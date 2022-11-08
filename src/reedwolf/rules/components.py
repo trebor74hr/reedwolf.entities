@@ -159,6 +159,9 @@ class Field(Component):
 
     # optional
     type:           Optional[FieldTypeEnum] = None # TODO: Enum or implicit conversion?
+    # TODO: required is also Validation() - nothing special that deserves
+    #       special attribute or not? this could be shortcut, but then we will lack
+    #       some special features that Validation enable.
     required:       Optional[Union[bool,ValueExpression]] = False
     # TODO: maybe UNDEFINED?
     default:        Optional[Union[StandardType, ValueExpression]] = None

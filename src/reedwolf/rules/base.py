@@ -382,6 +382,9 @@ class ComponentBase(SetOwnerMixin):
 
     # ------------------------------------------------------------
 
+    # TODO: def clone(self):
+    #       quite complex to do right, due cross-references (parent->child and opposite, siblings etc.)
+
     def to_strlist(self, path=None):
         if path is None:
             path = []

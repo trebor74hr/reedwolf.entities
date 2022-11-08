@@ -240,13 +240,16 @@ class ValueExpression(RubberObjectBase):
                     all_ok = False
                     break
                 # except (RuleError) as ex:
-                except (RuleSetupNameNotFoundError) as ex:
-                    self._status = VExpStatusEnum.ERR_NOT_FOUND
-                    all_ok = False
-                    # current_variable = heap.get(namespace=bit._namespace, var_name=var_name, owner=owner, parent=current_variable)
-                    print(f"== TODO: RuleSetupError - {self} -> Heap error {bit}: {ex}")
-                    # raise RuleSetupError(owner=self, msg=f"Heap {heap!r} attribute {var_name} not found")
-                    break
+                # NOTE: RL 221104 strict mode - do not tolerate variable not found any more
+                # except (RuleSetupNameNotFoundError) as ex:
+                #     if False:
+                #         self._status = VExpStatusEnum.ERR_NOT_FOUND
+                #         all_ok = False
+                #         # current_variable = heap.get(namespace=bit._namespace, var_name=var_name, owner=owner, parent=current_variable)
+                #         print(f"== TODO: RuleSetupError - {self} -> Heap error {bit}: {ex}")
+                #         break
+                #     else:
+                #         raise RuleSetupError(owner=self, msg=f"Heap {heap!r} attribute {var_name} not found: {ex}")
 
                 if not isinstance(current_variable, Variable):
                     raise RuleInternalError(owner=self, msg=f"Type of found object is not Variable, got: {type(current_variable)}.")

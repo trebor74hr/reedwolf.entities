@@ -33,24 +33,37 @@ from reedwolf.rules import (
 )
 from reedwolf.rules.types import TransMessageType
 
-@dataclass
-class Company:
-    name: str
-    vat_number: str
 
 
 class TestBasic(unittest.TestCase):
+
+    @dataclass
+    class Company:
+        name: str
+        vat_number: str
+
+
+    def test_late_bind(self):
+        rules = Rules(
+            name="company_rules", label="Company rules",
+            contains=[
+                Field(bind=M.company.name, label="Name"),
+            ])
+        rules.bind_to(BoundModel(name="company", model=self.Company))
+        self._test_minimal(rules)
 
 
     def test_minimal_example(self):
         rules = Rules(
             name="company_rules", label="Company rules",
-            bound_model=BoundModel(name="company", model=Company),
+            bound_model=BoundModel(name="company", model=self.Company),
             contains=[
                 Field(bind=M.company.name, label="Name"),
             ])
         rules.setup()
+        self._test_minimal(rules)
 
+    def _test_minimal(self, rules):
         self.assertNotEqual(rules.bound_model, None)
         # rules.print_components()
         self.assertNotEqual(rules.as_str(), "")
@@ -58,9 +71,10 @@ class TestBasic(unittest.TestCase):
         self.assertNotEqual(len(rules.to_strlist()), 0)
 
         self.assertEqual(rules.owner, None)
-        self.assertEqual(list(rules.components.keys()), list(['company_rules', 'company', 'name']))
-        self.assertEqual(list(rules.models.keys()), list(['company']))
-        self.assertEqual(list(rules.models.keys()), list(['company']))
+        self.assertSetEqual(set(rules.components.keys()), set(['company_rules', 'company', 'name']))
+
+        self.assertEqual(list(rules.models.keys()), ['company'])
+        self.assertEqual(list(rules.models.keys()), ['company'])
         self.assertEqual(rules.get_owner_container(), rules)
         self.assertEqual(rules.is_extension(), False)
         self.assertEqual(rules.validations, [])
@@ -82,9 +96,6 @@ class TestBasic(unittest.TestCase):
         
         self.assertEqual(rules.get_children(), [name_component]) 
 
-    # TODO: 
-    # def test_dump_pydantic_models(self):
-    #   rules.dump_pydantic_models()
 
 
 if __name__ == '__main__':

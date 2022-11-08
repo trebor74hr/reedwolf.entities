@@ -99,6 +99,9 @@ class ContainerBase(ComponentBase):
 
     def setup(self):
         # components are flat list, no recursion/hierarchy browsing needed
+        if self.bound_model is None:
+            raise RuleSetupError(owner=self, msg="bound_model not set. Initialize in constructor or call bind_to() first.")
+
         if self.is_finished():
             raise RuleSetupError(owner=self, msg="setup() should be called only once")
 
@@ -168,6 +171,9 @@ class ContainerBase(ComponentBase):
                     if not variable:
                         variable = model.Setup(heap=self.heap, owner=bound_model, parent=None)
 
+                if not variable:
+                    raise RuleInternalError(owner=self, msg=f"Variable not recognized: {model}")
+
                 if not isinstance(variable.data, TypeHintField):
                     raise RuleInternalError(owner=self, msg=f"Variable data is not TypeHintField, got: {type(variable.data)} / {variable.data}")
 
@@ -176,7 +182,7 @@ class ContainerBase(ComponentBase):
                 # OLD: model, is_list = self.heap.get_vexp_type(vexp=model)
 
             if not is_dataclass(model) and not is_pydantic(model) and not (is_list and model in STANDARD_TYPE_LIST):
-                raise RuleSetupNameError(owner=self, msg=f"Managed model {bound_model_name} needs to be a @dataclass, pydantic.BaseModel or List[{STANDARD_TYPE_LIST}], got: {type(model)}")
+                raise RuleSetupError(owner=self, msg=f"Managed model {bound_model_name} needs to be a @dataclass, pydantic.BaseModel or List[{STANDARD_TYPE_LIST}], got: {type(model)}")
 
             if not variable:
                 # standard variable
@@ -284,10 +290,12 @@ class ContainerBase(ComponentBase):
 class Rules(ContainerBase):
     name            : str
     label           : TransMessageType
-    bound_model     : BoundModel = field(repr=False)
-
     contains        : List[Component]            = field(repr=False)
+    # --- can be bound later with bind_to
+    bound_model     : Optional[BoundModel]       = field(repr=False, default=None)
+    # --- can be bound later with bind_to
     dataproviders   : Optional[List[DataVar]]    = field(repr=False, default_factory=list)
+
     validations     : Optional[List[Validation]] = field(repr=False, default_factory=list)
 
     # --- Evaluated later
@@ -298,6 +306,18 @@ class Rules(ContainerBase):
     owner           : Union[None, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     owner_name      : Union[str, UndefinedType]  = field(init=False, default=UNDEFINED)
 
+    def bind_to(self, bound_model:BoundModel, dataproviders:Optional[List[DataVar]]=None):
+        """
+        late binding, will do setup()
+        """
+        if self.bound_model is not None:
+            raise RuleSetupError(owner=self, msg="bound_model already set.")
+        if self.dataproviders:
+            raise RuleSetupError(owner=self, msg="dataproviders set, late binding not allowed.")
+        self.bound_model = bound_model
+        if dataproviders:
+            self.dataproviders = dataproviders
+        self.setup()
 
 # ------------------------------------------------------------
 

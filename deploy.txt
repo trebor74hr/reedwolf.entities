@@ -1,19 +1,36 @@
 Packaging and deploy info in
 https://github.com/trebor74hr/sqlalchemy-capture-sql/blob/main/deploy.txt
 
-Additional
+like this::
+
+    # 1. build
+    rm -Rf dist/* && py -m build
+
+    # 2. if ok then install on pypi 
+    py -m twine upload dist/* --verbose
+
+    # 3. check on: https://pypi.org/project/reedwolf.rules/0.0.1/
+
+    # TODO: git tag with release number?
+
+    # 4. to github
+    git ci -m"some msg" && git push
+
+
+### Additional
 
 url:
     https://pypi.org/project/reedwolf.rules/0.0.1/
-    testing::
 
-        export PYTHONPATH=
-        pip install reedwolf.rules
-        python -c "from reedwolf.rules import *; print(dir())"
-        python -c "from reedwolf.rules import Rules; print(dir())"
-        python -c "from reedwolf import rules; print(rules.__file__)"
-        cd tests/
-        python test_basic.py
-        cd ..
-        pip uninstall reedwolf.rules
+testing::
+
+    export PYTHONPATH=
+    pip install reedwolf.rules
+    python -c "from reedwolf.rules import *; print(dir())"
+    python -c "from reedwolf.rules import Rules; print(dir())"
+    python -c "from reedwolf import rules; print(rules.__file__)"
+    cd tests/
+    python test_basic.py
+    cd ..
+    pip uninstall reedwolf.rules
 
