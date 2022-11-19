@@ -1,4 +1,6 @@
 # TODO: this module probably should be merged into expressions - since there is circular depencdency - see __getattr__
+from abc import ABC, abstractmethod
+
 from .exceptions import RuleSetupNameError
 
 # ------------------------------------------------------------
@@ -8,20 +10,25 @@ from .exceptions import RuleSetupNameError
 # ValueExpression declaration
 
 
-class RubberObjectBase:
+class DynamicAttrsBase(ABC):
     """
     Just to mark objects that are (too) flexible
     all attributes are "existing" returning again objects that are same alike.
     """
-    pass
+    @abstractmethod
+    def __getattr__(self, name):
+        ...
 
 
-class Namespace(RubberObjectBase):
+class Namespace(DynamicAttrsBase):
 
-    RESERVED_ATTR_NAMES = {"_name",}
+    RESERVED_ATTR_NAMES = {"_name", "_manual_setup"}
 
-    def __init__(self, name):
+    def __init__(self, name:str, manual_setup:bool = False):
         self._name = name
+        # manual_setup == True ==> Setup() for ValueExpression-s needs to be
+        # called postponed, manually, usually with extrra context - like ThisNS
+        self._manual_setup = manual_setup
 
     def __str__(self):
         return f"{self._name}"
@@ -36,61 +43,48 @@ class Namespace(RubberObjectBase):
         from .expressions import ValueExpression
         return ValueExpression(node=aname, namespace=self)
 
-    # def get_field_definition(self, vexpr):
-    #     # context = self.components
-    #     assert hasattr(self, "components"), "Call setup() first"
-    #     assert vexpr.is_top
-    #     if   isinstance(vexpr.namespace, ContextNS):
-    #         raise NotImplementedError()
-    #         self.manage
-    #     elif isinstance(vexpr.namespace, DataProviderNS):
-    #         raise NotImplementedError()
-    #         self.dataproviders
-    #     elif isinstance(vexpr.namespace, FieldsNS):
-    #         raise NotImplementedError()
-    #         self.fields # is an dict with UNDEFINED values on start, filled on init() with model attr values 
-    #     elif isinstance(vexpr.namespace, ThisNS):
-    #         raise NotImplementedError()
-    #         # this is within context of Control - e.g. Select.option
-    #     elif isinstance(vexpr.namespace, UtilsNS):
-    #         raise NotImplementedError()
-    #         # this one should call generic functions
-    #     else:
-    #         raise RuleSetupError(f"Unknown type {vexpr.namespace}, expected some known namespace")
 
 # Instances - should be used as singletons
-
 # the only namespace declaration in this module
-GlobalNS = Namespace("G")
+FunctionsNS = Namespace("Fn")
 
-# Context - Direct access to managed models underneath and global Rules objects like Validation/Section etc
-ContextNS = Namespace("Context")
+# internally used
+OperationsNS = Namespace("Op")
 
 # managed models
 ModelsNS = Namespace("Models")
 
-# DataProviders/DP - DataVar - can be list, primitive type, object, Option etc. 
-#   evaluated from functions or Expressions 
-# TODO: DP. can have only list of DataVar(s) - naming is not the best
-DataProvidersNS = Namespace("DataProviders")
+# Data/D - can be list, primitive type, object, Option etc.
+#   evaluated from functions or Expressions
+DataNS = Namespace("D")
 
-# Field/F - of current rules setup - current version - manage(d) model
+# Field/F - all componenents in current container - including chain
+#           from current owner to top owner, including all their children (e.g.
+#           FieldGroups and their Fields, Validations etc.
+# TODO: rename to ComponentsNS / C.
 FieldsNS = Namespace("Fields")
 
 # This - values from a current context, e.g. iteration of loop, option in select
-ThisNS = Namespace("This")
+ThisNS = Namespace("This", manual_setup=True)
 
-# Utils - common functions 
-UtilsNS = Namespace("Utils")
+# Context - see contexts.py
+ContextNS = Namespace("Ctx")
+
+# Config - see config.py
+ConfigNS = Namespace("Cfg")
 
 # aliases
-G = GlobalNS
-Ctx  = ContextNS
+Fn = FunctionsNS
 M = ModelsNS
-DP = DataProvidersNS
+D = DataNS
 F = FieldsNS
 This = ThisNS
-Utils = UtilsNS
+Ctx = ContextNS
+Cfg = ConfigNS
 
-# ALL_NS_OBJECTS = (ContextNS, DataProvidersNS, FieldsNS, ThisNS, UtilsNS, GlobalNS)
+# ALL_NS_OBJECTS = (ContextNS, DataNS, FieldsNS, ThisNS, UtilsNS, FunctionsNS)
+
+# # Context - Direct access to managed models underneath and global Rules objects like Validation/FieldGroup etc
+# ContextNS = Namespace("Context")
+# Ctx  = ContextNS
 

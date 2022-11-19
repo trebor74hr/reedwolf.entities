@@ -4,16 +4,15 @@ Yaml rules to python source code
 TODO: generated code is obsolete
 TODO: missing yaml example(s) and unit-tests
 """
-
-raise NotImplementedError("The module from_yaml is not up-to-date with current Rules object system")
-
 # NOTE: This is obsolete - could be adapted and reused
-import os, sys
+import os
+import sys
 
 import yaml
 
 INDENT = "  "
 
+raise NotImplementedError("The module from_yaml is not up-to-date with current Rules object system")
 
 class ParseException(Exception):
     pass
@@ -203,15 +202,18 @@ def dump_rule_attr(  # noqa: C901
 # ------------------------------------------------------------
 
 
-def dump_validations(parents_str, name, type, item, indent_depth, output):
-    validations = item.pop("validations", None)
-    if validations:
-        if not isinstance(validations, list):
-            warn(f"{parents_str}::{name} ({type}) VALIDATIONS is not a list: {validations}")
+def dump_cleaners(parents_str, name, type, item, indent_depth, output):
+    cleaners = item.pop("cleaners", None)
+    if cleaners:
+        if not isinstance(cleaners, list):
+            warn(f"{parents_str}::{name} ({type}) CLEANERS is not a list: {cleaners}")
         else:
-            output.append(f"{get_indent(indent_depth+2)}validations=[")
-            for vnr, validation in enumerate(validations, 1):
+            output.append(f"{get_indent(indent_depth+2)}cleaners=[")
+            for vnr, cleaner in enumerate(cleaners, 1):
+                raise NotImplementedError("TODO: needs to implement Validation vs Evaluation")
+
                 output.append(f"{get_indent(indent_depth+3)}Validation(")
+                validation = cleaner
                 if not (
                     dump_rule_attr(
                         validation, output, indent_depth + 4, "ensure", "list_or_interpret"
@@ -224,12 +226,12 @@ def dump_validations(parents_str, name, type, item, indent_depth, output):
                     )
                 ):
                     warn(
-                        f"{parents_str}::{name} ({type}) VALIDATIONS - not found ensure/min/max: {vnr} -> {validation}"
+                        f"{parents_str}::{name} ({type}) CLEANERS - not found ensure/min/max: {vnr} -> {validation}"
                     )
                 dump_rule_attr(validation, output, indent_depth + 4, "error", "message")
                 output.append(f"{get_indent(indent_depth+3)}),")
             output.append(f"{get_indent(indent_depth+2)}],")
-    return bool(validations)
+    return bool(cleaners)
 
 
 # ------------------------------------------------------------
@@ -276,7 +278,7 @@ def parse_item(item, outputs, nrs, indent_depth, objects, parents=None):  # noqa
         "number",
         "label",
         "form",
-        "section",
+        "fieldgroup",
         "select",
         "data",
         "validation",
@@ -288,10 +290,10 @@ def parse_item(item, outputs, nrs, indent_depth, objects, parents=None):  # noqa
 
         if len(nrs) > 5 and (
             "stock_tracking" not in parents_str
-            and "prekitting_machine_section" not in parents_str
-            and "prekitting_route_section" not in parents_str
+            and "prekitting_machine_fieldgroup" not in parents_str
+            and "prekitting_route_fieldgroup" not in parents_str
         ):  # iznimka
-            warn(f"Too deep, remove section? {parents_str} / {name} / / {item_repr}")  # noqa: T001
+            warn(f"Too deep, remove fieldgroup? {parents_str} / {name} / / {item_repr}")  # noqa: T001
 
         children = item.pop("contains", None)
         enables = item.pop("enables", None)
@@ -339,12 +341,14 @@ def parse_item(item, outputs, nrs, indent_depth, objects, parents=None):  # noqa
             # ignored for now
             return False
 
-        elif type not in ("section", "form"):
+        elif type not in ("fieldgroup", "form"):
             subtype = ""
 
             # class name
             if type == "data":
-                class_name = "DataVar"
+                class_name = "StaticData"
+            elif type == "evaluation":
+                class_name = "Evaluation"
             elif type == "validation":
                 class_name = "Validation"
             elif type == "dynamic":
@@ -391,13 +395,17 @@ def parse_item(item, outputs, nrs, indent_depth, objects, parents=None):  # noqa
                     value_type="literal",
                 )
                 # dump_rule_attr(item=item, output=output, indent_depth=indent_depth, attr_name="source"   , value_type="list_or_interpret")
-                dump_rule_attr(
-                    item=item,
-                    output=output,
-                    indent_depth=indent_depth,
-                    attr_name="evaluate",
-                    value_type="bool",
-                )
+                # dump_rule_attr(
+                #     item=item,
+                #     output=output,
+                #     indent_depth=indent_depth,
+                #     attr_name="evaluate",
+                #     value_type="bool",
+                # )
+
+            elif type in ("evaluation",):
+                class_name = "Evaluation"
+                raise NotImplementedError("TODO: evaluation")
 
             elif type in ("validation",):
                 class_name = "Validation"
@@ -473,13 +481,13 @@ def parse_item(item, outputs, nrs, indent_depth, objects, parents=None):  # noqa
                     attr_name="description",
                     value_type="message",
                 )
-                dump_rule_attr(
-                    item=item,
-                    output=output,
-                    indent_depth=indent_depth,
-                    attr_name="autocomplete",
-                    value_type="bool",
-                )
+                # dump_rule_attr(
+                #     item=item,
+                #     output=output,
+                #     indent_depth=indent_depth,
+                #     attr_name="autocomplete",
+                #     value_type="bool",
+                # )
                 dump_rule_attr(
                     item=item,
                     output=output,
@@ -496,7 +504,7 @@ def parse_item(item, outputs, nrs, indent_depth, objects, parents=None):  # noqa
                 )
                 # dump_rule_attr(item, output, indent_depth, "data-case", "quote")
 
-                dump_validations(
+                dump_cleaners(
                     parents_str=parents_str,
                     name=name,
                     type=type,
@@ -568,28 +576,28 @@ def parse_item(item, outputs, nrs, indent_depth, objects, parents=None):  # noqa
 
             if children:
                 warn(  # noqa: T001
-                    f"{parents_str} item {name} not section and has children: {item_repr}"
+                    f"{parents_str} item {name} not fieldgroup and has children: {item_repr}"
                 )
                 return
 
-        if type in ("section", "form") or enables:
+        if type in ("fieldgroup", "form") or enables:
             # output.append(f"{get_indent(indent_depth+1)}")
             if enables:
                 children = enables
                 class_name = None
                 output.append(f"{get_indent(indent_depth+2)}enables=[")
             else:
-                if type == "section":
-                    class_name = "Section"
+                if type == "fieldgroup":
+                    class_name = "FieldGroup"
                 elif type == "form":
-                    class_name = "SectionForm"
+                    class_name = "FieldGroupForm"
                 output.append("")
                 output.append(f"{get_indent(indent_depth+1)}{class_name}(name='{name}',")
                 dump_rule_attr(item, output, indent_depth, "available", "interpret")
                 if type == "form":
                     dump_rule_attr(item, output, indent_depth, "method", "quote")
                     dump_rule_attr(item, output, indent_depth, "url", "quote")
-                dump_validations(
+                dump_cleaners(
                     parents_str=parents_str,
                     name=name,
                     type=type,
@@ -649,12 +657,12 @@ def main(filename):
 
         # DataSource,
         outputs["py"].append(
-            "from reedwolf.rules.base import _, RulesSetup, Section, Field, SelectOptions, DynamicOutput, "
-            + "Validation, FieldsGenerator, SectionForm, msg, "
-            + "DataVar, option, This, F, D, M, Context, Utils"
+            "from reedwolf.rules.base import _, RulesSetup, FieldGroup, Field, SelectOptions, DynamicOutput, "
+            + "Validation, Evaluation, FieldsGenerator, FieldGroupForm, msg, "
+            + "StaticData, option, This, F, D, M, Context, Utils"
         )
         outputs["py"].append("")
-        name = 
+        name = "TODO:"  # noqa: F841
         outputs["py"].append("rules_setup = RulesSetup(name='{name}',")
         outputs["py"].append(f"{INDENT*2}models = ['TODO'],")
         outputs["py"].append(f"{INDENT*2}contains = [")

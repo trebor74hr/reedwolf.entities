@@ -3,18 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Set, Dict
+from typing import List, Dict
 
 from ..base import (
-        ComponentBase, 
-        TypeHintField,
+        ComponentBase,
         )
-from ..types import STANDARD_TYPE_LIST
-from ..utils import (
-        is_enum,
-        snake_case_to_camel,
-        )
-from ..components import Field, Section, ChoiceField, FieldTypeEnum
+from ..components import Field, FieldGroup, FieldTypeEnum, ValidationBase, EvaluationBase
 from ..containers import Extension, Rules
 
 
@@ -40,10 +34,10 @@ def dump_to_html(component:ComponentBase, fname:str):
         fout.write(code)
 
     print(f"Output in {fname}, {len_lines} lines.")
-    return 
+    return
 
 def prefix_indent(indent, lines):
-    return [f"{indent}{l}" for l in lines]
+    return [f"{indent}{line}" for line in lines]
 
 def get_html_attrs(common_attrs):
     common_attrs_str = []
@@ -59,7 +53,7 @@ def get_html_attrs(common_attrs):
 
 def dump_html_models_to_str(
                          component:ComponentBase,
-                         path:List[str]=None, 
+                         path:List[str]=None,
                          depth:int=0,
                          component_dict: Dict[str, ComponentBase]=None,
                          inline:bool=False,
@@ -74,7 +68,7 @@ def dump_html_models_to_str(
     component_dict[component.name] = component
 
     indent = HTML_INDENT * depth
-    indent_next = HTML_INDENT * (depth+1)
+    # indent_next = HTML_INDENT * (depth+1)
 
     lines = []
 
@@ -84,46 +78,46 @@ def dump_html_models_to_str(
     for child_comp in children:
         assert child_comp.name not in lines_children
         # recursion
-        lines_children[child_comp.name] = dump_html_models_to_str(child_comp, path=path[:], 
-                                                depth=depth+1, 
-                                                component_dict=component_dict, 
+        lines_children[child_comp.name] = dump_html_models_to_str(child_comp, path=path[:],
+                                                depth=depth+1,
+                                                component_dict=component_dict,
                                                 inline=isinstance(component, Extension),
                                                 )
 
     # guard
-    if depth==1 and not isinstance(component, (Section,)):
-        raise Exception(f"TODO: no supported, currenly only structure Rules+Sections supported, got {component}")
+    if depth==1 and not isinstance(component, (FieldGroup,)):
+        raise Exception(f"TODO: no supported, currenly only structure Rules+FieldGroups supported, got {component}")
 
-    py_name = None
+    # py_name = None
     if depth==0:
         assert isinstance(component, (Rules,)), component
         lines.append(f"<h1 id='{component.name}'>{component.label}</h1>")
-        lines.append(f'<nav>')
-        lines.append(f'  <div class="nav nav-tabs" id="nav-tab" role="tablist">')
+        lines.append('<nav>')
+        lines.append('  <div class="nav nav-tabs" id="nav-tab" role="tablist">')
 
         area_selected = 'aria-selected="true"'
         for nr, (child_name, child_lines) in enumerate(lines_children.items(),1):
             child_comp = component_dict[child_name]
-            line = (f'    <button class="nav-link {"active" if nr==1 else ""}" '
+            line = ('    <button class="nav-link {"active" if nr==1 else ""}" '
                     f' id="nav-{child_name}-tab" data-bs-toggle="tab" '
                     f' data-bs-target="#nav-{child_name}" type="button" role="tab" '
                     f' aria-controls="nav-home" {area_selected if nr==1 else ""}>'
                     f'{child_comp.label}</button>')
             lines.append(line)
-        lines.append(f'  </div>')
-        lines.append(f'</nav>')
+        lines.append('  </div>')
+        lines.append('</nav>')
 
 
-        lines.append(f'<div class="tab-content" id="nav-tabContent">')
+        lines.append('<div class="tab-content" id="nav-tabContent">')
         for nr, (child_name, child_lines) in enumerate(lines_children.items(),1):
             lines.append(f'  <div class="container tab-pane fade {"show active" if nr==1 else ""}"'
                          f' id="nav-{child_name}" role="tabpanel" aria-labelledby="nav-{child_name}-tab">')
-            lines.append(f'    <form class="row g-3">')
+            lines.append('    <form class="row g-3">')
             lines.extend(prefix_indent("    ", child_lines))
-            lines.append(f'      <div class="col-12">')
-            lines.append(f'        <button type="submit" class="btn btn-primary">Save</button>')
-            lines.append(f'      </div>')
-            lines.append(f'    </form>')
+            lines.append('      <div class="col-12">')
+            lines.append('        <button type="submit" class="btn btn-primary">Save</button>')
+            lines.append('      </div>')
+            lines.append('    </form>')
             lines.append('  </div>')
         lines.append('</div>')
 
@@ -131,12 +125,12 @@ def dump_html_models_to_str(
         nr_examples = 3
 
         common_attrs = {}
-        common_attrs["data-bs-toggle"]="tooltip" 
-        common_attrs["data-bs-placement"]="right" 
+        common_attrs["data-bs-toggle"]="tooltip"
+        common_attrs["data-bs-placement"]="right"
         common_attrs["title"]= f'Cardinality: {component.cardinality}'
         # TODO: this too?:
-        #   Is list: {component.bound_variable.data.is_list}'
-        #   Is optional: {component.bound_variable.data.is_list}'
+        #   Is list: {component.bound_attr_node.data.is_list}'
+        #   Is optional: {component.bound_attr_node.data.is_list}'
         #                component.cardinality.allow_none
 
         common_attrs_str = get_html_attrs(common_attrs)
@@ -145,32 +139,32 @@ def dump_html_models_to_str(
 
         for row_nr in range(1, nr_examples+1):
             is_add = (row_nr==nr_examples)
-            lines.append(f'    <ul class="list-inline" >')
+            lines.append('    <ul class="list-inline" >')
             lines.append(f'      <li class="list-inline-item" id="name-{component.name}-{row_nr}">{row_nr}. </li>')
             for nr, (child_name, child_lines) in enumerate(lines_children.items(),1):
                 lines.append(f'      <li class="list-inline-item" id="container-{child_name}-{row_nr}">')
                 lines.extend(prefix_indent("      ", child_lines))
-                lines.append(f'      </li>')
+                lines.append('      </li>')
 
             lines.append(f'      <li class="list-inline-item" id="container-{child_name}-{row_nr}">')
             lines.append(f'        <button type="button" class="btn {"btn-success" if is_add else "btn-secondary"} " id="add-{component.name}">{"Add" if is_add else "Edit"}</button>')
-            lines.append(f'      </li>')
+            lines.append('      </li>')
 
-            lines.append(f'    </ul>')
-            lines.append(f'  </li>')
-        lines.append(f'</ul>')
+            lines.append('    </ul>')
+            lines.append('  </li>')
+        lines.append('</ul>')
 
 
-    elif isinstance(component, (Section, Rules)):
+    elif isinstance(component, (FieldGroup, Rules)):
         assert lines_children
-        lines.append(f'<ul class="my-list-unstyled">')
+        lines.append('<ul class="my-list-unstyled">')
         title = f"<h3>{component.label}</h3>" if depth<=1 else f"<strong>{component.label}</strong>"
         lines.append(f'  <li id="title-{component.name}">{title}</li>')
         for nr, (child_name, child_lines) in enumerate(lines_children.items(),1):
             lines.append(f'  <li id="container-{child_name}">')
             lines.extend(prefix_indent("  ", child_lines))
-            lines.append(f'  </li>')
-        lines.append(f'</ul>')
+            lines.append('  </li>')
+        lines.append('</ul>')
 
 
     elif isinstance(component, (Field,)):
@@ -195,20 +189,26 @@ def dump_html_models_to_str(
         if component.default is not None:
             tooltip.append(f"Default: {component.default}")
 
-        if component.editable not in (True, None):
-            tooltip.append(f"Editable when: {component.editable}")
+        # TODO: check for cleaners.Readonly(...)
+        # if component.editable not in (True, None):
+        #     tooltip.append(f"Editable when: {component.editable}")
 
-        if component.autocomplete not in (True, None):
-            tooltip.append(f"Autocomplete: {component.autocomplete}")
+        # if component.autocomplete not in (True, None):
+        #     tooltip.append(f"Autocomplete: {component.autocomplete}")
 
         if component.available not in (True, None):
             tooltip.append(f"Available term(s): {component.available}")
 
-        if component.validations:
+        if component.cleaners:
             out = []
-            for validation in component.validations:
-                out.append(f"{validation.label} => {repr(validation.ensure)}")
-            tooltip.append(f"Validations: {' AND '.join(out)}")
+            for cleaner in component.cleaners:
+                if isinstance(cleaner, ValidationBase):
+                    out.append(f"Validate {cleaner.label} => {repr(cleaner.ensure)}")
+                elif isinstance(cleaner, EvaluationBase):
+                    out.append(f"Evaluate {cleaner.label} => {repr(cleaner.ensure)}")
+                else:
+                    raise NotImplementedError(f"{cleaner} not implemented")
+            tooltip.append(f"Cleaners: {' AND '.join(out)}")
 
         if component.enables:
             out = []
@@ -221,8 +221,8 @@ def dump_html_models_to_str(
 
 
         if tooltip:
-            common_attrs["data-bs-toggle"]="tooltip" 
-            common_attrs["data-bs-html"]="true" 
+            common_attrs["data-bs-toggle"]="tooltip"
+            common_attrs["data-bs-html"]="true"
             common_attrs["data-bs-placement"]="left"
             common_attrs["title"]='<ul>{}</ul>'.format("\n".join([f"<li>{tt}</li>" for tt in tooltip]))
 
@@ -244,9 +244,9 @@ def dump_html_models_to_str(
                 choices = [("", f"Choices from {component.enum.__name__}")] + [(ev.value, ev.name) for ev in component.enum]
             for nr, (k,v) in enumerate(choices,1):
                 html.append(f'    <option {"selected" if nr==1 else ""} value="{k}">{v}</option>')
-            html.append(f'  </select>')
+            html.append('  </select>')
             html.append(f'  <label for="{component.name}">{component.label}</label>')
-            html.append(f'</div>')
+            html.append('</div>')
 
         elif component.type==FieldTypeEnum.BOOL  :
             # NOTE: not using: {common_class_str}
@@ -254,13 +254,13 @@ def dump_html_models_to_str(
             html.append(f'  <input class="form-check-input" type="checkbox" value="" id="{component.name}" checked >')
             html.append(f'  <label class="form-check-label" for="{component.name}">')
             html.append(f'    {component.label}')
-            html.append(f'  </label>')
-            html.append(f'</div>')
+            html.append('  </label>')
+            html.append('</div>')
         elif component.type==FieldTypeEnum.FILE:
             html.append(f'<div class="{common_class_str}">')
             html.append(f'  <label for="{component.name}" class="form-label">{component.label}</label>')
             html.append(f'  <input class="form-control" type="file" id="{component.name}" {common_attrs_str} >')
-            html.append(f'</div>')
+            html.append('</div>')
         else:
             value = ""
             if component.type==FieldTypeEnum.EMAIL:
@@ -282,7 +282,7 @@ def dump_html_models_to_str(
             html.append(f'  <input type="{input_type}" class="form-control" id="{component.name}" value="{value}"'
                             f' placeholder="{component.label}" {common_attrs_str} >')
             html.append(f'  <label for="floatingInput">{component.label}</label>')
-            html.append(f'</div>')
+            html.append('</div>')
 
         # TODO: forgot f"" or some other issue?
         #       assert "{" not in "\n".join(html), html
@@ -293,11 +293,11 @@ def dump_html_models_to_str(
             # lines.append(f'  <h{depth}>{component.label}</h{depth}>')
             lines.append(f'  <ul class="my-list-unstyled" id="children-{component.name}">')
             for nr, (child_name, child_lines) in enumerate(lines_children.items(),1):
-                lines.append(f'    <li>')
+                lines.append('    <li>')
                 lines.extend(prefix_indent("    ", child_lines))
-                lines.append(f'    </li>')
-            lines.append(f'  </ul>')
-            lines.append(f'</div>')
+                lines.append('    </li>')
+            lines.append('  </ul>')
+            lines.append('</div>')
         else:
             lines.extend(html)
 
@@ -312,7 +312,7 @@ def dump_html_models_to_str(
             '<html lang="en">',
             '  <head>',
             '    <meta charset=UTF-8>',
-           f'    <title>{component.label}</title>',
+            f'    <title>{component.label}</title>',
             '    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">',
             '    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-ka7Sk0Gln4gmtz2MlQnikT1wXgYsOg+OMhuP+IlRH9sENBO0LRn5q+8nbTov4+1p" crossorigin="anonymous"></script>'
             '    <style media="all">',
@@ -331,7 +331,7 @@ def dump_html_models_to_str(
 
         all_lines.extend(lines)
 
-        all_lines.append(f"</body>")
+        all_lines.append("</body>")
         all_lines.extend([
             '<script>',
             """
@@ -342,7 +342,7 @@ def dump_html_models_to_str(
             """,
             '</script>',
             ])
-        all_lines.append(f"</html>")
+        all_lines.append("</html>")
 
         out = all_lines
     else:

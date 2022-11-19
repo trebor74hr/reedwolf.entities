@@ -1,193 +1,281 @@
-from typing import List, Optional, Union
-from dataclasses import dataclass, field
+# ------------------------------------------------------------
+# Validations (components)
+# ------------------------------------------------------------
+"""
+Validation-s are used in cleaners.
+Base is value:ValueExpression which shuuld return bool value 
+if False - validation.error should be registered/raised
 
-from .exceptions import (
-        RuleSetupError, 
-        RuleValidationCardinalityError, 
-        RuleSetupTypeError,
+
+TODO: novi Validation - je li se promijenio u bazi u međuvremenu - provjeri
+      timestamp polje koje se update-a (vidi evaluations.py na vrhu)
+TODO: novi Validation - je li isti korisnik mijenja podatak
+TODO: novi Validation - koja grupa korisnika smije mijenjati zapis?
+TODO: novi Validation - je li podatak lock-an do nekog datuma 
+
+"""
+
+from __future__ import annotations
+
+from abc import ABC
+from typing import Union, Optional
+from dataclasses import (
+        dataclass, 
+        field,
         )
-from .utils import (
-        to_int,
-        UNDEFINED, 
-        UndefinedType,
+from .meta import (
+        TransMessageType,
         )
 from .base import (
-        SetOwnerMixin,
+        IApplySession,
+        ValidationFailure,
+        )
+from .components    import (
+        ValidationBase, 
+        )
+from .expressions   import ValueExpression
+from .exceptions    import RuleSetupError
+from .utils         import (
+        to_int,
+        message_truncate,
         )
 
-class ChildrenValidation(SetOwnerMixin):
-    def is_finished(self):
-        return bool(self.name)
+@dataclass
+class Validation(ValidationBase):
+    """
+    new custom validations could be done like this:
 
+        @dataclass
+        class ValidationHourValue(Validation):
+            def __init__(self, name:str, label:TransMessageType):
+                super().__init__(
+                        name=name, label=label,
+                        ensure=((This.value>=0) & (This.value<=23)),
+                        error=_("Need valid hour value (0-23)"),
+                        )
 
-class CardinalityValidation(ChildrenValidation): # count
+    """
+    name:           str
+    ensure:         ValueExpression
+    error:          TransMessageType = field(repr=False)
+    available:      Optional[Union[bool, ValueExpression]] = field(repr=False, default=True)
+    label:          Optional[TransMessageType] = field(repr=False, default=None)
+
 
     def __post_init__(self):
-        if self.__class__==CardinalityValidation:
-            raise RuleSetupError(owner=self, msg=f"Use subclasses of CardinalityValidation")
+        if not isinstance(self.ensure, ValueExpression):
+            raise RuleSetupError(owner=self, msg=f"ensure must be ValueExpression, got: {type(self.ensure)} / {self.ensure}")
+        super().__post_init__()
 
-    def validate_setup(self):
-        """
-        if not ok, 
-            raises RuleSetupTypeError
-        """
-        raise NotImplementedError("abstract method")
-
-    def validate(self, items_count:bool, raise_err:bool=True) -> bool:
-        """
-        takes nr. of items and validates
-        if ok, returns True
-        if not ok, 
-            if raise_err -> raises RuleValidationCardinalityError
-            else -> return false
-        """
-        raise NotImplementedError("abstract method")
-
-    def _validate_setup_common(self, allow_none:Optional[bool]=None) -> 'Variable':
-        model_var = self.owner.get_bound_model_var()
-        if allow_none is not None:
-            if allow_none and not model_var.isoptional():
-                raise RuleSetupTypeError(owner=self, msg=f"Type hint is not Optional and cardinality allows None. Add Optional or set .allow_none=False/min=1+")
-            if not allow_none and model_var.isoptional():
-                raise RuleSetupTypeError(owner=self, msg=f"Type hint is Optional and cardinality does not allow None. Remove Optional or set .allow_none=True/min=0")
-        return model_var
-
-# ------------------------------------------------------------
-
-class Cardinality: # namespace holder
-
-    @dataclass
-    class Single(CardinalityValidation):
-        name            : str
-        allow_none      : bool = True
-
-        owner           : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-        owner_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
-
-        def validate_setup(self):
-            model_var = self._validate_setup_common(self.allow_none)
-            if model_var.islist():
-                raise RuleSetupTypeError(owner=self, msg=f"Type hint is List and should be single instance. Change to Range/Multi or remove type hint List[]")
-
-        def validate(self, items_count:int, raise_err:bool=True):
-            if items_count==0 and not self.allow_none:
-                if raise_err: 
-                    raise RuleValidationCardinalityError(owner=self, msg=f"Expected exactly one item, got none.")
-                return False
-            if items_count!=1:
-                if raise_err: 
-                    raise RuleValidationCardinalityError(owner=self, msg=f"Expected exactly one item, got {items_count}.")
-                return False
-            return True
-
-    @dataclass
-    class Range(CardinalityValidation):
-        """ 
-            at least one (min or max) arg is required
-            min=None -> any number (<= max)
-            max=None -> any number (>= min)
-            min=0    -> same as allow_none in other validations
-
-        """
-        name            : str
-        min             : Optional[int] = None
-        max             : Optional[int] = None
-
-        owner           : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-        owner_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
-
-        def __post_init__(self):
-            if self.min is None and self.max is None:
-                raise RuleSetupError(owner=self, msg=f"Please provide min and/or max")
-            if self.min is not None and (to_int(self.min)==None or to_int(self.min)<0):
-                raise RuleSetupError(owner=self, msg=f"Please provide integer min >=0 ")
-            if self.max is not None and (to_int(self.max)==None or to_int(self.max)<0):
-                raise RuleSetupError(owner=self, msg=f"Please provide integer max >=0 ")
-            if self.min is not None and self.max is not None and self.max<self.min:
-                raise RuleSetupError(owner=self, msg=f"Please provide min <= max")
-            if self.max is not None and self.max==1:
-                raise RuleSetupError(owner=self, msg=f"Please provide max>1 or use Single.")
-
-        def validate_setup(self):
-            model_var = self._validate_setup_common(allow_none=(self.min==0))
-            if not model_var.islist():
-                raise RuleSetupTypeError(owner=self, msg=f"Type hint is not List and should be. Change to Single or add List[] type hint ")
-
-        def validate(self, items_count:int, raise_err:bool=True):
-            if self.min and items_count < self.min:
-                if raise_err: 
-                    raise RuleValidationCardinalityError(owner=self, msg=f"Expected at least {self.min} item(s), got {items_count}.")
-                return False
-            if self.max and items_count < self.max:
-                if raise_err: 
-                    raise RuleValidationCardinalityError(owner=self, msg=f"Expected at most {self.max} items, got {items_count}.")
-                return False
-            return True
-
-    @dataclass
-    class Multi(CardinalityValidation):
-        " [0,1]:N "
-        name            : str
-        allow_none      : bool = True
-
-        owner           : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-        owner_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
-
-        def validate_setup(self):
-            model_var = self._validate_setup_common(self.allow_none)
-            if not model_var.islist():
-                raise RuleSetupTypeError(owner=self, msg=f"Type hint is not a List and should be. Change to Single or add List[] type hint")
-
-        def validate(self, items_count:int, raise_err:bool=True):
-            if items_count==0 and not self.allow_none:
-                if raise_err: 
-                    raise RuleValidationCardinalityError(owner=self, msg=f"Expected at least one item, got none.")
-                return False
-            return True
+    def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
+        component = apply_session.current_frame.component
+        vexp_result = self.ensure._evaluator.evaluate(apply_session)
+        if not bool(vexp_result.value):
+            error = self.error if self.error else "Validation failed"
+            return ValidationFailure(
+                            component_key_string = component.get_key_string(apply_session),
+                            error=error, 
+                            validation_name=self.name,
+                            validation_label=self.label,
+                            details=f"The validation returned '{vexp_result.value}'"
+                            )
+        return None
 
 
-# ------------------------------------------------------------
-# other validations
-# ------------------------------------------------------------
-class UniqueValidation(ChildrenValidation):
+
+@dataclass
+class SimpleValidationBase(ValidationBase, ABC):
+    name:           Optional[str] = None
+    error:          Optional[TransMessageType] = field(repr=False, default=None)
+    available:      Optional[Union[bool, ValueExpression]] = field(repr=False, default=True)
+    label:          Optional[TransMessageType] = field(repr=False, default=None)
+
+@dataclass
+class Required(SimpleValidationBase):
 
     def __post_init__(self):
-        if self.__class__==UniqueValidation:
-            raise RuleSetupError(owner=self, msg=f" Use subclasses of UniqueValidation")
+        if not self.error:
+            self.error = f"The value is required"
+        super().__post_init__()
 
-    # def set_owner(self, owner):
-    #     super().set_owner(owner)
-    #     if not self.name:
-    #         self.name = f"{self.owner.name}__{self.__class__.__name__.lower()}"
+    def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
+        component = apply_session.current_frame.component
+        value = component.get_current_value_from_history(apply_session)
+        if value is None:
+            return ValidationFailure(
+                            component_key_string = component.get_key_string(apply_session),
+                            error=self.error, 
+                            validation_name=self.name,
+                            validation_label=self.label,
+                            details=f"The value is required."
+                            )
+        return None
 
-class Unique: # namespace holder
+@dataclass
+class Readonly(SimpleValidationBase):
+    # synonym for: Editable(False)
+    # TODO: define standard label and error message
+    # returns True, False, only-when-not-empty
+    # NOTE: Editable / Frozen
+    #   after filled with initial value can the value be cheanged
+    # TODO: if autocomputed = ALLWAYS should not be ...
+    value: Optional[Union[bool, ValueExpression]] = True
 
-    @dataclass
-    class Global(UniqueValidation):
-        " globally - e.g. within table "
-        name            : str
-        fields          : List[str] # TODO: better field specification or vexpr?
-        ignore_none     : bool = True
+    def __post_init__(self):
+        if not isinstance(self.value, (bool, ValueExpression)):
+            raise RuleSetupError(owner=self, msg=f"ensure must be ValueExpression or bool, got: {type(self.value)} / {self.value}")
 
-        owner           : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-        owner_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
-
-    @dataclass
-    class Children(UniqueValidation):
-        " within extension records "
-        name            : str
-        fields          : List[str] # TODO: better field specification or vexpr?
-        ignore_none     : bool = True
-
-        owner           : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-        owner_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+        if not self.error:
+            self.error = f"The value is readonly"
+        super().__post_init__()
 
 
-# ALT: names for ChildrenValidation
-#   class IterationValidation:
-#   # db terminology: scalar custom functions, table value custom functions, aggregate custom functions
-#   class AggregateValidation: 
-#   class ExtensionValidation:
-#   class ItemsValidation:
-#   class MultipleItemsValidation:
-#   class ContainerItemsValidation:
+    def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
+        component = apply_session.current_frame.component
+
+        if isinstance(self.value, ValueExpression):
+            vexp_result = self.value._evaluator.evaluate(apply_session)
+            is_readonly = vexp_result.value
+        else:
+            is_readonly = self.value
+
+        if not is_readonly:
+            return None
+
+        key_string = component.get_key_string(apply_session)
+        change_history = apply_session.change_history.get(key_string)
+        if change_history and len(change_history) > 1:
+            initial_value = change_history[0].value
+            last_value = change_history[-1].value
+            if initial_value != last_value:
+                return ValidationFailure(
+                                component_key_string = key_string,
+                                error=self.error, 
+                                validation_name=self.name,
+                                validation_label=self.label,
+                                details=f"Readonly value is changed" 
+                                    f" from '{message_truncate(initial_value, 15)}'" 
+                                    f" to '{message_truncate(last_value, 15)}'"
+                                )
+        return None
+
+
+@dataclass
+class MaxLength(ValidationBase):
+    # NOTE: list all attributes, do not reuse SimpleValidationBase, due 
+    #       goal of having proper types and order: single required positional
+    #       argument 'value'
+    value:          int = None
+    name:           Optional[str] = None
+    error:          Optional[TransMessageType] = field(repr=False, default=None)
+    available:      Optional[Union[bool, ValueExpression]] = field(repr=False, default=True)
+    label:          Optional[TransMessageType] = field(repr=False, default=None)
+
+    def __post_init__(self):
+        # TODO: define standard label and error message
+        if not to_int(self.value, 0) > 0:
+            raise RuleSetupError(owner=self, msg=f"'value' must be integer > 0")
+        if not self.error:
+            self.error = f"Provide value with length at most {self.value}"
+        super().__post_init__()
+
+    def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
+        component = apply_session.current_frame.component
+        value = component.get_current_value_from_history(apply_session)
+        if value and hasattr(value, "__len__") and len(value) > self.value:
+            return ValidationFailure(
+                            component_key_string = component.get_key_string(apply_session),
+                            error=self.error, 
+                            validation_name=self.name,
+                            validation_label=self.label,
+                            details=f"Value's length of {len(value)} is greater of maximum allowed {self.value}" 
+                                    f" (value is '{message_truncate(value)}')"
+                            )
+        return None
+
+@dataclass
+class MinLength(ValidationBase):
+    # see MaxLength NOTE:
+    value:          int
+    name:           Optional[str] = None
+    error:          Optional[TransMessageType] = field(repr=False, default=None)
+    available:      Optional[Union[bool, ValueExpression]] = field(repr=False, default=True)
+    label:          Optional[TransMessageType] = field(repr=False, default=None)
+
+    def __post_init__(self):
+        # TODO: define standard label and error message
+        if not to_int(self.value, 0) > 0:
+            raise RuleSetupError(owner=self, msg=f"'value' must be integer > 0")
+        if not self.error:
+            self.error = f"Provide value with length at least {self.value}"
+
+        super().__post_init__()
+
+    def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
+        component = apply_session.current_frame.component
+        value = component.get_current_value_from_history(apply_session)
+        if value and hasattr(value, "__len__") and len(value) < self.value:
+            return ValidationFailure(
+                            component_key_string = component.get_key_string(apply_session),
+                            error=self.error, 
+                            validation_name=self.name,
+                            validation_label=self.label,
+                            details=f"Value's length of {len(value)} is smaller of minimum allowed {self.value}" 
+                                    f"({message_truncate(value)})")
+        return None
+
+@dataclass
+class RangeLength(ValidationBase):
+    # see MaxLength NOTE:
+    min:            Optional[int] = None
+    max:            Optional[int] = None
+    name:           Optional[str] = None
+    error:          Optional[TransMessageType] = field(repr=False, default=None)
+    available:      Optional[Union[bool, ValueExpression]] = field(repr=False, default=True)
+    label:          Optional[TransMessageType] = field(repr=False, default=None)
+
+    def __post_init__(self):
+        if self.min is None and self.max is None:
+            raise RuleSetupError(owner=self, msg="Please provide min and/or max")
+        if self.min is not None and (to_int(self.min) is None or to_int(self.min)<0):
+            raise RuleSetupError(owner=self, msg="Please provide integer min >=0 ")
+        if self.max is not None and (to_int(self.max) is None or to_int(self.max)<0):
+            raise RuleSetupError(owner=self, msg="Please provide integer max >=0 ")
+        if self.min is not None and self.max is not None and self.max<self.min:
+            raise RuleSetupError(owner=self, msg="Please provide min <= max")
+        # TODO: define standard label and error message
+        if not self.error:
+            if self.min and self.max:
+                self.error = f"Provide value with length between {self.min} and {self.max}"
+            elif self.min:
+                self.error = f"Provide value with length at least {self.min}"
+            elif self.max:
+                self.error = f"Provide value with length at most {self.max}"
+            else:
+                assert False
+
+        super().__post_init__()
+
+    # value: Any, component: "ComponentBase", 
+    def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
+        component = apply_session.current_frame.component
+        value = component.get_current_value_from_history(apply_session)
+        if hasattr(value, "__len__"):
+            if self.min and value and len(value) < self.min:
+                return ValidationFailure(
+                                component_key_string = component.get_key_string(apply_session),
+                                error=self.error, 
+                                validation_name=self.name,
+                                validation_label=self.label,
+                                details=f"Value's length of {len(value)} is smaller of minimum allowed {self.min}" 
+                                        f"({message_truncate(value)})")
+            elif self.max and value and len(value) > self.max:
+                return ValidationFailure(
+                                component_key_string = component.get_key_string(apply_session),
+                                error=self.error, 
+                                validation_name=self.name,
+                                validation_label=self.label,
+                                details=f"Value's length of {len(value)} is greater of maximum allowed {self.max}" 
+                                        f"({message_truncate(value)})")
+        return None
+

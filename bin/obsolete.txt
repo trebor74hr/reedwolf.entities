@@ -1,0 +1,603 @@
+meta.py
+    # ============================================================
+    # OBSOLETE 
+    # ============================================================
+
+    # type_hint_details: TypeHintDetails = _extract_type_hint_details(self.py_type_hint)
+
+    # if self.function and self.th_field:
+    #     raise RuleInternalError(owner=self, msg=f"Invalid TypeInfo - both Function and Field")
+
+    # self.parent_object = None
+
+    # if self.function:
+    #     self.var_type = TypeInfoTypeEnum.FUNCTION
+    # elif self.parent_object is None:
+    #     assert self.th_field is None
+    #     # print("1", inspect.isclass(self.py_type_hint), self.py_type_hint)
+    #     # import pdb;pdb.set_trace() 
+    #     self.var_type = TypeInfoTypeEnum.DIRECT_ARG
+    # elif is_dataclass(self.parent_object):
+    #     self.var_type = TypeInfoTypeEnum.DC_FIELD
+    # elif is_pydantic(self.parent_object):
+    #     self.var_type = TypeInfoTypeEnum.PYD_FIELD
+    # elif is_function(self.parent_object):
+    #     # TODO: hm, function again?
+    #     self.var_type = TypeInfoTypeEnum.FUNCTION
+    # else:
+    #     raise RuleSetupError(owner=self, msg=f"Currently only pydantic/dataclass parent classes are supported, got: {self.parent_object} / {type(self.parent_object)}")
+
+    # def is_function_return_type(self):
+    #     return bool(self.function)
+
+    # def is_pydantic(self):
+    #     return self.var_type == TypeInfoTypeEnum.PYD_FIELD
+
+    # def is_dataclass(self):
+    #     return self.var_type == TypeInfoTypeEnum.DC_FIELD
+
+    # @staticmethod
+    # def get_by_type(py_type_hint: type) -> TypeInfo:
+    #     if not py_type_hint not in _TYPE_INFO_REGISTRY:
+    #         raise RuleInternalError(f"{py_type_hint} not in type registry")
+    #     return _TYPE_INFO_REGISTRY[py_type_hint]
+
+
+    # ------------------------------------------------------------
+
+    # def _extract_type_hint_details(py_type_hint: Any) -> TypeHintDetails:
+    #     # TODO: add proper typing
+    #     origin_type = getattr(py_type_hint, "__origin__", None)
+    # 
+    #     if origin_type == Union \
+    #             and len(getattr(py_type_hint, "__args__", [])) == 2 \
+    #             and py_type_hint.__args__[1] == NoneType:  # noqa: E711
+    #         # e.g. Optional[SomeClass] === Union[SomeClass, NoneType]
+    #         is_optional = True
+    #         origin_type = py_type_hint.__args__[0]
+    #         origin_type_new = getattr(origin_type, "__origin__", None)
+    #         if origin_type_new:
+    #             py_type_hint = origin_type
+    #             origin_type = origin_type_new
+    #     else:
+    #         is_optional = False
+    # 
+    #     if origin_type == list:
+    #         # List[some_type]
+    #         is_list = True
+    #         if len(py_type_hint.__args__) != 1:
+    #             raise RuleSetupNameError(item=py_type_hint, msg=f"AttrVexpNode's annotation should have single List argument, got: {py_type_hint.__args__}.")
+    #         inner_type = py_type_hint.__args__[0]
+    #     elif origin_type is not None:
+    #         is_list = False
+    #         inner_type = origin_type
+    #     else:
+    #         is_list = False
+    #         inner_type = py_type_hint
+    # 
+    #     type_is_enum = is_enum(inner_type)
+    #     # if type_is_enum: leave original inner_type - otherwise I would need extra field 
+    # 
+    #     return TypeHintDetails(type_=inner_type, is_list=is_list, is_optional=is_optional, is_enum=type_is_enum)
+
+    # @dataclass
+    # class TypeHintDetails:
+    #     type_: type
+    #     is_list: bool
+    #     is_optional: bool
+    #     is_enum: bool
+    # 
+
+    # # ------------------------------------------------------------
+    # # TYPE HINT CLASSES
+    # # ------------------------------------------------------------
+    # 
+    # class TypeInfoTypeEnum(Enum):
+    #     DC_FIELD   = 801  # noqa: E221
+    #     PYD_FIELD  = 802  # noqa: E221
+    #     FUNCTION   = 803  # noqa: E221
+    #     # TODO: when this happens
+    #     DIRECT_ARG = 804  # noqa: E221
+
+    # var_type:       TypeInfoTypeEnum = field(init=False, repr=False)
+    # parent_object: type
+
+    # # Source field from model - type hinted (th_)
+    # # It is None when function
+    # th_field: OptionalModelField
+    # function: Optional[Callable[..., Any]]
+
+
+    # rejected - test shown ok
+    # # ------------------------------------------------------------
+    # # To check if all objects are setup()
+    # # ------------------------------------------------------------
+    # 
+    # @dataclass
+    # class _InstanceItem:
+    #     id: int = field(repr=False)
+    #     name: str
+    #     class_name: str
+    #     setup_called: bool = False
+    # 
+    #     def __str__(self):
+    #         return f"{self.class_name:20}('{self.name:30}', id={self.id})"
+    # 
+    # 
+    # class SetupCallsChecks:
+    #     """
+    #     can be used only when env. variable RULES_INTERNAL_CHECKS is set, e.g.
+    #     (bash):
+    #         RWF_RULES_DEVELOP=1 python ...
+    #     """
+    # 
+    #     @staticmethod
+    #     def can_use() -> bool:
+    #         return bool(os.environ.get("RWF_RULES_DEVELOP", ""))
+    # 
+    #     def __init__(self):
+    #         self.instances_by_id: Dict[int, _InstanceItem] = {}
+    # 
+    # 
+    #     #  Components | IValueExpression
+    #     def register(self, instance: Any):
+    #         # from .expressions import ValueExpression; if isinstance(instance, ValueExpression): import pdb;pdb.set_trace() 
+    #         instance_id = id(instance)
+    #         if instance_id in self.instances_by_id:
+    #             raise Exception(f"Already registered: {self.instances_by_id[instance_id]}")
+    # 
+    #         if hasattr(instance, "_name"):
+    #             name = instance._name
+    #         elif getattr(instance, "name", None):
+    #             name = instance.name
+    #         else:
+    #             name = str(instance)
+    # 
+    #         self.instances_by_id[instance_id] = _InstanceItem(id=instance_id, name=name, class_name=instance.__class__.__name__)
+    # 
+    #     def setup_called(self, instance: Any):
+    #         instance_id = id(instance)
+    # 
+    #         if instance_id not in self.instances_by_id:
+    #             self.register(instance)
+    #             # raise Exception(f"Not yet registered: {instance}. Put 'SETUP_CALLS_CHECKS.register(self) in __post_init__ / __init__ method.'")
+    # 
+    #         instance_item = self.instances_by_id[instance_id]
+    #         if instance_item.setup_called:
+    #             raise Exception(f"{instance_item} - setup already called.")
+    #         instance_item.setup_called = True
+    # 
+    #     def check_all(self):
+    #         # print("Calling internal checks!")
+    #         if not self.instances_by_id:
+    #             raise Exception("Instance registry is empty")
+    #         # not_called = [instance_item for instance_item in self.instances_by_id.values() if not instance_item.setup_called]
+    #         not_called = [instance_item for instance_item in self.instances_by_id.values() if not instance_item.setup_called]
+    #         if not_called:
+    #             not_called_str = "\n  ".join([f"{nr}. {str(instance_item)}" for nr, instance_item in enumerate(not_called, 1)])
+    #             # raise Exception(f"Internal check failed: setup not called for:\n  {not_called_str}")
+    #             print(f"Internal check failed: setup not called for:\n  {not_called_str}. Missing 'SETUP_CALLS_CHECKS.setup_called(self)'?'")
+    #         else:
+    #             print("check_all(): All OK")
+    # 
+    #         self.reset()
+    #         
+    #     def reset(self):
+    #         if self.instances_by_id:
+    #             self.instances_by_id = {}
+    # 
+    # 
+    # SETUP_CALLS_CHECKS = SetupCallsChecks()
+    # 
+    # 
+
+
+base.py
+    # ------------------------------------------------------------
+    # OBSOLETE
+    # ------------------------------------------------------------
+    # parent_type_info = TypeInfo.extract_function_return_type_info(function=inspect_object)
+    # # ignore fun_return_py_type_hint.is_list, fun_return_py_type_hint.is_optional
+    # parent_object = parent_type_info.type_
+
+    # Replaced with Function()
+    # # ------------------------------------------------------------
+    # # RulesHandlerFunction
+    # # ------------------------------------------------------------
+    # 
+    # @dataclass
+    # class RulesHandlerFunction:
+    #     function: Callable[..., Any]
+    #     inject_params: Optional[Dict[str, ValueExpression]] = field(default=None, repr=False)
+    #     model_param_name: Optional[str] = field(default=None, repr=False)
+
+    # ------------------------------------------------------------
+    # BASE CLASSES/ENGINE OF BUILDING BLOCKS OF RULES (later)
+    # ------------------------------------------------------------
+
+    # BoundVar = namedtuple("BoundVar", ["registries_name", "namespace", "vexp_node_name"])
+
+    # TODO: def clone(self):
+    #       quite complex to do right, due cross-references (parent->child and opposite, siblings etc.)
+
+    # print(f"RT: {owner} -> {self}")
+    # if is_top:
+    #     print("component:")
+    #     for n,v in components.items():
+    #         print(f"  {n} [{type(v)}] = {repr(v)[:100]}")
+
+    # TODO: remove dep somehow - interface?
+    # from .components import ComponentBase
+
+    # if isinstance(inspect_object, RulesHandlerFunction):
+    #     inspect_object = inspect_object.function
+
+    # === type_info: TypeInfo
+    # if func_args:
+    #     func_node : IFunctionVexpNode = \
+    #             try_create_function(
+    #                 functions_factory_registry=functions_factory_registry,
+    #                 attr_node_name=attr_node_name,
+    #                 func_args=func_args,
+    #                 value_arg_type_info=parent_type_info,
+    #                 )
+    #     type_info = func_node.output_type_info
+    #     # assert functions_factory_registry
+    #     # function_factory = functions_factory_registry.get(attr_node_name)
+
+    #     # if function_factory:
+    #     #     # ===== Create IFunctionVexpNode instance ===== 
+    #     #     func_node = function_factory.create_function(
+    #     #                     func_args=func_args,
+    #     #                     value_arg_type_info=parent_type_info)
+    #     #     type_info = func_node.output_type_info
+
+    #     # if not type_info:
+    #     #     # TODO: filter functions based on type: is_list or similar ...
+    #     #     names_avail = get_available_names_example(attr_node_name,
+    #     #                         functions_factory_registry.get_all_names())
+    #     #     raise RuleSetupNameNotFoundError(item=inspect_object, msg=f"Function name '{attr_node_name}' not found (parent={model_class}). Valid are: {names_avail}")
+    # else:
+
+fields.py
+    # TODO:
+    #   @dataclass
+    #   class FileField(FieldBase):
+    #       # TODO: subtype django: ImageField?
+    #       PYTHON_TYPE:ClassVar[type] = Path
+
+    # TODO: instead of supporting any JSON, put some specific json, e.g. Dict[str, Any], List[Any] or similar
+    #       make it possible to easily implement new custom json or any other Field
+    #       SOLUTION: It could be Section which is nested and only storage is for whole section -> to json field
+    #   @dataclass
+    #   class JSONField(FieldBase):
+    #       PYTHON_TYPE:ClassVar[type] = object
+
+    # -- Django: BinaryField
+
+    # if self.type is None:
+    #     if self.__class__==BooleanField:
+    #         self.type = FieldTypeEnum.BOOL
+    #     elif self.__class__==ChoiceField:
+    #         self.type = FieldTypeEnum.CHOICE
+    #     elif self.__class__==EnumField:
+    #         self.type = FieldTypeEnum.ENUM
+    #     else:
+    #         self.type=FieldTypeEnum.INPUT
+    # else:
+    #     # type should be ommited?
+    #     if self.__class__==BooleanField:
+    #         raise RuleSetupValueError(owner=self, msg=f"For BooleanField type should be ommited.")
+    #     elif self.__class__==ChoiceField:
+    #         raise RuleSetupValueError(owner=self, msg=f"For ChoiceField type should be ommited.")
+    #     elif self.__class__==EnumField:
+    #         raise RuleSetupValueError(owner=self, msg=f"For EnumField type should be ommited.")
+
+    #     # use classes?
+    #     elif self.__class__!=BooleanField and self.type==FieldTypeEnum.BOOL:
+    #         raise RuleSetupValueError(owner=self, msg=f"For type='checkbox' use BooleanField instead.")
+    #     elif self.__class__!=ChoiceField and self.type==FieldTypeEnum.CHOICE:
+    #         raise RuleSetupValueError(owner=self, msg=f"For type='choice' use ChoiceField instead.")
+    #     elif self.__class__!=EnumField and self.type==FieldTypeEnum.ENUM:
+    #         raise RuleSetupValueError(owner=self, msg=f"For type='enum' use EnumField instead.")
+
+    #     # normalize to Enum value
+    #     type_values = {ev.value:ev for ev in FieldTypeEnum}
+    #     if self.type not in type_values:
+    #         raise RuleSetupValueError(owner=self, msg=f"type='{self.type}' needs to be one of {type_values.keys()}.")
+    #     self.type = type_values[self.type]
+
+    # def _check_py_type(self):
+    #     my_type_info = TypeInfo.get_or_create_by_type(py_type_hint=self.PYTHON_TYPE, parent_object=self, th_field=None)
+    #     if not self.bound_attr_node.data.is_type_equal(my_type_info) \
+    #         and not self.bound_attr_node.data.is_type_inherited(my_type_info):
+    #         raise RuleSetupError(owner=self, msg=f"PYTHON_TYPE={self.PYTHON_TYPE} -> [ {my_type_info.as_str()} ], does not match bound attr_node type: {self.bound_attr_node.name}.data =[ {self.bound_attr_node.data.as_str()} ]")
+
+    # class FieldTypeEnum(str, Enum):
+    #     INPUT  = "input"
+    #     EMAIL  = "email"  # no special class
+    #     NUMBER = "number" # no special class
+    #     BOOL   = "bool"
+    #     CHOICE = "choice" # html select
+    #     ENUM   = "enum"
+    #     FILE   = "file"
+    #     PASSWORD  = "password"
+    #     DATE  = "date"
+
+
+    # if not self.bound_attr_node.data.is_type_equal(my_type_info) \
+    #    and not self.bound_attr_node.data.is_type_inherited(my_type_info):
+    #     raise RuleSetupError(owner=self, msg=f"PYTHON_TYPE={self.PYTHON_TYPE} -> [ {my_type_info.as_str()} ], does not match bound attr_node type: {self.bound_attr_node.name}.data =[ {self.bound_attr_node.data.as_str()} ]")
+
+
+context.py
+
+    # ------------------------------------------------------------
+    # OBSOLETE
+    # ------------------------------------------------------------
+
+    # ContextKlass = TypeVar("ContextKlass", bound=type)
+    # # standardized values
+    # user_attr: Optional[str] = None
+    # session_attr: Optional[str] = None
+    # # Used for enabling .Inspect() functions work (debug) and maybe logging
+    # is_debug_mode_attr: Optional[str] = None
+
+    # # Should return datetime with timezone. Can accept Context instance.
+    # now_function: Optional[CustomFunctionFactory] = None
+
+    # TODO: Consider following:
+    #           log_format: Optional[str] = None
+    #       for logging to change logging format something like:
+    #           "{now} - {user} - {session} - {level}"
+
+    # TODO: Consider following:
+    #           run_mode_attr = "run_mode"
+    #       which should returns enum like: 
+    #           .PRODUCTION, .STAGING, .TEST, .DEV
+
+    # autocomputed 
+    # type_info : TypeInfo = field(init=False, repr=False)
+    # user_attrgetter: Optional[Callable] = field(init=False, repr=False, default=None)
+    # session_attrgetter: Optional[Callable] = field(init=False, repr=False, default=None)
+    # is_debug_mode_attrgetter: Optional[Callable] = field(init=False, repr=False, default=None)
+
+
+    # def __post_init__(self):
+    #     if not type(self.klass)==type:
+    #         raise RuleSetupValueError(f"klass should be some python class, got: {self.klass}")
+
+    #     if self.user_attr:
+    #         if not hasattr(klass, self.user_attr):
+    #             raise RuleSetupValueError(f"user_attr should be attribute of {self.klass}, got: {self.user_attr}")
+    #         from operator import attrgetter
+    #         self.user_attrgetter = attrgetter(self.user_attr)
+
+    #     if self.session_attr:
+    #         if not hasattr(klass, self.session_attr):
+    #             raise RuleSetupValueError(f"session_attr should be attribute of {self.klass}, got: {self.session_attr}")
+    #         self.session_attrgetter= attrgetter(self.session_attr)
+
+    #     if self.is_debug_mode_attr:
+    #         if not hasattr(klass, self.is_debug_mode_attr):
+    #             raise RuleSetupValueError(f"is_debug_mode_attr should be attribute of {self.klass}, got: {self.is_debug_mode_attr}")
+    #         self.is_debug_mode_attrgetter = attrgetter(self.is_debug_mode_attr)
+
+    #     if self.now_function:
+    #         if not isinstance(self.now_function, CustomFunctionFactory):
+    #             raise RuleSetupValueError(f"now_function should be instance of CustomFunctionFactory, got: {self.now_function}. Have you forgot to wrap with Function()?")
+    #         # TODO: check that function returns datetime instance w/wo timezone
+    #         # TODO: check that function can accept only context or nothing else
+
+
+    # def get_user(self, context_instance: ContextKlass) -> Any:
+    #     return self.user_attrgetter(context_instance) if self.user_attrgetter else None
+
+    # def get_session(self, context_instance: ContextKlass) -> Any:
+    #     return self.session_attrgetter(context_instance) if self.session_attrgetter else None
+
+    # def is_debug_mode(self, context_instance: ContextKlass) -> bool:
+    #     return self.is_debug_mode_attrgetter(context_instance) if self.is_debug_mode_attrgetter else False
+    #         
+    # def get_now(self, context_instance: ContextKlass) -> datetime:
+    #     # TODO: .call() does not exist yet
+    #     return self.now_function.call(context_instance) if self.now_function else datetime.now()
+
+expressions.py
+    # ------------------------------------------------------------ 
+    # OBSOLETE
+    # ------------------------------------------------------------ 
+
+    # class StreamOperation(OperationVexpNode):
+    #     """
+    #         def __rshift__(self, other):
+    #     """
+    # 
+    #     #   operator.__rshift__(a, b) - a >> b - Return a shifted right by b.
+    #     def get_op_function(self):
+    #         # TODO: not implemented yet
+    #         return None
+
+
+    # if self._read_functions!=UNDEFINED:
+    #     raise RuleSetupError(owner=self, msg="Setup() already called (found _read_functions).")
+
+    # _read_functions = []
+
+    # # print(f"OK: {self} -> {bit}")
+    # if bit._func_args is not None:
+    #     args, kwargs = bit._func_args
+    #     # getter = operator.attrgetter(vexp_node_name)
+    #     # def func_call(obj):
+    #     #     return getter(obj)(*args, **kwargs)
+    #     # -> .<vexp_node_name>(*args, **kwargs)
+    #     func_call  = operator.methodcaller(vexp_node_name, *args, **kwargs)
+    #     _read_functions.append(func_call)
+    #     # raise NotImplementedError(f"Call to functions {bit} in {self} not implemented yet!")
+    # else:
+    #     getter = operator.attrgetter(vexp_node_name)
+    #     _read_functions.append(getter)
+
+
+    # if "select_id_of_default_device" in repr(self):
+    #     import pdb;pdb.set_trace()
+
+    # self._read_functions = _read_functions
+    # if not vexp_evaluator.is_all_ok():
+    #     if self._namespace not in (FunctionsNS, ThisNS, ): # UtilsNS
+    #         raise RuleSetupValueError(owner=self, msg="AttrVexpNode not found.")
+    #     # self._all_ok = False?
+    #     # self._vexp_node_name = None
+    #     self._evaluator = None
+    # else:
+    #     # self._all_ok = False?
+    #     # attr_node.add_reference(owner.name)
+    #     # self._vexp_node_name = attr_node.name
+    #     self._evaluator = vexp_evaluator
+
+    # self._vexp_node_name = None
+    # self._read_functions = None
+
+    # def Read(self, registries:'Registries', model_name:Optional[str]):  # noqa: F821
+    #     if "_read_functions" not in dir(self):
+    #         raise RuleInternalError(owner=self, msg="Setup not done.")
+    #     val = UNDEFINED
+    #     # TODO: if self._vexp_node_name
+    #     for func in self._read_functions:
+    #         if val is UNDEFINED:
+    #             val = func(registries)
+    #         else:
+    #             val = func(val)
+    #     return val
+    # parent:"AttrVexpNode"
+
+containers.py
+    # ------------------------------------------------------------
+    # OBSOLETE
+    # ------------------------------------------------------------
+
+    # def is_finished(self):
+    #     return hasattr(self, "_finished")
+
+    # def finish(self):
+    #     if self.is_finished():
+    #         raise RuleSetupError(owner=self, msg="finish() should be called only once.")
+    #     self._finished = True
+
+    
+attr_nodes.py
+    # ------------------------------------------------------------
+    # OBSOLETE
+    # ------------------------------------------------------------
+    # @property
+    # def refcount(self) -> int:
+    #     return len(self.references)
+
+
+registries.py
+    # ============================================================
+    # OBSOLETE
+    # ============================================================
+
+    # def __getitem__(self, key: str) -> AttrVexpNode:
+    #     raise RuleInternalError(f"{self} - use get()")
+    #     # return self.store[key]
+
+    # def __setitem__(self, key: str, value: AttrVexpNode):
+    #     raise RuleInternalError(f"{self} - use register()")
+    #     # self.store[key] = value
+
+    # def __delitem__(self, key: str):
+    #     raise NotImplementedError(f"{self} - delete not allowed")
+
+    # def __contains__(self, key: str) -> bool:
+    #     raise RuleInternalError(f"{self} - use get()")
+    #     # return key in self.store
+
+    # def keys(self) -> List[str]:
+    #     return self.store.keys()
+
+    # def values(self) -> List[AttrVexpNode]:
+    #     return self.store.values()
+
+evaluators.py
+    implemented as standard functions
+    """
+    TODO: still confused if this should be like this - maybe implement as normal
+          standard functions (for now only children like: List[Item] -> Item)
+          e.g.
+          cleaners = [
+              Evaluation(
+                  value = Fn.Last(This.addresses.date_added)
+              ]
+
+
+    Evaluators could be used instead ValueExpression or directly in
+    combination with ValueExpressions.
+    """
+    from abc import ABC
+    from dataclasses import dataclass
+
+    from .base import (
+            SetOwnerMixin,
+            )
+
+    class EvaluatorBase(SetOwnerMixin, ABC):
+        pass
+
+    # ------------------------------------------------------------
+    # Evaluators based on children records
+    #   input: children records, output: single value (can be object?)
+    # ------------------------------------------------------------
+
+    class ChildrenEvaluatorBase(EvaluatorBase, ABC):
+        pass
+
+    class ChildrenEvaluators:
+        """ container class for evaluators based on children """
+
+        @dataclass
+        class Min(ChildrenEvaluatorBase):
+            " order by F1 asc + first + store F1 field "
+            pass
+
+        @dataclass
+        class Max(ChildrenEvaluatorBase):
+            " order by F1 desc + first + store F1 field "
+            pass
+
+        @dataclass
+        class First(ChildrenEvaluatorBase):
+            " order by F1 asc + first + store F2 field "
+            pass
+
+        @dataclass
+        class Last(ChildrenEvaluatorBase):
+            " order by F1 desc + first + store F2 field "
+            pass
+
+        @dataclass
+        class Oldest(ChildrenEvaluatorBase):
+            " same as First, but for date/datetime fields "
+            pass
+
+        @dataclass
+        class Newest(ChildrenEvaluatorBase):
+            " same as Last, but for date/datetime fields "
+            pass
+
+        @dataclass
+        class Count(ChildrenEvaluatorBase):
+            " Count "
+            pass
+
+        @dataclass
+        class Sum(ChildrenEvaluatorBase):
+            " for numeric fields "
+            pass
+
+        @dataclass
+        class Average(ChildrenEvaluatorBase):
+            " for numeric fields "
+            pass
+

@@ -1,22 +1,32 @@
-from typing import Optional
+from abc import ABC
+from typing import (
+        Optional,
+        Dict,
+        )
+from .utils import (
+        message_truncate,
+        )
 
 # TODO: check https://snarky.ca/unravelling-from/ - how to convert/transform exception
 
 # Base errors
-class RuleError(Exception):
+
+class RuleError(Exception, ABC):
     # TODO: validate that every call is marked for translations, check in constructor or using mypy
-    def __init__(self, msg:str, owner:Optional['ComponentBase'] = None, item: Optional['Item'] = None):
+    def __init__(self, msg:str, owner:Optional['ComponentBase'] = None, item: Optional['Item'] = None):  # noqa: F821
         self.msg, self.owner, self.item = msg, owner, item
         # maybe type(item)?
         self.full_msg = self._get_full_msg() + (f" (item={repr(item)[:50]})" if self.item else "")
 
     def _get_full_msg(self) -> str:
-        return f"{self.owner.name}: {self.msg}" if self.owner and getattr(self.owner, "name", None) \
-                        else (f"{str(self.owner)}: {self.msg}" if self.owner else self.msg) 
+        return f"{self.owner.__class__.__name__}('{self.owner.name}') -> {self.msg}" if self.owner and getattr(self.owner, "name", None) \
+                        else (f"{str(self.owner)} -> {self.msg}" if self.owner else self.msg)
 
     def __str__(self):
-        return f"{self.__class__.__name__} => {self.full_msg}"
-    __repr__ = __str__
+        return f"{self.full_msg}"
+
+    def __repr__(self):
+        return f"{self.__class__.__name__} ( {self.full_msg} )"
 
 # ------------------------------------------------------------
 # General and internal errors
@@ -36,10 +46,10 @@ class RuleSetupError(RuleError):
 class RuleSetupValueError(RuleSetupError):
     pass
 
-class RuleSetupNameNotFoundError(RuleSetupError):
+class RuleSetupNameError(RuleSetupError):
     pass
 
-class RuleSetupNameError(RuleSetupError):
+class RuleSetupNameNotFoundError(RuleSetupNameError):
     pass
 
 class RuleSetupTypeError(RuleSetupError):
@@ -47,22 +57,53 @@ class RuleSetupTypeError(RuleSetupError):
 
 
 # ------------------------------------------------------------
+# Rules setup (boot time) validation errors
+# ------------------------------------------------------------
+class RuleApplyError(RuleError):
+    pass
+
+class RuleApplyValueError(RuleApplyError):
+    pass
+
+class RuleApplyNameError(RuleApplyError):
+    pass
+
+class RuleApplyNameNotFoundError(RuleApplyNameError):
+    pass
+
+class RuleApplyTypeError(RuleApplyError):
+    pass
+
+
+
+# ------------------------------------------------------------
 # Validations
 # ------------------------------------------------------------
 
 class RuleValidationError(RuleError):
-    def __init__(self, msg:str, owner:'ComponentBase', item : Optional['Item'] = None):
+    def __init__(self, errors: Dict[str, 'ValidationFailure'], owner: 'ComponentBase'):  # noqa: F821
         " owner is required "
-        super().__init__(msg=msg, owner=owner, item=item)
+        self.errors = errors
+        msg = []
+        for component_key, validation_failure_list in self.errors.items():
+            err_msg = [vf.error for vf in validation_failure_list]
+            msg.append("{} => {}".format(
+                    component_key, 
+                    message_truncate("; ".join(err_msg), 100)))
+        msg = f"Validation failed ({len(msg)}): \n  - " + message_truncate("\n  - ".join(msg), 500)
+        
+        super().__init__(msg=msg, owner=owner)
 
-class RuleValidationFieldError(RuleError):
-    def __init__(self, msg:str, owner:'Field', item : Optional['Item'] = None):
-        " owner must be field and is required "
-        super().__init__(msg=msg, owner=owner, item=item)
+# class RuleValidationFieldError(RuleError):
+#     def __init__(self, msg:str, owner:'Field', item : Optional['Item'] = None):  # noqa: F821
+#         " owner must be field and is required "
+#         super().__init__(msg=msg, owner=owner, item=item)
+# 
+# class RuleValidationValueError(RuleValidationError):
+#     pass
 
-class RuleValidationValueError(RuleValidationError):
-    pass
-
+# TODO: consider renaming Validation -> Validator ?
 class RuleValidationCardinalityError(RuleValidationError):
     pass
+
 

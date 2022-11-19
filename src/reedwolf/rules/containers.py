@@ -1,103 +1,304 @@
+# https://stackoverflow.com/questions/58986031/type-hinting-child-class-returning-self/74545764#74545764
+from __future__ import annotations
+import inspect
+from abc import (
+        ABC, 
+        abstractmethod,
+        )
 from typing import (
-        Any, 
-        Dict, 
-        List, 
+        Dict,
+        List,
         Optional,
         Union,
-        ClassVar,
+        Type,
         )
-from dataclasses import dataclass, field, is_dataclass, fields as dc_fields
+# https://peps.python.org/pep-0673/
+# python 3.11+ from typing import Self
 
-from .types import (
-        TransMessageType, 
-        STANDARD_TYPE_LIST,
-        )
+from dataclasses import dataclass, field
+
 from .utils import (
-        is_pydantic, 
-        get_available_vars_sample,
+        get_available_names_example,
         UNDEFINED,
         UndefinedType,
         )
-from .base import (
-        ComponentBase,
-        BoundModelBase,
-        extract_field_meta,
-        BoundVar,
-        TypeHintField,
-        )
 from .exceptions import (
-        RuleSetupNameError,
         RuleSetupError,
+        RuleSetupValueError,
         RuleInternalError,
         RuleNameNotFoundError,
+        RuleSetupNameNotFoundError,
+        # apply
+        RuleApplyError,
+        RuleApplyNameNotFoundError,
         )
 from .namespaces import (
-        Namespace,
-        FieldsNS, 
-        DataProvidersNS,
-        ContextNS,
-        GlobalNS,
         ModelsNS,
-        ThisNS,
         )
-from .expressions import(
+from .meta import (
+        STANDARD_TYPE_LIST,
+        TransMessageType,
+        TypeInfo,
+        is_model_class,
+        get_model_fields,
+        )
+from .base import (
+        ComponentBase,
+        IContainerBase,
+        IData,
+        BoundModelBase,
+        GlobalConfig,
+        )
+from .expressions import (
         ValueExpression,
-        Operation,
         )
 from .models import (
         BoundModel,
         BoundModelWithHandlers,
         )
-from .validations import (
-        CardinalityValidation,
-        ChildrenValidation,
-        )
-from .variables import (
-        Variable,
-        VariablesHeap, 
+from .attr_nodes import AttrVexpNode
+from .functions import CustomFunctionFactory
+from .registries import Registries
+from .valid_children import (
+        CardinalityValidation
         )
 from .components import (
-        BooleanField,
-        ChoiceField,
         Component,
-        DataVar,
-        EnumField,
-        Field,
-        Section, 
-        Validation, 
+        FieldGroup,
+        ValidationBase,
+        EvaluationBase,
+        )
+from .contexts import (
+        IContext,
+        )
+from .config import (
+        Config,
         )
 
 # ------------------------------------------------------------
-# Rules 
+# Rules
 # ------------------------------------------------------------
 
-@dataclass
-class ContainerBase(ComponentBase):
 
-    # def is_finished(self):
-    #     return hasattr(self, "_finished")
+class ContainerBase(IContainerBase, ComponentBase, ABC):
 
-    # def finish(self):
-    #     print(self.name)
-    #     import pdb;pdb.set_trace() 
-    #     if self.is_finished():
-    #         raise RuleSetupError(owner=self, msg="finish() should be called only once.")
-    #     self._finished = True
+    def _get_function(self, name: str, strict:bool=True):
+        if not self.functions:
+            raise KeyError(f"{self.name}: Function '{name}' not found, no functions available.")
+        return self.registries.functions_factory_registry.get(name, strict=strict)
 
-    def add_section(self, section:Section):
+    def add_fieldgroup(self, fieldgroup:FieldGroup):
         if self.is_finished():
-            raise RuleSetupError(owner=self, msg="Section can not be added after setup() is called.")
-        found = [sec for sec in self.contains if sec.name==section.name]
+            raise RuleSetupError(owner=self, msg="FieldGroup can not be added after setup() is called.")
+        found = [sec for sec in self.contains if sec.name==fieldgroup.name]
         if found:
-            raise RuleSetupError(owner=self, msg=f"Section {section.name} is already added.")
-        self.contains.append(section)
+            raise RuleSetupError(owner=self, msg=f"FieldGroup {fieldgroup.name} is already added.")
+        self.contains.append(fieldgroup)
+
+    def is_top_owner(self):
+        return not bool(self.owner)
 
     def is_extension(self):
         # TODO: if self.owner is not None could be used as the term, put validation somewhere
         " if start model is value expression - that mean that the the Rules is Extension "
         return isinstance(self.bound_model.model, ValueExpression)
 
-    def setup(self):
+    def is_container(self):
+        return True
+
+    def __getitem__(self, name):
+        if name not in self.components:
+            vars_avail = get_available_names_example(name, self.components.keys())
+            raise KeyError(f"{self.name}: Component name '{name}' not found, available: {vars_avail}")
+        return self.components[name]
+
+    # ------------------------------------------------------------
+
+    def _register_model_attr_nodes(self):
+        # ----------------------------------------
+        # A. 1st level attr_nodes
+        # ------------------------------------------------------------
+        # A.1. MODELS - collect attr_nodes from managed models
+        # ------------------------------------------------------------
+        self.models = self.bound_model.fill_models()
+
+        if not self.models:
+            raise RuleSetupError(owner=self, msg="Rules(models=List[models]) is required.")
+
+        for bound_model_name, bound_model in self.models.items():
+            assert bound_model_name == bound_model.name
+            self._register_bound_model(bound_model=bound_model)
+
+    # ------------------------------------------------------------
+
+    def _register_bound_model(self, bound_model:BoundModelBase):
+        # ex. type_info.metadata.get("bind_to_owner_registries")
+        is_main_model = (bound_model==self.bound_model)
+        is_extension_main_model = (self.is_extension() and is_main_model)
+
+        # is_list = False
+        if not isinstance(bound_model, BoundModelBase):
+            raise RuleSetupError(owner=self, msg=f"{bound_model.name}: Needs to be Boundbound_model* instance, got: {bound_model}")
+
+        model = bound_model.model
+
+        attr_node = None
+        if is_extension_main_model:
+            if not isinstance(model, ValueExpression):
+                raise RuleSetupError(owner=self, msg=f"{bound_model.name}: For Extension main bound_model needs to be ValueExpression: {bound_model.model}")
+
+        # alias_saved = False
+        is_list = False
+
+        if isinstance(model, ValueExpression):
+            # TODO: for functions value expressions need to be stored
+            #       with all parameters (func_args)
+            if model.GetNamespace()!=ModelsNS:
+                raise RuleSetupError(owner=self, msg=f"{bound_model.name}: ValueExpression should be in ModelsNS namespace, got: {model.GetNamespace()}")
+
+            if is_extension_main_model:
+                # TODO: DRY this - the only difference is registries - extract common logic outside
+                # bound attr_node
+                assert hasattr(self, "owner_registries")
+                registries_from = self.owner_registries
+                # attr_node = self.owner_registries.get_vexp_node_by_vexp(vexp=model)
+                # if attr_node:
+                #     raise RuleInternalError(owner=self, msg=f"AttrVexpNode data already in registries: {model} -> {attr_node}")
+                # attr_node = model.Setup(registries=self.owner_registries, owner=bound_model, parent=None)
+
+                # NOTE: this will be done later
+                # # add bounded attr_node - from owner registries to this registries
+                # self.registries.register(attr_node, alt_attr_node_name=bound_model.name)
+
+                # # attr_node.add_bound_attr_node(BoundVar(self.registries.name, attr_node.namespace, bound_model.name))
+                # alias_saved = True
+            else:
+                # Rules - top owner container
+                # normal case
+                registries_from = self.registries
+                # attr_node = model.Setup(registries=self.registries, owner=bound_model)
+
+            attr_node = registries_from.get_vexp_node_by_vexp(vexp=model)
+            if attr_node:
+                raise RuleInternalError(owner=self, msg=f"AttrVexpNode data already in registries: {model} -> {attr_node}")
+
+            attr_node = model.Setup(registries=registries_from, owner=bound_model)
+            if not attr_node:
+                raise RuleInternalError(owner=self, msg=f"AttrVexpNode not recognized: {model}")
+
+            if not isinstance(attr_node.data, TypeInfo):
+                raise RuleInternalError(owner=self, msg=f"AttrVexpNode data is not TypeInfo, got: {type(attr_node.data)} / {attr_node.data}")
+
+            model   = attr_node.data.type_
+            is_list = attr_node.data.is_list
+            # OLD: model, is_list = self.registries.get_vexp_type(vexp=model)
+
+        if not is_model_class(model) and not (is_list and model in STANDARD_TYPE_LIST):
+            raise RuleSetupError(owner=self, msg=f"Managed model {bound_model.name} needs to be a @dataclass, pydantic.BaseModel or List[{STANDARD_TYPE_LIST}], got: {type(model)}")
+
+        # model_class: ModelType = model
+
+        if not attr_node:
+            attr_node = self.registries.models_registry.create_attr_node(bound_model=bound_model)
+
+            # # standard DTO class attr_node
+            # if not bound_model.type_info:
+            #     bound_model.set_type_info()
+            # assert bound_model.type_info.type_==model
+            # attr_node = AttrVexpNode(
+            #                 name=bound_model.name,
+            #                 data=bound_model,
+            #                 namespace=ModelsNS,
+            #                 type_info=bound_model.type_info)
+            # # # print(f"{self} -> {bound_model} -> {attr_node}")
+            # # self.registries.register(attr_node)
+
+        # assert attr_node.name!=bound_model.name # not alias_saved and 
+
+        # simgle place to register
+        # save attr_node with alias or not
+
+        # self.registries.register(attr_node, alt_attr_node_name=bound_model.name if attr_node.name!=bound_model.name else None)
+        self.registries.models_registry.register_attr_node(
+                                    attr_node, 
+                                    alt_attr_node_name=(
+                                        bound_model.name 
+                                        if attr_node.name!=bound_model.name 
+                                        else None))
+
+        # attr_node.add_bound_attr_node(BoundVar(self.registries.name, attr_node.namespace, bound_model.name))
+        # alias_saved = True
+
+        # if is_extension_main_model:
+        #     # can be fetched with self.get_bound_model_attr_node()
+        #     self.bound_attr_node = attr_node
+
+        # NOTE: bound_model not stored in registries, just bound_model.model
+        # registries.register(current_attr_node, alt_attr_node_name=copy_to_registries.attr_node_name)
+
+        return attr_node
+
+    # ------------------------------------------------------------
+
+    def _register_data_attr_nodes(self):
+        # ------------------------------------------------------------
+        # A.2. DATAPROVIDERS - Collect all attr_nodes from dataproviders fieldgroup
+        # ------------------------------------------------------------
+        for data_var in self.data:
+            self.registries.data_registry.register(data_var)
+            # assert isinstance(data_var, IData)
+            # function = data_var.value if is_function(data_var.value) else None
+            # data_var_attr_node = AttrVexpNode(
+            #                         name=data_var.name,
+            #                         data=data_var,
+            #                         namespace=DatasNS,
+            #                         type_info=data_var.type_info,
+            #                         function=function)
+            # self.registries.register(data_var_attr_node)
+
+    # ------------------------------------------------------------
+
+    def _register_fields_components_attr_nodes(self):
+        """
+        Traverse the whole tree (recursion) and collect all components into
+        simple flat list. It will set owner for each child component.
+        """
+        self.components = self.fill_components()
+
+        # A.3. COMPONENTS - collect attr_nodes - previously flattened (recursive function fill_components)
+        for component_name, component in self.components.items():
+            self.registries.fields_registry.register(component)
+            # if isinstance(component, (FieldBase, IData)):
+            #     denied = False
+            #     deny_reason = ""
+            #     # TODO: type_info = component.attr_node.type_info
+            #     # print("here-7", component)
+            #     type_info = None
+            # # containers, validations, validators, evaluations, evaluators
+            # elif isinstance(component, (BoundModel, BoundModelWithHandlers, ValidationBase, EvaluationBase, FieldGroup, Extension, Rules, ValidatorBase)):
+            #     # stored - but should not be used
+            #     denied = True
+            #     deny_reason = "Component of type {component.__class__.__name__} can not be referenced in ValueExpressions"
+            #     if hasattr(component, "type_info"):
+            #         type_info=component.type_info
+            #     else:
+            #         type_info=None
+            # else:
+            #     valid_types = ', '.join([t.__name__ for t in (StringField, ChoiceField, BooleanField, EnumField, ValidationBase, EvaluationBase, FieldGroup, Extension, Rules, ValidatorBase, EvaluatorBase)])
+            #     raise RuleSetupError(owner=self, msg=f"RuleSetup does not support type {type(component)}: {repr(component)[:100]}. Valid type of objects or objects inherited from are: {valid_types}")
+
+            # attr_node = AttrVexpNode(
+            #                 name=component_name,
+            #                 data=component,
+            #                 namespace=FieldsNS,
+            #                 type_info=type_info,
+            #                 denied=denied,
+            #                 deny_reason=deny_reason)
+            # self.registries.register(attr_node) # , is_list=False))
+
+    # ------------------------------------------------------------
+
+    def setup(self) -> ContainerBase:
         # components are flat list, no recursion/hierarchy browsing needed
         if self.bound_model is None:
             raise RuleSetupError(owner=self, msg="bound_model not set. Initialize in constructor or call bind_to() first.")
@@ -105,219 +306,296 @@ class ContainerBase(ComponentBase):
         if self.is_finished():
             raise RuleSetupError(owner=self, msg="setup() should be called only once")
 
-        if self.heap is not None:
-            raise RuleSetupError(owner=self, msg="Heap.setup() should be called only once")
+        # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(self)
 
-        self.heap = VariablesHeap(owner=self)
+        if self.registries is not None:
+            raise RuleSetupError(owner=self, msg="Registries.setup() should be called only once")
 
-        # ----------------------------------------
-        # A. 1st level variables
-        # ----------------------------------------
-
-        # ------------------------------------------------------------
-        # A.1. MODELS - collect variables from managed models
-        # ------------------------------------------------------------
-        self.models = self.bound_model.fill_models()
-
-        if not self.models:
-            raise RuleSetupError(owner=self, msg="Rules(models=List[models]) is required.")
-
-        # model_fields_variables = {}
-        # th_field = extract_field_meta(self, "bound_model"):
-        is_extension = self.is_extension()
-
-        for bound_model_name, bound_model in self.models.items():
-            assert bound_model_name == bound_model.name
-            # ex. th_field.metadata.get("bind_to_owner_heap")
-            is_main_model = (bound_model==self.bound_model)
-            is_extension_main_model = (is_extension and is_main_model)
-
-            # is_list = False
-            if not isinstance(bound_model, BoundModelBase):
-                raise RuleSetupError(owner=self, msg=f"{bound_bound_model_name}: Needs to be Boundbound_model* instance, got: {bound_model}")
-
-            model = bound_model.model
-
-            variable = None
-            if is_extension_main_model:
-                if not isinstance(model, ValueExpression):
-                    raise RuleSetupError(owner=self, msg=f"{bound_model_name}: For Extension main bound_model needs to be ValueExpression: {bound_model.model}")
-
-            alias_saved = False
-            is_list = False
-
-            # if bound_model_name=="device_types": import pdb;pdb.set_trace() 
-            if isinstance(model, ValueExpression):
-                if model.GetNamespace()!=ModelsNS:
-                    raise RuleSetupError(owner=self, msg=f"{bound_model_name}: ValueExpression should be in ModelsNS namespace, got: {model.GetNamespace()}")
-
-                if is_extension_main_model:
-                    # bound variable
-                    assert hasattr(self, "owner_heap")
-                    # TODO: GetVariable + Setup - 3 time repetead (1x in components) - DRY it
-                    # variable = model.GetVariable(heap=self.owner_heap, strict=False)
-                    variable = self.owner_heap.get_var_by_vexp(vexp=model)
-                    if not variable:
-                        variable = model.Setup(heap=self.owner_heap, owner=bound_model, parent=None)
-                        # add bounded variable - from owner heap to this heap
-                        self.heap.add(variable, alt_var_name=bound_model_name)
-
-                    variable.add_bound_var(BoundVar(self.heap.name, variable.namespace, bound_model_name))
-                    alias_saved = True
-                else:
-                    # variable = self.heap.get_var(namespace=ModelsNS, var_name=model)
-                    # variable = model.GetVariable(heap=self.heap, strict=False)
-                    variable = self.heap.get_var_by_vexp(vexp=model)
-                    if not variable:
-                        variable = model.Setup(heap=self.heap, owner=bound_model, parent=None)
-
-                if not variable:
-                    raise RuleInternalError(owner=self, msg=f"Variable not recognized: {model}")
-
-                if not isinstance(variable.data, TypeHintField):
-                    raise RuleInternalError(owner=self, msg=f"Variable data is not TypeHintField, got: {type(variable.data)} / {variable.data}")
-
-                model   = variable.data.klass 
-                is_list = variable.data.is_list
-                # OLD: model, is_list = self.heap.get_vexp_type(vexp=model)
-
-            if not is_dataclass(model) and not is_pydantic(model) and not (is_list and model in STANDARD_TYPE_LIST):
-                raise RuleSetupError(owner=self, msg=f"Managed model {bound_model_name} needs to be a @dataclass, pydantic.BaseModel or List[{STANDARD_TYPE_LIST}], got: {type(model)}")
-
-            if not variable:
-                # standard variable
-                # when available Instead model, pass type_hint_field - it holds more information
-                if not bound_model.type_hint_field:
-                    bound_model.set_type_hint_field()
-                assert bound_model.type_hint_field.klass==model
-                variable = Variable(bound_model_name, bound_model.type_hint_field, namespace=ModelsNS) # , is_list=is_list)
-                self.heap.add(variable)
-
-            if not alias_saved and variable.name!=bound_model_name:
-                # save variable with alias 
-                self.heap.add(variable, alt_var_name=bound_model_name)
-                variable.add_bound_var(BoundVar(self.heap.name, variable.namespace, bound_model_name))
-                alias_saved = True
-
-            if is_extension_main_model:
-                self.bound_variable = variable
-
-            # NOTE: bound_model not stored in heap, just bound_model.model
-            # heap.add(current_variable, alt_var_name=copy_to_heap.var_name)
-
-
-        # ------------------------------------------------------------
-        # A.2. DATAPROVIDERS - Collect all variables from dataproviders section
-        # ------------------------------------------------------------
-        for data_var in self.dataproviders:
-            assert isinstance(data_var, DataVar)
-            self.heap.add(Variable(data_var.name, data_var, namespace=DataProvidersNS)) 
-
-        # ------------------------------------------------------------
-        # Traverse the whole tree (recursion) and collect all components into
-        # simple flat list. It will set owner for each child component.
-        # ------------------------------------------------------------
-        self.components = self.fill_components()
-
-        # A.3. COMPONENTS - collect variables - previously flattened (recursive function fill_components)
-        for component_name, component in self.components.items():
-            if isinstance(component, (Field, DataVar)):
-                denied = False
-                deny_reason = ""
-            # containers and validations
-            elif isinstance(component, (BoundModel, BoundModelWithHandlers, Validation, Section, Extension, Rules, ChildrenValidation)):
-                # stored - but should not be used
-                denied = True
-                deny_reason = "Component of type {component.__class__.__name__} can not be referenced in ValueExpressions"
-            else: 
-                valid_types = ', '.join([t.__class__.__name__ for t in (Field, ChoiceField, BooleanField, EnumField, Validation, Section, Extension, Rules, ChildrenValidation)])
-                raise RuleSetupError(owner=self, msg=f"RuleSetup does not support type {type(component)}: {repr(component)[:100]}. Valid type of objects are: {valid_types}")
-
-            variable = Variable(component_name, component, namespace=FieldsNS, 
-                                denied=denied, deny_reason=deny_reason)
-            self.heap.add(variable) # , is_list=False))
-
-        # NOTE: ContextNS, UtilsNS, ThisNS and GlobalNS - are used on-the-fly later 
-        # TODO: do boot/load validations of ValueExpressions on these too (ThisNS, UtilsNS especially)
+        self.registries = Registries(owner=self, functions=self.functions, context_class=self.context_class, config=self.config)
 
         # ----------------------------------------
-        # B. other level variables - recursive
+        # A. 1st level attr_nodes
         # ----------------------------------------
-        # now when all variables are set, now setup() can be called for all
+        # ModelsNS
+        self._register_model_attr_nodes()
+
+        # DataNS
+        self._register_data_attr_nodes()
+
+        # FieldsNS
+        self._register_fields_components_attr_nodes()
+
+        # NOTE: ThisNS and FunctionsNS - are initialized differently and later
+
+        # ----------------------------------------
+        # B. other level attr_nodes - recursive
+        # ----------------------------------------
+        # now when all attr_nodes are set, now setup() can be called for all
         # components recursively:
         #   it will validate every component attribute
         #   if attribute is another component - it will call recursively component.setup()
         #   if component attribute is ValueExpression -> will call vexp.Setup()
         #   if component is another container i.e. is_extension() - it will
         #       process only that component and will not go deeper. later
-        #       extension.setup() will do this within own tree dep (own .components / .heap)
+        #       extension.setup() will do this within own tree dep (own .components / .registries)
 
         if not self.contains:
             raise RuleSetupError(owner=self, msg=f"{self}: needs 'contains' attribute with list of components")
 
-        self._setup(heap=self.heap)
+        # iterate all subcomponents and call _setup() for each
+        self._setup(registries=self.registries)
 
+        # check all ok?
         for component_name, component in self.components.items():
-            # TODO: maybe bound Field.bind -> Model variable?
+            # TODO: maybe bound Field.bind -> Model attr_node?
             if not component.is_finished():
-                raise RuleInternalError(owner=self, msg=f"{component} not finished")
+                raise RuleInternalError(owner=self, msg=f"{component} not finished. Is in overriden setup()/Setup() parent method super().setup()/Setup() been called (which sets parent and marks finished)?")
 
-        self.heap.finish() 
+        self.registries.finish()
 
-    def get_bound_model_var(self) -> Variable:
-        # TODO: rename this method to _get_bound_model_var
-        return self.heap.get_var_by_bound_model(bound_model=self.bound_model)
+        if self.keys:
+            # Inner BoundModel can have self.bound_model.model = ValueExpression
+            self.keys.validate(self.bound_model.get_type_info().type_)
 
+        return self
+
+    # ------------------------------------------------------------
+
+    def get_bound_model_attr_node(self) -> AttrVexpNode:
+        return self.registries.models_registry.get_attr_node_by_bound_model(bound_model=self.bound_model)
+
+    # ------------------------------------------------------------
 
     def get_component(self, name:str) -> ComponentBase:
-        # TODO: currently components are retrieved only from contains - but should include validations + cardinality 
+        # TODO: currently components are retrieved only from contains - but should include validations + cardinality
         if name not in self.components:
-            vars_avail = get_available_vars_sample(name, self.components.keys())
+            vars_avail = get_available_names_example(name, self.components.keys())
             raise RuleNameNotFoundError(owner=self, msg=f"{self}: component '{name}' not found, some valid_are: {vars_avail}")
         return self.components[name]
 
+    # ------------------------------------------------------------
 
-    def print_components(self):
-        if not hasattr(self, "components"): raise RuleError(owner=self, msg="Call .setup() first")
-        for k,v in self.components.items():
-            print(k, repr(v)[:100]) # noqa: T001
+    def pp(self):
+        if not hasattr(self, "components"):
+            raise RuleSetupError(owner=self, msg="Call .setup() first")
+        print(f"{self.name}: {self.__class__.__name__} ::")
+        for nr, (name, component) in enumerate(self.components.items(),1):
+            print(f"  {nr:02}. {name}: {component.__class__.__name__} ::")
+            print(f"      {repr(component)[:100]}") # noqa: T001
+            # TODO: if pp() exists -> recursion with depth+1 (indent)
 
+    # ------------------------------------------------------------
+    # Apply phase
+    # ------------------------------------------------------------
+
+    def get_key_string(self, apply_session:IApplySession) -> str:
+        # TODO: is caching possible?
+        # NOTE: it is good enough key to have current name only 
+        #       without owner_container.get_key_string() attached
+
+        frame = apply_session.current_frame
+
+        instance_id = id(frame.instance)
+
+        key_string = apply_session.key_string_container_cache.get(instance_id, None)
+        if key_string is None:
+            key_string = self.name
+            if self.keys:
+                key_pairs = self.get_key_pairs(apply_session)
+                assert key_pairs
+                key_string = "{}[{}]".format(
+                                key_string, GlobalConfig.ID_NAME_SEPARATOR.join(
+                                [f"{name}={value}" 
+                                    for name, value in key_pairs
+                                ]))
+            elif frame.index0 is not None:
+                key_string = f"{key_string}[{frame.index0}]"
+
+            apply_session.key_string_container_cache[instance_id] = key_string
+
+        #     from_cache = "new"
+        # else:
+        #     from_cache = "cache"
+        # print("cont:", self.name, key_string, f"[{from_cache}]")
+
+        return key_string
+
+
+    def get_key_pairs(self, apply_session:IApplySession) -> List[(str, Any)]:
+        if not self.keys:
+            raise RuleInternalError(msg=f"get_key_pairs() should be called only when 'keys' are defined")
+        key_pairs = self.keys.get_key_pairs(apply_session)
+        return key_pairs
+        
 
 # ------------------------------------------------------------
 
+class KeysBase(ABC):
+
+    @abstractmethod
+    def validate(self, model_or_children_model:Any):
+        ...
+
+    @abstractmethod
+    def get_key_pairs(self, apply_session:IApplySession) -> List[Tuple[str, Any]]:
+        """ returns list of (key-name, key-value) """
+        ...
+
+    def get_keys(self, apply_session:IApplySession) -> List[Any]:
+        return [key for name,key in self.get_keys_tuple(apply_session)]
+
+
+@dataclass
+class KeyFields(KeysBase):
+
+    # list of field names
+    field_names : List[str]
+
+
+    def __post_init__(self):
+        if not self.field_names:
+            raise RuleSetupError(f"field_names are required")
+        for field_name in self.field_names:
+            if not isinstance(field_name, str):
+                raise RuleSetupNameError(f"Fields needs to be list of strings, got '{field_name}'")
+        if len(set(self.field_names)) != len(self.field_names):
+            raise RuleSetupNameError(f"Fields needs to be unique list of names, found duplicates: '{self.field_names}'")
+
+    def validate(self, model:ModelType):
+        model_fields = get_model_fields(model)
+        for field_name in self.field_names:
+            if field_name not in model_fields:
+                available_names = get_available_names_example(field_name, model_fields.keys())
+                raise RuleSetupNameNotFoundError(f"Field name '{field_name}' not found in list of attributes of '{model}'. Available names: {available_names}")
+
+    @classmethod
+    def get_new_unique_id(cls):
+        # TODO: is this unique enough 
+        GlobalConfig.ID_COUNTER += 1
+        return GlobalConfig.ID_COUNTER
+
+    def get_key_pairs(self, apply_session:IApplySession) -> List[Tuple(str, Any)]:
+        keys = []
+        frame = apply_session.current_frame
+        instance = frame.instance
+
+        for field_name in self.field_names:
+            if not hasattr(instance, field_name):
+                raise RuleApplyNameNotFoundError(f"Field name '{field_name}' not found in list of attributes of '{type(instance)}'!?")
+            key = getattr(instance, field_name)
+            if key is None:
+                # if None, then setup something unique instead
+                key = "{}{}".format(GlobalConfig.ID_PREFIX_FOR_NEW, self.get_new_unique_id())
+            else:
+                assert not str(key).startswith(GlobalConfig.ID_PREFIX_FOR_NEW), key
+            keys.append((field_name, key))
+        return keys
+
+
+
+# class ListIndexKey(KeysBase):
+#     # Can be applied only for children - e.g. Extension with multiple items
+#     # parent assignes key as index of item in the list of "children").
+# 
+#     def validate(self, children_model:Any):
+#         # children_model - check if get_type_info().is_list
+#         raise NotImplementedError()
+# 
+#     def get_key_pairs(apply_session:IApplySessio) -> List[Tuple[str, Any]]:
+#         raise NotImplementedError()
+
+# ------------------------------------------------------------
 
 @dataclass
 class Rules(ContainerBase):
     name            : str
     label           : TransMessageType
-    contains        : List[Component]            = field(repr=False)
-    # --- can be bound later with bind_to
-    bound_model     : Optional[BoundModel]       = field(repr=False, default=None)
-    # --- can be bound later with bind_to
-    dataproviders   : Optional[List[DataVar]]    = field(repr=False, default_factory=list)
 
-    validations     : Optional[List[Validation]] = field(repr=False, default_factory=list)
+    contains        : List[Component]      = field(repr=False)
+
+    # --- optional - following can be bound later with .bind_to()
+    bound_model     : Optional[BoundModel] = field(repr=False, default=None)
+    # will be filled automatically with Config() if not supplied
+    config          : Optional[Type[Config]] = field(repr=False, default=None)
+    context_class   : Optional[Type[IContext]] = field(repr=False, default=None)
+    data            : Optional[List[IData]] = field(repr=False, default_factory=list)
+    functions       : Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list)
+    # --- only list of model names allowed
+    keys            : Optional[KeysBase] = field(repr=False, default=None)
+    # --- validators and evaluators
+    cleaners        : Optional[List[Union[ValidationBase, EvaluationBase]]] = field(repr=False, default_factory=list)
 
     # --- Evaluated later
-    heap            : Optional[VariablesHeap]    = field(init=False, repr=False, default=None)
-    components      : Optional[List[Component]]  = field(repr=False, default=None)
+    registries      : Optional[Registries]    = field(init=False, repr=False, default=None)
+    components      : Optional[Dict[str, Component]]  = field(repr=False, default=None)
     models          : Dict[str, Union[type, ValueExpression]] = field(repr=False, init=False, default_factory=dict)
     # in Rules (top object) this case allway None - since it is top object
     owner           : Union[None, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     owner_name      : Union[str, UndefinedType]  = field(init=False, default=UNDEFINED)
 
-    def bind_to(self, bound_model:BoundModel, dataproviders:Optional[List[DataVar]]=None):
+    def __post_init__(self):
+        # TODO: check that BoundModel.model is_model_class() and not ValueExpression
+
+        # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
+        if not self.config:
+            # default setup
+            self.config = Config()
+
+        self.init_clean()
+
+    def init_clean(self):
+        if not isinstance(self.config, Config):
+            raise RuleSetupValueError(owner=self, msg=f"config needs Config instance, got: {type(self.config)} / {self.config}")
+
+        if self.context_class and not (
+                inspect.isclass(self.context_class)
+                and IContext in inspect.getmro(self.context_class)):
+            raise RuleSetupValueError(owner=self, msg=f"context_class needs to be class that inherits IContext, got: {self.context_class}")
+
+        # if self.functions:
+        #     for function in self.functions:
+        #         assert isinstance(function, IFunctionFactory), function
+
+    def bind_to(self, 
+                bound_model:Optional[BoundModel]=None, 
+                config: Optional[Config]=None,
+                context_class: Optional[IContext]=None,
+                data:Optional[List[IData]]=None, 
+                functions: Optional[List[CustomFunctionFactory]]=None,
+                do_setup:bool = True,
+                ):
         """
-        late binding, will do setup()
+        late binding, will call .setup()
         """
-        if self.bound_model is not None:
-            raise RuleSetupError(owner=self, msg="bound_model already set.")
-        if self.dataproviders:
-            raise RuleSetupError(owner=self, msg="dataproviders set, late binding not allowed.")
-        self.bound_model = bound_model
-        if dataproviders:
-            self.dataproviders = dataproviders
-        self.setup()
+        # TODO: DRY this - for loop
+        if bound_model:
+            if self.bound_model is not None:
+                raise RuleSetupError(owner=self, msg="bound_model already already set, late binding not allowed.")
+            self.bound_model = bound_model
+
+        if data:
+            if self.data:
+                raise RuleSetupError(owner=self, msg="data already set, late binding not allowed.")
+            self.data = data
+
+        if functions:
+            if self.functions:
+                raise RuleSetupError(owner=self, msg="functions already set, late binding not allowed.")
+            self.functinos = functions
+
+        if context_class:
+            if self.context_class:
+                raise RuleSetupError(owner=self, msg="context already set, late binding not allowed.")
+            self.context_class = context_class
+
+        if config:
+            # overwrite
+            self.config = config
+
+        self.init_clean()
+
+        if do_setup:
+            self.setup()
 
 # ------------------------------------------------------------
 
@@ -328,40 +606,56 @@ class Extension(ContainerBase):
 
     # required since if it inherit name from BoundModel then the name will not
     # be unique in self.components (Extension and BoundModel will share the same name)
-    name            : str 
-    bound_model     : Union[BoundModel, BoundModelWithHandlers] = field(repr=False) 
-    # metadata={"bind_to_owner_heap" : True})
+    name            : str
+    bound_model     : Union[BoundModel, BoundModelWithHandlers] = field(repr=False)
+    # metadata={"bind_to_owner_registries" : True})
     label           : TransMessageType
 
     cardinality     : CardinalityValidation
-    contains        : List[Component]            = field(repr=False)
-    dataproviders   : Optional[List[DataVar]]    = field(repr=False, default_factory=list)
-    validations     : Optional[List[Validation]] = field(repr=False, default_factory=list)
+    contains        : List[Component] = field(repr=False)
+
+    data            : Optional[List[IData]] = field(repr=False, default_factory=list)
+    functions       : Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list)
+    # --- can be index based or standard key-fields names
+    keys            : Optional[KeysBase] = field(repr=False, default=None)
+    # --- validators and evaluators
+    cleaners        : Optional[List[Union[ValidationBase, EvaluationBase]]] = field(repr=False, default_factory=list)
 
     # --- Evaluated later
-    heap            : Optional[VariablesHeap]    = field(init=False, repr=False, default=None)
-    components      : Optional[List[Component]]  = field(repr=False, default=None)
+    registries      : Optional[Registries] = field(init=False, repr=False, default=None)
+    components      : Optional[Dict[str, Component]]  = field(repr=False, default=None)
     models          : Dict[str, Union[type, ValueExpression]] = field(repr=False, init=False, default_factory=dict)
     owner           : Union[ComponentBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    owner_name      : Union[str, UndefinedType]  = field(init=False, default=UNDEFINED)
+    owner_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+    # copy from owner
+    context_class   : Optional[Type[IContext]] = field(repr=False, init=False, default=None)
+    config          : Optional[Type[Config]] = field(repr=False, default=None)
 
-    # extension specific
+
+    # extension specific - is this top owner or what? what is the difference to self.owner
     owner_container : Union[ContainerBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    owner_heap      : Optional[VariablesHeap]   = field(init=False, repr=False, default=None)
-    bound_variable: Union[Variable, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
+    owner_registries: Optional[Registries] = field(init=False, repr=False, default=None)
+    # bound_attr_node  : Union[AttrVexpNode, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
 
     # Class attributes
     # namespace_only  : ClassVar[Namespace] = ThisNS
+    def __post_init__(self):
+        # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
+        ...
+
 
     def set_owner(self, owner:ContainerBase):
         super().set_owner(owner=owner)
-        self.owner_container = self.get_owner_container()
+        self.owner_container = self.get_container_owner()
+        self.context_class = owner.context_class
+        self.config = owner.config
 
-    def setup(self, heap:VariablesHeap):
-        # NOTE: heap is not used, can be reached with owner.heap(). left param
+    def setup(self, registries:Registries):
+        # NOTE: registries is not used, can be reached with owner.registries(). left param
         #       for same function signature as for components.
-        self.owner_heap = heap
+        self.owner_registries = registries
         super().setup()
         self.cardinality.validate_setup()
+        return self
 
 

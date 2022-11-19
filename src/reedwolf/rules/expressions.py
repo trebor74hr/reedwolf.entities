@@ -1,110 +1,303 @@
 # Copied and adapted from Reedwolf project (project by robert.lujo@gmail.com - git@bitbucket.org:trebor74hr/reedwolf.git)
 from __future__ import annotations
 
+from abc import (
+        ABC, 
+        abstractmethod,
+        )
 import operator
-
+from dataclasses import (
+        dataclass, 
+        field,
+        replace as dataclasses_replace,
+        )
 from enum import Enum
-from functools import partial
-from dataclasses import dataclass
 
 from typing import (
-        List, 
-        Optional, 
-        Union, 
-        Any, 
-        )
-from .exceptions import (
-        RuleSetupValueError, 
-        RuleSetupError, 
-        RuleSetupNameError, 
-        RuleError, 
-        RuleInternalError,
-        RuleSetupNameNotFoundError,
+        List,
+        Optional,
+        Union,
+        Any,
+        Callable,
         )
 from .utils import (
-        composite_functions, 
         UNDEFINED,
         )
-from .namespaces import RubberObjectBase, GlobalNS, Namespace, ThisNS, UtilsNS
+from .exceptions import (
+        RuleSetupValueError,
+        RuleSetupError,
+        RuleSetupNameError,
+        RuleInternalError,
+        RuleApplyError,
+        )
+from .namespaces import (
+        DynamicAttrsBase,
+        FunctionsNS,
+        OperationsNS,
+        Namespace,
+        )
+from .meta import (
+        FunctionArgumentsType,
+        FunctionArgumentsTupleType,
+        STANDARD_TYPE_W_NONE_LIST,
+        )
+
+
+# ------------------------------------------------------------
+# internal structs
+# ------------------------------------------------------------
+
+@dataclass
+class RawAttrValue:
+    value: Any
+    attr_name: str
+    changer_name: str
+
+@dataclass
+class VexpResult:
+    # last value, mutable
+    value: Any  = field(init=False, default=UNDEFINED)
+    # TODO: set compoenent (owner) that triggerred value change
+    #       value evaluation - can have attr_node.name
+    value_history : List[Tuple[str, RawAttrValue]] = field(repr=False, init=False, default_factory=list)
+
+    def set_value(self, value: Any, attr_name: str, changer_name: str, ):
+        self.value_history.append(
+                RawAttrValue(value=value, attr_name=attr_name, changer_name=changer_name)
+                )
+        self.value = value
+
+
+# ------------------------------------------------------------
+# evaluate_vexp_or_node
+# ------------------------------------------------------------
+
+def evaluate_vexp_or_node(
+        vexp_or_value: Union[ValueExpression, Any],
+        # Union[OperationVexpNode, IFunctionVexpNode, LiteralVexpNode]
+        vexp_node: Union[IValueExpressionNode, Any], 
+        vexp_result: VexpResult,
+        apply_session: "IApplySession"
+        ) -> VexpResult:
+
+    # TODO: this function has ugly interface - solve this better
+
+    if isinstance(vexp_or_value, ValueExpression):
+        vexp_result = vexp_or_value._evaluator.evaluate(
+                            apply_session=apply_session,
+                            )
+    # AttrVexpNode, OperationVexpNode, IFunctionVexpNode, LiteralVexpNode,
+    elif isinstance(vexp_node, (
+            IValueExpressionNode,
+            )):
+        vexp_result = vexp_node.evaluate(
+                            apply_session=apply_session, 
+                            vexp_result=vexp_result,
+                            )
+    else:
+        raise RuleInternalError(
+                f"Expected Vexp, OpVexp or FuncVexp, got: {type(vexp_or_value)} -> {vexp_or_value} / {type(vexp_node)} -> {vexp_node}")
+
+    return vexp_result
+
+# ------------------------------------------------------------
+# get_type_info_from_vexp_or_node
+# ------------------------------------------------------------
+def get_type_info_from_vexp_or_node(
+        # IValueExpressionNode == Union[OperationVexpNode, IFunctionVexpNode, AttrVexpNode, LiteralVexpNode]
+        vexp_node: IValueExpressionNode,
+        ) -> TypeInfo:
+    # TODO: remove the function and expose same function (abstract) to all vexpnode types: get_output_type_info()
+    if isinstance(vexp_node, IFunctionVexpNode):
+        type_info = vexp_node.get_output_type_info()
+    elif isinstance(vexp_node, OperationVexpNode):
+        # Assumption - for all operations type_info of first operation
+        # argumnent will persist to result
+        type_info = vexp_node.get_first_type_info()
+    elif isinstance(vexp_node, IValueExpressionNode):
+        # TODO: AttrVexpNode?
+        type_info = vexp_node.type_info
+    else:
+        # TODO: what with LiteralVexpNode
+        raise RuleSetupTypeError(msg=f"Unsupported type: {type(vexp_node)} / {vexp_node}")
+    return type_info
+
+# ------------------------------------------------------------
+# IValueExpressionNode
+# ------------------------------------------------------------
+
+@dataclass
+class IValueExpressionNode(ABC):
+    """ wrapper around one element in ValueExpression e.g. M.company.name.Count()
+    .company, .name, .Count() are nodes
+    """
+    def clone(self):
+        # If already setup then copy it and reuse
+        return dataclasses_replace(self)
+
+    @abstractmethod
+    def evaluate(self, 
+                 apply_session: IApplySession, 
+                 # previous - can be undefined too
+                 vexp_result: Union[VexpResult, UndefinedType],
+                 ) -> VexpResult:
+        raise NotImplementedError()
+
+
+
+# ------------------------------------------------------------
+# IFunctionVexpNode - name used in-between just to emphasize that this is Vexp
+#                     Node
+# ------------------------------------------------------------
+
+class IFunctionVexpNode(IValueExpressionNode):
+    """
+    a bit an overhead -> just to have better naming for base class
+    """
+    pass
+
+
+@dataclass
+class LiteralVexpNode(IValueExpressionNode):
+
+    value : Any
+    vexp_result: VexpResult = field(repr=False, init=False)
+
+    def __post_init__(self):
+        self.vexp_result = VexpResult()
+        self.vexp_result.set_value(self.value, attr_name="", changer_name="")
+
+    def evaluate(self, apply_session: "IApplySession", vexp_result: VexpResult) -> VexpResult:
+        assert not vexp_result
+        return self.vexp_result
 
 # ------------------------------------------------------------
 
 class VExpStatusEnum(str, Enum):
     INITIALIZED      = "INIT"
-    OK               = "OK"
     ERR_NOT_FOUND    = "ERR_NOT_FOUND"
     ERR_TO_IMPLEMENT = "ERR_TO_IMPLEMENT"
+    BUILT            = "BUILT" # OK
 
 # ------------------------------------------------------------
+# Operations
+# ------------------------------------------------------------
 
-class Operation:
+# Custom implementation - no operator function, needs custom
+# logic
 
-    def __init__(self, op: str, first: Any, second: Optional[Any] = None):
-        self.op, self.first, self.second = op, first, second
-        self.op_function = self.OPCODE_TO_FUNCTION.get(self.op, None)
-        if self.op_function is None:
-            raise RuleSetupValueError(owner=self, msg="Invalid operation code, {self.op} not one of: {', '.join(self.OP_TO_CODE.keys())}")
+def _op_apply_and(self, first, second):
+    return bool(first) and bool(second)
+
+def _op_apply_or(self, first, second):
+    return bool(first) or bool(second)
+
+
+# https://florian-dahlitz.de/articles/introduction-to-pythons-operator-module
+# https://docs.python.org/3/library/operator.html#mapping-operators-to-functions
+OPCODE_TO_FUNCTION = {
+    # binary operatorsy - buultin
+      "=="  : operator.eq  # noqa: E131
+    , "!="  : operator.ne   
+    , ">"   : operator.gt
+    , ">="  : operator.ge
+    , "<"   : operator.lt
+    , "<="  : operator.le
+
+    , "+"   : operator.add
+    , "-"   : operator.sub
+    , "*"   : operator.mul
+    , "/"   : operator.truediv
+    , "//"  : operator.floordiv
+
+    , "in"  : operator.contains
+
+    # binary operatorsy - custom implementation 
+    , "and" : _op_apply_and   # orig: &
+    , "or"  : _op_apply_or    # orig: |
+
+    # unary operators:
+    , "not" : operator.not_   # orig: ~
+
+}
+
+
+@dataclass
+class OperationVexpNode(IValueExpressionNode):
+    """
+    Binary or Unary operators that handles
+    basically will do following:
+
+        op_function(first[, second]) -> value
+
+    """
+    op: str  # OPCODE_TO_FUNCTION.keys()
+    first: Any
+    second: Union[Any, UNDEFINED] = UNDEFINED
+
+    # later evaluated
+    op_function: Callable[[...], Any] = field(repr=False, init=False)
+    _status : VExpStatusEnum = field(repr=False, init=False, default=VExpStatusEnum.INITIALIZED)
+    _all_ok : Optional[bool] = field(repr=False, init=False, default=None)
+
+    _first_vexp_node : Optional[IValueExpressionNode] = field(repr=False, init=False, default=None)
+    _second_vexp_node : Optional[IValueExpressionNode] = field(repr=False, init=False, default=None)
+
+    def __post_init__(self):
+        self.op_function = self.get_op_function(self.op)
         self._status : VExpStatusEnum = VExpStatusEnum.INITIALIZED
         self._all_ok : Optional[bool] = None
 
-    # no operator, needs custom logic
-    def apply_and(self, first, second): return bool(first) and bool(second)
-    def apply_or (self, first, second): return bool(first) or  bool(second)
+        # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
 
-    # https://florian-dahlitz.de/articles/introduction-to-pythons-operator-module
-    # https://docs.python.org/3/library/operator.html#mapping-operators-to-functions
-    OPCODE_TO_FUNCTION = {
-          "=="  : operator.eq
-        , "!="  : operator.ne
-        , ">"   : operator.gt
-        , ">="  : operator.ge
-        , "<"   : operator.lt
-        , "<="  : operator.le
+    def get_first_type_info(self):
+        return self._first_vexp_node.type_info
 
-        , "+"   : operator.add
-        , "-"   : operator.sub
-        , "*"   : operator.mul
-        , "/"   : operator.truediv
-        , "//"  : operator.floordiv
+    def get_op_function(self, op: str) -> Callable[..., Any]:
+        op_function = OPCODE_TO_FUNCTION.get(op, None)
+        if op_function is None:
+            raise RuleSetupValueError(owner=self, msg="Invalid operation code, {self.op} not one of: {', '.join(self.OP_TO_CODE.keys())}")
+        return op_function
 
-        , "in"  : operator.contains
 
-        , "not" : operator.not_   # orig: ~
-        # no operator, needs custom logic
-        , "and" : apply_and       # orig: &
-        , "or"  : apply_or        # orig: |
-    }
-
-    def Setup(self, heap: "VariableHeap", owner: Any):
-        # parent:"Variable"
-        assert self._status==VExpStatusEnum.INITIALIZED, self
-
-        if isinstance(self.first, (ValueExpression, Operation)):
-            self.first.Setup(heap, owner=owner, parent=None)
-        if self.second!=None and isinstance(self.second, (ValueExpression, Operation)):
-            self.second.Setup(heap, owner=owner, parent=None)
-        self._status=VExpStatusEnum.OK
-
-    def apply(self, heap):
-        first  = self.first.Read(ctx)
-        if self.second!=None:
-            # binary operator
-            second = self.second.Read(ctx)
-            try:
-                res = self.op_function(first, second)
-            except Exception as ex:
-                raise RuleSetupError(owner=heap, item=self, msg=f"Apply {self.first} {self.op} {self.second} => {first} {self.op} {second} raised error: {ex}")
+    @staticmethod
+    def create_vexp_node(
+                   vexp_or_other: Union[ValueExpression, Any], 
+                   label: str,
+                   registries: "Registries", 
+                   owner: Any) -> IValueExpressionNode:
+        if isinstance(vexp_or_other, ValueExpression):
+            vexp_node = vexp_or_other.Setup(registries, owner=owner)
+        elif isinstance(vexp_or_other, IValueExpressionNode):
+            raise NotImplementedError(f"{label}.type unhandled: '{type(vexp_or_other)}' => '{vexp_or_other}'")
+            # vexp_node = vexp_or_other
         else:
-            # unary operator
-            try:
-                res = self.op_function(first, second)
-            except Exception as ex:
-                raise RuleSetupError(owner=heap, item=self, msg=f"Apply {self.op} {self.first} => {self.op} {first} raised error: {ex}")
-        return res
+            # TODO: check other types - maybe some unappliable
+            if not isinstance(vexp_or_other, STANDARD_TYPE_W_NONE_LIST):
+                raise NotImplementedError(f"{label}.type unhandled: '{type(vexp_or_other)}' => '{vexp_or_other}'")
+            vexp_node = LiteralVexpNode(value=vexp_or_other)
 
+        return vexp_node
+
+
+    def Setup(self, registries: "Registries", owner: Any) -> ValueExpressionEvaluator:  # noqa: F821
+        # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(self)
+
+        if not self._status==VExpStatusEnum.INITIALIZED:
+            raise RuleSetupError(owner=registries, item=self, msg=f"AttrVexpNode not in INIT state, got {self._status}")
+
+        # just to check if all ok
+        self._first_vexp_node = self.create_vexp_node(self.first, label="First", registries=registries, owner=owner)
+
+        if self.second is not UNDEFINED:
+            self._second_vexp_node = self.create_vexp_node(self.second, label="second", registries=registries, owner=owner)
+
+        self._status=VExpStatusEnum.BUILT
+
+        return self
 
     def __str__(self):
-        if self.second:
+        if self.second is not UNDEFINED:
             return f"({self.first} {self.op} {self.second})"
         else:
             return f"({self.op} {self.first})"
@@ -113,216 +306,298 @@ class Operation:
         return f"Op{self}"
 
 
+    # vexp_result = node.evaluate(apply_session, vexp_result)
+    # def evaluate(self, registries: "Registries", input_value: Any, context:Any) -> Any:  # noqa: F821
+    def evaluate(self, apply_session: "IApplySession", vexp_result: VexpResult) -> VexpResult:
+        # this should be included: context.this_registry: ThisRegistry
+
+        if vexp_result:
+            raise NotImplementedError("TODO:")
+
+        first_vexp_result = evaluate_vexp_or_node(
+                                self.first, self._first_vexp_node, 
+                                vexp_result=vexp_result,
+                                apply_session=apply_session)
+
+        # TODO: use self._second_vexp_node
+        if self.second is not None:
+            second_vexp_result = evaluate_vexp_or_node(
+                                    self.second, self._second_vexp_node, 
+                                    vexp_result=vexp_result,
+                                    apply_session=apply_session)
+            # binary operation second argument adaption?
+            #   string + number -> string + str(int)
+            first_value = first_vexp_result.value
+            second_value = second_vexp_result.value
+            type_adapter = apply_session\
+                    .binary_operations_type_adapters\
+                    .get((type(first_value), type(second_value)), None)
+
+            if type_adapter:
+                second_value = type_adapter(second_value)
+
+            try:
+                new_value = self.op_function(first_value, second_value)
+            except Exception as ex:
+                # raise
+                raise RuleApplyError(owner=apply_session, msg=f"{self} := {self.op_function}({first_vexp_result.value}, {second_vexp_result.value}) raised error: {ex}")
+        else:
+            # unary operation
+            try:
+                new_value = self.op_function(first_vexp_result.value)
+            except Exception as ex:
+                # raise
+                raise RuleApplyError(owner=apply_session, msg=f"{self} := {self.op_function}({first_vexp_result.value}) raised error: {ex}")
+
+        op_vexp_result = VexpResult()
+
+        # TODO: we are loosing: first_vexp_result / second_vexp_result
+        #       to store it in result somehow?
+        op_vexp_result.set_value(new_value, "", f"Op[{self.op}]")
+
+        return op_vexp_result
 
 
-class ValueExpression(RubberObjectBase):
+
+# ------------------------------------------------------------
+# ValueExpression
+# ------------------------------------------------------------
+
+
+class ValueExpression(DynamicAttrsBase):
+    """
+    Could be called DotExpression too, but Value expresses the final goal, what
+    is more important than syntax or structure.
+
+    shortcut used in the library for var names: vexp
+    """
+    # NOTE: not a @dataclass for now, reason: overriding too many __dunder__ methods so ...
 
     # NOTE: each item in this list should be implemented as attribute or method in this class
-    # "GetVariable", 
-    RESERVED_ATTR_NAMES = {"Path", "Read", "Setup", "GetNamespace",  
-                           "_var_name", "_node", "_namespace", "_name", "_func_args", "_is_top", "_read_functions", "_status"}
+    # "GetAttrVexpNode",
+    # "Read", 
+    RESERVED_ATTR_NAMES = {"Path", "Setup", "GetNamespace",
+                           "_evaluator",  # allwyays filled, contains all nodes
+                           "_vexp_node",  # is last node (redundant), but None if case of error
+                           "_node", "_namespace", "_name", "_func_args", "_is_top", "_status",
+                           "_EnsureFinished", "IsFinished",
+                           } # "_read_functions",  "_vexp_node_name"
     RESERVED_FUNCTION_NAMES = ("Value",)
-    # "First", "Second", 
+    # "First", "Second",
 
     def __init__(
         self,
-        node: Union[str, Operation],
+        node: Union[str, OperationVexpNode],
         namespace: Namespace,
         Path: Optional[List[ValueExpression]] = None,
     ):
+        # SAFE OPERATIONS
         self._status : VExpStatusEnum = VExpStatusEnum.INITIALIZED
-
         self._namespace = namespace
+        self._node = node
+        self._is_top = Path is None
+        self._name = str(self._node)
+        # init Path => to make __str__ works
+        self.Path = None 
+
+        # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
+
+        # -- CHECK PRECONDITIONS
+        # risky -> can cause failure in: str(self), repr(self)
         if not isinstance(self._namespace, Namespace):
             raise RuleSetupValueError(owner=self, msg=f"Namespace parameter '{self._namespace}' needs to be instance of Namespace inherited class.")
-        self._node = node
         if isinstance(self._node, str):
             if self._node in self.RESERVED_ATTR_NAMES:
                 raise RuleSetupValueError(owner=self, msg=f"Value expression's attribute '{self._node}' is a reserved name, choose another.")
         else:
-            if not isinstance(self._node, Operation):
-                raise RuleSetupValueError(owner=self, msg=f"Value expression's attribute '{self._node}' needs to be string or Operation, got: {type(self._node)}")
-            self._node = node
+            if not isinstance(self._node, OperationVexpNode):
+                raise RuleSetupValueError(owner=self, msg=f"Value expression's attribute '{self._node}' needs to be string or OperationVexpNode, got: {type(self._node)}")
 
-        self._is_top = Path is None
-        self._name = str(self._node)
-
+        # -- COMPUTED VALUES
+        # copy list of parent/previous
         self.Path = [] if self._is_top else Path[:]
         self.Path.append(self)
 
-        self._func_args = None
+        # FunctionArgumentsType
+        self._func_args: Optional[FunctionArgumentsTupleType] = None
+        self._is_reserved_function:bool = self._name in self.RESERVED_FUNCTION_NAMES
 
-        self._read_functions = UNDEFINED
-        self._var_name = UNDEFINED
-
-        self._reserved_function = self._name in self.RESERVED_FUNCTION_NAMES
+        # -- can calculate all, contains all attr_node-s, and the last one is in 
+        # not defined in is_predefined mode
+        self._evaluator = UNDEFINED
+        # the last one attr_node
+        self._vexp_node = UNDEFINED
 
 
     def GetNamespace(self) -> Namespace:
         return self._namespace
 
-    # NOTE: replaced with VariableHeap.get_var_by_vexp(vexp ...)
-    # def GetVariable(self, heap:'VariableHeap', strict=True) -> 'Variable':
-    #     if self._var_name==UNDEFINED:
-    #         if strict:
-    #             raise RuleSetupNameError(owner=self, msg=f"Variable not processed/Setup yet")
-    #         return UNDEFINED
-    #     return heap.get_var(self._namespace, self._var_name)
+    def IsFinished(self):
+        return self._status!=VExpStatusEnum.INITIALIZED
 
-    def Setup(self, heap:"VariableHeap", owner:"Component", parent:"Variable") -> Optional['Variable']:
-        """
-        owner used just for reference count.
-        """
-        # , copy_to_heap:Optional[CopyToHeap]=None
-        # TODO: create single function - which is composed of functions 
-        #           see: https://florian-dahlitz.de/articles/introduction-to-pythons-operator-module
-        #             callable = operator.attrgetter("last_name")           -> .last_name
-        #             callable = operator.itemgetter(1)                     -> [1]
-        #             callable = operator.methodcaller("run", "foo", bar=1) -> .run("foot", bar=1)
-        #           and this:
-        #             functools.partial(function, x=1, y=2)
-        #       https://www.geeksforgeeks.org/function-composition-in-python/
-
-        from .variables import Variable
-
+    def _EnsureFinished(self):
         if self._status!=VExpStatusEnum.INITIALIZED:
-            raise RuleInternalError(owner=self, msg=f"Setup() already called (status={self._status}).")
+            raise RuleInternalError(msg=f"{self}: Setup() already called, further ValueExpression building is not possible (status={self._status}).")
 
-        if self._read_functions!=UNDEFINED:
-            raise RuleSetupError(owner=self, msg=f"Setup() already called (found _read_functions).")
 
-        _read_functions = []
+    def Setup(self, 
+            registries:"IRegistries",  # noqa: F821
+            owner:"Component",  # noqa: F821
+            # local registry, not default by namespace
+            registry: Optional["IRegistry"]=None,  # noqa: F821
+            strict:bool = False,
+            ) -> Optional['IValueExpressionNode']:
+        """
+        Owner used just for reference count.
+        """
+        # TODO: circular dependency - maybe to pass eval class to this method
+        from .expression_evaluators import ValueExpressionEvaluator
 
-        current_variable = None
-        last_parent = parent
-        var_name = None
+        self._EnsureFinished()
 
-        all_ok = True
-        bit_length = len(self.Path)
-        # if "status" in str(self.Path): import pdb;pdb.set_trace() 
+        if registry:
+            if not self._namespace._manual_setup:
+                raise RuleInternalError(f"{self}: registry should be passed only for namespace._manual_setup cases, got: {registry}")
+        else:
+            if self._namespace._manual_setup:
+                raise RuleInternalError(f"{self}: registry should be passed for namespace._manual_setup cases (usually manually created ThisRegistry()).")
+            registry = registries.get_registry(self._namespace)
+
+        if self._namespace != registry.NAMESPACE:
+            raise RuleInternalError(f"{self}: registry has diff namespace from variable: {self._namespace} != {registry.NAMESPACE}")
+
+        current_vexp_node = None
+        last_vexp_node = None
+        vexp_node_name = None
+        vexp_evaluator = ValueExpressionEvaluator()
+
+        # if str(self) == "G.(G.varname1 + G.varname2)": 
         for bnr, bit in enumerate(self.Path, 1):
-            is_last = (bnr==bit_length)
+            # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(bit)
+
             assert bit._namespace==self._namespace
             # TODO: if self._func_args:
             # operator.attrgetter("last_name")
-            if isinstance(bit._node, Operation):
-                operation = bit._node
-                # one level deeper
-                operation.Setup(heap=heap, owner=owner) 
-                _read_functions.append(operation.apply)
-            else:
-                # ----------------------------------------
-                # Check if Path goes to correct variable 
-                # ----------------------------------------
-                var_name = bit._node
-                try:
-                    last_parent = (current_variable 
-                                   if current_variable is not None 
-                                   else parent)
-                    # when copy_to_heap defined:
-                    #   read from copy_to_heap.heap_bind_from and store in both heaps in the
-                    #   same namespace (usually ModelsNS)
-                    # heap_read_from = copy_to_heap.heap_bind_from if copy_to_heap else heap
-                    heap_read_from = heap
+            try:
+                # last_vexp_node = (current_vexp_node
+                #                if current_vexp_node is not None
+                #                else parent)
 
-                    current_variable = heap_read_from.getset_attribute_var(
-                                            namespace=self._namespace,
-                                            var_name=var_name, 
-                                            # owner=owner, 
-                                            parent_var=last_parent)
+                # ========================================
+                # Operations 
+                # ========================================
+                if isinstance(bit._node, OperationVexpNode):
+                    op_node = bit._node
+                    # one level deeper
+                    # parent not required, but in this case should be 
+                    assert bnr == 1
+                    current_vexp_node = op_node.Setup(registries=registries, owner=owner)
+                    vexp_node_name = bit._node
+                    # _read_functions.append(op_node.apply)
 
-                    # if is_last and copy_to_heap:
-                    #     current_variable.add_bound_var(BoundVar(heap.name, copy_to_heap.var_name))
-                    #     heap.add(current_variable, alt_var_name=copy_to_heap.var_name)
+                # ========================================
+                # Functions - IFunctionVexpNode
+                # ========================================
+                elif bit._func_args:
+                    if bnr==1:
+                        if self._namespace != FunctionsNS:
+                            raise RuleSetupNameError(f"{self}: Only FunctionsNS (G.) namespace accepts direct function calls. Got '{bit}' on '{bit._namespace}) namespace.")
 
-                except NotImplementedError as ex:
-                    self._status = VExpStatusEnum.ERR_TO_IMPLEMENT
-                    all_ok = False
-                    break
-                # except (RuleError) as ex:
-                # NOTE: RL 221104 strict mode - do not tolerate variable not found any more
-                # except (RuleSetupNameNotFoundError) as ex:
-                #     if False:
-                #         self._status = VExpStatusEnum.ERR_NOT_FOUND
-                #         all_ok = False
-                #         # current_variable = heap.get(namespace=bit._namespace, var_name=var_name, owner=owner, parent=current_variable)
-                #         print(f"== TODO: RuleSetupError - {self} -> Heap error {bit}: {ex}")
-                #         break
-                #     else:
-                #         raise RuleSetupError(owner=self, msg=f"Heap {heap!r} attribute {var_name} not found: {ex}")
+                    func_args = FunctionArgumentsType(*bit._func_args)
 
-                if not isinstance(current_variable, Variable):
-                    raise RuleInternalError(owner=self, msg=f"Type of found object is not Variable, got: {type(current_variable)}.")
+                    vexp_node_name = bit._node
+                    if last_vexp_node:
+                        parent_arg_type_info = get_type_info_from_vexp_or_node(last_vexp_node)
+                    else:
+                        parent_arg_type_info = None
 
-                # can be Component/DataVar or can be managed Model dataclass Field - when .denied is not appliable
-                if hasattr(current_variable, "denied") and current_variable.denied:
-                    raise RuleSetupValueError(owner=self, msg=f"Variable '{var_name}' (owner={owner.name}) references '{current_variable.name}' is not allowed in ValueExpression due: {current_variable.deny_reason}.")
-
-                # print(f"OK: {self} -> {bit}")
-                if bit._func_args is not None:
-                    args, kwargs = bit._func_args
-                    # getter = operator.attrgetter(var_name)
-                    # def func_call(obj):
-                    #     return getter(obj)(*args, **kwargs)
-                    # -> .<var_name>(*args, **kwargs)
-                    func_call  = operator.methodcaller(var_name, *args, **kwargs)
-                    _read_functions.append(func_call)
-                    # raise NotImplementedError(f"Call to functions {bit} in {self} not implemented yet!")
+                    # : IFunctionVexpNode
+                    current_vexp_node = registry.create_func_node(
+                            registries=registries,
+                            caller=last_vexp_node,
+                            attr_node_name=vexp_node_name,
+                            func_args=func_args,
+                            value_arg_type_info=parent_arg_type_info
+                            )
                 else:
-                    getter = operator.attrgetter(var_name)
-                    _read_functions.append(getter)
+                    # ========================================
+                    # Attributes
+                    # ========================================
+                    # ----------------------------------------
+                    # Check if Path goes to correct attr_node
+                    # ----------------------------------------
+                    # when copy_to_registries defined:
+                    #   read from copy_to_registries.registries_bind_from and store in both registriess in the
+                    #   same namespace (usually ModelsNS)
+                    # registries_read_from = copy_to_registries.registries_bind_from if copy_to_registries else registries
+                    # registries_read_from = registries
 
-        variable = None
+                    vexp_node_name = bit._node
+                    current_vexp_node = registry.create_node(
+                                vexp_node_name=vexp_node_name,
+                                parent_vexp_node=last_vexp_node,
+                                # func_args=bit._func_args,
+                                )
 
-        # if "select_id_of_default_device" in repr(self):
-        #     import pdb;pdb.set_trace() 
+                # add node to evaluator
+                vexp_evaluator.add(current_vexp_node)
 
-        if all_ok:
-            self._status = VExpStatusEnum.OK
+                # if is_last and copy_to_registries:
+                #     current_vexp_node.add_bound_vexp_node(BoundVar(registries.name, copy_to_registries.vexp_node_name))
+                #     registries.add(current_vexp_node, alt_vexp_node_name=copy_to_registries.vexp_node_name)
+
+            except NotImplementedError as ex:
+                # print(f"XX {self} -> {ex}")
+                if strict:
+                    raise
+                self._status = VExpStatusEnum.ERR_TO_IMPLEMENT
+                vexp_evaluator.failed(str(ex))
+                break
+
+            last_vexp_node = current_vexp_node
+
+            # except (RuleError) as ex:
+            # NOTE: RL 221104 strict mode - do not tolerate attr_node not found any more
+            # except (RuleSetupNameNotFoundError) as ex:
+            #     if False:
+            #         self._status = VExpStatusEnum.ERR_NOT_FOUND
+            #         # current_vexp_node = registries.get(namespace=bit._namespace, vexp_node_name=vexp_node_name, owner=owner, parent=current_vexp_node)
+            #         print(f"== TODO: RuleSetupError - {self} -> Registries error {bit}: {ex}")
+            #         break
+            #     else:
+            #         raise RuleSetupError(owner=self, msg=f"Registries {registries!r} attribute {vexp_node_name} not found: {ex}")
+
+            # if not isinstance(current_vexp_node, AttrVexpNode):
+            #     raise RuleInternalError(owner=self, msg=f"Type of found object is not AttrVexpNode, got: {type(current_vexp_node)}.")
+
+            # can be Component/IData or can be managed Model dataclass Field - when .denied is not appliable
+            if hasattr(current_vexp_node, "denied") and current_vexp_node.denied:
+                raise RuleSetupValueError(owner=self, msg=f"VexpNode '{vexp_node_name}' (owner={owner.name}) references '{current_vexp_node.name}' is not allowed in ValueExpression due: {current_vexp_node.deny_reason}.")
+
+        vexp_evaluator.finish()
+
+
+        if vexp_evaluator.is_all_ok():
+            self._status = VExpStatusEnum.BUILT
             self._all_ok = True
-            self._read_functions = _read_functions
-            variable = current_variable
-            if not variable:
-                if self._namespace not in (GlobalNS, ThisNS, UtilsNS):
-                    raise RuleSetupValueError(owner=self, msg=f"Variable not found.")
-                # self._all_ok = False?
-                self._var_name = None
-            else:
-                # self._all_ok = False?
-                variable.add_reference(owner.name)
-                self._var_name = variable.name
+            self._evaluator = vexp_evaluator
+            self._vexp_node = vexp_evaluator.last_node()
 
         else:
+            # TODO: raise RuleSetupError()
             self._all_ok = False
-            self._var_name = None
-            self._read_functions = None
+            self._evaluator = vexp_evaluator
+            self._vexp_node = None
 
-        return variable
-
-
-    def Read(self, heap:'VariablesHeap', model_name:Optional[str]):
-        if not "_read_functions" in dir(self):
-            raise RuleSetupInternalError(owner=self, msg=f"Setup not done.")
-        val = UNDEFINED
-        # TODO: if self._var_name
-        for func in rself._read_functions:
-            if val is UNDEFINED:
-                val = func(heap)
-            else:
-                val = func(val)
-        return val
+        return self._vexp_node
 
     # def __getitem__(self, ind):
     #     # list [0] or dict ["test"]
-    #     return ValueExpression(
-    #         Path=self.Path
-    #         + "."
-    #         + str(ind)
-    #     )
+    #     return ValueExpression( Path=self.Path + "." + str(ind))
 
     def __getattr__(self, aname):
-        # if aname.startswith("_"):
-        #     raise RuleSetupNameError(owner=self, msg=f"VariableExpression name {aname} starts with _ what is reserved, choose another name.")
+        self._EnsureFinished()
+
         if aname in self.RESERVED_ATTR_NAMES: # , "%r -> %s" % (self._node, aname):
             raise RuleSetupNameError(owner=self, msg=f"ValueExpression's attribute '{aname}' is reserved name, choose another.")
         if aname.startswith("__") and aname.endswith("__"):
@@ -350,7 +625,7 @@ class ValueExpression(RubberObjectBase):
         return out
 
     def __str__(self):
-        return ".".join([ve.as_str() for ve in self.Path])
+        return ".".join([ve.as_str() for ve in self.Path]) if self.Path else f"{self.__class__.__name__}(... {self._node})"
 
     def __repr__(self):
         return f"VExpr({self})"
@@ -369,21 +644,44 @@ class ValueExpression(RubberObjectBase):
     # ------- Internal methods ---------
 
     # https://realpython.com/python-bitwise-operators/#custom-data-types
-    def __eq__(self, other):        return ValueExpression(Operation("==", self, other), namespace=GlobalNS)
-    def __ne__(self, other):        return ValueExpression(Operation("!=", self, other), namespace=GlobalNS)
-    def __gt__(self, other):        return ValueExpression(Operation(">", self, other), namespace=GlobalNS)
-    def __ge__(self, other):        return ValueExpression(Operation(">=", self, other), namespace=GlobalNS)
-    def __lt__(self, other):        return ValueExpression(Operation("<", self, other), namespace=GlobalNS)
-    def __le__(self, other):        return ValueExpression(Operation("<=", self, other), namespace=GlobalNS)
-    def __add__(self, other):       return ValueExpression(Operation("+", self, other), namespace=GlobalNS)
-    def __sub__(self, other):       return ValueExpression(Operation("-", self, other), namespace=GlobalNS)
-    def __mul__(self, other):       return ValueExpression(Operation("*", self, other), namespace=GlobalNS)
-    def __truediv__(self, other):   return ValueExpression(Operation("/", self, other), namespace=GlobalNS)
-    def __floordiv__(self, other):  return ValueExpression(Operation("//", self, other), namespace=GlobalNS)
-    def __contains__(self, other):  return ValueExpression(Operation("in", self, other), namespace=GlobalNS)
-    def __invert__(self):           return ValueExpression(Operation("not", self), namespace=GlobalNS)  # ~
-    def __and__(self, other):       return ValueExpression(Operation("and", self, other), namespace=GlobalNS)  # &
-    def __or__(self, other):        return ValueExpression(Operation("or", self, other), namespace=GlobalNS)  # |
+    # comparison operators <, <=, ==, !=, >=, >
+
+    # NOTE: Operations are in internal OperationsNS
+
+    def __eq__(self, other):        self._EnsureFinished(); return ValueExpression(OperationVexpNode("==", self, other), namespace=OperationsNS)  # noqa: E702
+    def __ne__(self, other):        self._EnsureFinished(); return ValueExpression(OperationVexpNode("!=", self, other), namespace=OperationsNS)  # noqa: E702
+    def __gt__(self, other):        self._EnsureFinished(); return ValueExpression(OperationVexpNode(">" , self, other), namespace=OperationsNS)  # noqa: E702
+    def __ge__(self, other):        self._EnsureFinished(); return ValueExpression(OperationVexpNode(">=", self, other), namespace=OperationsNS)  # noqa: E702
+    def __lt__(self, other):        self._EnsureFinished(); return ValueExpression(OperationVexpNode("<" , self, other), namespace=OperationsNS)  # noqa: E702
+    def __le__(self, other):        self._EnsureFinished(); return ValueExpression(OperationVexpNode("<=", self, other), namespace=OperationsNS)  # noqa: E702
+
+    # +, -, *, /
+    def __add__(self, other):       self._EnsureFinished(); return ValueExpression(OperationVexpNode("+" , self, other), namespace=OperationsNS)  # noqa: E702
+    def __sub__(self, other):       self._EnsureFinished(); return ValueExpression(OperationVexpNode("-" , self, other), namespace=OperationsNS)  # noqa: E702
+    def __mul__(self, other):       self._EnsureFinished(); return ValueExpression(OperationVexpNode("*" , self, other), namespace=OperationsNS)  # noqa: E702
+    def __truediv__(self, other):   self._EnsureFinished(); return ValueExpression(OperationVexpNode("/" , self, other), namespace=OperationsNS)  # noqa: E702
+
+    # what is this??
+    def __floordiv__(self, other):  self._EnsureFinished(); return ValueExpression(OperationVexpNode("//", self, other), namespace=OperationsNS)  # noqa: E702
+
+    # in
+    def __contains__(self, other):  self._EnsureFinished(); return ValueExpression(OperationVexpNode("in", self, other), namespace=OperationsNS)  # noqa: E702
+
+    # Bool operators, NOT, AND, OR
+    def __invert__(self):           self._EnsureFinished(); return ValueExpression(OperationVexpNode("not", self), namespace=OperationsNS)  # ~  # noqa: E702
+    def __and__(self, other):       self._EnsureFinished(); return ValueExpression(OperationVexpNode("and", self, other), namespace=OperationsNS)  # &  # noqa: E702
+    def __or__(self, other):        self._EnsureFinished(); return ValueExpression(OperationVexpNode("or" , self, other), namespace=OperationsNS)  # |  # noqa: E702
+
+    # ------------------------------------------------------------
+
+    # def __rshift__(self, other):
+    #     """
+    #     Streaming:
+    #         List[Instance] >> Function() # receives Qs/List, like Map(Function, List) -> List
+    #         Instance >> Function()       # receives Instance, returns
+    #     """
+    #     return ValueExpression(StreamOperation(">>", self, other), namespace=OperationsNS)  # >>
+
 
 
     # __abs__ - abs()
@@ -397,4 +695,19 @@ class ValueExpression(RubberObjectBase):
     # Slicing 	seq[i:j] 	getitem(seq, slice(i, j))
     # String Formatting 	s % obj 	mod(s, obj)
     #       % 	__mod__(self, object) 	Modulus
-    # Truth Test 	obj 	truth(obj) 
+    # Truth Test 	obj 	truth(obj)
+
+    # https://docs.python.org/3/library/operator.html
+    #   operator.__lshift__(a, b) - a << b - Return a shifted left by b.
+    #   operator.__rshift__(a, b) - a >> b - Return a shifted right by b.
+    #   operator.__mod__(a, b) - Return a % b.
+    #   operator.__matmul__(a, b) -  Return a @ b.
+    #   operator.__pow__(a, b) - Return a ** b, for a and b numbers.
+    #   operator.__xor__(a, b) -  a ^ b Return the bitwise exclusive or of a and b.
+    #   setitem(seq, slice(i, j), values) - seq[i:j] = values
+    #       When[ a > b : 25 ], When[ a > b : 25 ]
+    #   operator.__ixor__(a, b) - a ^= b.
+    #   operator.__irshift__(a, b) - a >>= b.
+    #         When(a > b) >>= 25
+
+
