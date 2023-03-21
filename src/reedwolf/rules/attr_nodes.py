@@ -175,7 +175,7 @@ class AttrVexpNode(IValueExpressionNode):
                     raise RuleInternalError(owner=self, msg=f"AttrVexpNode data.bound_attr_node={self.data} -> {self.data.bound_attr_node} .type_info not set.")
                 # transfer type_info from type_info.bound attr_node
                 self.type_info = type_info.bound_attr_node.type_info
-            # NOTE: can be done with isinstance(CompoentBase)
+            # NOTE: can be done with isinstance(ComponentBase)
 
             # NOTE: maybe simplier:
             #     if not isinstance(self.data, (CardinalityValidation, ComponentBase)):

@@ -106,6 +106,10 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
     def is_container(self):
         return True
 
+    @staticmethod
+    def can_apply_partial() -> bool:
+        return True
+
     def __getitem__(self, name):
         if name not in self.components:
             vars_avail = get_available_names_example(name, self.components.keys())
@@ -596,6 +600,56 @@ class Rules(ContainerBase):
 
         if do_setup:
             self.setup()
+
+    # ------------------------------------------------------------
+    # apply - API entries
+    # ------------------------------------------------------------
+    def apply_partial(self, 
+              component_name_only:str,
+              instance: Any, 
+              context: Optional[IContext] = None, 
+              raise_if_failed:bool = True) -> IApplySession:
+        return self._apply(
+                  instance=instance,
+                  component_name_only=component_name_only,
+                  context=context,
+                  raise_if_failed=raise_if_failed)
+
+    def apply(self, 
+              instance: Any, 
+              context: Optional[IContext] = None, 
+              raise_if_failed:bool = True) -> IApplySession:
+        return self._apply(
+                  instance=instance,
+                  context=context,
+                  raise_if_failed=raise_if_failed)
+
+
+    def _apply(self, 
+              instance: Any, 
+              component_name_only:Optional[str] = None,
+              context: Optional[IContext] = None, 
+              raise_if_failed:bool = True) -> IApplySession:
+        """
+        proxy to Result().apply()
+        TODO: check that this is container / extension / fieldgroup
+        """
+        from .apply import ApplyResult
+        container = self.get_container_owner()
+
+        apply_result = \
+                ApplyResult(registries=container.registries, 
+                      rules=self, 
+                      component_name_only=component_name_only,
+                      context=context, 
+                      instance=instance)\
+                  .apply()
+
+        if raise_if_failed:
+            apply_result.raise_if_failed()
+
+        return apply_result
+
 
 # ------------------------------------------------------------
 

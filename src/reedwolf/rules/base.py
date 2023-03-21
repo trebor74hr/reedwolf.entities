@@ -180,6 +180,10 @@ class ComponentBase(SetOwnerMixin, ABC):
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
         ...
 
+    @staticmethod
+    def can_apply_partial() -> bool:
+        return False
+
     def as_str(self):
         return "\n".join(self.to_strlist())
 
@@ -546,7 +550,7 @@ class ComponentBase(SetOwnerMixin, ABC):
         from .containers import ContainerBase
 
         if self.owner == UNDEFINED:
-            raise RuleSetupError(owner=self, msg="Owner is not set. Have setup() been called?")
+            raise RuleSetupError(owner=self, msg="Owner is not set. Call .setup() method first.")
 
         if isinstance(self, ContainerBase):
             return self
@@ -561,32 +565,6 @@ class ComponentBase(SetOwnerMixin, ABC):
 
         return owner_container
 
-
-    # ------------------------------------------------------------
-    # apply - main entry
-    # ------------------------------------------------------------
-
-    def apply(self, 
-              instance: Any, 
-              context: Optional[IContext] = None, 
-              raise_if_failed:bool = True) -> IApplySession:
-        """
-        proxy to Result().apply()
-        TODO: check that this is container / extension / fieldgroup
-        """
-        from .apply import ApplyResult
-        container = self.get_container_owner()
-        # registries = self.
-        apply_result = ApplyResult(registries=container.registries, 
-                      component=self, 
-                      context=context, 
-                      instance=instance)\
-                  .apply()
-
-        if raise_if_failed:
-            apply_result.raise_if_failed()
-
-        return apply_result
 
     # ------------------------------------------------------------
 
@@ -811,14 +789,18 @@ class ValidationFailure:
 class IApplySession:
     # TODO: možda bi ovo trebalo izbaciti ... - link na IRegistry u vexp node-ovima 
     registries: IRegistries = field(repr=False)
-    component: ComponentBase = field(repr=False)
+    rules: "Rules" = field(repr=False) # ex. ComponentBase 
     instance: Any = field(repr=False)
     context: Optional[IContext] = field()
+    # apply_partial
+    component_name_only: Optional[str] = field(repr=False, default=None)
 
     # automatically computed
     # extracted from component
     bound_model : BoundModelBase = field(repr=False, init=False)
     finished: bool = field(repr=False, init=False, default=False)
+    # computed from component_name_only
+    component_only: Optional[ComponentBase] = field(repr=False, default=None)
 
     # ---- internal structs ----
 

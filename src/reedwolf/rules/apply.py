@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from .exceptions import (
         RuleApplyError,
         RuleValidationError,
+        RuleInternalError,
         )
 from .meta import (
         UNDEFINED,
@@ -36,6 +37,11 @@ from .components import (
         EvaluationBase,
         ValidationBase,
         )
+from .containers import (
+        ContainerBase,
+        Rules,
+        )
+
 
 MAX_RECURSIONS = 30
 
@@ -43,12 +49,18 @@ MAX_RECURSIONS = 30
 class ApplyResult(IApplySession):
 
     def __post_init__(self):
-        if not isinstance(self.component, ComponentBase):
-            raise RuleApplyError(owner=self, msg=f"Component object '{self.component}' is not Component")
+        if not isinstance(self.rules, Rules):
+            raise RuleApplyError(owner=self, msg=f"Component object '{self.rules}' is not top container - Rules.")
 
-        self.bound_model = getattr(self.component, "bound_model")
+        if self.component_name_only:
+            # Will raise if component is not found
+            self.component_only = self.rules.get_component(self.component_name_only)
+            if not self.component_only.can_apply_partial():
+                raise RuleApplyError(owner=self, msg=f"Component '{self.component_only}' does not support partial apply. Use Extension, FieldGroup or similar.")
+
+        self.bound_model = getattr(self.rules, "bound_model")
         if not self.bound_model:
-            raise RuleApplyError(owner=self, msg=f"Component object '{self.component}' has no bound model")
+            raise RuleApplyError(owner=self, msg=f"Component object '{self.rules}' has no bound model")
 
         self.model = self.bound_model.model
         if not self.model:
@@ -57,7 +69,7 @@ class ApplyResult(IApplySession):
         if not isinstance(self.instance, self.model):
             raise RuleApplyError(owner=self, msg=f"Object '{self.instance}' is not instance of bound model '{self.model}'.")
 
-        if self.component.context_class:
+        if self.rules.context_class:
             if not self.context:
                 raise RuleApplyError(owner=self, msg=f"Pass context object, instance of context class '{component.context_class}'.")
             if not isinstance(self.context, component.context_class):
@@ -105,7 +117,7 @@ class ApplyResult(IApplySession):
             raise RuleApplyError(owner=self, msg=f"Apply process is not finished")
 
         if self.errors:
-            raise RuleValidationError(owner=self.component, errors=self.errors)
+            raise RuleValidationError(owner=self.rules, errors=self.errors)
 
     # ------------------------------------------------------------
 
@@ -162,11 +174,20 @@ class ApplyResult(IApplySession):
 
     def _apply(self, 
                parent: Optional[ComponentBase], 
-               component: CompoentBase, 
+               component: ComponentBase, 
+               in_component_only_tree: bool = False,
                depth:int=0, 
                extension_list_mode:bool = False, 
                ):
         assert not self.finished
+
+        if self.component_only:
+            if component == self.component_only:
+                if not extension_list_mode and in_component_only_tree:
+                    raise RuleInternalError(owner=self, msg=f"{parent} -> {component}: in_component_only_tree should be False, got {in_component_only_tree}")
+                in_component_only_tree = True
+
+        # print ("here", in_component_only_tree, component.name, component == self.component_only)
 
         if depth > MAX_RECURSIONS:
             raise RecursionError("Maximum recursion depth exceeded ({depth})")
@@ -174,7 +195,7 @@ class ApplyResult(IApplySession):
         new_frame = None
         if depth==0:
             assert parent is None
-            assert component == self.component
+            assert component == self.rules
             instance = self.instance
             new_frame = StackFrame(
                             container=component, 
@@ -209,6 +230,7 @@ class ApplyResult(IApplySession):
                     # Recursion with prevention to hit this code again
                     self._apply(parent=parent, 
                                 component=component, 
+                                in_component_only_tree=in_component_only_tree,
                                 depth=depth+1,
                                 # prevent is_extension_logic again -> infinitive recursion
                                 extension_list_mode=True)
@@ -238,35 +260,9 @@ class ApplyResult(IApplySession):
             self.push_frame_to_stack(new_frame)
 
 
-        # ------------------------------------------------------------
-        # --- call cleaners - validations and evaluations
-        # ------------------------------------------------------------
 
-        # Fill initial value from instance
-
-        # TODO: if isinstance(component, FieldBase):
-        init_bind_vexp_result = self.register_initial_from_bind(component) if getattr(component, "bind", None) else None
-
-        # TODO: provide last value to all evaluations and validations 
-        #       but be careful with vexp_result.value - it coluld be unadapted
-        #       see: field.try_adapt_value(eval_value)
-
-        if component.cleaners:
-            for cleaner in component.cleaners:
-                if isinstance(cleaner, ValidationBase):
-                    # value=value, 
-                    self.execute_validation(component=component, validation=cleaner)
-                elif isinstance(cleaner, EvaluationBase):
-                    if not init_bind_vexp_result:
-                        # TODO: this belongs to Setup phase
-                        raise RuleApplyError(owner=self, msg=f"Evaluator can be defined only for components with 'bind' defined. Remove 'Evaluation' or define 'bind'.")
-                    self.execute_evaluation(component=component, evaluation=cleaner)
-                else:
-                    raise RuleApplyError(owner=self, msg=f"Unknown cleaner type {type(cleeaner)}. Expected Evaluation or Validation.")
-
-        # NOTE: initial value from instance is not checked - only
-        #       intermediate and the last value
-        self.validate_type(component)
+        if not (self.component_only and not in_component_only_tree):
+            self.call_cleaners(component=component)
 
         # ------------------------------------------------------------
         # REMOVE_THIS: used only for test if all Vexp values could evaluate ...
@@ -283,6 +279,7 @@ class ApplyResult(IApplySession):
         # ------------------------------------------------------------
         for child in component.get_children():
             self._apply(parent=component, 
+                        in_component_only_tree=in_component_only_tree,
                         component=child, 
                         depth=depth+1)
 
@@ -309,8 +306,40 @@ class ApplyResult(IApplySession):
         if not ok - errors contain all details.
 
         """
-        self._apply(parent=None, component=self.component)
+        self._apply(parent=None, component=self.rules)
         self.set_finished()
 
         return self
+
+    # ------------------------------------------------------------
+
+    def call_cleaners(self, component: ComponentBase):
+        # ------------------------------------------------------------
+        # --- call cleaners - validations and evaluations
+        # ------------------------------------------------------------
+        # Fill initial value from instance
+
+        # TODO: if isinstance(component, FieldBase):
+        init_bind_vexp_result = self.register_initial_from_bind(component) if getattr(component, "bind", None) else None
+
+        # TODO: provide last value to all evaluations and validations 
+        #       but be careful with vexp_result.value - it coluld be unadapted
+        #       see: field.try_adapt_value(eval_value)
+
+        if component.cleaners:
+            for cleaner in component.cleaners:
+                if isinstance(cleaner, ValidationBase):
+                    # value=value, 
+                    self.execute_validation(component=component, validation=cleaner)
+                elif isinstance(cleaner, EvaluationBase):
+                    if not init_bind_vexp_result:
+                        # TODO: this belongs to Setup phase
+                        raise RuleApplyError(owner=self, msg=f"Evaluator can be defined only for components with 'bind' defined. Remove 'Evaluation' or define 'bind'.")
+                    self.execute_evaluation(component=component, evaluation=cleaner)
+                else:
+                    raise RuleApplyError(owner=self, msg=f"Unknown cleaner type {type(cleeaner)}. Expected Evaluation or Validation.")
+
+        # NOTE: initial value from instance is not checked - only
+        #       intermediate and the last value
+        self.validate_type(component)
 

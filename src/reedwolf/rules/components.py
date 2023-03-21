@@ -76,20 +76,14 @@ class Component(ComponentBase, ABC):
     dot_node:   Union[AttrVexpNode, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
 
     def init_clean_base(self):
-        # hopefully will be later defined - see set_owner
-        # TODO: found no way to declare name
+        # when not set then will be later defined - see set_owner()
         if self.name not in (None, "", UNDEFINED):
-            # if not self.name:
-            #     raise RuleSetupValueError(owner=self, msg=f"{self} -> attribute name is not defined")
-
             if not self.name.isidentifier():
                 raise RuleSetupValueError(owner=self, msg=f"{self.name} -> attribute name needs to be valid python identifier name")
 
-        # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
-
-
     def __post_init__(self):
         self.init_clean_base()
+        super().__post_init__()
 
     def get_key_string(self, apply_session: IApplySession):
         # TODO: is caching possible? 
@@ -129,7 +123,7 @@ class StaticData(IData, Component):
             # raise RuleSetupValueError(owner=self, msg=f"{self.name} -> {type(self.value)}: {type(self.value)} - to be done a ValueExpression")
             raise NotImplementedError(f"{self.name} -> {type(self.value)}: {type(self.value)} - to be done a ValueExpression")
         self.type_info = TypeInfo.get_or_create_by_type(self.value)
-        self.init_clean_base()
+        super().__post_init__()
 
 # ------------------------------------------------------------
 
@@ -155,7 +149,7 @@ class DynamicData(IData, Component):
         custon_function_factory: CustomFunctionFactory = self.function
         self.type_info = custon_function_factory.get_output_type_info()
         # TODO: check function output is Callable[..., RuleDatatype]
-        self.init_clean_base()
+        super().__post_init__()
 
 # ------------------------------------------------------------
 # Clenaers (cleaners) == Validations OR Evaluations
@@ -209,3 +203,6 @@ class FieldGroup(Component):
     cleaners:       Optional[List[Union[ValidationBase, EvaluationBase]]] = None
     available:      Union[bool, ValueExpression] = True
 
+    @staticmethod
+    def can_apply_partial() -> bool:
+        return True

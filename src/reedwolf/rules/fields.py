@@ -153,15 +153,6 @@ class FieldBase(Component, IFieldBase, ABC):
             self.name = self.get_name_from_bind(self.bind)
 
         self.autocomputed = AutocomputedEnum.from_value(self.autocomputed)
-
-        #     # normalize to Enum value
-        #     type_values = {ev.value:ev for ev in FieldTypeEnum}
-        #     if self.type not in type_values:
-        #         raise RuleSetupValueError(owner=self, msg=f"type='{self.type}' needs to be one of {type_values.keys()}.")
-        #     self.type = type_values[self.type]
-
-        # NOTE: for dataclass found no way to call in standard "inheritance
-        #       way", super().clean_base()
         self.init_clean_base()
 
 
@@ -307,8 +298,6 @@ class StringField(FieldBase):
     # NOTE: TextField -> MaxLength=Neki valiki, render nešto drugačiji, rows/columns
     PYTHON_TYPE:ClassVar[type] = str
     REQUIRED_VALIDATIONS:ClassVar[List[ValidationBase]] = [MaxLength]
-
-    # def __post_init__(self): super().__post_init__()
 
     def try_adapt_value(self, value: Any) -> Any:
         " apply phase: if not string and is standard type, convert to string "
