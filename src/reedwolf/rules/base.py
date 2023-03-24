@@ -5,6 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 import inspect
 from decimal import Decimal
+from enum import Enum
 from typing import (
         List, 
         Any, 
@@ -43,6 +44,7 @@ from .meta import (
         is_method_by_name,
         is_model_class,
         ModelType,
+        DataclassType,
         extract_field_meta,
         extract_py_type_hints,
         STANDARD_TYPE_LIST,
@@ -756,23 +758,40 @@ class InstanceAttrValue:
     is_from_bind: bool = field(repr=False, compare=False, default=False)
 
 # ------------------------------------------------------------
+
+class StructEnum(str, Enum):
+    # models like - follows flat, storage/db like structure
+    MODELS_LIKE = "MODELS"
+    # rules like - follows hierachical structure like defined in rules
+    RULES_LIKE  = "RULES"
+
+# ------------------------------------------------------------
+
 @dataclass
 class StackFrame:
-    instance: Any
+    # current container data instance which will be procesed: changed/validated/evaluated
+    instance: DataclassType
     container: 'ContainerBase'
     component: ComponentBase
+
+    # UPDATE by this instance - can be RULES_LIKE or MODELS_LIKE (same dataclass) struct
+    # required but is None when not update
+    instance_new: Optional[ModelType] = field(repr=False)
+    # this is currently created on 1st level and then copied to each next level
+    instance_new_struct_type: Optional[StructEnum] = field(repr=False)
+
     # filled only when container list member
     index0: Optional[int] = None
 
     # internal - filled in __post_init__
     key_string: Optional[str] = field(init=False, repr=False, default=None)
 
-
     def __post_init__(self):
         from .containers import ContainerBase
         assert isinstance(self.container, ContainerBase)
         assert isinstance(self.component, ComponentBase)
         assert is_model_class(self.instance.__class__), self.instance
+
         if self.index0 is not None:
             assert self.index0 >= 0
 

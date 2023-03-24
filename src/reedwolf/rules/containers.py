@@ -41,6 +41,8 @@ from .meta import (
         TypeInfo,
         is_model_class,
         get_model_fields,
+        ModelType,
+        DataclassType,
         )
 from .base import (
         ComponentBase,
@@ -199,8 +201,6 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
         if not is_model_class(model) and not (is_list and model in STANDARD_TYPE_LIST):
             raise RuleSetupError(owner=self, msg=f"Managed model {bound_model.name} needs to be a @dataclass, pydantic.BaseModel or List[{STANDARD_TYPE_LIST}], got: {type(model)}")
-
-        # model_class: ModelType = model
 
         if not attr_node:
             attr_node = self.registries.models_registry.create_attr_node(bound_model=bound_model)
@@ -405,7 +405,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         if key_string is None:
             key_string = self.name
             if self.keys:
-                key_pairs = self.get_key_pairs(apply_session)
+                key_pairs = self.get_key_pairs(apply_session.current_frame.instance)
                 assert key_pairs
                 key_string = "{}[{}]".format(
                                 key_string, GlobalConfig.ID_NAME_SEPARATOR.join(
@@ -425,10 +425,10 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         return key_string
 
 
-    def get_key_pairs(self, apply_session:IApplySession) -> List[(str, Any)]:
+    def get_key_pairs(self, instance: ModelType) -> List[(str, Any)]:
         if not self.keys:
             raise RuleInternalError(msg=f"get_key_pairs() should be called only when 'keys' are defined")
-        key_pairs = self.keys.get_key_pairs(apply_session)
+        key_pairs = self.keys.get_key_pairs(instance)
         return key_pairs
         
 
@@ -437,16 +437,16 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 class KeysBase(ABC):
 
     @abstractmethod
-    def validate(self, model_or_children_model:Any):
+    def validate(self, model_or_children_model: ModelType):
         ...
 
     @abstractmethod
-    def get_key_pairs(self, apply_session:IApplySession) -> List[Tuple[str, Any]]:
+    def get_key_pairs(self, instance: ModelType) -> List[Tuple[str, Any]]:
         """ returns list of (key-name, key-value) """
         ...
 
-    def get_keys(self, apply_session:IApplySession) -> List[Any]:
-        return [key for name,key in self.get_keys_tuple(apply_session)]
+    # def get_keys(self, apply_session:IApplySession) -> List[Any]:
+    #     return [key for name,key in self.get_keys_tuple(apply_session)]
 
 
 @dataclass
@@ -454,7 +454,6 @@ class KeyFields(KeysBase):
 
     # list of field names
     field_names : List[str]
-
 
     def __post_init__(self):
         if not self.field_names:
@@ -465,7 +464,7 @@ class KeyFields(KeysBase):
         if len(set(self.field_names)) != len(self.field_names):
             raise RuleSetupNameError(f"Fields needs to be unique list of names, found duplicates: '{self.field_names}'")
 
-    def validate(self, model:ModelType):
+    def validate(self, model: ModelType):
         model_fields = get_model_fields(model)
         for field_name in self.field_names:
             if field_name not in model_fields:
@@ -478,10 +477,12 @@ class KeyFields(KeysBase):
         GlobalConfig.ID_COUNTER += 1
         return GlobalConfig.ID_COUNTER
 
-    def get_key_pairs(self, apply_session:IApplySession) -> List[Tuple(str, Any)]:
+    def get_key_pairs(self, instance: ModelType) -> List[Tuple(str, Any)]:
+        # apply_session:IApplySession
+        # frame = apply_session.current_frame
+        # instance = frame.instance
+
         keys = []
-        frame = apply_session.current_frame
-        instance = frame.instance
 
         for field_name in self.field_names:
             if not hasattr(instance, field_name):
@@ -501,11 +502,11 @@ class KeyFields(KeysBase):
 #     # Can be applied only for children - e.g. Extension with multiple items
 #     # parent assignes key as index of item in the list of "children").
 # 
-#     def validate(self, children_model:Any):
+#     def validate(self, children_model: ModelType):
 #         # children_model - check if get_type_info().is_list
 #         raise NotImplementedError()
 # 
-#     def get_key_pairs(apply_session:IApplySessio) -> List[Tuple[str, Any]]:
+#     def get_key_pairs(instance: ModelType) -> List[Tuple[str, Any]]:
 #         raise NotImplementedError()
 
 # ------------------------------------------------------------
@@ -604,29 +605,36 @@ class Rules(ContainerBase):
     # ------------------------------------------------------------
     # apply - API entries
     # ------------------------------------------------------------
-    def apply_partial(self, 
-              component_name_only:str,
-              instance: Any, 
+
+    def apply(self, 
+              instance: DataclassType, 
+              instance_new: Optional[ModelType] = None,
               context: Optional[IContext] = None, 
               raise_if_failed:bool = True) -> IApplySession:
         return self._apply(
                   instance=instance,
+                  instance_new=instance_new,
+                  context=context,
+                  raise_if_failed=raise_if_failed)
+
+    def apply_partial(self, 
+              component_name_only:str,
+              instance: DataclassType, 
+              instance_new: Optional[ModelType] = None,
+              context: Optional[IContext] = None, 
+              raise_if_failed:bool = True) -> IApplySession:
+        return self._apply(
+                  instance=instance,
+                  instance_new=instance_new,
                   component_name_only=component_name_only,
                   context=context,
                   raise_if_failed=raise_if_failed)
 
-    def apply(self, 
-              instance: Any, 
-              context: Optional[IContext] = None, 
-              raise_if_failed:bool = True) -> IApplySession:
-        return self._apply(
-                  instance=instance,
-                  context=context,
-                  raise_if_failed=raise_if_failed)
 
 
     def _apply(self, 
-              instance: Any, 
+              instance: DataclassType, 
+              instance_new: Optional[ModelType] = None,
               component_name_only:Optional[str] = None,
               context: Optional[IContext] = None, 
               raise_if_failed:bool = True) -> IApplySession:
@@ -642,8 +650,11 @@ class Rules(ContainerBase):
                       rules=self, 
                       component_name_only=component_name_only,
                       context=context, 
-                      instance=instance)\
-                  .apply()
+                      instance=instance,
+                      )\
+                  .apply(
+                      instance_new=instance_new,
+                      )
 
         if raise_if_failed:
             apply_result.raise_if_failed()

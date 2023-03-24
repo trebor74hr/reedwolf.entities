@@ -75,16 +75,15 @@ from .namespaces import (
 # ------------------------------------------------------------
 NoneType                = type(None) # or None.__class__
 
-
 # NOTE: for dataclass there is no base type, so using Any
+DataclassType = Any
+
 if PydBaseModel:
-    ModelType  = Union[PydBaseModel, Any] # for dataclass there is no base type, 
+    ModelType  = Union[DataclassType, PydBaseModel]
     ModelField = Union[DcField, PydModelField]
-    # OptionalModelField = Union[DcField, PydModelFieldType, NoneType]
 else:
-    ModelType  = Any 
+    ModelType  = DataclassType
     ModelField = DcField
-    # OptionalModelField = Optional[DcField]
 
 # e.g. [(1,"test"), ("C2", "test2")]
 STANDARD_TYPE_LIST      = (str, int, float, bool, Decimal, date, datetime, timedelta, time)

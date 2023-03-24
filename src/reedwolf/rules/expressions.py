@@ -137,7 +137,7 @@ class IValueExpressionNode(ABC):
 
     @abstractmethod
     def evaluate(self, 
-                 apply_session: IApplySession, 
+                 apply_session: "IApplySession", 
                  # previous - can be undefined too
                  vexp_result: Union[VexpResult, UndefinedType],
                  ) -> VexpResult:
@@ -167,7 +167,10 @@ class LiteralVexpNode(IValueExpressionNode):
         self.vexp_result = VexpResult()
         self.vexp_result.set_value(self.value, attr_name="", changer_name="")
 
-    def evaluate(self, apply_session: "IApplySession", vexp_result: VexpResult) -> VexpResult:
+    def evaluate(self, 
+                 apply_session: "IApplySession", 
+                 vexp_result: VexpResult,
+                 ) -> VexpResult:
         assert not vexp_result
         return self.vexp_result
 
@@ -308,7 +311,10 @@ class OperationVexpNode(IValueExpressionNode):
 
     # vexp_result = node.evaluate(apply_session, vexp_result)
     # def evaluate(self, registries: "Registries", input_value: Any, context:Any) -> Any:  # noqa: F821
-    def evaluate(self, apply_session: "IApplySession", vexp_result: VexpResult) -> VexpResult:
+    def evaluate(self, 
+                 apply_session: "IApplySession", 
+                 vexp_result: VexpResult,
+                 ) -> VexpResult:
         # this should be included: context.this_registry: ThisRegistry
 
         if vexp_result:
