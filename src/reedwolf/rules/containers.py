@@ -11,6 +11,7 @@ from typing import (
         Optional,
         Union,
         Type,
+        Sequence,
         )
 # https://peps.python.org/pep-0673/
 # python 3.11+ from typing import Self
@@ -477,7 +478,7 @@ class KeyFields(KeysBase):
         GlobalConfig.ID_COUNTER += 1
         return GlobalConfig.ID_COUNTER
 
-    def get_key_pairs(self, instance: ModelType) -> List[Tuple(str, Any)]:
+    def get_key_pairs(self, instance: ModelType) -> Sequence[Tuple(str, Any)]:
         # apply_session:IApplySession
         # frame = apply_session.current_frame
         # instance = frame.instance
@@ -494,7 +495,7 @@ class KeyFields(KeysBase):
             else:
                 assert not str(key).startswith(GlobalConfig.ID_PREFIX_FOR_NEW), key
             keys.append((field_name, key))
-        return keys
+        return tuple(keys)
 
 
 
