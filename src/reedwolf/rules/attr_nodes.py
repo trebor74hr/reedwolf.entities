@@ -207,24 +207,23 @@ class AttrVexpNode(IValueExpressionNode):
         attr_name = names[-1]
 
         if vexp_result == UNDEFINED:
-            # initial - first value - get from registry / namespace, e.g. M.company
+            # initial / first value - get from registry / namespace, e.g. M.company
             vexp_result = VexpResult()
             frame = apply_session.current_frame
 
             if frame.container.is_extension():
                 if not len(names)>1:
                     raise RuleInternalError(owner=self, msg=f"Initial evaluation step for extension failed, expected multiple name members, got: {self.name}\n  == Compoonent: {frame.container}")
-                # TODO: do check: frame.instance, frame.container.bound_model type
-                value_new = frame.instance
             else:
                 if not len(names)==1:
                     raise RuleInternalError(owner=self, msg=f"Initial evaluation step for non-extension failed, expected single name member, got: {self.name}\n  == Compoonent: {frame.container}")
-                # TODO: do check: frame.instance, frame.container.bound_model type
-                registry = apply_session.registries.get_registry(self.namespace)
-                value_new = registry.get_root_value(
-                                    apply_session=apply_session, 
-                                    name=attr_name)
+
+            registry = apply_session.registries.get_registry(self.namespace)
+            value_new = registry.get_root_value(
+                                apply_session=apply_session, 
+                                name=attr_name)
         else:
+            # 2+ value - based on previous result and evolved one step further
             assert len(names)>1
             value_previous = vexp_result.value
             if not hasattr(value_previous, attr_name):

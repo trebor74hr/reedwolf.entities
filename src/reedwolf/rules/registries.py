@@ -26,6 +26,8 @@ from .exceptions import (
         RuleSetupNameNotFoundError,
         RuleSetupValueError,
         RuleInternalError,
+        RuleApplyTypeError,
+        RuleApplyNameError,
         )
 from .namespaces import (
         Namespace,
@@ -417,17 +419,29 @@ class ModelsRegistry(RegistryBase):
         return self.store[attr_node_name]
 
     def get_root_value(self, apply_session: IApplySession, name: str) -> Any:
-        # NOTE: see why it returns instance and not current_frame.instance in class description.
-        #   assert apply_session.current_frame.instance is apply_session.instance
-        assert apply_session.instance
-        assert apply_session.bound_model
+        instance = apply_session.current_frame.instance
+        bound_model = apply_session.current_frame.container.bound_model
+        assert instance and bound_model, f"{instance} {bound_model}"
 
-        if not isinstance(apply_session.instance, apply_session.bound_model.model):
-            raise RuleApplyTypeError(owner=self, msg=f"Wrong type, expected '{apply_session.bound_model.model}', got '{apply_session.instance}'")
+        expected_type = bound_model.type_info.type_ if isinstance(bound_model.model, ValueExpression) else bound_model.model
+        if not isinstance(instance, expected_type):
+            raise RuleApplyTypeError(owner=self, msg=f"Wrong type, expected '{expected_type}', got '{instance}'")
+        # if name!=bound_model.name:
+        #     raise RuleApplyNameError(owner=self, msg=f"Wrong name, expected '{bound_model.name}', got '{name}'")
 
-        if name!=apply_session.bound_model.name:
-            raise RuleApplyNameError(owner=self, msg=f"Wrong name, expected '{apply_session.bound_model.name}', got '{name}'")
-        return apply_session.instance
+        return instance
+
+        # # NOTE: see why it returns instance and not current_frame.instance in class description.
+        # #   assert apply_session.current_frame.instance is apply_session.instance
+        # assert apply_session.instance
+        # assert apply_session.bound_model
+
+        # if not isinstance(apply_session.instance, apply_session.bound_model.model):
+        #     raise RuleApplyTypeError(owner=self, msg=f"Wrong type, expected '{apply_session.bound_model.model}', got '{apply_session.instance}'")
+
+        # if name!=apply_session.bound_model.name:
+        #     raise RuleApplyNameError(owner=self, msg=f"Wrong name, expected '{apply_session.bound_model.name}', got '{name}'")
+        # return apply_session.instance
 
 # ------------------------------------------------------------
 
