@@ -405,6 +405,8 @@ class ModelsRegistry(RegistryBase):
                         type_info=bound_model.get_type_info())
         return attr_node
 
+    # ------------------------------------------------------------
+
     def get_attr_node_by_bound_model(self,
                                bound_model:BoundModelBase,
                                # default:[None, UndefinedType]=UNDEFINED,
@@ -418,30 +420,36 @@ class ModelsRegistry(RegistryBase):
         # return self.store.get(attr_node_name, default)
         return self.store[attr_node_name]
 
+    # ------------------------------------------------------------
+
     def get_root_value(self, apply_session: IApplySession, name: str) -> Any:
         instance = apply_session.current_frame.instance
-        bound_model = apply_session.current_frame.container.bound_model
-        assert instance and bound_model, f"{instance} {bound_model}"
 
-        expected_type = bound_model.type_info.type_ if isinstance(bound_model.model, ValueExpression) else bound_model.model
-        if not isinstance(instance, expected_type):
+        # bound_model = apply_session.current_frame.container.bound_model
+        bound_model_root = apply_session.current_frame.bound_model_root
+        assert instance and bound_model_root, f"{instance} / {bound_model_root}"
+
+        expected_type = bound_model_root.type_info.type_ \
+                        if isinstance(bound_model_root.model, ValueExpression) \
+                        else bound_model_root.model
+        if bound_model_root.type_info.is_list and isinstance(instance, (list, tuple)):
+            # raise RuleApplyTypeError(owner=self, msg=f"Wrong type, expected list/tuple, got '{instance}'")
+            assert instance
+            # check only first
+            instance_to_test = instance[0]
+        else:
+            instance_to_test = instance
+
+        if not isinstance(instance_to_test, expected_type):
             raise RuleApplyTypeError(owner=self, msg=f"Wrong type, expected '{expected_type}', got '{instance}'")
-        # if name!=bound_model.name:
-        #     raise RuleApplyNameError(owner=self, msg=f"Wrong name, expected '{bound_model.name}', got '{name}'")
+
+        # TODO: activate this when it has sense (not partial mode with Extension/FieldGroup, not Extension)
+        # this could differ - e.g. name="address", bind=M.company.address_set
+        # if name!=bound_model_root.name:
+        #     raise RuleApplyNameError(owner=self, msg=f"Wrong name, expected '{bound_model_root.name}', got '{name}'")
 
         return instance
 
-        # # NOTE: see why it returns instance and not current_frame.instance in class description.
-        # #   assert apply_session.current_frame.instance is apply_session.instance
-        # assert apply_session.instance
-        # assert apply_session.bound_model
-
-        # if not isinstance(apply_session.instance, apply_session.bound_model.model):
-        #     raise RuleApplyTypeError(owner=self, msg=f"Wrong type, expected '{apply_session.bound_model.model}', got '{apply_session.instance}'")
-
-        # if name!=apply_session.bound_model.name:
-        #     raise RuleApplyNameError(owner=self, msg=f"Wrong name, expected '{apply_session.bound_model.name}', got '{name}'")
-        # return apply_session.instance
 
 # ------------------------------------------------------------
 

@@ -92,8 +92,15 @@ class ValueExpressionEvaluator:
             raise RuleInternalError(owner=self, msg=f"Not yet finished.")
         if self.failed_reasons:
             raise RuleApplyError(owner=self, msg=f"Failed in creation: {'; '.join(self.failed_reasons)}.")
+
         vexp_result = UNDEFINED
-        for node in self.attr_node_list:
+        if apply_session.current_frame.on_component_only:
+            # M.company.address_set -> process only address_set 
+            node = self.attr_node_list[-1]
             vexp_result = node.evaluate(apply_session, vexp_result)
+        else:
+            for node in self.attr_node_list:
+                vexp_result = node.evaluate(apply_session, vexp_result)
+
         return vexp_result
 

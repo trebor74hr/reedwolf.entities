@@ -652,10 +652,9 @@ class Rules(ContainerBase):
                       component_name_only=component_name_only,
                       context=context, 
                       instance=instance,
-                      )\
-                  .apply(
                       instance_new=instance_new,
-                      )
+                      )\
+                  .apply()
 
         if raise_if_failed:
             apply_result.raise_if_failed()

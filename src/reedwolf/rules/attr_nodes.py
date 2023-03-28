@@ -211,12 +211,12 @@ class AttrVexpNode(IValueExpressionNode):
             vexp_result = VexpResult()
             frame = apply_session.current_frame
 
-            if frame.container.is_extension():
+            if frame.container.is_extension() or frame.on_component_only:
                 if not len(names)>1:
-                    raise RuleInternalError(owner=self, msg=f"Initial evaluation step for extension failed, expected multiple name members, got: {self.name}\n  == Compoonent: {frame.container}")
+                    raise RuleInternalError(owner=self, msg=f"Initial evaluation step for extension failed, expected multiple name members (e.g. M.company.address_set), got: {self.name}\n  == Compoonent: {frame.container}")
             else:
                 if not len(names)==1:
-                    raise RuleInternalError(owner=self, msg=f"Initial evaluation step for non-extension failed, expected single name member, got: {self.name}\n  == Compoonent: {frame.container}")
+                    raise RuleInternalError(owner=self, msg=f"Initial evaluation step for non-extension failed, expected single name member (e.g. M.company), got: {self.name}\n  == Compoonent: {frame.container}")
 
             registry = apply_session.registries.get_registry(self.namespace)
             value_new = registry.get_root_value(

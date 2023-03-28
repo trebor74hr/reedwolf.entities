@@ -37,6 +37,7 @@ from .namespaces import (
         Namespace,
         )
 from .meta import (
+        NoneType,
         ModelField,
         TypeInfo,
         get_model_fields,
@@ -571,7 +572,7 @@ class ComponentBase(SetOwnerMixin, ABC):
     # ------------------------------------------------------------
 
     def get_vexp_result_from_instance(self, apply_session:IApplySession, strict:bool = True) -> VexpResult:
-        """ Fetch VexpResult from compoenent.bind from INSTANCE (storage)
+        """ Fetch VexpResult from component.bind from INSTANCE (storage)
             by executing bind._evaluator.evaluate() fetch value process
             Work on stored fields only.
             A bit slower due getattr() logic and more complex structs.
@@ -594,7 +595,7 @@ class ComponentBase(SetOwnerMixin, ABC):
     # #       and only bind vexp could provide parent_instance used for setting 
     # #       new instance attribute (see register_instance_attr_change() ).
     # def get_vexp_result_from_history(self, apply_session:IApplySession) -> VexpResult:
-    #     """ Fetch VexpResult from compoenent.bind from APPLY_SESSION.CHANGE_HISTORY
+    #     """ Fetch VexpResult from component.bind from APPLY_SESSION.CHANGE_HISTORY
     #         last record.
     #         !!! VexpResult.value could be unadapted :( !!!
     #         Could work on non-stored fields.
@@ -611,7 +612,7 @@ class ComponentBase(SetOwnerMixin, ABC):
     # ------------------------------------------------------------
 
     def get_current_value_from_history(self, apply_session:IApplySession) -> Any:
-        """ Fetch VexpResult from compoenent.bind from APPLY_SESSION.CHANGE_HISTORY
+        """ Fetch VexpResult from component.bind from APPLY_SESSION.CHANGE_HISTORY
             last record.
             !!! VexpResult.value could be unadapted :( !!!
             Could work on non-stored fields.
@@ -759,26 +760,23 @@ class InstanceAttrValue:
 
 # ------------------------------------------------------------
 
-class StructEnum(str, Enum):
-    # models like - follows flat, storage/db like structure
-    MODELS_LIKE = "MODELS"
-    # rules like - follows hierachical structure like defined in rules
-    RULES_LIKE  = "RULES"
-
-# ------------------------------------------------------------
-
 @dataclass
 class StackFrame:
     # current container data instance which will be procesed: changed/validated/evaluated
     instance: DataclassType
-    container: 'ContainerBase'
+    container: 'ContainerBase' = field(repr=False)
     component: ComponentBase
 
     # UPDATE by this instance - can be RULES_LIKE or MODELS_LIKE (same dataclass) struct
     # required but is None when not update
-    instance_new: Optional[ModelType] = field(repr=False)
+    instance_new: Union[ModelType, NoneType, UndefinedType] = field(repr=False)
+
+    # TODO: this is ugly 
+    # set only in single case: partial mode, in_component_only_tree, compoent=component_only, instance_new
+    on_component_only: Optional[ComponentBase] = field(repr=False, default=None)
+
     # this is currently created on 1st level and then copied to each next level
-    instance_new_struct_type: Optional[StructEnum] = field(repr=False)
+    # instance_new_struct_type: Union[StructEnum, NoneType, UndefinedType] = field(repr=False)
 
     # filled only when container list member
     index0: Optional[int] = None
@@ -786,14 +784,35 @@ class StackFrame:
     # internal - filled in __post_init__
     key_string: Optional[str] = field(init=False, repr=False, default=None)
 
+    # used to check root value in models registry 
+    bound_model_root : Optional[BoundModelBase] = field(repr=False, init=False, default=None)
+
     def __post_init__(self):
         from .containers import ContainerBase
         assert isinstance(self.container, ContainerBase)
         assert isinstance(self.component, ComponentBase)
-        assert is_model_class(self.instance.__class__), self.instance
 
         if self.index0 is not None:
             assert self.index0 >= 0
+
+        if self.on_component_only:
+            self.bound_model_root = (self.on_component_only 
+                                     if   self.on_component_only.is_extension()
+                                     else self.on_component_only.get_container_owner()\
+                                    ).bound_model
+            # can be list in this case
+            # TODO: check if list only: if self.bound_model_root.type_info.is_list:
+            instance_to_test = self.instance[0] \
+                               if isinstance(self.instance, (list, tuple)) \
+                               else self.instance
+            assert is_model_class(instance_to_test.__class__), self.instance
+        else:
+            self.bound_model_root = self.container.bound_model
+            assert is_model_class(self.instance.__class__), self.instance
+
+
+        assert self.bound_model_root
+
 
 @dataclass
 class ValidationFailure:
@@ -804,13 +823,36 @@ class ValidationFailure:
     details: Optional[str]
 
 
+# ------------------------------------------------------------
+
+class StructEnum(str, Enum):
+    # models like - follows flat, storage/db like structure
+    MODELS_LIKE = "MODELS"
+    # rules like - follows hierachical structure like defined in rules
+    RULES_LIKE  = "RULES"
+
+# TODO: consider using classes instead, e.g.
+#       class InputStructBase:
+#           pass
+#       class ModelInputStruct(InputStructBase):
+#           # models like - follows flat, storage/db like structure
+#           pass
+#       class RulesInputStruct(InputStructBase):
+#           # rules like - follows hierachical structure like defined in rules
+#           pass
+
+# ------------------------------------------------------------
+
 @dataclass
 class IApplySession:
     # TODO: možda bi ovo trebalo izbaciti ... - link na IRegistry u vexp node-ovima 
     registries: IRegistries = field(repr=False)
     rules: "Rules" = field(repr=False) # ex. ComponentBase 
     instance: Any = field(repr=False)
-    context: Optional[IContext] = field()
+    # TODO: consider: instance_new: Union[ModelType, UndefinedType] = UNDEFINED,
+    instance_new: Optional[ModelType] = field(repr=False)
+
+    context: Optional[IContext] = field(repr=False)
     # apply_partial
     component_name_only: Optional[str] = field(repr=False, default=None)
 
@@ -818,8 +860,6 @@ class IApplySession:
     # extracted from component
     bound_model : BoundModelBase = field(repr=False, init=False)
     finished: bool = field(repr=False, init=False, default=False)
-    # computed from component_name_only
-    component_only: Optional[ComponentBase] = field(repr=False, default=None)
 
     # ---- internal structs ----
 
@@ -842,6 +882,13 @@ class IApplySession:
 
     # on validation errors this will be filled
     errors: Dict[KeyString, ValidationFailure] = field(repr=False, init=False, default_factory=dict)
+
+    # for instance_new (root struct), is set, in normal mode set in init, in partial mode set on component detection
+    instance_new_struct_type: Optional[StructEnum] = field(repr=False, init=False, default=None)
+
+    # computed from component_name_only
+    component_only: Optional[ComponentBase] = field(repr=False, init=False, default=None)
+
 
     @abstractmethod
     def apply(self) -> IApplySession:
