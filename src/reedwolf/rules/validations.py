@@ -37,7 +37,7 @@ from .components    import (
 from .expressions   import (
         ValueExpression,
         NotAvailableVexpResult,
-        evaluate_available_vexp_result,
+        evaluate_available_vexp,
         )
 from .exceptions    import RuleSetupError
 from .utils         import (
@@ -73,7 +73,7 @@ class Validation(ValidationBase):
         super().__post_init__()
 
     def validate(self, apply_session: IApplySession) -> Union[NoneType, ValidationFailure]:
-        not_available_vexp_result: NotAvailableVexpResult  = evaluate_available_vexp_result(self.available, apply_session=apply_session)
+        not_available_vexp_result: NotAvailableVexpResult  = evaluate_available_vexp(self.available, apply_session=apply_session)
         if not_available_vexp_result: 
             # TODO: log ...
             return None

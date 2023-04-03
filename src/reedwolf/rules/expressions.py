@@ -88,7 +88,7 @@ class NotAvailableVexpResult(VexpResult):
         return instance
 
 
-def evaluate_available_vexp_result(
+def evaluate_available_vexp(
         available_vexp: Optional[Union[bool, ValueExpression]], 
         apply_session: IApplySession) \
             -> Optional[NotAvailableVexpResult]:

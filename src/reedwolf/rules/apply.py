@@ -40,6 +40,7 @@ from .base import (
 from .expressions import (
         VexpResult,
         ValueExpression,
+        evaluate_available_vexp,
         )
 from .fields import (
         FieldBase,
@@ -124,71 +125,6 @@ class ApplyResult(IApplySession):
 
     def use_stack_frame(self, frame: StackFrame) -> UseStackFrame:
         return UseStackFrame(apply_session=self, frame=frame)
-
-    # ------------------------------------------------------------
-
-    def _apply_bind_vexp(self, component: ComponentBase) -> VexpResult:
-        " get initial vexp value, if instance_new try to updated/overwrite with it"
-
-        if not isinstance(component, FieldBase):
-            raise RuleInternalError(owner=self, msg=f"Expected FieldBase field, got: {component}")
-
-        bind_vexp_result = component.get_vexp_result_from_instance(apply_session=self)
-        init_value = bind_vexp_result.value
-
-        self.register_instance_attr_change(
-                component = component, 
-                vexp_result = bind_vexp_result, 
-                new_value = init_value,
-                is_from_init_bind = True)
-
-
-        # try adapt of initial value changed value?
-        last_value = component.try_adapt_value(init_value)
-
-        updated = False
-        if self.current_frame.instance_new is not None:
-            if self.instance_new_struct_type == StructEnum.MODELS_LIKE:
-
-                with self.use_stack_frame(
-                        StackFrame(container=self.current_frame.container, 
-                                   component=self.current_frame.component, 
-                                   # only this is changed
-                                   instance=self.current_frame.instance_new,
-                                   instance_new=UNDEFINED, 
-                        )):
-                    instance_new_bind_vexp_result = \
-                            component.get_vexp_result_from_instance(apply_session=self)
-                    new_value = instance_new_bind_vexp_result.value
-
-            elif self.instance_new_struct_type == StructEnum.RULES_LIKE:
-                raise NotImplementedError()
-            else: 
-                raise RuleInternalError(owner=self, msg=f"Invalid instance_new_struct_type = {self.instance_new_struct_type}")
-
-            new_value = component.try_adapt_value(new_value)
-
-            # adapted new instance value diff from adapted initial value
-            if new_value != last_value:
-                self.register_instance_attr_change(
-                        component = component, 
-                        vexp_result = instance_new_bind_vexp_result, 
-                        new_value = new_value,
-                        )
-                last_value = new_value 
-                bind_vexp_result = instance_new_bind_vexp_result
-                updated = True
-
-        elif init_value != last_value:
-            # diff initial value from adapted
-            self.register_instance_attr_change(
-                    component=component, 
-                    # TODO: how to mark init -> adaptaion change?
-                    vexp_result=None,
-                    new_value=last_value
-                    )
-
-        return bind_vexp_result
 
     # ------------------------------------------------------------
 
@@ -297,6 +233,8 @@ class ApplyResult(IApplySession):
         elif not extension_list_mode and component.is_extension():
             assert isinstance(component.bound_model.model, ValueExpression), \
                     component.bound_model.model
+
+            # NOTE: this one has no 'available' attribute
 
             # original instance
             vexp_result: VexpResult = component.bound_model.model \
@@ -438,6 +376,8 @@ class ApplyResult(IApplySession):
                             instance_new = self.current_frame.instance_new,
                             )
 
+        process_further = True
+
         with self.use_stack_frame(new_frame):
                 # self.push_frame_to_stack(new_frame)
 
@@ -446,32 +386,30 @@ class ApplyResult(IApplySession):
                 # ============================================================
                 # Update, validate, evaluate
                 # ============================================================
-                self._update_and_clean(component=component)
-
+                process_further = self._update_and_clean(component=component)
+                # also if validation fails ...
 
             # ------------------------------------------------------------
-            # REMOVE_THIS: used only for test if all Vexp values could evaluate ...
-            # if True:
-            #     for attr_name, attr_value in vars(component).items():
-            #         if isinstance(attr_value, ValueExpression):
-            #             vexp_result: VexpResult = \
-            #                     attr_value._evaluator.evaluate(
-            #                             apply_session=self)
-            #             # print(f"{parent.name if parent else ''}.{component.name}.{attr_name} = VExp[{attr_value}] -> {vexp_result}")
+            # NOTE: used only for test if all Vexp values could evaluate ...
+            #       self.__check_component_all_vexps(component)
 
             # ------------------------------------------------------------
             # --- Recursive walk down - for each child call _apply
             # ------------------------------------------------------------
-            for child in component.get_children():
-                self._apply(parent=component, 
-                            in_component_only_tree=in_component_only_tree,
-                            component=child, 
-                            depth=depth+1)
+            if process_further:
+                for child in component.get_children():
+                    self._apply(parent=component, 
+                                in_component_only_tree=in_component_only_tree,
+                                component=child, 
+                                depth=depth+1)
 
 
         if depth==0:
             assert len(self.frames_stack)==0
 
+            # ---------------------------------------------------------------------
+            # Check which attributes are changed and collect original + new value
+            # ---------------------------------------------------------------------
             updated_values_dict: Dict[KeyString, Dict[AttrName, Tuple[AttrValue, AttrValue]] ] = defaultdict(dict)
             for key_string, instance_attr_values in self.update_history.items():
                 if len(instance_attr_values)>1:
@@ -482,12 +420,9 @@ class ApplyResult(IApplySession):
                                 get_instance_key_string_attrname_pair(key_string)
                         updated_values_dict[instance_key_string][attrname] = (first_val.value, last_val.value)
 
-            # TODO: key_string = component.get_key_string(apply_session = self)
-            # if updated_values_dict: import pdb;pdb.set_trace() 
-
             for instance_key_string, updated_values in updated_values_dict.items():
                 instance_updated = self.get_instance_by_key_string(instance_key_string)
-                # TODO: currently not set - should be cached, not so easy to get in this moment
+                # TODO: key_pairs are currently not set - should be cached, not so easy to get in this moment
                 #   key = component.get_key_pairs_or_index0(instance_updated, index0)
                 self.changes.append(
                         InstanceChange(
@@ -503,6 +438,18 @@ class ApplyResult(IApplySession):
         # print(f"depth={depth}, comp={component.name}, bind={bind} => {vexp_result}")
 
         return
+
+    # ------------------------------------------------------------
+
+    def __check_component_all_vexps(self, component: ComponentBase):
+        # used only for testing
+        for attr_name, attr_value in vars(component).items():
+            if isinstance(attr_value, ValueExpression):
+                vexp_result: VexpResult = \
+                        attr_value._evaluator.evaluate(
+                                apply_session=self)
+                # print(f"{parent.name if parent else ''}.{component.name}.{attr_name} = VExp[{attr_value}] -> {vexp_result}")
+
 
     # ------------------------------------------------------------
 
@@ -618,12 +565,24 @@ class ApplyResult(IApplySession):
     # _update_and_clean - Update, validate, evaluate
     # ============================================================
 
-    def _update_and_clean(self, component: ComponentBase):
+    def _update_and_clean(self, component: ComponentBase) -> bool:
+        """ returns if children should be processed 
+                False - when available yields False
+                False - when validation fails
+                True - everything is clean
+        """
         # ----------------------------------------------------------------
         # 1. init change history by bind of self.instance
         # 2. update value by bind of self.instance_new
         # 3. call cleaners - validations and evaluations in given order
         # ----------------------------------------------------------------
+
+        if getattr(component, "available", None):
+            not_available_vexp_result = evaluate_available_vexp(
+                                                component.available, 
+                                                apply_session=self)
+            if not_available_vexp_result: 
+                return False
 
         # Fill initial value from instance and try to update if instance_new is
         # provided and is different
@@ -633,11 +592,13 @@ class ApplyResult(IApplySession):
         # TODO: provide last value to all evaluations and validations 
         #       but be careful with vexp_result.value - it coluld be unadapted
         #       see: field.try_adapt_value(eval_value)
+        all_ok = True
         if component.cleaners:
             for cleaner in component.cleaners:
                 if isinstance(cleaner, ValidationBase):
-                    # value=value, 
-                    self.execute_validation(component=component, validation=cleaner)
+                    # returns validation_failure
+                    if self.execute_validation(component=component, validation=cleaner):
+                        all_ok = False
                 elif isinstance(cleaner, EvaluationBase):
                     if not init_bind_vexp_result:
                         # TODO: this belongs to Setup phase
@@ -648,6 +609,74 @@ class ApplyResult(IApplySession):
 
         # NOTE: initial value from instance is not checked - only
         #       intermediate and the last value
-        self.validate_type(component)
+        # returns validation_failure
+        if self.validate_type(component):
+            all_ok = False
 
+        return all_ok
+
+    # ------------------------------------------------------------
+
+    def _apply_bind_vexp(self, component: ComponentBase) -> VexpResult:
+        " get initial vexp value, if instance_new try to updated/overwrite with it"
+
+        if not isinstance(component, FieldBase):
+            raise RuleInternalError(owner=self, msg=f"Expected FieldBase field, got: {component}")
+
+        bind_vexp_result = component.get_vexp_result_from_instance(apply_session=self)
+        init_value = bind_vexp_result.value
+
+        self.register_instance_attr_change(
+                component = component, 
+                vexp_result = bind_vexp_result, 
+                new_value = init_value,
+                is_from_init_bind = True)
+
+
+        # try adapt of initial value changed value?
+        last_value = component.try_adapt_value(init_value)
+
+        updated = False
+        if self.current_frame.instance_new is not None:
+            if self.instance_new_struct_type == StructEnum.MODELS_LIKE:
+
+                with self.use_stack_frame(
+                        StackFrame(container=self.current_frame.container, 
+                                   component=self.current_frame.component, 
+                                   # only this is changed
+                                   instance=self.current_frame.instance_new,
+                                   instance_new=UNDEFINED, 
+                        )):
+                    instance_new_bind_vexp_result = \
+                            component.get_vexp_result_from_instance(apply_session=self)
+                    new_value = instance_new_bind_vexp_result.value
+
+            elif self.instance_new_struct_type == StructEnum.RULES_LIKE:
+                raise NotImplementedError()
+            else: 
+                raise RuleInternalError(owner=self, msg=f"Invalid instance_new_struct_type = {self.instance_new_struct_type}")
+
+            new_value = component.try_adapt_value(new_value)
+
+            # adapted new instance value diff from adapted initial value
+            if new_value != last_value:
+                self.register_instance_attr_change(
+                        component = component, 
+                        vexp_result = instance_new_bind_vexp_result, 
+                        new_value = new_value,
+                        )
+                last_value = new_value 
+                bind_vexp_result = instance_new_bind_vexp_result
+                updated = True
+
+        elif init_value != last_value:
+            # diff initial value from adapted
+            self.register_instance_attr_change(
+                    component=component, 
+                    # TODO: how to mark init -> adaptaion change?
+                    vexp_result=None,
+                    new_value=last_value
+                    )
+
+        return bind_vexp_result
 

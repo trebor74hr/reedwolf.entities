@@ -941,10 +941,12 @@ class IApplySession:
     #     return bind_vexp_result.value
 
     def validate_type(self, component: ComponentBase, value: Any = UNDEFINED):
+        validation_failure = None
         if isinstance(component, IFieldBase):
             validation_failure = component.validate_type(apply_session=self, value=value)
             if validation_failure:
                 self.register_instance_validation_failed(component, validation_failure)
+        return validation_failure
 
 
     def register_instance_attr_change(self, 
