@@ -29,11 +29,16 @@ from .meta import (
 from .base import (
         IApplySession,
         ValidationFailure,
+        VexpResult,
         )
 from .components    import (
         ValidationBase, 
         )
-from .expressions   import ValueExpression
+from .expressions   import (
+        ValueExpression,
+        NotAvailableVexpResult,
+        evaluate_available_vexp_result,
+        )
 from .exceptions    import RuleSetupError
 from .utils         import (
         to_int,
@@ -67,9 +72,14 @@ class Validation(ValidationBase):
             raise RuleSetupError(owner=self, msg=f"ensure must be ValueExpression, got: {type(self.ensure)} / {self.ensure}")
         super().__post_init__()
 
-    def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
+    def validate(self, apply_session: IApplySession) -> Union[NoneType, ValidationFailure]:
+        not_available_vexp_result: NotAvailableVexpResult  = evaluate_available_vexp_result(self.available, apply_session=apply_session)
+        if not_available_vexp_result: 
+            # TODO: log ...
+            return None
+
         component = apply_session.current_frame.component
-        vexp_result = self.ensure._evaluator.evaluate(apply_session)
+        vexp_result: VexpResult = self.ensure._evaluator.evaluate(apply_session)
         if not bool(vexp_result.value):
             error = self.error if self.error else "Validation failed"
             return ValidationFailure(

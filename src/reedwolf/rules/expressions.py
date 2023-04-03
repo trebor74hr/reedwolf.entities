@@ -67,6 +67,40 @@ class VexpResult:
                 )
         self.value = value
 
+    def is_not_available(self):
+        return isinstance(self, NotAvailableVexpResult)
+
+
+@dataclass
+class NotAvailableVexpResult(VexpResult):
+    " used when available yields False - value contains "
+    reason: str = field()
+
+    @classmethod
+    def create(cls, available_vexp_result: VexpResult, reason: Optional[str] = None) -> NotAvailableVexpResult:
+        if not reason:
+            if available_vexp_result:
+                reason=f"Not available since expression yields: {available_vexp_result.value}", 
+            else:
+                reason="Disabled"
+        instance = cls(reason=reason)
+        instance.value = available_vexp_result
+        return instance
+
+
+def evaluate_available_vexp_result(
+        available_vexp: Optional[Union[bool, ValueExpression]], 
+        apply_session: IApplySession) \
+            -> Optional[NotAvailableVexpResult]:
+    if isinstance(available_vexp, ValueExpression):
+        available_vexp_result = available_vexp._evaluator.evaluate(apply_session=apply_session)
+        if not bool(available_vexp_result.value):
+            return NotAvailableVexpResult.create(available_vexp_result=available_vexp_result)
+    elif isinstance(available_vexp, bool):
+        if available_vexp == False:
+            return NotAvailableVexpResult.create(available_vexp_result=None)
+    return None
+
 
 # ------------------------------------------------------------
 # evaluate_vexp_or_node

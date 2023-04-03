@@ -217,6 +217,9 @@ class ApplyResult(IApplySession):
         # eval_vexp_result  = evaluation_vexp._evaluator.evaluate(apply_session=self)
         eval_vexp_result  = evaluation.evaluate(apply_session=self)
 
+        if eval_vexp_result.is_not_available():
+            return eval_vexp_result
+
         eval_value = eval_vexp_result.value
 
         if isinstance(component, FieldBase):
@@ -440,6 +443,9 @@ class ApplyResult(IApplySession):
 
             # obnly when full apply or partial apply
             if not (self.component_only and not in_component_only_tree):
+                # ============================================================
+                # Update, validate, evaluate
+                # ============================================================
                 self._update_and_clean(component=component)
 
 
@@ -607,7 +613,10 @@ class ApplyResult(IApplySession):
 
         return current_instance_new
 
-    # ------------------------------------------------------------
+
+    # ============================================================
+    # _update_and_clean - Update, validate, evaluate
+    # ============================================================
 
     def _update_and_clean(self, component: ComponentBase):
         # ----------------------------------------------------------------
