@@ -10,6 +10,7 @@ from typing import (
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from enum import Enum
+from collections import OrderedDict, defaultdict
 
 from .exceptions import (
         RuleApplyError,
@@ -25,12 +26,16 @@ from .meta import (
         is_model_class,
         )
 from .base import (
+        KeyString,
         ComponentBase,
         IRegistries,
         IApplySession,
         StackFrame,
         ValidationFailure,
         StructEnum,
+        ChangeOpEnum,
+        InstanceChange,
+        get_instance_key_string_attrname_pair,
         )
 from .expressions import (
         VexpResult,
@@ -45,6 +50,7 @@ from .components import (
         )
 from .containers import (
         ContainerBase,
+        MissingKey,
         Rules,
         )
 
@@ -306,29 +312,80 @@ class ApplyResult(IApplySession):
 
                 # TODO: validate cardinality before or after changes
 
-                current_instances_by_key = None
+                new_instances_by_key = None
                 if current_instance_new is not None:
                     if not isinstance(current_instance_new, (list, tuple)):
                         raise RuleApplyValueError(owner=self, msg=f"{component}: Expected list/tuple in the new instance, got: {current_instance_new}")
 
-                    current_instances_by_key = {}
+                    new_instances_by_key = {}
                     for index0, item_instance_new in enumerate(current_instance_new, 0):
-                        key = component.get_key_pairs(item_instance_new) if component.keys else index0
-                        if key in current_instances_by_key:
-                            raise RuleApplyValueError(owner=self, msg=f"{component}: Duplicate key {key}, first item is: {current_instances_by_key[key]}")
-                        current_instances_by_key[key] = item_instance_new
+                        key = component.get_key_pairs_or_index0(item_instance_new, index0)
+                        if key in new_instances_by_key:
+                            raise RuleApplyValueError(owner=self, msg=f"{component}: Duplicate key {key}, first item is: {new_instances_by_key[key]}")
+                        new_instances_by_key[key] = item_instance_new
 
-                # Apply for all items
+
+                # NOTE: considered to use dict() since dictionaries are ordered in Python 3.6+ 
+                #       ordering-perserving As of Python 3.7, this is a guaranteed, i.e.  Dict keeps insertion order
+                #       https://stackoverflow.com/questions/39980323/are-dictionaries-ordered-in-python-3-6
+                instances_by_key = OrderedDict()
+
                 for index0, instance in enumerate(instance_list, 0):
+                    key = component.get_key_pairs_or_index0(instance, index0)
+                    if component.keys:
+                        missing_keys = [kn for kn, kv in key if isinstance(kv, MissingKey)]
+                        if missing_keys:
+                            raise RuleApplyValueError(owner=self, msg=f"Instance {instance} has key(s) with value None, got: {', '.join(missing_keys)}")
+
                     if current_instance_new is not None:
-                        key = component.get_key_pairs(instance) if component.keys else index0
-                        item_instance_new = current_instances_by_key.get(key, UNDEFINED)
+                        item_instance_new = new_instances_by_key.get(key, UNDEFINED)
                         if item_instance_new is UNDEFINED:
-                            # TODO: deleted -> currently ignore
+                            key_string = component.get_key_string_by_instance(
+                                    apply_session = self, 
+                                    instance = instance, 
+                                    index0 = index0)
+
+                            self.changes.append(
+                                    InstanceChange(
+                                        key_string = key_string,
+                                        key_pairs = key,
+                                        operation = ChangeOpEnum.DELETE,
+                                        instance = instance,
+                                    ))
                             item_instance_new = None
                     else:
                         item_instance_new = None
 
+                    if key in instances_by_key:
+                        raise RuleApplyValueError(owenr=self, msg=f"Found duplicate key {key}:\n  == {instance}\n  == {instances_by_key[key]}")
+
+                    instances_by_key[key] = (instance, index0, item_instance_new)
+
+                
+                if new_instances_by_key:
+                    index0_new = len(instances_by_key)
+                    new_keys = [key for key in new_instances_by_key.keys() if key not in instances_by_key]
+                    # register new items and add to processing
+                    for key in new_keys:
+                        item_instance_new = new_instances_by_key[key]
+
+                        key_string = component.get_key_string_by_instance(
+                                apply_session = self, 
+                                instance = item_instance_new, 
+                                index0 = index0_new)
+
+                        self.changes.append(
+                                InstanceChange(
+                                    key_string = key_string,
+                                    key_pairs = key,
+                                    operation = ChangeOpEnum.CREATE,
+                                    instance = item_instance_new,
+                                ))
+                        instances_by_key[key] = (item_instance_new, index0_new, None)
+                        index0_new += 1
+
+                for key, (instance, index0, item_instance_new) in instances_by_key.items():
+                    # Apply for all items
                     with self.use_stack_frame(
                             StackFrame(
                                 container = component,
@@ -385,6 +442,7 @@ class ApplyResult(IApplySession):
             if not (self.component_only and not in_component_only_tree):
                 self._update_and_clean(component=component)
 
+
             # ------------------------------------------------------------
             # REMOVE_THIS: used only for test if all Vexp values could evaluate ...
             # if True:
@@ -408,6 +466,34 @@ class ApplyResult(IApplySession):
         if depth==0:
             assert len(self.frames_stack)==0
 
+            updated_values_dict: Dict[KeyString, Dict[AttrName, Tuple[AttrValue, AttrValue]] ] = defaultdict(dict)
+            for key_string, instance_attr_values in self.update_history.items():
+                if len(instance_attr_values)>1:
+                    first_val = instance_attr_values[0]
+                    last_val = instance_attr_values[-1]
+                    if last_val.value != first_val.value:
+                        instance_key_string, attrname = \
+                                get_instance_key_string_attrname_pair(key_string)
+                        updated_values_dict[instance_key_string][attrname] = (first_val.value, last_val.value)
+
+            # TODO: key_string = component.get_key_string(apply_session = self)
+            # if updated_values_dict: import pdb;pdb.set_trace() 
+
+            for instance_key_string, updated_values in updated_values_dict.items():
+                instance_updated = self.get_instance_by_key_string(instance_key_string)
+                # TODO: currently not set - should be cached, not so easy to get in this moment
+                #   key = component.get_key_pairs_or_index0(instance_updated, index0)
+                self.changes.append(
+                        InstanceChange(
+                            key_string = instance_key_string,
+                            # see above
+                            key_pairs = None,
+                            operation = ChangeOpEnum.UPDATE,
+                            instance = instance_updated,
+                            updated_values = updated_values,
+                        ))
+
+
         # print(f"depth={depth}, comp={component.name}, bind={bind} => {vexp_result}")
 
         return
@@ -427,6 +513,12 @@ class ApplyResult(IApplySession):
         self.set_finished()
 
         return self
+
+    # ------------------------------------------------------------
+
+    def get_instance_by_key_string(self, key_string: str) -> ModelType:
+        " must exist in cache - see previous method which sets Container.get_key_string_by_instance "
+        return self.instance_by_key_string_cache[key_string]
 
     # ------------------------------------------------------------
 
@@ -503,6 +595,7 @@ class ApplyResult(IApplySession):
                 # set new value
                 current_instance_new = vexp_result.value
                 if frame.bound_model_root.type_info.is_list and not isinstance(current_instance_new, (list, tuple)):
+                    # TODO: 
                     current_instance_new = [current_instance_new]
             else:
                 current_instance_new = None

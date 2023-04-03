@@ -143,10 +143,10 @@ class Readonly(SimpleValidationBase):
             return None
 
         key_string = component.get_key_string(apply_session)
-        change_history = apply_session.change_history.get(key_string)
-        if change_history and len(change_history) > 1:
-            initial_value = change_history[0].value
-            last_value = change_history[-1].value
+        update_history = apply_session.update_history.get(key_string)
+        if update_history and len(update_history) > 1:
+            initial_value = update_history[0].value
+            last_value = update_history[-1].value
             if initial_value != last_value:
                 return ValidationFailure(
                                 component_key_string = key_string,

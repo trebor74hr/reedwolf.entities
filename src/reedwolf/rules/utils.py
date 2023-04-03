@@ -5,6 +5,7 @@ from typing import (
         Optional,
         )
 from functools import reduce
+from threading import Lock
 
 # ------------------------------------------------------------
 # UNDEFINED
@@ -148,3 +149,18 @@ def message_truncate(message: Optional[str], max_length:int = 50) -> str:
         message = message[:(max_length - len(dots))] + dots
     return message
 
+
+class ThreadSafeCounter:
+    "  thread safe counter class based on https://superfastpython.com/thread-safe-counter-in-python/ "
+    def __init__(self):
+        self._counter = 0
+        self._lock = Lock()
+ 
+    def get_new(self):
+        with self._lock:
+            self._counter += 1
+            return self._counter
+ 
+    # def value(self):
+    #     with self._lock:
+    #         return self._counter

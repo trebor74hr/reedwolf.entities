@@ -13,6 +13,7 @@ from typing import (
         Union, 
         Optional, 
         Tuple,
+        Sequence,
         )
 from dataclasses import (
         dataclass,
@@ -23,6 +24,7 @@ from .utils import (
         UNDEFINED,
         UndefinedType,
         get_available_names_example,
+        ThreadSafeCounter,
         )
 from .exceptions import (
         RuleInternalError,
@@ -595,7 +597,7 @@ class ComponentBase(SetOwnerMixin, ABC):
     # #       and only bind vexp could provide parent_instance used for setting 
     # #       new instance attribute (see register_instance_attr_change() ).
     # def get_vexp_result_from_history(self, apply_session:IApplySession) -> VexpResult:
-    #     """ Fetch VexpResult from component.bind from APPLY_SESSION.CHANGE_HISTORY
+    #     """ Fetch VexpResult from component.bind from APPLY_SESSION.UPDATE_HISTORY
     #         last record.
     #         !!! VexpResult.value could be unadapted :( !!!
     #         Could work on non-stored fields.
@@ -605,14 +607,14 @@ class ComponentBase(SetOwnerMixin, ABC):
     #     #       bind_vexp: ValueExpression = getattr(component, "bind", None)
     #     #       bind_vexp._evaluator.evaluate()
     #     key_str = self.get_key_string(apply_session=apply_session)
-    #     assert key_str in apply_session.change_history
-    #     instance_attr_value = apply_session.change_history[key_str][-1]
+    #     assert key_str in apply_session.update_history
+    #     instance_attr_value = apply_session.update_history[key_str][-1]
     #     return instance_attr_value.vexp_result
 
     # ------------------------------------------------------------
 
     def get_current_value_from_history(self, apply_session:IApplySession) -> Any:
-        """ Fetch VexpResult from component.bind from APPLY_SESSION.CHANGE_HISTORY
+        """ Fetch VexpResult from component.bind from APPLY_SESSION.UPDATE_HISTORY
             last record.
             !!! VexpResult.value could be unadapted :( !!!
             Could work on non-stored fields.
@@ -622,8 +624,8 @@ class ComponentBase(SetOwnerMixin, ABC):
         #       bind_vexp: ValueExpression = getattr(component, "bind", None)
         #       bind_vexp._evaluator.evaluate()
         key_str = self.get_key_string(apply_session=apply_session)
-        assert key_str in apply_session.change_history
-        instance_attr_value = apply_session.change_history[key_str][-1]
+        assert key_str in apply_session.update_history
+        instance_attr_value = apply_session.update_history[key_str][-1]
         return instance_attr_value.value
 
 
@@ -727,18 +729,49 @@ class BoundModelBase(ComponentBase, ABC):
 
 # TODO: put in Config and use only in ApplySession.config ...
 class GlobalConfig:
-    ID_PREFIX_FOR_NEW: ClassVar[str] = "_NID_"
-    ID_PREFIX_WHEN_INTERNAL: ClassVar[str] = "_IID_"
     ID_NAME_SEPARATOR: ClassVar[str] = "::"
 
-    ID_KEY_COUNTER: ClassVar[int] = 0 # field(repr=False, init=False, default=0)
+
+    # ID_PREFIX_WHEN_INTERNAL: ClassVar[str] = "_IID_"
+
+    # ID_KEY_COUNTER: ClassVar[int] = 0 # field(repr=False, init=False, default=0)
+    ID_KEY_COUNTER: ClassVar[ThreadSafeCounter] = ThreadSafeCounter()
+    ID_KEY_PREFIX_FOR_MISSING: ClassVar[str] = "_MK_"
 
 
-# aliases
+def get_instance_key_string_attrname_pair(key_string: str) -> Tuple[str, str]:
+    idx = key_string.rfind(GlobalConfig.ID_NAME_SEPARATOR)
+    if idx < 0:
+        raise RuleInternalError(f"Invalid key_string='{key_string}'")
+    instance_key_string = key_string[:idx]
+    attrname = key_string[idx + len(GlobalConfig.ID_NAME_SEPARATOR):]
+    return instance_key_string, attrname, 
+
+
+# --------------------------------------------------
+# Key types aliases
+# --------------------------------------------------
+KeyPairs = Sequence[Tuple[str, Any]]
+
 InstanceId = int
 KeyString = str
-# AttrKey = str
+
+AttrName = str
 AttrValue = Any
+
+class ChangeOpEnum(str, Enum):
+    CREATE = "CREATE"
+    DELETE = "DELETE"
+    UPDATE = "UPDATE"
+
+@dataclass
+class InstanceChange:
+    key_string: KeyString
+    # model_class: Any 
+    key_pairs: KeyPairs = field()
+    operation: ChangeOpEnum
+    instance: ModelType = field(repr=True)
+    updated_values: Optional[ Dict[AttrName, Tuple[AttrValue, AttrValue]] ] = field(default=None)
 
 @dataclass
 class InstanceAttrValue:
@@ -872,9 +905,16 @@ class IApplySession:
     key_string_container_cache : Dict[InstanceId, KeyString] = \
             field(repr=False, init=False, default_factory=dict)
 
-    # list of attribute values - from initial to final
-    change_history: Dict[KeyString, List[InstanceAttrValue]] = \
+    # used when when collecting list of instances/attributes which are updated
+    instance_by_key_string_cache : Dict[KeyString, ModelType] = \
             field(repr=False, init=False, default_factory=dict)
+
+    # list of attribute values - from initial to final
+    update_history: Dict[KeyString, List[InstanceAttrValue]] = \
+            field(repr=False, init=False, default_factory=dict)
+
+    # final list of channged instances / sub-instances (operation + orig values)
+    changes: List[InstanceChange] = field(repr=False, init=False, default_factory=list)
 
     # When first argument is <type> and second is <type> then call function Callable
     # which will adapt second type to first one. Example: <string> + <int> -> <string> + str(<int>)
@@ -919,23 +959,23 @@ class IApplySession:
         assert component == self.current_frame.component
 
         key_str = component.get_key_string(apply_session=self)
-        if key_str not in self.change_history:
+        if key_str not in self.update_history:
             if not is_from_init_bind:
-                raise RuleInternalError(owner=self, msg="key_str not found in change_history and this is not initialization")
-            self.change_history[key_str] = []
+                raise RuleInternalError(owner=self, msg="key_str not found in update_history and this is not initialization")
+            self.update_history[key_str] = []
 
             # NOTE: initial value from instance is not checked - only
             #       intermediate and the last value
             #   self.validate_type(component, new_value)
         else:
             if is_from_init_bind:
-                raise RuleInternalError(owner=self, msg="key_str found in change_history and this is initialization")
+                raise RuleInternalError(owner=self, msg="key_str found in update_history and this is initialization")
 
-            if not self.change_history[key_str]:
+            if not self.update_history[key_str]:
                 raise RuleInternalError(owner=self, msg="change history is empty")
 
             # -- check if current value is different from new one
-            value_current = self.change_history[key_str][-1].value
+            value_current = self.update_history[key_str][-1].value
             if value_current == new_value:
                 raise RuleApplyError(owner=self, msg=f"register change failed, the value is the same: {value_current}")
 
@@ -952,7 +992,7 @@ class IApplySession:
                         self.current_frame.container.bound_model.get_type_info().type_)
 
             # -- attr_name - fetch from initial bind vexp (very first)
-            init_instance_attr_value = self.change_history[key_str][0]
+            init_instance_attr_value = self.update_history[key_str][0]
             assert init_instance_attr_value.is_from_bind
             init_bind_vexp_result = init_instance_attr_value.vexp_result
             # attribute name is in the last item
@@ -978,7 +1018,7 @@ class IApplySession:
                                 # TODO: source of change ...
                                 )
 
-        self.change_history[key_str].append(instance_attr_value)
+        self.update_history[key_str].append(instance_attr_value)
 
         return instance_attr_value
 

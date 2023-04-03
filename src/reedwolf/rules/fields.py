@@ -278,7 +278,8 @@ class FieldBase(Component, IFieldBase, ABC):
             error = f"Value type '{type(value)}' is not compoatible with '{self.PYTHON_TYPE}' " \
                     f"(value is '{message_truncate(value)}')"
             return ValidationFailure(
-                            component_key_string = component.get_key_string(apply_session),
+                            component_key_string = \
+                                    component.get_key_string(apply_session),
                             error=error, 
                             validation_name=self.name,
                             validation_label="Type validation",

@@ -51,6 +51,7 @@ from .base import (
         IData,
         BoundModelBase,
         GlobalConfig,
+        KeyPairs,
         )
 from .expressions import (
         ValueExpression,
@@ -393,37 +394,45 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
     # Apply phase
     # ------------------------------------------------------------
 
-    def get_key_string(self, apply_session:IApplySession) -> str:
-        # TODO: is caching possible?
-        # NOTE: it is good enough key to have current name only 
-        #       without owner_container.get_key_string() attached
-
-        frame = apply_session.current_frame
-
-        instance_id = id(frame.instance)
-
+    def get_key_string_by_instance(self, apply_session:IApplySession, instance: ModelType, index0: Optional[int]) -> str:
+        # NOTE: it is good enough key to have current name only without
+        #       owner_container.get_key_string() attached
+        instance_id = id(instance)
         key_string = apply_session.key_string_container_cache.get(instance_id, None)
         if key_string is None:
-            key_string = self.name
             if self.keys:
-                key_pairs = self.get_key_pairs(apply_session.current_frame.instance)
+                key_pairs = self.get_key_pairs(instance)
                 assert key_pairs
                 key_string = "{}[{}]".format(
-                                key_string, GlobalConfig.ID_NAME_SEPARATOR.join(
+                                self.name, GlobalConfig.ID_NAME_SEPARATOR.join(
                                 [f"{name}={value}" 
                                     for name, value in key_pairs
                                 ]))
-            elif frame.index0 is not None:
-                key_string = f"{key_string}[{frame.index0}]"
-
+            elif index0 is not None:
+                key_string = f"{self.name}[{index0}]"
+            else:
+                key_string = self.name
             apply_session.key_string_container_cache[instance_id] = key_string
+            apply_session.instance_by_key_string_cache[key_string] = instance
 
         #     from_cache = "new"
         # else:
         #     from_cache = "cache"
         # print("cont:", self.name, key_string, f"[{from_cache}]")
-
         return key_string
+
+
+    def get_key_string(self, apply_session:IApplySession) -> str:
+        " uses cache, when not found then gets intances and index0 from current frame "
+        return self.get_key_string_by_instance(
+                apply_session = apply_session,
+                instance = apply_session.current_frame.instance, 
+                index0 = apply_session.current_frame.index0)
+
+
+    def get_key_pairs_or_index0(self, instance: ModelType, index0: int) -> Union[List[(str, Any)], int]:
+        " index0 is 0 based index of item in the list"
+        return self.get_key_pairs(instance) if self.keys else index0
 
 
     def get_key_pairs(self, instance: ModelType) -> List[(str, Any)]:
@@ -450,6 +459,27 @@ class KeysBase(ABC):
     #     return [key for name,key in self.get_keys_tuple(apply_session)]
 
 
+def get_new_unique_id() -> int:
+    return GlobalConfig.ID_KEY_COUNTER.get_new()
+
+
+class MissingKey:
+    def __init__(self, id=None):
+        self.id = id if id else get_new_unique_id()
+
+    def __str__(self):
+        return f"{GlobalConfig.ID_KEY_PREFIX_FOR_MISSING}{self.id}"
+    def __repr__(self):
+        return f"{self.__class__.__name__}('{str(self)}')"
+
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            return False
+        return self.id == other.id
+
+    def __hash__(self):
+        return hash(repr(self.id))
+
 @dataclass
 class KeyFields(KeysBase):
 
@@ -472,13 +502,8 @@ class KeyFields(KeysBase):
                 available_names = get_available_names_example(field_name, model_fields.keys())
                 raise RuleSetupNameNotFoundError(f"Field name '{field_name}' not found in list of attributes of '{model}'. Available names: {available_names}")
 
-    @classmethod
-    def get_new_unique_id(cls):
-        # TODO: is this unique enough 
-        GlobalConfig.ID_COUNTER += 1
-        return GlobalConfig.ID_COUNTER
 
-    def get_key_pairs(self, instance: ModelType) -> Sequence[Tuple(str, Any)]:
+    def get_key_pairs(self, instance: ModelType) -> KeyPairs:
         # apply_session:IApplySession
         # frame = apply_session.current_frame
         # instance = frame.instance
@@ -490,10 +515,10 @@ class KeyFields(KeysBase):
                 raise RuleApplyNameNotFoundError(f"Field name '{field_name}' not found in list of attributes of '{type(instance)}'!?")
             key = getattr(instance, field_name)
             if key is None:
-                # if None, then setup something unique instead
-                key = "{}{}".format(GlobalConfig.ID_PREFIX_FOR_NEW, self.get_new_unique_id())
+                # if missing then setup temp unique id
+                key = MissingKey()
             else:
-                assert not str(key).startswith(GlobalConfig.ID_PREFIX_FOR_NEW), key
+                assert not str(key).startswith(GlobalConfig.ID_KEY_PREFIX_FOR_MISSING), key
             keys.append((field_name, key))
         return tuple(keys)
 
