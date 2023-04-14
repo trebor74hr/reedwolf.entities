@@ -54,7 +54,7 @@ class RawAttrValue:
     changer_name: str
 
 @dataclass
-class VexpResult:
+class ExecResult:
     # last value, mutable
     value: Any  = field(init=False, default=UNDEFINED)
     # TODO: set compoenent (owner) that triggerred value change
@@ -68,16 +68,16 @@ class VexpResult:
         self.value = value
 
     def is_not_available(self):
-        return isinstance(self, NotAvailableVexpResult)
+        return isinstance(self, NotAvailableExecResult)
 
 
 @dataclass
-class NotAvailableVexpResult(VexpResult):
+class NotAvailableExecResult(ExecResult):
     " used when available yields False - value contains "
     reason: str = field()
 
     @classmethod
-    def create(cls, available_vexp_result: VexpResult, reason: Optional[str] = None) -> NotAvailableVexpResult:
+    def create(cls, available_vexp_result: ExecResult, reason: Optional[str] = None) -> NotAvailableExecResult:
         if not reason:
             if available_vexp_result:
                 reason=f"Not available since expression yields: {available_vexp_result.value}", 
@@ -88,43 +88,43 @@ class NotAvailableVexpResult(VexpResult):
         return instance
 
 
-def evaluate_available_vexp(
+def execute_available_vexp(
         available_vexp: Optional[Union[bool, ValueExpression]], 
         apply_session: IApplySession) \
-            -> Optional[NotAvailableVexpResult]:
+            -> Optional[NotAvailableExecResult]:
     if isinstance(available_vexp, ValueExpression):
-        available_vexp_result = available_vexp._evaluator.evaluate(apply_session=apply_session)
+        available_vexp_result = available_vexp._evaluator.execute(apply_session=apply_session)
         if not bool(available_vexp_result.value):
-            return NotAvailableVexpResult.create(available_vexp_result=available_vexp_result)
+            return NotAvailableExecResult.create(available_vexp_result=available_vexp_result)
     elif isinstance(available_vexp, bool):
         if available_vexp == False:
-            return NotAvailableVexpResult.create(available_vexp_result=None)
+            return NotAvailableExecResult.create(available_vexp_result=None)
     return None
 
 
 # ------------------------------------------------------------
-# evaluate_vexp_or_node
+# execute_vexp_or_node
 # ------------------------------------------------------------
 
-def evaluate_vexp_or_node(
+def execute_vexp_or_node(
         vexp_or_value: Union[ValueExpression, Any],
         # Union[OperationVexpNode, IFunctionVexpNode, LiteralVexpNode]
         vexp_node: Union[IValueExpressionNode, Any], 
-        vexp_result: VexpResult,
+        vexp_result: ExecResult,
         apply_session: "IApplySession"
-        ) -> VexpResult:
+        ) -> ExecResult:
 
     # TODO: this function has ugly interface - solve this better
 
     if isinstance(vexp_or_value, ValueExpression):
-        vexp_result = vexp_or_value._evaluator.evaluate(
+        vexp_result = vexp_or_value._evaluator.execute(
                             apply_session=apply_session,
                             )
     # AttrVexpNode, OperationVexpNode, IFunctionVexpNode, LiteralVexpNode,
     elif isinstance(vexp_node, (
             IValueExpressionNode,
             )):
-        vexp_result = vexp_node.evaluate(
+        vexp_result = vexp_node.execute(
                             apply_session=apply_session, 
                             vexp_result=vexp_result,
                             )
@@ -170,11 +170,11 @@ class IValueExpressionNode(ABC):
         return dataclasses_replace(self)
 
     @abstractmethod
-    def evaluate(self, 
+    def execute(self, 
                  apply_session: "IApplySession", 
                  # previous - can be undefined too
-                 vexp_result: Union[VexpResult, UndefinedType],
-                 ) -> VexpResult:
+                 vexp_result: Union[ExecResult, UndefinedType],
+                 ) -> ExecResult:
         raise NotImplementedError()
 
 
@@ -195,16 +195,16 @@ class IFunctionVexpNode(IValueExpressionNode):
 class LiteralVexpNode(IValueExpressionNode):
 
     value : Any
-    vexp_result: VexpResult = field(repr=False, init=False)
+    vexp_result: ExecResult = field(repr=False, init=False)
 
     def __post_init__(self):
-        self.vexp_result = VexpResult()
+        self.vexp_result = ExecResult()
         self.vexp_result.set_value(self.value, attr_name="", changer_name="")
 
-    def evaluate(self, 
+    def execute(self, 
                  apply_session: "IApplySession", 
-                 vexp_result: VexpResult,
-                 ) -> VexpResult:
+                 vexp_result: ExecResult,
+                 ) -> ExecResult:
         assert not vexp_result
         return self.vexp_result
 
@@ -343,25 +343,25 @@ class OperationVexpNode(IValueExpressionNode):
         return f"Op{self}"
 
 
-    # vexp_result = node.evaluate(apply_session, vexp_result)
-    # def evaluate(self, registries: "Registries", input_value: Any, context:Any) -> Any:  # noqa: F821
-    def evaluate(self, 
+    # vexp_result = node.execute(apply_session, vexp_result)
+    # def execute(self, registries: "Registries", input_value: Any, context:Any) -> Any:  # noqa: F821
+    def execute(self, 
                  apply_session: "IApplySession", 
-                 vexp_result: VexpResult,
-                 ) -> VexpResult:
+                 vexp_result: ExecResult,
+                 ) -> ExecResult:
         # this should be included: context.this_registry: ThisRegistry
 
         if vexp_result:
             raise NotImplementedError("TODO:")
 
-        first_vexp_result = evaluate_vexp_or_node(
+        first_vexp_result = execute_vexp_or_node(
                                 self.first, self._first_vexp_node, 
                                 vexp_result=vexp_result,
                                 apply_session=apply_session)
 
         # TODO: use self._second_vexp_node
         if self.second is not None:
-            second_vexp_result = evaluate_vexp_or_node(
+            second_vexp_result = execute_vexp_or_node(
                                     self.second, self._second_vexp_node, 
                                     vexp_result=vexp_result,
                                     apply_session=apply_session)
@@ -389,7 +389,7 @@ class OperationVexpNode(IValueExpressionNode):
                 # raise
                 raise RuleApplyError(owner=apply_session, msg=f"{self} := {self.op_function}({first_vexp_result.value}) raised error: {ex}")
 
-        op_vexp_result = VexpResult()
+        op_vexp_result = ExecResult()
 
         # TODO: we are loosing: first_vexp_result / second_vexp_result
         #       to store it in result somehow?

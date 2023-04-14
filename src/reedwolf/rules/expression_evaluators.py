@@ -16,9 +16,9 @@ Process:
         vexp_evaluator = ValueExpressionEvaluator()
             [AttrVexpNode(), AttrVexpNode(), Function(), AttrVexpNode()]
 
-    and later could be evaluated with concrete data objects/structure:
-        vexp_evaluator.evaluate(struct) 
-        -> VexpResult()
+    and later could be evaluated/executed with concrete data objects/structure:
+        vexp_evaluator.execute(struct) 
+        -> ExecResult()
 """
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ from .exceptions import (
         )
 from .expressions import (
         IValueExpressionNode,
-        VexpResult,
+        ExecResult,
         )
 
 # ------------------------------------------------------------
@@ -87,7 +87,7 @@ class ValueExpressionEvaluator:
         # TODO:     raise RuleInternalError(owner=self, msg=f"Empty attr_node_list.")
         self.finished = True
 
-    def evaluate(self, apply_session: "IApplySession") -> VexpResult:
+    def execute(self, apply_session: "IApplySession") -> ExecResult:
         if not self.finished:
             raise RuleInternalError(owner=self, msg=f"Not yet finished.")
         if self.failed_reasons:
@@ -97,10 +97,10 @@ class ValueExpressionEvaluator:
         if apply_session.current_frame.on_component_only:
             # M.company.address_set -> process only address_set 
             node = self.attr_node_list[-1]
-            vexp_result = node.evaluate(apply_session, vexp_result)
+            vexp_result = node.execute(apply_session, vexp_result)
         else:
             for node in self.attr_node_list:
-                vexp_result = node.evaluate(apply_session, vexp_result)
+                vexp_result = node.execute(apply_session, vexp_result)
 
         return vexp_result
 

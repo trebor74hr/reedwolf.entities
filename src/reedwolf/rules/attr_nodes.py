@@ -34,7 +34,7 @@ from .base import (
         IContainerBase,
         IFieldBase,
         IApplySession,
-        VexpResult,
+        ExecResult,
         )
 from .expressions import (
         ValueExpression,
@@ -195,11 +195,11 @@ class AttrVexpNode(IValueExpressionNode):
             #     raise RuleInternalError(owner=self, msg=f"For attr_node {self.attr_node_type} .type_info could not not set (type={type(self.data)}).")
 
 
-    def evaluate(self, 
+    def execute(self, 
                  apply_session: IApplySession, 
                  # previous - can be undefined too
-                 vexp_result: Union[VexpResult, UndefinedType],
-                 ) -> VexpResult:
+                 vexp_result: Union[ExecResult, UndefinedType],
+                 ) -> ExecResult:
 
         # TODO: not nicest way - string split
         #       for extension: [p._name for p in frame.container.bound_model.model.Path]
@@ -208,7 +208,7 @@ class AttrVexpNode(IValueExpressionNode):
 
         if vexp_result == UNDEFINED:
             # initial / first value - get from registry / namespace, e.g. M.company
-            vexp_result = VexpResult()
+            vexp_result = ExecResult()
             frame = apply_session.current_frame
 
             if frame.container.is_extension() or frame.on_component_only:

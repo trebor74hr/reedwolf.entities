@@ -38,9 +38,9 @@ from .base import (
         get_instance_key_string_attrname_pair,
         )
 from .expressions import (
-        VexpResult,
+        ExecResult,
         ValueExpression,
-        evaluate_available_vexp,
+        execute_available_vexp,
         )
 from .fields import (
         FieldBase,
@@ -137,21 +137,15 @@ class ApplyResult(IApplySession):
 
     # ------------------------------------------------------------
 
-    def execute_evaluation(self, component: ComponentBase, evaluation:EvaluationBase) -> VexpResult:
+    def execute_evaluation(self, component: ComponentBase, evaluation:EvaluationBase) -> ExecResult:
         """ Execute evaluation and if new value is different from existing
             value, update current instance """
-        # TODO: this is funny how much "evaluate.." names are referenced/used
-        #       problem is that two terms have similar naming: 
-        #           1. class Evaluation (as cleaner) 
-        #           2. .evaluate() method as verb which calculates something
-        #              (and _evaluator which executes this)
-
         assert component == self.current_frame.component
 
         # evaluation_vexp = evaluation.value
         # assert isinstance(evaluation_vexp, ValueExpression)
-        # eval_vexp_result  = evaluation_vexp._evaluator.evaluate(apply_session=self)
-        eval_vexp_result  = evaluation.evaluate(apply_session=self)
+        # eval_vexp_result  = evaluation_vexp._evaluator.execute(apply_session=self)
+        eval_vexp_result  = evaluation.execute(apply_session=self)
 
         if eval_vexp_result.is_not_available():
             return eval_vexp_result
@@ -237,8 +231,8 @@ class ApplyResult(IApplySession):
             # NOTE: this one has no 'available' attribute
 
             # original instance
-            vexp_result: VexpResult = component.bound_model.model \
-                                        ._evaluator.evaluate(apply_session=self)
+            vexp_result: ExecResult = component.bound_model.model \
+                                        ._evaluator.execute(apply_session=self)
             instance = vexp_result.value
 
             # new instance if any
@@ -445,8 +439,8 @@ class ApplyResult(IApplySession):
         # used only for testing
         for attr_name, attr_value in vars(component).items():
             if isinstance(attr_value, ValueExpression):
-                vexp_result: VexpResult = \
-                        attr_value._evaluator.evaluate(
+                vexp_result: ExecResult = \
+                        attr_value._evaluator.execute(
                                 apply_session=self)
                 # print(f"{parent.name if parent else ''}.{component.name}.{attr_name} = VExp[{attr_value}] -> {vexp_result}")
 
@@ -538,11 +532,11 @@ class ApplyResult(IApplySession):
                             instance_new = UNDEFINED, 
                             on_component_only=on_component_only,
                         )) as frame:
-                    vexp_result: VexpResult = \
+                    vexp_result: ExecResult = \
                                         component \
                                         .bound_model \
                                         .model \
-                                        ._evaluator.evaluate(
+                                        ._evaluator.execute(
                                                 apply_session=self, 
                                                 )
                 # set new value
@@ -554,6 +548,10 @@ class ApplyResult(IApplySession):
                 current_instance_new = None
 
         elif self.instance_new_struct_type == StructEnum.RULES_LIKE:
+            current_instance_new = self.get_attr_value(
+                                component=component, 
+                                instance=self.current_frame.instance_new)
+            import pdb;pdb.set_trace() 
             raise NotImplementedError()
         else: 
             raise RuleInternalError(owner=self, msg=f"Invalid instance_new_struct_type = {self.instance_new_struct_type}")
@@ -578,7 +576,7 @@ class ApplyResult(IApplySession):
         # ----------------------------------------------------------------
 
         if getattr(component, "available", None):
-            not_available_vexp_result = evaluate_available_vexp(
+            not_available_vexp_result = execute_available_vexp(
                                                 component.available, 
                                                 apply_session=self)
             if not_available_vexp_result: 
@@ -617,7 +615,7 @@ class ApplyResult(IApplySession):
 
     # ------------------------------------------------------------
 
-    def _apply_bind_vexp(self, component: ComponentBase) -> VexpResult:
+    def _apply_bind_vexp(self, component: ComponentBase) -> ExecResult:
         " get initial vexp value, if instance_new try to updated/overwrite with it"
 
         if not isinstance(component, FieldBase):
@@ -652,7 +650,10 @@ class ApplyResult(IApplySession):
                     new_value = instance_new_bind_vexp_result.value
 
             elif self.instance_new_struct_type == StructEnum.RULES_LIKE:
-                raise NotImplementedError()
+                import pdb;pdb.set_trace() 
+                new_value = self.get_attr_value(
+                                component=component, 
+                                instance=self.current_frame.instance_new)
             else: 
                 raise RuleInternalError(owner=self, msg=f"Invalid instance_new_struct_type = {self.instance_new_struct_type}")
 
@@ -679,4 +680,17 @@ class ApplyResult(IApplySession):
                     )
 
         return bind_vexp_result
+
+    # ------------------------------------------------------------
+
+    def get_attr_value(self, component:ComponentBase, instance: ModelType) -> Any:
+        attr_name = component.name
+        if not hasattr(instance, attr_name):
+            # TODO: depending of self.rules strategy or apply(strategy) 
+            #   - raise error
+            #   - return UNDEFINED (default)
+            #   - return None (default)
+            return UNDEFINED
+        value =  getattr(instance, attr_name)
+        return value
 

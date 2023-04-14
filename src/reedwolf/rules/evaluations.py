@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 from .meta          import TransMessageType
 from .components    import EvaluationBase
-from .expressions   import ValueExpression, VexpResult, evaluate_available_vexp
+from .expressions   import ValueExpression, ExecResult, execute_available_vexp
 
 
 # ------------------------------------------------------------
@@ -47,11 +47,11 @@ class Evaluation(PresaveEvaluationBase):
     def __post_init__(self):
         assert isinstance(self.value, ValueExpression), self.value
 
-    def evaluate(self, apply_session: IApplySession) -> Optional[VexpResult]:
-        not_available_vexp_result = evaluate_available_vexp(self.available, apply_session=apply_session)
+    def execute(self, apply_session: IApplySession) -> Optional[ExecResult]:
+        not_available_vexp_result = execute_available_vexp(self.available, apply_session=apply_session)
         if not_available_vexp_result: 
             return not_available_vexp_result
-        return self.value._evaluator.evaluate(apply_session=apply_session)
+        return self.value._evaluator.execute(apply_session=apply_session)
 
 # ------------------------------------------------------------
 # Evaluations on object/instance initialization
@@ -79,5 +79,5 @@ class Default(InitEvaluationBase):
         assert isinstance(self.value, ValueExpression), self.value
 
 
-    def evaluate(self, apply_session: IApplySession) -> Optional[VexpResult]:
-        return self.value._evaluator.evaluate(apply_session=apply_session)
+    def execute(self, apply_session: IApplySession) -> Optional[ExecResult]:
+        return self.value._evaluator.execute(apply_session=apply_session)

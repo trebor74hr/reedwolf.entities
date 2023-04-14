@@ -180,9 +180,9 @@ class EvaluationBase(Component, ABC): # TODO: make it abstract
     """
 
     @abstractmethod
-    def evaluate(self, apply_session: IApplySession) -> Optional[VexpResult]:
+    def execute(self, apply_session: IApplySession) -> Optional[ExecResult]:
         """
-        returns value wrapped in VexpResult which will be used to update instance.attribute
+        returns value wrapped in ExecResult which will be used to update instance.attribute
         if returns None, update won't be done
         """
         ...

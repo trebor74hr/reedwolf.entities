@@ -56,8 +56,8 @@ from .expressions import (
         ValueExpression,
         IValueExpressionNode,
         IFunctionVexpNode,
-        VexpResult,
-        evaluate_vexp_or_node,
+        ExecResult,
+        execute_vexp_or_node,
         )
 from .func_args import (
         FunctionArguments,
@@ -257,13 +257,13 @@ class IFunction(IFunctionVexpNode):
         return TypeInfo.extract_function_return_type_info(
                 self.py_function)
 
-    # TODO: evaluate_arg - i.e. from ValueExpression to standard pythoh types
+    # TODO: execute_arg - i.e. from ValueExpression to standard pythoh types
     #       this will need new input parameter: contexts/attr_node/...
     @staticmethod
-    def evaluate_arg(apply_session: "IApplySession", arg_value: Any) -> Any:
+    def execute_arg(apply_session: "IApplySession", arg_value: Any) -> Any:
         if isinstance(arg_value, (ValueExpression, IValueExpressionNode)):
-            # arg_value._evaluator.evaluate(apply_session=apply_session)
-            vexp_result = evaluate_vexp_or_node(
+            # arg_value._evaluator.execute(apply_session=apply_session)
+            vexp_result = execute_vexp_or_node(
                             arg_value,
                             arg_value,
                             vexp_result = None,
@@ -273,7 +273,7 @@ class IFunction(IFunctionVexpNode):
         return arg_value
 
     # TODO: IApplySession is in base.py which imports .functions just for one case ...
-    def evaluate(self, apply_session: "IApplySession", vexp_result: VexpResult) -> Any:
+    def execute(self, apply_session: "IApplySession", vexp_result: ExecResult) -> Any:
         """
         will be called when actual function logic needs to be executed. Input
         is/are function argument(s).
@@ -282,7 +282,7 @@ class IFunction(IFunctionVexpNode):
         #       check first / vexp_result argument that matches self.value_arg_type_info
         #       check output type that matches get_output_type_info()
         """
-        assert isinstance(vexp_result, VexpResult), vexp_result
+        assert isinstance(vexp_result, ExecResult), vexp_result
 
         input_value = vexp_result.value
 
@@ -308,8 +308,8 @@ class IFunction(IFunctionVexpNode):
                 kwargs.update(self.fixed_args.kwargs)
 
 
-        args   = [self.evaluate_arg(apply_session, arg_value) for arg_value in args]
-        kwargs = {arg_name: self.evaluate_arg(apply_session, arg_value) for arg_name, arg_value in kwargs.items()}
+        args   = [self.execute_arg(apply_session, arg_value) for arg_value in args]
+        kwargs = {arg_name: self.execute_arg(apply_session, arg_value) for arg_name, arg_value in kwargs.items()}
 
         try:
             ouptut_value = self.py_function(*args, **kwargs)
@@ -424,8 +424,8 @@ def Function(py_function : Callable[..., Any],
         # reference and store in wrapped function
         add_function = G.Add(b=This.value, c=3)
 
-        # call / evaluate referenced function wrapper
-        print (add_function.evaluate(ctx=this_ctx, registries)) 
+        # call / execute referenced function wrapper
+        print (add_function.execute(ctx=this_ctx, registries)) 
     """
     # value_arg_type_info = None # TODO: TypeInfo
     return CustomFunctionFactory(

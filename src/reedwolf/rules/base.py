@@ -56,7 +56,7 @@ from .meta import (
 from .expressions import (
         ValueExpression,
         RawAttrValue,
-        VexpResult,
+        ExecResult,
         IFunctionVexpNode,
         )
 from .functions import (
@@ -573,9 +573,9 @@ class ComponentBase(SetOwnerMixin, ABC):
 
     # ------------------------------------------------------------
 
-    def get_vexp_result_from_instance(self, apply_session:IApplySession, strict:bool = True) -> VexpResult:
-        """ Fetch VexpResult from component.bind from INSTANCE (storage)
-            by executing bind._evaluator.evaluate() fetch value process
+    def get_vexp_result_from_instance(self, apply_session:IApplySession, strict:bool = True) -> ExecResult:
+        """ Fetch ExecResult from component.bind from INSTANCE (storage)
+            by executing bind._evaluator.execute() fetch value process
             Work on stored fields only.
             A bit slower due getattr() logic and more complex structs.
             Does not work on initial values - when cache is not yet initialized
@@ -588,7 +588,7 @@ class ComponentBase(SetOwnerMixin, ABC):
                 # TODO: move this to Setup phase
                 raise RuleApplyError(owner=self, msg=f"Component '{self.name}' has no bind")
             return None
-        bind_vexp_result = bind_vexp._evaluator.evaluate(apply_session=apply_session)
+        bind_vexp_result = bind_vexp._evaluator.execute(apply_session=apply_session)
         return bind_vexp_result
 
     # ------------------------------------------------------------
@@ -596,16 +596,16 @@ class ComponentBase(SetOwnerMixin, ABC):
     # # TODO: this is rejected since vexp_result could be from non-bind vexp
     # #       and only bind vexp could provide parent_instance used for setting 
     # #       new instance attribute (see register_instance_attr_change() ).
-    # def get_vexp_result_from_history(self, apply_session:IApplySession) -> VexpResult:
-    #     """ Fetch VexpResult from component.bind from APPLY_SESSION.UPDATE_HISTORY
+    # def get_vexp_result_from_history(self, apply_session:IApplySession) -> ExecResult:
+    #     """ Fetch ExecResult from component.bind from APPLY_SESSION.UPDATE_HISTORY
     #         last record.
-    #         !!! VexpResult.value could be unadapted :( !!!
+    #         !!! ExecResult.value could be unadapted :( !!!
     #         Could work on non-stored fields.
     #         Probaly a bit faster, only dict queries.
     #     """
     #     # ALT: fetch from:
     #     #       bind_vexp: ValueExpression = getattr(component, "bind", None)
-    #     #       bind_vexp._evaluator.evaluate()
+    #     #       bind_vexp._evaluator.execute()
     #     key_str = self.get_key_string(apply_session=apply_session)
     #     assert key_str in apply_session.update_history
     #     instance_attr_value = apply_session.update_history[key_str][-1]
@@ -614,15 +614,15 @@ class ComponentBase(SetOwnerMixin, ABC):
     # ------------------------------------------------------------
 
     def get_current_value_from_history(self, apply_session:IApplySession) -> Any:
-        """ Fetch VexpResult from component.bind from APPLY_SESSION.UPDATE_HISTORY
+        """ Fetch ExecResult from component.bind from APPLY_SESSION.UPDATE_HISTORY
             last record.
-            !!! VexpResult.value could be unadapted :( !!!
+            !!! ExecResult.value could be unadapted :( !!!
             Could work on non-stored fields.
             Probaly a bit faster, only dict queries.
         """
         # ALT: fetch from:
         #       bind_vexp: ValueExpression = getattr(component, "bind", None)
-        #       bind_vexp._evaluator.evaluate()
+        #       bind_vexp._evaluator.execute()
         key_str = self.get_key_string(apply_session=apply_session)
         assert key_str in apply_session.update_history
         instance_attr_value = apply_session.update_history[key_str][-1]
@@ -782,7 +782,7 @@ class InstanceAttrValue:
     #   this .value could be unadapted value version (field.try_adapt_value())
     #   therefore value is in a special field.
     # * second+ - are from evaluation results
-    vexp_result: VexpResult = field(repr=False, compare=False)
+    vexp_result: ExecResult = field(repr=False, compare=False)
 
     # TODO: this is not filled good - allways component.name
     # just to have track who read/set this value
@@ -951,7 +951,7 @@ class IApplySession:
 
     def register_instance_attr_change(self, 
             component: ComponentBase, 
-            vexp_result: VexpResult,
+            vexp_result: ExecResult,
             new_value: Any,
             is_from_init_bind:bool=False) -> InstanceAttrValue:
 
