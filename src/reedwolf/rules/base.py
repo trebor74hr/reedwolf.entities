@@ -960,6 +960,9 @@ class IApplySession:
 
         assert component == self.current_frame.component
 
+        if new_value is UNDEFINED:
+            raise RuleInternalError(owner=self, msg=f"new value should not be UNDEFINED, fix the caller (comp={component})")
+
         key_str = component.get_key_string(apply_session=self)
         if key_str not in self.update_history:
             if not is_from_init_bind:

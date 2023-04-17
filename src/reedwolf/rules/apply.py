@@ -39,6 +39,7 @@ from .base import (
         )
 from .expressions import (
         ExecResult,
+        NotAvailableExecResult,
         ValueExpression,
         execute_available_vexp,
         )
@@ -202,7 +203,7 @@ class ApplyResult(IApplySession):
                 raise RuleInternalError(owner=self, 
                         msg=f"{parent} -> {component}: in_component_only_tree should be False, got {in_component_only_tree}")
 
-            if self.instance_new is not None and not self.instance_new_struct_type:
+            if self.instance_new not in (None, UNDEFINED) and not self.instance_new_struct_type:
                 self._detect_instance_new_struct_type(component)
 
             # NOTE: self.component_only should be found 
@@ -248,7 +249,7 @@ class ApplyResult(IApplySession):
                 # TODO: validate cardinality before or after changes
 
                 new_instances_by_key = None
-                if current_instance_new is not None:
+                if current_instance_new not in (None, UNDEFINED):
                     if not isinstance(current_instance_new, (list, tuple)):
                         raise RuleApplyValueError(owner=self, msg=f"{component}: Expected list/tuple in the new instance, got: {current_instance_new}")
 
@@ -272,7 +273,7 @@ class ApplyResult(IApplySession):
                         if missing_keys:
                             raise RuleApplyValueError(owner=self, msg=f"Instance {instance} has key(s) with value None, got: {', '.join(missing_keys)}")
 
-                    if current_instance_new is not None:
+                    if current_instance_new not in (None, UNDEFINED):
                         item_instance_new = new_instances_by_key.get(key, UNDEFINED)
                         if item_instance_new is UNDEFINED:
                             key_string = component.get_key_string_by_instance(
@@ -471,7 +472,7 @@ class ApplyResult(IApplySession):
 
     def _detect_instance_new_struct_type(self, component: ComponentBase) -> StructEnum:
 
-        assert self.instance_new is not None
+        assert self.instance_new not in (None, UNDEFINED)
 
         if isinstance(component, ContainerBase):
             # full or partial on container
@@ -512,7 +513,7 @@ class ApplyResult(IApplySession):
         elif self.instance_new_struct_type == StructEnum.MODELS_LIKE:
             assert isinstance(component.bound_model.model, ValueExpression), component.bound_model.model
 
-            if self.current_frame.instance_new is not None:
+            if self.current_frame.instance_new not in (None, UNDEFINED):
 
                 # if partial - then vexp must know - this value is set only in this case
                 if in_component_only_tree and component == self.component_only:
@@ -548,11 +549,10 @@ class ApplyResult(IApplySession):
                 current_instance_new = None
 
         elif self.instance_new_struct_type == StructEnum.RULES_LIKE:
-            current_instance_new = self.get_attr_value(
+            exec_result = self.get_attr_value(
                                 component=component, 
                                 instance=self.current_frame.instance_new)
-            import pdb;pdb.set_trace() 
-            raise NotImplementedError()
+            current_instance_new = exec_result.value
         else: 
             raise RuleInternalError(owner=self, msg=f"Invalid instance_new_struct_type = {self.instance_new_struct_type}")
 
@@ -635,7 +635,7 @@ class ApplyResult(IApplySession):
         last_value = component.try_adapt_value(init_value)
 
         updated = False
-        if self.current_frame.instance_new is not None:
+        if self.current_frame.instance_new not in (None, UNDEFINED):
             if self.instance_new_struct_type == StructEnum.MODELS_LIKE:
 
                 with self.use_stack_frame(
@@ -650,25 +650,26 @@ class ApplyResult(IApplySession):
                     new_value = instance_new_bind_vexp_result.value
 
             elif self.instance_new_struct_type == StructEnum.RULES_LIKE:
-                import pdb;pdb.set_trace() 
-                new_value = self.get_attr_value(
+                instance_new_bind_vexp_result = self.get_attr_value(
                                 component=component, 
                                 instance=self.current_frame.instance_new)
+                new_value = instance_new_bind_vexp_result.value
             else: 
                 raise RuleInternalError(owner=self, msg=f"Invalid instance_new_struct_type = {self.instance_new_struct_type}")
 
-            new_value = component.try_adapt_value(new_value)
+            if new_value is not UNDEFINED:
+                new_value = component.try_adapt_value(new_value)
 
-            # adapted new instance value diff from adapted initial value
-            if new_value != last_value:
-                self.register_instance_attr_change(
-                        component = component, 
-                        vexp_result = instance_new_bind_vexp_result, 
-                        new_value = new_value,
-                        )
-                last_value = new_value 
-                bind_vexp_result = instance_new_bind_vexp_result
-                updated = True
+                # adapted new instance value diff from adapted initial value
+                if new_value != last_value:
+                    self.register_instance_attr_change(
+                            component = component, 
+                            vexp_result = instance_new_bind_vexp_result, 
+                            new_value = new_value,
+                            )
+                    last_value = new_value 
+                    bind_vexp_result = instance_new_bind_vexp_result
+                    updated = True
 
         elif init_value != last_value:
             # diff initial value from adapted
@@ -683,14 +684,17 @@ class ApplyResult(IApplySession):
 
     # ------------------------------------------------------------
 
-    def get_attr_value(self, component:ComponentBase, instance: ModelType) -> Any:
+    def get_attr_value(self, component:ComponentBase, instance: ModelType) -> ExecResult:
         attr_name = component.name
         if not hasattr(instance, attr_name):
             # TODO: depending of self.rules strategy or apply(strategy) 
             #   - raise error
-            #   - return UNDEFINED (default)
+            #   - return NotAvailableExecResult() / UNDEFINED (default)
             #   - return None (default)
-            return UNDEFINED
+            return NotAvailableExecResult("Missing instance attribute")
         value =  getattr(instance, attr_name)
-        return value
+
+        exec_result = ExecResult()
+        exec_result.set_value(value, attr_name, changer_name=f"{component.name}.ATTR")
+        return exec_result
 
