@@ -964,6 +964,7 @@ class IApplySession:
             raise RuleInternalError(owner=self, msg=f"new value should not be UNDEFINED, fix the caller (comp={component})")
 
         key_str = component.get_key_string(apply_session=self)
+        # if "can_be_accessed" in key_str: import pdb;pdb.set_trace() 
         if key_str not in self.update_history:
             if not is_from_init_bind:
                 raise RuleInternalError(owner=self, msg="key_str not found in update_history and this is not initialization")

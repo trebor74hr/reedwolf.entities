@@ -675,7 +675,7 @@ class ApplyResult(IApplySession):
             # diff initial value from adapted
             self.register_instance_attr_change(
                     component=component, 
-                    # TODO: how to mark init -> adaptaion change?
+                    # TODO: how to mark init -> adaptation change?
                     vexp_result=None,
                     new_value=last_value
                     )
@@ -691,7 +691,8 @@ class ApplyResult(IApplySession):
             #   - raise error
             #   - return NotAvailableExecResult() / UNDEFINED (default)
             #   - return None (default)
-            return NotAvailableExecResult("Missing instance attribute")
+            return NotAvailableExecResult.create(reason="Missing instance attribute")
+
         value =  getattr(instance, attr_name)
 
         exec_result = ExecResult()

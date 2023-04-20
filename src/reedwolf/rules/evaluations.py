@@ -38,7 +38,7 @@ class Evaluation(PresaveEvaluationBase):
     TODO: put usage - new custom evaluations could be done like this:
     """
     # TODO: check in Setup phase if type of evaluated VExpression has correct
-    #       type - e.g.  EnumField should have default within enum values.
+    #       type - e.g.  for EnumField evaluated value must be within enum values.
     name:           str
     label:          TransMessageType
     value:          ValueExpression
@@ -63,21 +63,31 @@ class InitEvaluationBase(EvaluationBase, ABC):
     pass
 
 
-class Default(InitEvaluationBase):
+@dataclass
+class Default(PresaveEvaluationBase):
+    # TODO: make InitEvaluationBase version too
     """ used for generated classes, dynamically created objects or SQL or other
         storage generated code
         for existing bound models - needs hook to ensure good value on object creation (__init__)
         in simmple cases - can be used to ensure good default value
+        for EnumField should have default within enum values.
     """
-    value:          ValueExpression
-    name:           Optional[str]
-    label:          Optional[TransMessageType]
+
+    value:          Any # can be: ValueExpression
+    name:           Optional[str] = None
+    label:          Optional[TransMessageType] = None
     available:      Optional[Union[bool, ValueExpression]] = True
 
+    REQUIRES_AUTOCOMPUTE: ClassVar[bool] = False
 
     def __post_init__(self):
-        assert isinstance(self.value, ValueExpression), self.value
+        # assert isinstance(self.value, ValueExpression), self.value
+        pass
 
 
     def execute(self, apply_session: IApplySession) -> Optional[ExecResult]:
-        return self.value._evaluator.execute(apply_session=apply_session)
+        if isinstance(self.value, ValueExpression):
+            value = self.value._evaluator.execute(apply_session=apply_session)
+        else:
+            value = self.value
+        return ExecResult.create(value)

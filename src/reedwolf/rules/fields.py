@@ -204,8 +204,9 @@ class FieldBase(Component, IFieldBase, ABC):
                 self._check_py_type()
 
         # NOTE: can have multiple Evaluation-s
-        evaluations = [cleaner for cleaner in self.cleaners if isinstance(cleaner, EvaluationBase)] \
+        evaluations = [cleaner for cleaner in self.cleaners if isinstance(cleaner, EvaluationBase) and cleaner.REQUIRES_AUTOCOMPUTE] \
                       if self.cleaners else None
+
         if self.autocomputed and not evaluations:
             raise RuleSetupError(owner=self, msg=f"When 'autocomputed' is set to '{self.autocomputed.name}', you need to have at least one Evaluation cleaner defined or set 'autocomputed' to False/AutocomputedEnum.NO")
         elif not self.autocomputed and evaluations:
@@ -365,6 +366,8 @@ class ChoiceField(FieldBase):
         if isinstance(self.choices, (IFunctionVexpNode, CustomFunctionFactory, ValueExpression)):
             if not (self.choice_value and self.choice_label):
                 raise RuleSetupValueError(owner=self, msg="expected 'choice_label' and 'choice_value' passed.")
+        elif is_function(self.choices):
+            raise RuleSetupValueError(owner=self, msg="Passing functino to 'choices={self.choices}' is not allowed. Wrap it with 'Function()'.")
         else:
             if (self.choice_value or self.choice_label):
                 raise RuleSetupValueError(owner=self, msg="'choice_label' and 'choice_value' are not expected.")

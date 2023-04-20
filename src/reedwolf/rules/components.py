@@ -9,6 +9,7 @@ from typing import (
         List, 
         Optional, 
         Any,
+        ClassVar,
         )
 from dataclasses import dataclass, field
 
@@ -178,6 +179,7 @@ class EvaluationBase(Component, ABC): # TODO: make it abstract
     """ Auto-compute logic - executes 'value' expression, stores into field of
         current instance/object. The execution should not fail.
     """
+    REQUIRES_AUTOCOMPUTE: ClassVar[bool] = True
 
     @abstractmethod
     def execute(self, apply_session: IApplySession) -> Optional[ExecResult]:

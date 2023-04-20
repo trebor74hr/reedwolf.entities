@@ -57,11 +57,18 @@ class RawAttrValue:
 class ExecResult:
     # last value, mutable
     value: Any  = field(init=False, default=UNDEFINED)
+
     # TODO: set compoenent (owner) that triggerred value change
     #       value evaluation - can have attr_node.name
     value_history : List[Tuple[str, RawAttrValue]] = field(repr=False, init=False, default_factory=list)
 
-    def set_value(self, value: Any, attr_name: str, changer_name: str, ):
+    @classmethod
+    def create(cls, value: Any, attr_name: str="", changer_name: str=""):
+        instance = cls()
+        instance.set_value(value, attr_name=attr_name, changer_name=changer_name)
+        return instance
+
+    def set_value(self, value: Any, attr_name: str, changer_name: str):
         self.value_history.append(
                 RawAttrValue(value=value, attr_name=attr_name, changer_name=changer_name)
                 )
@@ -74,15 +81,19 @@ class ExecResult:
 @dataclass
 class NotAvailableExecResult(ExecResult):
     " used when available yields False - value contains "
-    reason: str = field()
+    reason: str = field(default=None)
 
     @classmethod
-    def create(cls, available_vexp_result: ExecResult, reason: Optional[str] = None) -> NotAvailableExecResult:
+    def create(cls, 
+            available_vexp_result: Union[ExecResult, UndefinedType]=UNDEFINED, 
+            reason: Optional[str] = None) -> NotAvailableExecResult:
         if not reason:
             if available_vexp_result:
+                assert not isinstance(ExecResult, NotAvailableExecResult)
                 reason=f"Not available since expression yields: {available_vexp_result.value}", 
             else:
-                reason="Disabled"
+                assert available_vexp_result is UNDEFINED
+                reason="Value not available"
         instance = cls(reason=reason)
         instance.value = available_vexp_result
         return instance
