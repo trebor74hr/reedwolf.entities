@@ -427,8 +427,13 @@ def create_function_arguments(
 
     arguments_default_dict = extract_function_arguments_default_dict(py_function)
 
-    assert set(arguments_default_dict.keys())==set(type_info_dict.keys()), \
-           f"{set(arguments_default_dict.keys())} != {set(type_info_dict.keys())}"
+    args_default = set(arguments_default_dict.keys())
+    args_types   = set(type_info_dict.keys())
+    if not args_default==args_types:
+        # TODO: when unbound method is attached, then first set has "self" and other does not
+        #       in this case report ValueError - unbound method not supported
+        raise RuleInternalError(owner=py_function, 
+                msg=f"Function's default arguments '{args_default}' not same as all arguments:  {args_types}. Args extraction issue...")
 
     func_args_specs = FunctionArguments()
 

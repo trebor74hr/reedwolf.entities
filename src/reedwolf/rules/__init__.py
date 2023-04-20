@@ -34,6 +34,7 @@ from .components import (  # noqa: F401
 from .fields import (
         AutocomputedEnum,
         StringField,
+        UnsizedStringField,
         BooleanField,
         IntegerField,
         FloatField,
@@ -124,6 +125,7 @@ __all__ = [
     # fields
     "AutocomputedEnum",
     "StringField",
+    "UnsizedStringField",
     "BooleanField",
     "IntegerField",
     "FloatField",

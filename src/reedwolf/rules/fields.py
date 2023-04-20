@@ -290,14 +290,12 @@ class FieldBase(Component, IFieldBase, ABC):
         
 
 # ------------------------------------------------------------
-# Field - general field
+# StringField
 # ------------------------------------------------------------
 
 @dataclass
 class StringField(FieldBase):
-    # default:        Optional[str[StandardType, ValueExpression]] = None
     # django: CharField
-    # NOTE: TextField -> MaxLength=Neki valiki, render nešto drugačiji, rows/columns
     PYTHON_TYPE:ClassVar[type] = str
     REQUIRED_VALIDATIONS:ClassVar[List[ValidationBase]] = [MaxLength]
 
@@ -307,6 +305,14 @@ class StringField(FieldBase):
             value = str(value)
         return value
 
+# ------------------------------------------------------------
+# UnsizedStringField
+# ------------------------------------------------------------
+
+@dataclass
+class UnsizedStringField(FieldBase):
+    # NOTE: Django TextField -> MaxLength=Neki valiki, render nešto drugačiji, rows/columns
+    PYTHON_TYPE:ClassVar[type] = str
 
 # ------------------------------------------------------------
 # BooleanField
