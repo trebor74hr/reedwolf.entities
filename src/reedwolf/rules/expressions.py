@@ -496,7 +496,7 @@ class ValueExpression(DynamicAttrsBase):
 
     def Setup(self, 
             registries:"IRegistries",  # noqa: F821
-            owner:"Component",  # noqa: F821
+            owner:"ComponentBase",  # noqa: F821
             # local registry, not default by namespace
             registry: Optional["IRegistry"]=None,  # noqa: F821
             strict:bool = False,
@@ -590,6 +590,7 @@ class ValueExpression(DynamicAttrsBase):
                     current_vexp_node = registry.create_node(
                                 vexp_node_name=vexp_node_name,
                                 parent_vexp_node=last_vexp_node,
+                                owner=owner,
                                 # func_args=bit._func_args,
                                 )
 
@@ -626,7 +627,8 @@ class ValueExpression(DynamicAttrsBase):
 
             # can be Component/IData or can be managed Model dataclass Field - when .denied is not appliable
             if hasattr(current_vexp_node, "denied") and current_vexp_node.denied:
-                raise RuleSetupValueError(owner=self, msg=f"VexpNode '{vexp_node_name}' (owner={owner.name}) references '{current_vexp_node.name}' is not allowed in ValueExpression due: {current_vexp_node.deny_reason}.")
+                # '{vexp_node_name}' 
+                raise RuleSetupValueError(owner=self, msg=f"VexpNode (owner={owner.name}) references '{current_vexp_node.name}' what is not allowed due: {current_vexp_node.deny_reason}.")
 
         vexp_evaluator.finish()
 

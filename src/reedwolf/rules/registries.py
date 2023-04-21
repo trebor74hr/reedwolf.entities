@@ -265,6 +265,7 @@ class RegistryBase(IRegistry):
                     vexp_node_name: str, 
                     parent_vexp_node: IValueExpressionNode, 
                     # func_args: FunctionArgumentsType
+                    owner: ComponentBase,
                     ) -> IValueExpressionNode:
         """
         Will create a new attr_node when missing, even in the case when the var
@@ -278,14 +279,14 @@ class RegistryBase(IRegistry):
         assert isinstance(vexp_node_name, str), vexp_node_name
 
         if vexp_node_name.startswith("_"):
-            raise RuleSetupNameError(owner=self, msg=f"AttrVexpNode '{vexp_node_name}' is invalid, should not start with _")
+            raise RuleSetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': AttrVexpNode '{vexp_node_name}' is invalid, should not start with _")
 
         type_info = None
 
         if parent_vexp_node:
             assert parent_vexp_node.name!=vexp_node_name
             if not isinstance(parent_vexp_node, IValueExpressionNode):
-                raise RuleSetupNameError(owner=self, msg=f"'{vexp_node_name}' -> parent_vexp_node={parent_vexp_node} :{type(parent_vexp_node)} is not IValueExpressionNode")
+                raise RuleSetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': '{vexp_node_name}' -> parent_vexp_node={parent_vexp_node} :{type(parent_vexp_node)} is not IValueExpressionNode")
 
         # TODO: za Sum(This.name) this is not good. Should be unique, since 
         #       This is ambigous - can evaluate to different contexts. 
@@ -304,7 +305,7 @@ class RegistryBase(IRegistry):
                 names_avail = get_available_names_example(full_vexp_node_name, self.store.keys())
                 valid_names = f"Valid attributes: {names_avail}" if self.store.keys() else "Namespace has no attributes at all."
                 # owner=self, 
-                raise RuleSetupNameNotFoundError(msg=f"Namespace '{self.NAMESPACE._name}' has no attribute '{full_vexp_node_name}'. {valid_names}")
+                raise RuleSetupNameNotFoundError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': Invalid attribute name '{full_vexp_node_name}'. {valid_names}")
 
             attr_node_template = self.store.get(full_vexp_node_name)
             # clone it - each attr_node must be unique - cached are used only as templates
@@ -345,13 +346,11 @@ class RegistryBase(IRegistry):
                             # functions_factory_registry=self.functions_factory_registry
                             )
             except RuleSetupNameNotFoundError as ex:
-                ex.msg = f"{self.NAMESPACE}: {ex.msg}"
+                ex.msg = f"{owner} / {self.NAMESPACE}-NS: {ex.msg}"
                 raise 
             except RuleError as ex:
-                # msg = f"'{self}' -> '{parent_vexp_node.full_name} -> '.{vexp_node_name}' metadata / type-hints read problem: {ex}"
-                ex.msg = f"'{parent_vexp_node.full_name} -> '.{vexp_node_name}' metadata / type-hints read problem: {ex}"
-                # raise same exception class
-                raise # ex.__class__(owner=self, msg=msg)
+                ex.msg = f"'{owner} / {self.NAMESPACE}-NS: {parent_vexp_node.full_name} -> '.{vexp_node_name}' metadata / type-hints read problem: {ex}"
+                raise 
 
             # if func_node:
             #     assert func_args
@@ -372,7 +371,7 @@ class RegistryBase(IRegistry):
                             ) # function=function
 
         if not isinstance(vexp_node, IValueExpressionNode):
-            raise RuleInternalError(owner=self, msg=f"Type of found object is not IValueExpressionNode, got: {type(vexp_node)}.")
+            raise RuleInternalError(owner=owner, msg=f"Namespace {self.NAMESPACE}: Type of found object is not IValueExpressionNode, got: {type(vexp_node)}.")
 
         return vexp_node
 
@@ -565,7 +564,7 @@ class FieldsRegistry(RegistryBase):
         elif isinstance(component, (BoundModel, BoundModelWithHandlers, ValidationBase, EvaluationBase, FieldGroup, Extension, Rules, )): # 
             # stored - but should not be used
             denied = True
-            deny_reason = "Component of type {component.__class__.__name__} can not be referenced in ValueExpressions"
+            deny_reason = f"Component of type {component.__class__.__name__} can not be referenced in ValueExpressions"
             if hasattr(component, "type_info"):
                 type_info=component.type_info
             else:

@@ -277,7 +277,7 @@ class FieldBase(Component, IFieldBase, ABC):
         if value is UNDEFINED:
             value = component.get_current_value_from_history(apply_session)
 
-        if self.PYTHON_TYPE is not None \
+        if self.PYTHON_TYPE not in (UNDEFINED, None) \
                 and value is not None \
                 and not isinstance(value, self.PYTHON_TYPE):
             error = f"Value type '{type(value)}' is not compoatible with '{self.PYTHON_TYPE}' " \
@@ -345,7 +345,7 @@ class ChoiceOption:
 @dataclass
 class ChoiceField(FieldBase):
     # TODO: check of types needs to be done too - this indicates to skip type check, but it could be done after setup()
-    PYTHON_TYPE:ClassVar[type(UNDEFINED)] = UNDEFINED
+    PYTHON_TYPE:ClassVar[UndefinedType] = UNDEFINED
 
     # https://stackoverflow.com/questions/51575931/class-inheritance-in-python-3-7-dataclasses
     # required is not required :) so in inherited class all attributes need to be optional

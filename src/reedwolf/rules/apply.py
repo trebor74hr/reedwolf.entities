@@ -104,9 +104,9 @@ class ApplyResult(IApplySession):
 
         if self.rules.context_class:
             if not self.context:
-                raise RuleApplyError(owner=self, msg=f"Pass context object, instance of context class '{component.context_class}'.")
-            if not isinstance(self.context, component.context_class):
-                raise RuleApplyError(owner=self, msg=f"Context object '{self.context}' is not instance of context class '{component.context_class}'.")
+                raise RuleApplyError(owner=self.rules, msg=f"Pass context object to .apply*(). Context should be instance of '{self.rules.context_class}'.")
+            if not isinstance(self.context, self.rules.context_class):
+                raise RuleApplyError(owner=self, msg=f"Context object '{self.context}' is not instance of context class '{self.rules.context_class}'.")
         else:
             if self.context:
                 raise RuleApplyError(owner=self, msg=f"Given context object '{self.context}', but context class in component is not setup. Provide 'context_class' to Rules object and try again.")
