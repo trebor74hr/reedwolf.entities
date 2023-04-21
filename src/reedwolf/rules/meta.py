@@ -116,6 +116,8 @@ FunctionArgumentsTupleType = Tuple[List[Any], Dict[str, Any]]
 # used for matching rows types, e.g. std_types map, filter etc.
 ItemType = TypeVar("ItemType")
 
+ComponentNameType = TypeVar("ComponentNameType", bound=str) 
+
 # Naming convention instead of class inheritance
 TYPE_FIELDNAME_SUFFIX = "AttrNameType"
 

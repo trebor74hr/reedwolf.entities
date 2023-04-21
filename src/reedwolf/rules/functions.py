@@ -273,7 +273,7 @@ class IFunction(IFunctionVexpNode):
         return arg_value
 
     # TODO: IApplySession is in base.py which imports .functions just for one case ...
-    def execute(self, apply_session: "IApplySession", vexp_result: ExecResult) -> Any:
+    def execute_node(self, apply_session: "IApplySession", vexp_result: ExecResult, is_last:bool) -> Any:
         """
         will be called when actual function logic needs to be executed. Input
         is/are function argument(s).

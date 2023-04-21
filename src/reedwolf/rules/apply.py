@@ -233,7 +233,7 @@ class ApplyResult(IApplySession):
 
             # original instance
             vexp_result: ExecResult = component.bound_model.model \
-                                        ._evaluator.execute(apply_session=self)
+                                        ._evaluator.execute_vexp(apply_session=self)
             instance = vexp_result.value
 
             # new instance if any
@@ -441,7 +441,7 @@ class ApplyResult(IApplySession):
         for attr_name, attr_value in vars(component).items():
             if isinstance(attr_value, ValueExpression):
                 vexp_result: ExecResult = \
-                        attr_value._evaluator.execute(
+                        attr_value._evaluator.execute_vexp(
                                 apply_session=self)
                 # print(f"{parent.name if parent else ''}.{component.name}.{attr_name} = VExp[{attr_value}] -> {vexp_result}")
 
@@ -537,7 +537,7 @@ class ApplyResult(IApplySession):
                                         component \
                                         .bound_model \
                                         .model \
-                                        ._evaluator.execute(
+                                        ._evaluator.execute_vexp(
                                                 apply_session=self, 
                                                 )
                 # set new value

@@ -1,3 +1,4 @@
+import re
 from typing import (
         Callable, 
         Any, 
@@ -108,13 +109,13 @@ def get_available_names_example(name:str, name_list:List[str], max_display:int =
     return names_avail
 
 
-def to_int(value, default=None):
+def to_int(value:Any, default=None) -> Optional[int]:
     try:
         return int(value)
     except Exception:
         return default
 
-def snake_case_to_camel(name):
+def snake_case_to_camel(name: str) -> str:
     out = []
     for name_bit in name.split("."):
         class_name = []
@@ -123,6 +124,12 @@ def snake_case_to_camel(name):
             class_name.append(bit)
         out.append("".join(class_name))
     return ".".join(out)
+
+
+def varname_to_title(varname:str) -> str:
+    out = varname.replace("_", " ")
+    out = re.sub(" +", " ", out).strip()
+    return out.capitalize()
 
 
 def format_arg_name_list(arg_name_list: List[str]):

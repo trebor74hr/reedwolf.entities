@@ -104,7 +104,7 @@ def execute_available_vexp(
         apply_session: IApplySession) \
             -> Optional[NotAvailableExecResult]:
     if isinstance(available_vexp, ValueExpression):
-        available_vexp_result = available_vexp._evaluator.execute(apply_session=apply_session)
+        available_vexp_result = available_vexp._evaluator.execute_vexp(apply_session=apply_session)
         if not bool(available_vexp_result.value):
             return NotAvailableExecResult.create(available_vexp_result=available_vexp_result)
     elif isinstance(available_vexp, bool):
@@ -128,16 +128,17 @@ def execute_vexp_or_node(
     # TODO: this function has ugly interface - solve this better
 
     if isinstance(vexp_or_value, ValueExpression):
-        vexp_result = vexp_or_value._evaluator.execute(
+        vexp_result = vexp_or_value._evaluator.execute_vexp(
                             apply_session=apply_session,
                             )
     # AttrVexpNode, OperationVexpNode, IFunctionVexpNode, LiteralVexpNode,
     elif isinstance(vexp_node, (
             IValueExpressionNode,
             )):
-        vexp_result = vexp_node.execute(
+        vexp_result = vexp_node.execute_node(
                             apply_session=apply_session, 
                             vexp_result=vexp_result,
+                            is_last=True,
                             )
     else:
         raise RuleInternalError(
@@ -181,10 +182,11 @@ class IValueExpressionNode(ABC):
         return dataclasses_replace(self)
 
     @abstractmethod
-    def execute(self, 
+    def execute_node(self, 
                  apply_session: "IApplySession", 
                  # previous - can be undefined too
                  vexp_result: Union[ExecResult, UndefinedType],
+                 is_last: bool,
                  ) -> ExecResult:
         raise NotImplementedError()
 
@@ -212,9 +214,10 @@ class LiteralVexpNode(IValueExpressionNode):
         self.vexp_result = ExecResult()
         self.vexp_result.set_value(self.value, attr_name="", changer_name="")
 
-    def execute(self, 
+    def execute_node(self, 
                  apply_session: "IApplySession", 
                  vexp_result: ExecResult,
+                 is_last: bool
                  ) -> ExecResult:
         assert not vexp_result
         return self.vexp_result
@@ -354,11 +357,10 @@ class OperationVexpNode(IValueExpressionNode):
         return f"Op{self}"
 
 
-    # vexp_result = node.execute(apply_session, vexp_result)
-    # def execute(self, registries: "Registries", input_value: Any, context:Any) -> Any:  # noqa: F821
-    def execute(self, 
+    def execute_node(self, 
                  apply_session: "IApplySession", 
                  vexp_result: ExecResult,
+                 is_last: bool,
                  ) -> ExecResult:
         # this should be included: context.this_registry: ThisRegistry
 

@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from .utils import (
         UNDEFINED,
         UndefinedType,
+        varname_to_title,
         )
 from .exceptions import (
         RuleSetupValueError,
@@ -112,9 +113,9 @@ class Component(ComponentBase, ABC):
 class StaticData(IData, Component):
     # TODO: Data - maybe should not be component at all?
     name:           str
-    label:          TransMessageType
     # TODO: ModelField or Enum or ...
     value:          Any 
+    label:          Optional[TransMessageType] = field(repr=False, default=None)
     type_info:      TypeInfo = field(init=False)
     # evaluate:       bool = False # TODO: describe
 
@@ -124,6 +125,8 @@ class StaticData(IData, Component):
             # raise RuleSetupValueError(owner=self, msg=f"{self.name} -> {type(self.value)}: {type(self.value)} - to be done a ValueExpression")
             raise NotImplementedError(f"{self.name} -> {type(self.value)}: {type(self.value)} - to be done a ValueExpression")
         self.type_info = TypeInfo.get_or_create_by_type(self.value)
+        if not self.label:
+            self.label = varname_to_title(self.name)
         super().__post_init__()
 
 # ------------------------------------------------------------
@@ -136,10 +139,10 @@ class DynamicData(IData, Component):
     See functions.py for details.
     """
     name:           str
-    label:          TransMessageType
     # NOTE: the name function is exposed and Function() is used, but internally
     #       this will be function_factory instance
     function:       CustomFunctionFactory
+    label:          Optional[TransMessageType] = field(repr=False, default=None)
     type_info:      TypeInfo = field(init=False)
     # evaluate:       bool = False # TODO: describe
 
@@ -150,6 +153,8 @@ class DynamicData(IData, Component):
         custon_function_factory: CustomFunctionFactory = self.function
         self.type_info = custon_function_factory.get_output_type_info()
         # TODO: check function output is Callable[..., RuleDatatype]
+        if not self.label:
+            self.label = varname_to_title(self.name)
         super().__post_init__()
 
 # ------------------------------------------------------------
@@ -199,11 +204,17 @@ class EvaluationBase(Component, ABC): # TODO: make it abstract
 @dataclass
 class FieldGroup(Component):
     name:           str
-    label:          str
     contains:       List[Component] = field(repr=False)
+    label:          Optional[TransMessageType] = field(repr=False, default=None)
     # TODO: allow ChildrenValidation too (currently only used in Extension, e.g. Cardinality/Unique)
     cleaners:       Optional[List[Union[ValidationBase, EvaluationBase]]] = None
     available:      Union[bool, ValueExpression] = True
+
+    def __post_init__(self):
+        if not self.label:
+            self.label = varname_to_title(self.name)
+        super().__post_init__()
+
 
     @staticmethod
     def can_apply_partial() -> bool:

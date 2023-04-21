@@ -22,6 +22,7 @@ from .utils import (
         get_available_names_example,
         UNDEFINED,
         UndefinedType,
+        varname_to_title,
         )
 from .exceptions import (
         RuleSetupError,
@@ -540,11 +541,10 @@ class KeyFields(KeysBase):
 @dataclass
 class Rules(ContainerBase):
     name            : str
-    label           : TransMessageType
-
     contains        : List[Component]      = field(repr=False)
 
     # --- optional - following can be bound later with .bind_to()
+    label           : Optional[TransMessageType] = field(repr=False, default=None)
     bound_model     : Optional[BoundModel] = field(repr=False, default=None)
     # will be filled automatically with Config() if not supplied
     config          : Optional[Type[Config]] = field(repr=False, default=None)
@@ -573,6 +573,9 @@ class Rules(ContainerBase):
             self.config = Config()
 
         self.init_clean()
+        if not self.label:
+            self.label = varname_to_title(self.name)
+        super().__post_init__()
 
     def init_clean(self):
         if not isinstance(self.config, Config):
@@ -699,11 +702,11 @@ class Extension(ContainerBase):
     name            : str
     bound_model     : Union[BoundModel, BoundModelWithHandlers] = field(repr=False)
     # metadata={"bind_to_owner_registries" : True})
-    label           : TransMessageType
 
     cardinality     : CardinalityValidation
     contains        : List[Component] = field(repr=False)
 
+    label           : Optional[TransMessageType] = field(repr=False, default=None)
     data            : Optional[List[IData]] = field(repr=False, default_factory=list)
     functions       : Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list)
     # --- can be index based or standard key-fields names
@@ -731,7 +734,9 @@ class Extension(ContainerBase):
     # namespace_only  : ClassVar[Namespace] = ThisNS
     def __post_init__(self):
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
-        ...
+        if not self.label:
+            self.label = varname_to_title(self.name)
+        super().__post_init__()
 
 
     def set_owner(self, owner:ContainerBase):

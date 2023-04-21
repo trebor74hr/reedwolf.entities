@@ -22,6 +22,7 @@ from .utils import (
         UNDEFINED,
         UndefinedType,
         message_truncate,
+        varname_to_title,
         )
 from .exceptions import (
         RuleSetupValueError,
@@ -101,7 +102,7 @@ class FieldBase(Component, IFieldBase, ABC):
 
     # to Model attribute
     bind:           ValueExpression
-    label:          TransMessageType = field(repr=False)
+    label:          Optional[TransMessageType] = field(repr=False, default=None)
 
     # NOTE: required - is also Validation, i.e. Required() - just commonly used
     #       validation, nothing special that deserves special attribute.
@@ -142,6 +143,7 @@ class FieldBase(Component, IFieldBase, ABC):
 
     def __post_init__(self):
         self.init_clean()
+        super().__post_init__()
 
 
     def init_clean(self):
@@ -151,6 +153,8 @@ class FieldBase(Component, IFieldBase, ABC):
         # ModelsNs.person.surname -> surname
         if not self.name:
             self.name = self.get_name_from_bind(self.bind)
+        if not self.label:
+            self.label = varname_to_title(self.name)
 
         self.autocomputed = AutocomputedEnum.from_value(self.autocomputed)
         self.init_clean_base()

@@ -39,6 +39,7 @@ from .namespaces import (
         Namespace,
         )
 from .meta import (
+        ComponentNameType,
         NoneType,
         ModelField,
         TypeInfo,
@@ -238,16 +239,28 @@ class ComponentBase(SetOwnerMixin, ABC):
 
     # ------------------------------------------------------------
 
+    def get_children_dict(self) -> Dict[ComponentNameType, ComponentBase]:
+        if not hasattr(self, "_children_dict"):
+            self._children_dict = {comp.name : comp for comp in self.get_children()}
+        return self._children_dict
+
+    # ------------------------------------------------------------
+
     def get_children(self) -> List[ComponentBase]:
         """
-        used only in unit tests
+        Get only children components. Used in apply() (+unit tests).
+        to get all - components, cleaners and all other complex objects 
+        - use _get_subcomponents_list()
         """
-        children = getattr(self, "contains", None)
-        if not children:
-            children = getattr(self, "enables", None)
-        else:
-            assert not hasattr(self, "enables"), self
-        return children if children else []
+        # TODO: cached - be careful not to add new components aferwards
+        if not hasattr(self, "_children"):
+            children = getattr(self, "contains", None)
+            if not children:
+                children = getattr(self, "enables", None)
+            else:
+                assert not hasattr(self, "enables"), self
+            self._children = children if children else []
+        return self._children
 
     # ------------------------------------------------------------
 
@@ -299,6 +312,7 @@ class ComponentBase(SetOwnerMixin, ABC):
 
         self._add_component(component=self, components=components)
 
+        # includes components, cleaners and all other complex objects
         for subcomponent_wrapper in self._get_subcomponents_list():
             component = subcomponent_wrapper.subcomponent
             if isinstance(component, ValueExpression):
@@ -368,6 +382,9 @@ class ComponentBase(SetOwnerMixin, ABC):
     # ------------------------------------------------------------
     def _get_subcomponents_list(self) -> List[SubcomponentWrapper]:
         """
+        Includes components, cleaners and all other complex objects
+        to get only children components, use get_children()
+
         TODO: document and make it better, pretty hackish.
               the logic behind is to collect all attributes (recurseively) that 
               are:
@@ -588,7 +605,7 @@ class ComponentBase(SetOwnerMixin, ABC):
                 # TODO: move this to Setup phase
                 raise RuleApplyError(owner=self, msg=f"Component '{self.name}' has no bind")
             return None
-        bind_vexp_result = bind_vexp._evaluator.execute(apply_session=apply_session)
+        bind_vexp_result = bind_vexp._evaluator.execute_vexp(apply_session=apply_session)
         return bind_vexp_result
 
     # ------------------------------------------------------------
@@ -642,6 +659,19 @@ class IRegistries(ABC):
 
     def get_registry(self, namespace:Namespace):
         pass
+
+# ------------------------------------------------------------
+
+class IAttributeAccessorBase(ABC):
+    " used in registry "
+
+    @abstractmethod
+    def get_attribute(self, attr_name:str) -> IAttributeAccessorBase:
+        ...
+
+    # @abstractmethod
+    # def get_value(self) -> Any:
+    #     ...
 
 
 # ------------------------------------------------------------

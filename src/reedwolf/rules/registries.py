@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import inspect
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 
 from typing import (
         Any,
@@ -56,6 +57,7 @@ from .base import (
         IRegistry,
         IRegistries,
         IApplySession,
+        IAttributeAccessorBase,
         )
 from .models import (
         BoundModelBase,
@@ -137,6 +139,8 @@ def get_vexp_node_name(parent_name: Optional[str],
         vexp_node_name = f"{parent_name}.{vexp_node_name}"
 
     return vexp_node_name
+
+
 
 # ------------------------------------------------------------
 
@@ -373,7 +377,7 @@ class RegistryBase(IRegistry):
         return vexp_node
 
     @abstractmethod
-    def get_root_value(self, apply_session: IApplySession, name: str) -> Any:
+    def get_root_value(self, apply_session: IApplySession, name: str, is_last:bool) -> Any:
         # abstractmethod does not work - its complicated ...
         ...
 
@@ -422,7 +426,7 @@ class ModelsRegistry(RegistryBase):
 
     # ------------------------------------------------------------
 
-    def get_root_value(self, apply_session: IApplySession, name: str) -> Any:
+    def get_root_value(self, apply_session: IApplySession, name: str, is_last:bool) -> Any:
         instance = apply_session.current_frame.instance
 
         # bound_model = apply_session.current_frame.container.bound_model
@@ -491,11 +495,41 @@ class DataRegistry(RegistryBase):
         self.register_vexp_node(vexp_node)
         return vexp_node
 
-    def get_root_value(self, apply_session: IApplySession, name: str) -> Any:
+    def get_root_value(self, apply_session: IApplySession, name: str, is_last:bool) -> Any:
         raise NotImplementedError()
 
 # ------------------------------------------------------------
 
+@dataclass
+class ComponentAttributeAccessor(IAttributeAccessorBase):
+    " used in FieldsNS "
+    component: ComponentBase
+
+    # def has_attribute(self, attr_name: str) -> bool:
+    #     raise NotImplementedError()
+
+    def get_attribute(self, attr_name: str) -> ComponentAttributeAccessor:
+        children_dict = self.component.get_children_dict()
+        if attr_name not in children_dict:
+            avail_names = get_available_names_example(attr_name, children_dict.keys())
+            raise RuleApplyNameError(owner=self, msg=f"Attribute '{attr_name}' not found in '{self.component.name}' ({type(self.component.name)}). Available: {avail_names}")
+        component = children_dict[attr_name]
+        return ComponentAttributeAccessor(component)
+
+    # # TODO: get final value ...
+    # def get_value(self) -> Any:
+    #     raise NotImplementedError()
+
+    # CONTAINER_REGISTRY: ClassVar[Dict[int, ContainerBase]] = {}
+    # @classmethod
+    # def get_or_create(cls, container):
+    #     key = id(container)
+    #     if key not in cls.CONTAINER_REGISTRY:
+    #         cls.CONTAINER_REGISTRY[key] = container
+    #     return cls.CONTAINER_REGISTRY[key]
+
+
+# ------------------------------------------------------------
 
 class FieldsRegistry(RegistryBase):
     NAMESPACE = FieldsNS
@@ -551,8 +585,12 @@ class FieldsRegistry(RegistryBase):
         self.register_attr_node(attr_node) # , is_list=False))
         return attr_node
 
-    def get_root_value(self, apply_session: IApplySession, name: str) -> Any:
-        raise NotImplementedError()
+    def get_root_value(self, apply_session: IApplySession, name: str, is_last:bool) -> Any:
+        # container = apply_session.current_frame.component.get_container_owner()
+        component = apply_session.current_frame.component
+        top_attr_accessor = ComponentAttributeAccessor(component)
+        attr_accessor = top_attr_accessor.get_attribute(name)
+        return attr_accessor
 
 # ------------------------------------------------------------
 
@@ -567,14 +605,14 @@ class FunctionsRegistry(RegistryBase):
         #     # print("here-3", func_name, function_factory)
         #     self.register_vexp_node(function_factory)
 
-    def get_root_value(self, apply_session: IApplySession, name: str) -> Any:
+    def get_root_value(self, apply_session: IApplySession, name: str, is_last:bool) -> Any:
         raise NotImplementedError()
 
 
 class OperationsRegistry(RegistryBase):
     NAMESPACE = OperationsNS
 
-    def get_root_value(self, apply_session: IApplySession, name: str) -> Any:
+    def get_root_value(self, apply_session: IApplySession, name: str, is_last:bool) -> Any:
         raise RuleInternalError(owner=self, msg=f"This registry should not be used to get root value.")
 
 # ------------------------------------------------------------
@@ -594,7 +632,7 @@ class ThisRegistry(RegistryBase):
             attr_node = self._create_attr_node_for_model_attr(self.model_class, attr_name)
             self.register_attr_node(attr_node)
 
-    def get_root_value(self, apply_session: IApplySession, name: str) -> Any:
+    def get_root_value(self, apply_session: IApplySession, name: str, is_last:bool) -> Any:
         raise NotImplementedError()
 
 # ------------------------------------------------------------
@@ -638,7 +676,7 @@ class ContextRegistry(RegistryBase):
                             )
             self.register_attr_node(attr_node, attr_name)
 
-    def get_root_value(self, apply_session: IApplySession, name: str) -> Any:
+    def get_root_value(self, apply_session: IApplySession, name: str, is_last:bool) -> Any:
         raise NotImplementedError()
 
 # ------------------------------------------------------------
@@ -665,7 +703,7 @@ class ConfigRegistry(RegistryBase):
             attr_node = self._create_attr_node_for_model_attr(config_class, attr_name)
             self.register_attr_node(attr_node)
 
-    def get_root_value(self, apply_session: IApplySession, name: str) -> Any:
+    def get_root_value(self, apply_session: IApplySession, name: str, is_last:bool) -> Any:
         raise NotImplementedError()
 
 # ------------------------------------------------------------

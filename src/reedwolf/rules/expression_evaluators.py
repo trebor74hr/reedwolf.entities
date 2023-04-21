@@ -87,7 +87,7 @@ class ValueExpressionEvaluator:
         # TODO:     raise RuleInternalError(owner=self, msg=f"Empty attr_node_list.")
         self.finished = True
 
-    def execute(self, apply_session: "IApplySession") -> ExecResult:
+    def execute_vexp(self, apply_session: "IApplySession") -> ExecResult:
         if not self.finished:
             raise RuleInternalError(owner=self, msg=f"Not yet finished.")
         if self.failed_reasons:
@@ -97,10 +97,11 @@ class ValueExpressionEvaluator:
         if apply_session.current_frame.on_component_only:
             # M.company.address_set -> process only address_set 
             node = self.attr_node_list[-1]
-            vexp_result = node.execute(apply_session, vexp_result)
+            vexp_result = node.execute_node(apply_session, vexp_result, is_last=True)
         else:
-            for node in self.attr_node_list:
-                vexp_result = node.execute(apply_session, vexp_result)
+            idx_last = len(self.attr_node_list)
+            for idx, node in enumerate(self.attr_node_list, 1):
+                vexp_result = node.execute_node(apply_session, vexp_result, is_last=(idx_last==idx))
 
         return vexp_result
 

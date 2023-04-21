@@ -51,7 +51,7 @@ class Evaluation(PresaveEvaluationBase):
         not_available_vexp_result = execute_available_vexp(self.available, apply_session=apply_session)
         if not_available_vexp_result: 
             return not_available_vexp_result
-        return self.value._evaluator.execute(apply_session=apply_session)
+        return self.value._evaluator.execute_vexp(apply_session=apply_session)
 
 # ------------------------------------------------------------
 # Evaluations on object/instance initialization
@@ -87,7 +87,7 @@ class Default(PresaveEvaluationBase):
 
     def execute(self, apply_session: IApplySession) -> Optional[ExecResult]:
         if isinstance(self.value, ValueExpression):
-            value = self.value._evaluator.execute(apply_session=apply_session)
+            value = self.value._evaluator.execute_vexp(apply_session=apply_session)
         else:
             value = self.value
         return ExecResult.create(value)

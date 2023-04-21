@@ -35,6 +35,7 @@ from .base import (
         IFieldBase,
         IApplySession,
         ExecResult,
+        IAttributeAccessorBase,
         )
 from .expressions import (
         ValueExpression,
@@ -195,10 +196,11 @@ class AttrVexpNode(IValueExpressionNode):
             #     raise RuleInternalError(owner=self, msg=f"For attr_node {self.attr_node_type} .type_info could not not set (type={type(self.data)}).")
 
 
-    def execute(self, 
+    def execute_node(self, 
                  apply_session: IApplySession, 
                  # previous - can be undefined too
                  vexp_result: Union[ExecResult, UndefinedType],
+                 is_last: bool,
                  ) -> ExecResult:
 
         # TODO: not nicest way - string split
@@ -221,15 +223,21 @@ class AttrVexpNode(IValueExpressionNode):
             registry = apply_session.registries.get_registry(self.namespace)
             value_new = registry.get_root_value(
                                 apply_session=apply_session, 
-                                name=attr_name)
+                                name=attr_name, 
+                                is_last=is_last)
         else:
             # 2+ value - based on previous result and evolved one step further
             assert len(names)>1
             value_previous = vexp_result.value
-            if not hasattr(value_previous, attr_name):
-                # if all types match - could be internal problem?
-                raise RuleApplyNameError(owner=self, msg=f"Attribute '{attr_name}' not found in '{value_previous}' : '{type(value_previous)}'")
-            value_new = getattr(value_previous, attr_name)
+            if isinstance(value_previous, IAttributeAccessorBase):
+                value_new = value_previous.get_attribute(attr_name)
+                # TODO: if this is last in chain - fetch value
+            else:
+                if not hasattr(value_previous, attr_name):
+                    # TODO: list which fields are available
+                    # if all types match - could be internal problem?
+                    raise RuleApplyNameError(owner=self, msg=f"Attribute '{attr_name}' not found in '{value_previous}' : '{type(value_previous)}'")
+                value_new = getattr(value_previous, attr_name)
 
         # TODO: hm, changer_name is equal to attr_name, any problem / check / fix ... 
         vexp_result.set_value(attr_name=attr_name, changer_name=attr_name, value=value_new)

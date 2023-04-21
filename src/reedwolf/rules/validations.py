@@ -79,7 +79,7 @@ class Validation(ValidationBase):
             return None
 
         component = apply_session.current_frame.component
-        vexp_result: ExecResult = self.ensure._evaluator.execute(apply_session)
+        vexp_result: ExecResult = self.ensure._evaluator.execute_vexp(apply_session)
         if not bool(vexp_result.value):
             error = self.error if self.error else "Validation failed"
             return ValidationFailure(
@@ -144,7 +144,7 @@ class Readonly(SimpleValidationBase):
         component = apply_session.current_frame.component
 
         if isinstance(self.value, ValueExpression):
-            vexp_result = self.value._evaluator.execute(apply_session)
+            vexp_result = self.value._evaluator.execute_vexp(apply_session)
             is_readonly = vexp_result.value
         else:
             is_readonly = self.value
