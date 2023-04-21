@@ -666,12 +666,12 @@ class IAttributeAccessorBase(ABC):
     " used in registry "
 
     @abstractmethod
-    def get_attribute(self, attr_name:str) -> IAttributeAccessorBase:
+    def get_attribute(self, apply_session: IApplySession, attr_name:str, is_last:bool) -> IAttributeAccessorBase:
+        """ 
+        is_last -> True - need to get final literal value from object
+        (usually primitive type like int/str/date ...) 
+        """
         ...
-
-    # @abstractmethod
-    # def get_value(self) -> Any:
-    #     ...
 
 
 # ------------------------------------------------------------

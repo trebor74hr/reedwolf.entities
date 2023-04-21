@@ -504,17 +504,26 @@ class DataRegistry(RegistryBase):
 class ComponentAttributeAccessor(IAttributeAccessorBase):
     " used in FieldsNS "
     component: ComponentBase
+    instance: ModelType
 
     # def has_attribute(self, attr_name: str) -> bool:
     #     raise NotImplementedError()
 
-    def get_attribute(self, attr_name: str) -> ComponentAttributeAccessor:
+    def get_attribute(self, apply_session:IApplySession, attr_name: str, is_last:bool) -> ComponentAttributeAccessor:
         children_dict = self.component.get_children_dict()
         if attr_name not in children_dict:
             avail_names = get_available_names_example(attr_name, children_dict.keys())
-            raise RuleApplyNameError(owner=self, msg=f"Attribute '{attr_name}' not found in '{self.component.name}' ({type(self.component.name)}). Available: {avail_names}")
+            raise RuleApplyNameError(owner=self.component, msg=f"Attribute '{attr_name}' not found in '{self.component.name}' ({type(self.component.name)}). Available: {avail_names}")
         component = children_dict[attr_name]
-        return ComponentAttributeAccessor(component)
+        if is_last:
+            if not hasattr(component, "bind"):
+                raise RuleApplyNameError(owner=self.component, msg=f"Attribute '{attr_name}' is '{type(component)}' type which has no binding, therefore can not extract value. Use standard *Field components instead.")
+            vexp_result = component.bind._evaluator.execute_vexp(apply_session)
+            out = vexp_result.value
+        else:
+            out = ComponentAttributeAccessor(component)
+        return out
+
 
     # # TODO: get final value ...
     # def get_value(self) -> Any:
@@ -588,8 +597,12 @@ class FieldsRegistry(RegistryBase):
     def get_root_value(self, apply_session: IApplySession, name: str, is_last:bool) -> Any:
         # container = apply_session.current_frame.component.get_container_owner()
         component = apply_session.current_frame.component
-        top_attr_accessor = ComponentAttributeAccessor(component)
-        attr_accessor = top_attr_accessor.get_attribute(name)
+        instance  = apply_session.current_frame.instance
+        top_attr_accessor = ComponentAttributeAccessor(component, instance)
+        attr_accessor = top_attr_accessor.get_attribute(
+                                apply_session=apply_session, 
+                                attr_name=name, 
+                                is_last=is_last)
         return attr_accessor
 
 # ------------------------------------------------------------

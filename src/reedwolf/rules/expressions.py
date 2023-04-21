@@ -237,16 +237,18 @@ class VExpStatusEnum(str, Enum):
 # Custom implementation - no operator function, needs custom
 # logic
 
-def _op_apply_and(self, first, second):
+def _op_apply_and(first, second):
     return bool(first) and bool(second)
 
-def _op_apply_or(self, first, second):
+def _op_apply_or(first, second):
     return bool(first) or bool(second)
 
 
 # https://florian-dahlitz.de/articles/introduction-to-pythons-operator-module
 # https://docs.python.org/3/library/operator.html#mapping-operators-to-functions
 OPCODE_TO_FUNCTION = {
+    # NOTE: no need to check unary/binary vs have 1 or 2 params
+    #       python parser/interpretor will ensure this
     # binary operatorsy - buultin
       "=="  : operator.eq  # noqa: E131
     , "!="  : operator.ne   
@@ -372,8 +374,8 @@ class OperationVexpNode(IValueExpressionNode):
                                 vexp_result=vexp_result,
                                 apply_session=apply_session)
 
-        # TODO: use self._second_vexp_node
-        if self.second is not None:
+        # if self.second is not in (UNDEFINED, None):
+        if self._second_vexp_node is not None:
             second_vexp_result = execute_vexp_or_node(
                                     self.second, self._second_vexp_node, 
                                     vexp_result=vexp_result,
@@ -392,7 +394,6 @@ class OperationVexpNode(IValueExpressionNode):
             try:
                 new_value = self.op_function(first_value, second_value)
             except Exception as ex:
-                # raise
                 raise RuleApplyError(owner=apply_session, msg=f"{self} := {self.op_function}({first_vexp_result.value}, {second_vexp_result.value}) raised error: {ex}")
         else:
             # unary operation
