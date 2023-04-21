@@ -221,23 +221,29 @@ class AttrVexpNode(IValueExpressionNode):
                     raise RuleInternalError(owner=self, msg=f"Initial evaluation step for non-extension failed, expected single name member (e.g. M.company), got: {self.name}\n  == Compoonent: {frame.container}")
 
             registry = apply_session.registries.get_registry(self.namespace)
-            value_new = registry.get_root_value(
-                                apply_session=apply_session, 
-                                name=attr_name, 
-                                is_last=is_last)
+            value_previous = registry.get_root_value(apply_session=apply_session)
+            do_fetch_by_name = registry.ROOT_VALUE_NEEDS_FETCH_BY_NAME
         else:
             # 2+ value - based on previous result and evolved one step further
             assert len(names)>1
             value_previous = vexp_result.value
+            do_fetch_by_name = True
+
+        if do_fetch_by_name:
             if isinstance(value_previous, IAttributeAccessorBase):
-                value_new = value_previous.get_attribute(attr_name)
-                # TODO: if this is last in chain - fetch value
+                # NOTE: if this is last in chain - fetch final value
+                value_new = value_previous.get_attribute(
+                                apply_session=apply_session, 
+                                attr_name=attr_name, 
+                                is_last=is_last)
             else:
                 if not hasattr(value_previous, attr_name):
                     # TODO: list which fields are available
                     # if all types match - could be internal problem?
                     raise RuleApplyNameError(owner=self, msg=f"Attribute '{attr_name}' not found in '{value_previous}' : '{type(value_previous)}'")
                 value_new = getattr(value_previous, attr_name)
+        else:
+            value_new = value_previous
 
         # TODO: hm, changer_name is equal to attr_name, any problem / check / fix ... 
         vexp_result.set_value(attr_name=attr_name, changer_name=attr_name, value=value_new)
