@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 import inspect
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -19,6 +18,7 @@ from .utils import (
         get_available_names_example,
         UNDEFINED,
         UndefinedType,
+        check_identificator_name,
         )
 from .exceptions import (
         RuleError,
@@ -98,24 +98,14 @@ from .config import (
         )
 
 
-_RE_ID_NAME_1, _RE_ID_NAME_2 = "a-zA-Z", "a-zA-Z0-9_"
-_RE_ID_NAME = re.compile(f"^[{_RE_ID_NAME_1}][{_RE_ID_NAME_2}]*$")
-
-def _clean_identificator_name(vexp_node_name: str) -> str:
-    """ When attr_node/paremeter/argument name is valid 
-        it returns the same value. """
-    if not vexp_node_name:
-        raise RuleSetupNameError(owner=None, msg=f"Invalid identificator name '{vexp_node_name}'. Empty name not allowed.")
-    if not re.match(_RE_ID_NAME, vexp_node_name):
-        raise RuleSetupNameError(owner=None, msg=f"Invalid identificator name '{vexp_node_name}'. Name should begin with: {_RE_ID_NAME_1} and can continue with one or more: {_RE_ID_NAME_2}.")
-    return vexp_node_name
 
 
 def get_vexp_node_name(parent_name: Optional[str], 
                        vexp_node_name: str, 
                        func_args: Optional[Union[FunctionArgumentsTupleType, FunctionArgumentsType]]
                        ) -> str:
-    vexp_node_name = _clean_identificator_name(vexp_node_name)
+    # vexp_node_name = 
+    check_identificator_name(vexp_node_name)
 
     if func_args:
         if isinstance(func_args, (list, tuple)) and len(func_args)==2:
@@ -128,7 +118,7 @@ def get_vexp_node_name(parent_name: Optional[str],
                 [f"'{a}':{type(a)}" for a in args]))
         if kwargs:
             all_args_str.append(", ".join(
-                [f"{_clean_identificator_name(k)}='{v}':{type(v)}" 
+                [f"{k}='{v}':{type(v)}" 
                     for k,v in kwargs.items()]))
         all_args_str = ", ".join(all_args_str)
         vexp_node_name = f"{vexp_node_name}({all_args_str})"

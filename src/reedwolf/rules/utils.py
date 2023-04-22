@@ -1,4 +1,5 @@
 import re
+import keyword
 from typing import (
         Callable, 
         Any, 
@@ -136,9 +137,10 @@ def snake_case_to_camel(name: str) -> str:
     return ".".join(out)
 
 
+_RE_SPACES = re.compile(" +")
 def varname_to_title(varname:str) -> str:
     out = varname.replace("_", " ")
-    out = re.sub(" +", " ", out).strip()
+    out = _RE_SPACES.sub(" ", out).strip()
     return out.capitalize()
 
 
@@ -182,6 +184,8 @@ class ThreadSafeCounter:
     #     with self._lock:
     #         return self._counter
 
+# ------------------------------------------------------------
+
 REPR_MAX_LEN = 100
 
 def to_repr(instance: Any, max_len: int = REPR_MAX_LEN):
@@ -190,5 +194,27 @@ def to_repr(instance: Any, max_len: int = REPR_MAX_LEN):
         out = out[:max_len-5] + ".." + out[-3:]
     return out
 
+# ------------------------------------------------------------
 
+_RE_ID_NAME_1, _RE_ID_NAME_2 = "a-zA-Z", "a-zA-Z0-9_"
+# _RE_ID_NAME = re.compile(f"^[{_RE_ID_NAME_1}][{_RE_ID_NAME_2}]*$")
+
+def check_identificator_name(vexp_node_name: str): #  -> str:
+    """ When attr_node/paremeter/argument name is valid 
+        it returns the same value. """
+    from .exceptions import RuleSetupNameError
+
+    if not vexp_node_name:
+        raise RuleSetupNameError(owner=None, msg=f"Invalid identificator name '{vexp_node_name}'. Empty name not allowed.")
+
+    # NOTE: profiling showed that re.match (sre_parse._parse) is a bit slow, so used 
+    #       https://stackoverflow.com/questions/12700893/how-to-check-if-a-string-is-a-valid-python-identifier-including-keyword-check
+    # ALT: if not _RE_ID_NAME.match(vexp_node_name):
+    if not vexp_node_name.isidentifier():
+        raise RuleSetupNameError(owner=None, msg=f"Name '{vexp_node_name}' is not valid identifier. HINT: Identifiers should begin with: {_RE_ID_NAME_1} and continue with one or more: {_RE_ID_NAME_2}.")
+
+    if keyword.iskeyword(vexp_node_name):
+        raise RuleSetupNameError(owner=None, msg=f"Name '{vexp_node_name}' is python keyword. Use another name.")
+
+    # return vexp_node_name
 

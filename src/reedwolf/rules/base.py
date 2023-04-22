@@ -385,6 +385,10 @@ class ComponentBase(SetOwnerMixin, ABC):
         Includes components, cleaners and all other complex objects
         to get only children components, use get_children()
 
+        TODO: profiling showed that this is the slowest function (even tottime
+              - without function calls), although in general the lib is not so slow.
+              RL 230422 
+
         TODO: document and make it better, pretty hackish.
               the logic behind is to collect all attributes (recurseively) that 
               are:
@@ -408,6 +412,9 @@ class ComponentBase(SetOwnerMixin, ABC):
         for subcomponent_name, subcomponent in vars(self).items():
 
             if not isinstance(subcomponent, ValueExpression):
+                if subcomponent_name.startswith("_"):
+                    continue
+
                 if subcomponent in (None, (), {}, []):
                     continue
 
@@ -427,6 +434,7 @@ class ComponentBase(SetOwnerMixin, ABC):
 
             if th_field and th_field.metadata.get("skip_traverse", False):
                 continue
+
 
             if is_function(subcomponent):
                 # TODO: check that this is not class too
