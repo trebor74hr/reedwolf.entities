@@ -14,9 +14,12 @@ from .utils import (
 class RuleError(Exception, ABC):
     # TODO: validate that every call is marked for translations, check in constructor or using mypy
     def __init__(self, msg:str, owner:Optional['ComponentBase'] = None, item: Optional['Item'] = None):  # noqa: F821
-        self.msg, self.owner, self.item = msg, owner, item
-        # maybe type(item)?
-        self.full_msg = self._get_full_msg() + (f" (item={repr(item)[:50]})" if self.item else "")
+        self.owner, self.item = owner, item
+        self.set_msg(msg)
+
+    def set_msg(self, msg:str):
+        self.msg = msg
+        self.full_msg = self._get_full_msg() + (f" (item={repr(self.item)[:50]})" if self.item else "")
 
     def _get_full_msg(self) -> str:
         return f"{self.owner.__class__.__name__}('{self.owner.name}') -> {self.msg}" if self.owner and getattr(self.owner, "name", None) \

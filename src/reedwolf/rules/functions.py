@@ -193,7 +193,9 @@ class IFunction(IFunctionVexpNode):
                     value_arg_type_info=self.value_arg_type_info,
                     value_arg_name=self.value_arg_name)
         except RuleSetupTypeError as ex:
-            raise ex.__class__(f"{self.as_str()}: {ex.msg}")
+            ex.set_msg(f"{self.as_str()}: {ex.msg}")
+            # raise ex.__class__(f"{self.as_str()}: {ex.msg}")
+            raise
 
         # first validate value type matches
         # if self.prepared_args.value_arg_implicit==True:
@@ -433,8 +435,8 @@ def Function(py_function : Callable[..., Any],
                 name=name,
                 value_arg_name=value_arg_name,
                 fixed_args=FunctionArgumentsType(
-                    args if args!=UNDEFINED else (), 
-                    kwargs if kwargs!=UNDEFINED else {}
+                    args if args is not UNDEFINED else (), 
+                    kwargs if kwargs is not UNDEFINED else {}
                     ),
                 arg_validators=arg_validators,
                 )

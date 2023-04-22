@@ -141,13 +141,13 @@ class SetOwnerMixin:
     # ------------------------------------------------------------
 
     def set_owner(self, owner: ComponentBase):
-        if not self.owner == UNDEFINED:
+        if not self.owner is UNDEFINED:
             raise RuleInternalError(owner=self, msg=f"Owner already defined, got: {owner}")
 
         assert owner is None or isinstance(owner, ComponentBase), owner
         self.owner = owner
 
-        if not self.owner_name == UNDEFINED:
+        if not self.owner_name is UNDEFINED:
             raise RuleInternalError(owner=self, msg=f"Owner name already defined, got: {owner}")
 
         self.owner_name = owner.name if owner else ""
@@ -521,7 +521,7 @@ class ComponentBase(SetOwnerMixin, ABC):
 
 
     def _setup(self, registries: 'Registries'):  # noqa: F821
-        if self.owner == UNDEFINED:
+        if self.owner is UNDEFINED:
             raise RuleInternalError(owner=self, msg="Owner not set")
 
         if self.is_finished():
@@ -571,7 +571,7 @@ class ComponentBase(SetOwnerMixin, ABC):
         # TODO: remove dep somehow - interface?
         from .containers import ContainerBase
 
-        if self.owner == UNDEFINED:
+        if self.owner is UNDEFINED:
             raise RuleSetupError(owner=self, msg="Owner is not set. Call .setup() method first.")
 
         if isinstance(self, ContainerBase):
@@ -1002,7 +1002,6 @@ class IApplySession:
             raise RuleInternalError(owner=self, msg=f"new value should not be UNDEFINED, fix the caller (comp={component})")
 
         key_str = component.get_key_string(apply_session=self)
-        # if "can_be_accessed" in key_str: import pdb;pdb.set_trace() 
         if key_str not in self.update_history:
             if not is_from_init_bind:
                 raise RuleInternalError(owner=self, msg="key_str not found in update_history and this is not initialization")

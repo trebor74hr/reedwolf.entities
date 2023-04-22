@@ -209,7 +209,7 @@ class AttrVexpNode(IValueExpressionNode):
         names = self.name.split(".")
         attr_name = names[-1]
 
-        if vexp_result == UNDEFINED:
+        if vexp_result is UNDEFINED:
             # initial / first value - get from registry / namespace, e.g. M.company
             vexp_result = ExecResult()
             frame = apply_session.current_frame

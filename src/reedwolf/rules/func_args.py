@@ -307,7 +307,6 @@ class FunctionArguments:
         # ==== 2/3: VALUE ARGUMENTS - are filled at the end
 
         value_args = []
-        # if value_arg_name=="value_list": import pdb;pdb.set_trace() 
         if caller is None:
             # direct from namespace, e.g. Fn.get_my_country()
             value_arg_implicit = None
@@ -383,7 +382,7 @@ class FunctionArguments:
 
         # ---- Any required unfilled?
         unfilled = [arg_name for arg_name, type_info in expected_args.items() 
-                    if not type_info and self.func_arg_dict[arg_name].default==UNDEFINED]
+                    if not type_info and self.func_arg_dict[arg_name].default is UNDEFINED]
         if unfilled:
             raise RuleSetupTypeError(owner=self, msg=f"Function missing {len(unfilled)} required argument{plural_suffix(len(unfilled))}: {format_arg_name_list(unfilled)}")
 

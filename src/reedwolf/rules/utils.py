@@ -8,11 +8,20 @@ from typing import (
 from functools import reduce
 from threading import Lock
 
+
+class Singleton(type):
+    " https://stackoverflow.com/questions/6760685/creating-a-singleton-in-python "
+    _instances = {}
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
+        return cls._instances[cls]
+
 # ------------------------------------------------------------
 # UNDEFINED
 # ------------------------------------------------------------
 
-class UndefinedType:
+class UndefinedType(metaclass=Singleton):
 
     instance:'UndefinedType'= None
 
@@ -28,14 +37,15 @@ class UndefinedType:
         return False
 
     def __eq__(self, other):
-        # if other is None: return False
-        # same only to same or other UNDEFINED
-        if isinstance(other, self.__class__):
-            return True
-        return False
+        " same only to same or other UNDEFINED - since it is Singleton "
+        # this function is called many times but is fast enough
+        # did not disallowed this since it is handy to have "not in (None, UNDEFINED)
+        #   raise ValueError(f"Not allowed to use operators '==' and '!=' with {self.__class__.__name__}. Use 'is' and 'is not' instead.")
+        return other.__class__ == self.__class__
 
     def __ne__(self, other):
-        return not self.__eq__(other)
+        # ALT: return not self.__eq__(other)
+        return other.__class__ != self.__class__
 
     __repr__ = __str__
 

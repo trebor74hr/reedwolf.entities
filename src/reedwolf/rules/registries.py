@@ -347,10 +347,10 @@ class RegistryBase(IRegistry):
                             # functions_factory_registry=self.functions_factory_registry
                             )
             except RuleSetupNameNotFoundError as ex:
-                ex.msg = f"{owner} / {self.NAMESPACE}-NS: {ex.msg}"
+                ex.set_msg(f"{owner} / {self.NAMESPACE}-NS: {ex.msg}")
                 raise 
             except RuleError as ex:
-                ex.msg = f"'{owner} / {self.NAMESPACE}-NS: {parent_vexp_node.full_name} -> '.{vexp_node_name}' metadata / type-hints read problem: {ex}"
+                ex.set_msg(f"'{owner} / {self.NAMESPACE}-NS: {parent_vexp_node.full_name} -> '.{vexp_node_name}' metadata / type-hints read problem: {ex}")
                 raise 
 
             # if func_node:
@@ -526,6 +526,7 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
                 raise RuleApplyNameError(
                         owner=self.component,
                         msg=f"Attribute '{attr_name}' is '{type(component)}' type which has no binding, therefore can not extract value. Use standard *Field components instead.")
+            # TODO: needs some class wrapper and caching ...
             vexp_result = component.bind._evaluator.execute_vexp(apply_session)
             out = vexp_result.value
         else:
