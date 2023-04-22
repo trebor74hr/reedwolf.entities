@@ -214,7 +214,7 @@ class FieldBase(Component, IFieldBase, ABC):
         if self.autocomputed and not evaluations:
             raise RuleSetupError(owner=self, msg=f"When 'autocomputed' is set to '{self.autocomputed.name}', you need to have at least one Evaluation cleaner defined or set 'autocomputed' to False/AutocomputedEnum.NO")
         elif not self.autocomputed and evaluations:
-            raise RuleSetupError(owner=self, msg=f"'When you have at least one Evaluation cleaner, set autcomputed to AutocomputedEnum.ALLWAYS/SOMETIMES (got '{self.autocomputed.name}').")
+            raise RuleSetupError(owner=self, msg=f"'When you have at least one Evaluation cleaner, set 'autocomputed = AutocomputedEnum.ALLWAYS/SOMETIMES' (got '{self.autocomputed.name}').")
 
         if self.REQUIRED_VALIDATIONS:
             validations_kls_required = set(self.REQUIRED_VALIDATIONS)

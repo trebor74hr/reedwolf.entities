@@ -1082,6 +1082,7 @@ class IApplySession:
         self.errors[failure.component_key_string].append(failure)
         # TODO: mark invalid all children and this component
 
+
 # ------------------------------------------------------------
 
 def extract_type_info(

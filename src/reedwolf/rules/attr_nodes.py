@@ -10,6 +10,7 @@ from enum import Enum
 
 from .utils import (
         UNDEFINED,
+        to_repr,
         )
 from .exceptions import (
         RuleSetupValueError,
@@ -240,7 +241,7 @@ class AttrVexpNode(IValueExpressionNode):
                 if not hasattr(value_previous, attr_name):
                     # TODO: list which fields are available
                     # if all types match - could be internal problem?
-                    raise RuleApplyNameError(owner=self, msg=f"Attribute '{attr_name}' not found in '{value_previous}' : '{type(value_previous)}'")
+                    raise RuleApplyNameError(owner=self, msg=f"Attribute '{attr_name}' not found in '{to_repr(value_previous)}' : '{type(value_previous)}'")
                 value_new = getattr(value_previous, attr_name)
         else:
             value_new = value_previous

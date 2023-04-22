@@ -171,3 +171,14 @@ class ThreadSafeCounter:
     # def value(self):
     #     with self._lock:
     #         return self._counter
+
+REPR_MAX_LEN = 100
+
+def to_repr(instance: Any, max_len: int = REPR_MAX_LEN):
+    out = repr(instance)
+    if len(out) > max_len:
+        out = out[:max_len-5] + ".." + out[-3:]
+    return out
+
+
+
