@@ -511,38 +511,8 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
     component: ComponentBase
     instance: ModelType
 
-    # cache
-    children_dict: Optional[Dict[ComponentNameType, ComponentBase]]= \
-        field(init=False, default=None)
-
-    def get_upward_components_dict(self, component: ComponentBase) \
-            -> Dict[ComponentNameType, ComponentBase]:
-        # TODO: do caching of tree in a session
-        if self.children_dict is None:
-            components_hierarchy = []
-            curr_comp = component
-            while curr_comp is not None:
-                if curr_comp in components_hierarchy:
-                    raise RuleInternalError(
-                            owner=component, 
-                            msg=f"Issue with hierarchy tree - duplicate node: {curr_comp.name}")
-                components_hierarchy.append(curr_comp)
-                curr_comp = curr_comp.owner
-
-            children_dict = {}
-            # Reverse to have local scopes first
-            # (although no name clash could happen)
-            for curr_comp in reversed(components_hierarchy):
-                children_dict.update(
-                    curr_comp.get_children_dict()
-                    )
-            self.children_dict = children_dict
-
-        return self.children_dict
-
-
     def get_attribute(self, apply_session:IApplySession, attr_name: str, is_last:bool) -> ComponentAttributeAccessor:
-        children_dict = self.get_upward_components_dict(self.component)
+        children_dict = apply_session.get_upward_components_dict(self.component)
         if attr_name not in children_dict:
             avail_names = get_available_names_example(attr_name, children_dict.keys())
             raise RuleApplyNameError(
@@ -561,16 +531,6 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
         else:
             out = ComponentAttributeAccessor(component)
         return out
-
-
-    # CONTAINER_REGISTRY: ClassVar[Dict[int, ContainerBase]] = {}
-    # @classmethod
-    # def get_or_create(cls, container):
-    #     key = id(container)
-    #     if key not in cls.CONTAINER_REGISTRY:
-    #         cls.CONTAINER_REGISTRY[key] = container
-    #     return cls.CONTAINER_REGISTRY[key]
-
 
 # ------------------------------------------------------------
 

@@ -959,6 +959,14 @@ class IApplySession:
     # computed from component_name_only
     component_only: Optional[ComponentBase] = field(repr=False, init=False, default=None)
 
+    # used for cache only
+    _component_children_upward_dict: \
+            Optional[
+                Dict[
+                    ComponentNameType,
+                    Dict[ComponentNameType, ComponentBase]
+                ]
+            ]= field(init=False, default_factory=dict)
 
     @abstractmethod
     def apply(self) -> IApplySession:
@@ -1081,6 +1089,32 @@ class IApplySession:
             self.errors[failure.component_key_string] = []
         self.errors[failure.component_key_string].append(failure)
         # TODO: mark invalid all children and this component
+
+
+    def get_upward_components_dict(self, component: ComponentBase) \
+            -> Dict[ComponentNameType, ComponentBase]:
+        # CACHE
+        if component.name not in self._component_children_upward_dict:
+            components_hierarchy = []
+            curr_comp = component
+            while curr_comp is not None:
+                if curr_comp in components_hierarchy:
+                    raise RuleInternalError(
+                            owner=component, 
+                            msg=f"Issue with hierarchy tree - duplicate node: {curr_comp.name}")
+                components_hierarchy.append(curr_comp)
+                curr_comp = curr_comp.owner
+
+            children_dict = {}
+            # Reverse to have local scopes first
+            # (although no name clash could happen)
+            for curr_comp in reversed(components_hierarchy):
+                children_dict.update(
+                    curr_comp.get_children_dict()
+                    )
+            self._component_children_upward_dict[component.name] = children_dict
+
+        return self._component_children_upward_dict[component.name]
 
 
 # ------------------------------------------------------------
