@@ -61,6 +61,12 @@ DataNS = Namespace("D")
 # Field/F - all componenents in current container - including chain
 #           from current owner to top owner, including all their children (e.g.
 #           FieldGroups and their Fields, Validations etc.
+#
+#           Difference to ModelsNS:
+#             - rules struct could be diifferent from storage models (ModelsNS)
+#             - Fields are more suitable for embedding - e.g. when other model could be
+#               injected into component or component to be reused in other rules-struct
+
 # TODO: rename to ComponentsNS / C.
 FieldsNS = Namespace("Fields")
 
