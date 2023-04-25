@@ -593,10 +593,17 @@ class ApplyResult(IApplySession):
             if not_available_vexp_result: 
                 return False
 
-        # Fill initial value from instance and try to update if instance_new is
-        # provided and is different
-        init_bind_vexp_result = self._apply_bind_vexp(component) \
-                                    if getattr(component, "bind", None) else None
+        if getattr(component, "bind", None):
+            # Fill initial value from instance 
+            init_bind_vexp_result = self._init_by_bind_vexp(component)
+
+            # try to update if instance_new is provided and yields different value
+            bind_vexp_result, _ = self._try_update_by_instance(
+                    component=component, 
+                    init_bind_vexp_result=init_bind_vexp_result)
+        else:
+            bind_vexp_result = None
+
 
         # TODO: provide last value to all evaluations and validations 
         #       but be careful with vexp_result.value - it coluld be unadapted
@@ -609,7 +616,7 @@ class ApplyResult(IApplySession):
                     if self.execute_validation(component=component, validation=cleaner):
                         all_ok = False
                 elif isinstance(cleaner, EvaluationBase):
-                    if not init_bind_vexp_result:
+                    if not bind_vexp_result:
                         # TODO: this belongs to Setup phase
                         raise RuleApplyError(owner=self, msg=f"Evaluator can be defined only for components with 'bind' defined. Remove 'Evaluation' or define 'bind'.")
                     self.execute_evaluation(component=component, evaluation=cleaner)
@@ -626,7 +633,7 @@ class ApplyResult(IApplySession):
 
     # ------------------------------------------------------------
 
-    def _apply_bind_vexp(self, component: ComponentBase) -> ExecResult:
+    def _init_by_bind_vexp(self, component: ComponentBase) -> ExecResult:
         " get initial vexp value, if instance_new try to updated/overwrite with it"
 
         if not isinstance(component, FieldBase):
@@ -641,6 +648,19 @@ class ApplyResult(IApplySession):
                 new_value = init_value,
                 is_from_init_bind = True)
 
+        return bind_vexp_result
+
+
+    # ------------------------------------------------------------
+
+    def _try_update_by_instance(self, component: ComponentBase, init_bind_vexp_result: ExecResult) \
+            -> Tuple[ExecResult, bool]:
+        """
+        try to update if instance_new is provided and yields different value
+        bool -> returns if updated or not, but not if value is adapted
+        """
+        init_value = init_bind_vexp_result.value
+        bind_vexp_result = init_bind_vexp_result
 
         # try adapt of initial value changed value?
         last_value = component.try_adapt_value(init_value)
@@ -683,7 +703,8 @@ class ApplyResult(IApplySession):
                     bind_vexp_result = instance_new_bind_vexp_result
                     updated = True
 
-        elif init_value != last_value:
+        if not updated and init_value != last_value:
+            # adapted value => updated = False
             # diff initial value from adapted
             self.register_instance_attr_change(
                     component=component, 
@@ -692,7 +713,7 @@ class ApplyResult(IApplySession):
                     new_value=last_value
                     )
 
-        return bind_vexp_result
+        return bind_vexp_result, updated
 
     # ------------------------------------------------------------
 
