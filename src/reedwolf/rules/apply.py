@@ -384,6 +384,17 @@ class ApplyResult(IApplySession):
                 process_further = self._update_and_clean(component=component)
                 # also if validation fails ...
 
+                if process_further and getattr(component, "enables", None):
+                    assert not getattr(component, "contains", None), component
+                    bind_vexp_result = component.get_vexp_result_from_instance(apply_session=self)
+                    value = bind_vexp_result.value
+                    if not isinstance(value, (bool, NoneType)):
+                        raise RuleApplyValueError(owner=component, 
+                                msg=f"Component.enables can be applied only for Boolean or None values, got: {value} : {type(value)}")
+                    if not value: 
+                        process_further = False
+
+
             # ------------------------------------------------------------
             # NOTE: used only for test if all Vexp values could evaluate ...
             #       self.__check_component_all_vexps(component)
@@ -549,7 +560,7 @@ class ApplyResult(IApplySession):
                 current_instance_new = None
 
         elif self.instance_new_struct_type == StructEnum.RULES_LIKE:
-            exec_result = self.get_attr_value(
+            exec_result = self.get_attr_value_by_comp_name(
                                 component=component, 
                                 instance=self.current_frame.instance_new)
             current_instance_new = exec_result.value
@@ -650,7 +661,8 @@ class ApplyResult(IApplySession):
                     new_value = instance_new_bind_vexp_result.value
 
             elif self.instance_new_struct_type == StructEnum.RULES_LIKE:
-                instance_new_bind_vexp_result = self.get_attr_value(
+                instance_new_bind_vexp_result = \
+                        self.get_attr_value_by_comp_name(
                                 component=component, 
                                 instance=self.current_frame.instance_new)
                 new_value = instance_new_bind_vexp_result.value
@@ -684,7 +696,7 @@ class ApplyResult(IApplySession):
 
     # ------------------------------------------------------------
 
-    def get_attr_value(self, component:ComponentBase, instance: ModelType) -> ExecResult:
+    def get_attr_value_by_comp_name(self, component:ComponentBase, instance: ModelType) -> ExecResult:
         attr_name = component.name
         if not hasattr(instance, attr_name):
             # TODO: depending of self.rules strategy or apply(strategy) 

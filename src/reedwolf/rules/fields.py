@@ -115,14 +115,32 @@ class FieldBase(Component, IFieldBase, ABC):
     #   default:        Optional[Union[StandardType, ValueExpression]] = None
 
     description:    Optional[TransMessageType] = field(repr=False, default=None)
+
+
+    # NOTE: available that yields True(ish?) value 
+    #   => this is NOT processed: 
+    #       - field update by new instance, 
+    #       - cleaners for the field
+    #       - children tree (contains/enables)
+    #   Only initial value is unchanged. See also BooleanField.enables.
     available:      Union[bool, ValueExpression] = field(repr=False, default=True)
     # NOTE: replaced with Readonly(False|ValueExpression...) 
     #       editable:       Union[bool, ValueExpression] = field(repr=False, default=True)
     cleaners:       Optional[List[Union[ValidationBase, EvaluationBase]]] = field(repr=False, default=None)
     autocomputed:   Union[bool, AutocomputedEnum] = field(repr=False, default=False)
 
-    # TODO: ovo pripada samo Bool, no može se složiti da je nova FieldGroup-like komponenta 
-    #       tako da osim bool radi i za Choice/Enum - structural pattern matching like
+
+    # BooleanField.enables that yields False/None (value must be bool/None)
+    #   => this is NOT processed:
+    #       - children tree (enables) 
+    #   This is equivalent to 
+    #       FieldGroup(
+    #           available=<this-field.value>, 
+    #           contains=<this-field.enables-list>)
+    #   See also "available".
+
+    # TODO: možda složiti da radi i za Choice/Enum -> structural pattern
+    #       matching like, samo nisam još našao zgodnu sintaksu.
     enables:        Optional[List[Component]] = field(repr=False, default=None)
 
     # NOTE: this has no relation to type hinting - this is used for html input placeholder attribute
