@@ -693,14 +693,15 @@ class IData(ABC):
 # ------------------------------------------------------------
 
 class IFieldBase(ABC):
+    ...
 
-    @abstractmethod
-    def get_attr_node(self, registries:"Registries") -> "AttrVexpNode":  # noqa: F821
-        ...
+    # @abstractmethod
+    # def get_attr_node(self, registries:"Registries") -> "AttrVexpNode":  # noqa: F821
+    #     ...
 
-    @abstractmethod
-    def get_bound_attr_node(self, registries:"Registries") -> "AttrVexpNode":  # noqa: F821
-        ...
+    # @abstractmethod
+    # def get_bound_attr_node(self, registries:"Registries") -> "AttrVexpNode":  # noqa: F821
+    #     ...
 
 # ------------------------------------------------------------
 # ContainerBase
@@ -760,8 +761,9 @@ class BoundModelBase(ComponentBase, ABC):
                 dep_bound_model.fill_models(models=models)
         return models
 
-    def get_attr_node(self, registries: 'Registries') -> Union["AttrVexpNode", UndefinedType]:  # noqa: F821
-        return registries.models_registry.get_attr_node_by_bound_model(bound_model=self)
+    # Not used:
+    # def get_attr_node(self, registries: 'Registries') -> Union["AttrVexpNode", UndefinedType]:  # noqa: F821
+    #     return registries.models_registry.get_attr_node_by_bound_model(bound_model=self)
 
 # ------------------------------------------------------------
 

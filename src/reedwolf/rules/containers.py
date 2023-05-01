@@ -65,7 +65,7 @@ from .attr_nodes import AttrVexpNode
 from .functions import CustomFunctionFactory
 from .registries import Registries
 from .valid_children import (
-        CardinalityValidation
+        ICardinalityValidation
         )
 from .components import (
         Component,
@@ -703,7 +703,7 @@ class Extension(ContainerBase):
     bound_model     : Union[BoundModel, BoundModelWithHandlers] = field(repr=False)
     # metadata={"bind_to_owner_registries" : True})
 
-    cardinality     : CardinalityValidation
+    cardinality     : ICardinalityValidation
     contains        : List[Component] = field(repr=False)
 
     label           : Optional[TransMessageType] = field(repr=False, default=None)

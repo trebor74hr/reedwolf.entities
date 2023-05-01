@@ -12,7 +12,7 @@ TODO: Check if they could be implemented in cleaners instead of cardinality ...
 TODO: implement as normal validations, now there are leftovers ...
 
 """
-from abc import ABC
+from abc import ABC, abstractmethod
 from typing import List, Optional, Union
 from dataclasses import dataclass, field
 
@@ -25,6 +25,9 @@ from .utils import (
         to_int,
         UNDEFINED,
         UndefinedType,
+        )
+from .meta import (
+        TransMessageType,
         )
 from .components import (
         ValidationBase,
@@ -41,16 +44,17 @@ from .components import (
 #         return bool(self.name)
 
 
-class ChildrenValidator(ValidationBase, ABC):
-    pass
+class IChildrenValidator(ValidationBase, ABC):
+    label           : Optional[TransMessageType] = field(repr=False, default=None)
 
 
-class CardinalityValidation(ChildrenValidator): # count
+class ICardinalityValidation(IChildrenValidator, ABC): # count
 
-    def __post_init__(self):
-        if self.__class__==CardinalityValidation:
-            raise RuleSetupError(owner=self, msg="Use subclasses of CardinalityValidation")
+    # def __post_init__(self):
+    #     if self.__class__==ICardinalityValidation:
+    #         raise RuleSetupError(owner=self, msg="Use subclasses of ICardinalityValidation")
 
+    @abstractmethod
     def validate_setup(self):
         """
         if not ok,
@@ -82,7 +86,7 @@ class CardinalityValidation(ChildrenValidator): # count
 class Cardinality: # namespace holder
 
     @dataclass
-    class Single(CardinalityValidation):
+    class Single(ICardinalityValidation):
         name            : str
         allow_none      : bool = True
 
@@ -106,7 +110,7 @@ class Cardinality: # namespace holder
             return True
 
     @dataclass
-    class Range(CardinalityValidation):
+    class Range(ICardinalityValidation):
         """
             at least one (min or max) arg is required
             min=None -> any number (<= max)
@@ -151,7 +155,7 @@ class Cardinality: # namespace holder
             return True
 
     @dataclass
-    class Multi(CardinalityValidation):
+    class Multi(ICardinalityValidation):
         " [0,1]:N "
         name            : str
         allow_none      : bool = True
@@ -176,11 +180,12 @@ class Cardinality: # namespace holder
 # ------------------------------------------------------------
 # other validators
 # ------------------------------------------------------------
-class UniqueValidator(ChildrenValidator):
+class IUniqueValidator(IChildrenValidator, ABC):
+    ...
 
-    def __post_init__(self):
-        if self.__class__==UniqueValidator:
-            raise RuleSetupError(owner=self, msg=" Use subclasses of UniqueValidator")
+    # def __post_init__(self):
+    #     if self.__class__==IUniqueValidator:
+    #         raise RuleSetupError(owner=self, msg=" Use subclasses of IUniqueValidator")
 
     # def set_owner(self, owner):
     #     super().set_owner(owner)
@@ -190,7 +195,7 @@ class UniqueValidator(ChildrenValidator):
 class Unique: # namespace holder
 
     @dataclass
-    class Global(UniqueValidator):
+    class Global(IUniqueValidator):
         " globally - e.g. within table "
         name            : str
         fields          : List[str] # TODO: better field specification or vexpr?
@@ -200,7 +205,7 @@ class Unique: # namespace holder
         owner_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
     @dataclass
-    class Children(UniqueValidator):
+    class Children(IUniqueValidator):
         " within extension records "
         name            : str
         fields          : List[str] # TODO: better field specification or vexpr?
@@ -210,7 +215,7 @@ class Unique: # namespace holder
         owner_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
 
-# ALT: names for ChildrenValidator
+# ALT: names for IChildrenValidator
 #   class IterationValidator:
 #   # db terminology: scalar custom functions, table value custom functions, aggregate custom functions
 #   class AggregateValidator:

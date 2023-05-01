@@ -410,6 +410,7 @@ class ModelsRegistry(RegistryBase):
                                # default:[None, UndefinedType]=UNDEFINED,
                                # strict:bool=False
                                ) -> Union[AttrVexpNode, None, UndefinedType]:
+        # models specific function
         # allways in models
         attr_node_name = bound_model.name
         assert attr_node_name

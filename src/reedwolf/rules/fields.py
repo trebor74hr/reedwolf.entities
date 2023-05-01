@@ -249,14 +249,14 @@ class FieldBase(Component, IFieldBase, ABC):
     #     self.is_key = True
 
 
-    def get_attr_node(self, registries:Registries) -> AttrVexpNode:
-        assert self.attr_node
-        return self.attr_node
+    # def get_attr_node(self, registries:Registries) -> AttrVexpNode:
+    #     assert self.attr_node
+    #     return self.attr_node
 
 
-    def get_bound_attr_node(self, registries:Registries) -> AttrVexpNode:
-        assert self.bind._all_ok, self.bind._status
-        assert self.bound_attr_node
+    # def get_bound_attr_node(self, registries:Registries) -> AttrVexpNode:
+    #     assert self.bind._all_ok, self.bind._status
+    #     assert self.bound_attr_node
 
 
     def _check_py_type(self):
