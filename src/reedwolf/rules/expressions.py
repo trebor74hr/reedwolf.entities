@@ -174,7 +174,7 @@ def get_type_info_from_vexp_or_node(
 
 @dataclass
 class IValueExpressionNode(ABC):
-    """ wrapper around one element in ValueExpression e.g. M.company.name.Count()
+    """ wrapper around one element in ValueExpression e.g. M.name.Count()
     .company, .name, .Count() are nodes
     """
     def clone(self):
@@ -525,7 +525,6 @@ class ValueExpression(DynamicAttrsBase):
         vexp_node_name = None
         vexp_evaluator = ValueExpressionEvaluator()
 
-        # if str(self) == "G.(G.varname1 + G.varname2)": 
         for bnr, bit in enumerate(self.Path, 1):
             # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(bit)
 
@@ -555,7 +554,7 @@ class ValueExpression(DynamicAttrsBase):
                 elif bit._func_args:
                     if bnr==1:
                         if self._namespace != FunctionsNS:
-                            raise RuleSetupNameError(f"{self}: Only FunctionsNS (G.) namespace accepts direct function calls. Got '{bit}' on '{bit._namespace}) namespace.")
+                            raise RuleSetupNameError(f"{self}: Only FunctionsNS (Fn.) namespace accepts direct function calls. Got '{bit}' on '{bit._namespace}) namespace.")
 
                     func_args = FunctionArgumentsType(*bit._func_args)
 

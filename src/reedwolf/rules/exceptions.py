@@ -84,6 +84,9 @@ class RuleApplyTypeError(RuleApplyError):
 # ------------------------------------------------------------
 
 class RuleValidationError(RuleError):
+    MAX_ERR_DESC_ONE = 200
+    MAX_ERR_DESC_ALL = 1000
+
     def __init__(self, errors: Dict[str, 'ValidationFailure'], owner: 'ComponentBase'):  # noqa: F821
         " owner is required "
         self.errors = errors
@@ -92,8 +95,8 @@ class RuleValidationError(RuleError):
             err_msg = [vf.error for vf in validation_failure_list]
             msg.append("{} => {}".format(
                     component_key, 
-                    message_truncate("; ".join(err_msg), 100)))
-        msg = f"Validation failed ({len(msg)}): \n  - " + message_truncate("\n  - ".join(msg), 500)
+                    message_truncate("; ".join(err_msg), self.MAX_ERR_DESC_ONE)))
+        msg = f"Validation failed ({len(msg)}): \n  - " + message_truncate("\n  - ".join(msg), self.MAX_ERR_DESC_ALL)
         
         super().__init__(msg=msg, owner=owner)
 

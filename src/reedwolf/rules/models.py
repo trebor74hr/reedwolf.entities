@@ -38,7 +38,7 @@ class BoundModel(BoundModelMixin, BoundModelBase):
     # label           : TransMessageType
 
     model           : Union[ModelType, ValueExpression] = field(repr=False)
-    contains        : Optional[List['BoundModel']] = field(repr=False, default_factory=list)
+    contains        : Optional[List[BoundModelBase]] = field(repr=False, default_factory=list)
 
     # evaluated later
     owner           : Union[BoundModelBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
@@ -156,5 +156,5 @@ class BoundModelWithHandlers(BoundModelMixin, BoundModelBase):
 #     raise RuleSetupValueError(owner=self, msg=f"save_handler={self.save_handler} argument '{self.name}' has type '{save_type_info.py_type_hint}' and expected is same as read handler return type '{self.type_info.py_type_hint}'. Check save or read function declaration.")
 
 # TODO: read() and save() method types matches - problem is
-#       read_handler M.company is vexpr that is not available in this
+#       read_handler M is vexpr that is not available in this
 #       moment - should be checked in setup() method ...

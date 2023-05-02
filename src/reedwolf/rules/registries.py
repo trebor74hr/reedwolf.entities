@@ -292,7 +292,7 @@ class RegistryBase(IRegistry):
             # --------------------------------------------------
             # get() -> TOP LEVEL - only level that is stored
             # --------------------------------------------------
-            # e.g. M.company. Predefined before in Rules.setup() function.
+            # e.g. M.company Predefined before in Rules.setup() function.
             if full_vexp_node_name not in self.store:
                 names_avail = get_available_names_example(full_vexp_node_name, self.store.keys())
                 valid_names = f"Valid attributes: {names_avail}" if self.store.keys() else "Namespace has no attributes at all."
@@ -378,20 +378,26 @@ class RegistryBase(IRegistry):
 class ModelsRegistry(RegistryBase):
     """
     All models have full path from top container (for better readibility)
-    e.g. M.company.address_set.city.street so reading begins from root
+    e.g. M.address_set.city.street so reading begins from root
     instance, instead of apply_session.current_frame.instance.
     See get_root_value() implementation.
     """
     NAMESPACE = ModelsNS
 
-    # Caller should not fetch attribute by name from return value of
-    # get_root_value()
-    ROOT_VALUE_NEEDS_FETCH_BY_NAME: ClassVar[bool] = False
+    # == M.company.name case
+    # # Caller should not fetch attribute by name from return value of
+    # # get_root_value()
+    # ROOT_VALUE_NEEDS_FETCH_BY_NAME: ClassVar[bool] = False
+
+    def __init__(self):
+        super().__init__()
+        self.root_attr_nodes : Optional[Dict[str, AttrVexpNode]] = {}
 
     # NOTE: no register() method due complex logic - see
     #       ContainerBase._register_bound_model()
 
-    def create_attr_node(self, bound_model:BoundModelBase):
+    def _create_root_attr_node(self, bound_model:BoundModelBase) -> AttrVexpNode:
+        " models specific method "
         # standard DTO class attr_node
         # if not bound_model.type_info:
         #     bound_model.set_type_info()
@@ -403,6 +409,30 @@ class ModelsRegistry(RegistryBase):
                         type_info=bound_model.get_type_info())
         return attr_node
 
+
+    # ------------------------------------------------------------
+
+    def register_all_nodes(self, root_attr_node: Optional[AttrVexpNode],  bound_model: BoundModelBase, model: ModelType):
+        " models specific method "
+        if not root_attr_node:
+            root_attr_node = self._create_root_attr_node(bound_model=bound_model)
+
+        name = bound_model.get_full_name()
+        is_root = "." not in name # TODO: hack
+        if name in self.root_attr_nodes:
+            raise RuleInternalError(owner=self, msg=f"Duplicate {name} -> {self.root_attr_nodes[name]}, already set, failed to set: {root_attr_node}")
+
+        self.root_attr_nodes[name] = root_attr_node
+
+        # company.business_type.name --> company__business_types__name
+        name_for_reg = name.replace(".", "__")
+
+        for attr_name in get_model_fields(model):
+            attr_node = self._create_attr_node_for_model_attr(model, attr_name)
+            alt_attr_node_name = None if is_root else f"{name_for_reg}__{attr_name}"
+            self.register_attr_node(attr_node, alt_attr_node_name=alt_attr_node_name)
+
+
     # ------------------------------------------------------------
 
     def get_attr_node_by_bound_model(self,
@@ -410,19 +440,31 @@ class ModelsRegistry(RegistryBase):
                                # default:[None, UndefinedType]=UNDEFINED,
                                # strict:bool=False
                                ) -> Union[AttrVexpNode, None, UndefinedType]:
-        # models specific function
+        " models specific method "
+        # attr_node_name = bound_model.name
+        # == M.name mode
+        name = bound_model.get_full_name() 
+
+        # company.business_type.name --> company__business_types__name
+        name_for_reg = name.replace(".", "__")
+
+        if name_for_reg not in self.root_attr_nodes:
+            raise RuleInternalError(owner=self, msg=f"Name not found {name_for_reg} in {self.root_attr_nodes.keys()}")
+        return self.root_attr_nodes[name_for_reg] 
+
+        # == M.company mode
         # allways in models
-        attr_node_name = bound_model.name
-        assert attr_node_name
-        # if strict and attr_node_name not in self.store:
-        #     raise RuleSetupNameError(owner=self, msg=f"AttrVexpNode not found {ModelsNS}.{attr_node_name}")
-        # return self.store.get(attr_node_name, default)
-        return self.store[attr_node_name]
+        # attr_node_name = bound_model.name
+        # assert attr_node_name
+        # # return self.store.get(attr_node_name, default)
+        # # if not attr_node_name in self.store: import pdb;pdb.set_trace() 
+        # return self.store[attr_node_name]
 
     # ------------------------------------------------------------
 
     def get_root_value(self, apply_session: IApplySession) -> Any:
         # ROOT_VALUE_NEEDS_FETCH_BY_NAME = False
+        component = apply_session.current_frame.component
         instance = apply_session.current_frame.instance
 
         # bound_model = apply_session.current_frame.container.bound_model
@@ -434,21 +476,27 @@ class ModelsRegistry(RegistryBase):
                         else bound_model_root.model
         if bound_model_root.type_info.is_list and isinstance(instance, (list, tuple)):
             # raise RuleApplyTypeError(owner=self, msg=f"Wrong type, expected list/tuple, got '{instance}'")
-            assert instance
             # check only first
-            instance_to_test = instance[0]
+            instance_to_test = instance[0] if instance else None
         else:
             instance_to_test = instance
 
-        if not isinstance(instance_to_test, expected_type):
+        # == M.name case
+        if instance_to_test and not isinstance(instance_to_test, expected_type):
             raise RuleApplyTypeError(owner=self, msg=f"Wrong type, expected '{expected_type}', got '{instance}'")
 
-        # TODO: activate this when it has sense (not partial mode with Extension/FieldGroup, not Extension)
-        # this could differ - e.g. name="address", bind=M.company.address_set
-        # if name!=bound_model_root.name:
-        #     raise RuleApplyNameError(owner=self, msg=f"Wrong name, expected '{bound_model_root.name}', got '{name}'")
-
         return instance
+
+        # == M.name case
+        # if not isinstance(instance_to_test, expected_type):
+        #     raise RuleApplyTypeError(owner=self, msg=f"Wrong type, expected '{expected_type}', got '{instance}'")
+
+        # # TODO: activate this when it has sense (not partial mode with Extension/FieldGroup, not Extension)
+        # # this could differ - e.g. name="address", bind=M.address_set
+        # # if name!=bound_model_root.name:
+        # #     raise RuleApplyNameError(owner=self, msg=f"Wrong name, expected '{bound_model_root.name}', got '{name}'")
+
+        # return instance
 
 
 # ------------------------------------------------------------
@@ -693,8 +741,8 @@ class ContextRegistry(RegistryBase):
     def get_root_value(self, apply_session: IApplySession) -> Any:
         context = apply_session.context
         if context in (UNDEFINED, None):
-            # avail_names = get_available_names_example(attr_name, ...())
-            raise RuleApplyNameError(owner=self, msg=f"Attribute '{attr_name}' not found in context '{context}' ({type(context)}).")
+            component = apply_session.current_frame.component
+            raise RuleApplyNameError(owner=self, msg=f"ContextNS attribute '{component.name}' can not be fetched since context is not set ({type(context)}).")
         return context
 
 

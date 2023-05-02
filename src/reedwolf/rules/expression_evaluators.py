@@ -95,7 +95,7 @@ class ValueExpressionEvaluator:
 
         vexp_result = UNDEFINED
         if apply_session.current_frame.on_component_only:
-            # M.company.address_set -> process only address_set 
+            # M.address_set -> process only address_set 
             node = self.attr_node_list[-1]
             vexp_result = node.execute_node(apply_session, vexp_result, is_last=True)
         else:

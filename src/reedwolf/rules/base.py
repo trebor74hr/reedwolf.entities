@@ -315,6 +315,9 @@ class ComponentBase(SetOwnerMixin, ABC):
         # includes components, cleaners and all other complex objects
         for subcomponent_wrapper in self._get_subcomponents_list():
             component = subcomponent_wrapper.subcomponent
+            if isinstance(component, Namespace):
+                raise RuleSetupValueError(owner=self, msg=f"Subcomponents should not be Namespace instances, got: {subcomponent_wrapper.name} = {subcomponent_wrapper.subcomponent}")
+
             if isinstance(component, ValueExpression):
                 pass
             elif hasattr(component, "fill_components"):
@@ -746,7 +749,20 @@ class IContainerBase(ABC):
 class BoundModelBase(ComponentBase, ABC):
 
 
-    def fill_models(self, models=None):
+    def get_full_name(self, owner: Optional[BoundModelBaes] = None, depth: int = 0, init: bool = False):
+        if not hasattr(self, "_name"):
+            assert init
+            assert depth < 20
+            names = []
+            if owner:
+                # recusion
+                names.append(owner.get_full_name(owner=self, depth=depth+1, init=init))
+            names.append(self.name)
+            self._name = ".".join(names)
+        return self._name
+
+
+    def fill_models(self, models: Dict[str, BoundModelBase] = None, owner : BoundModelBase = None):
         """
         Recursion
         """
@@ -754,11 +770,13 @@ class BoundModelBase(ComponentBase, ABC):
             models = {}
         if self.name in models:
             raise RuleSetupNameError(owner=self, msg=f"Currently model names in tree dependency should be unique. Model name {self.name} is not, found: {models[self.name]}")
-        models[self.name] = self
+
+        name = self.get_full_name(owner=owner, init=True)
+        models[name] = self
         if hasattr(self, "contains"):
             for dep_bound_model in self.contains:
                 # recursion
-                dep_bound_model.fill_models(models=models)
+                dep_bound_model.fill_models(models=models, owner=self)
         return models
 
     # Not used:

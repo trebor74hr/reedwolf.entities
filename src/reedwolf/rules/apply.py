@@ -24,6 +24,7 @@ from .meta import (
         TypeInfo,
         ModelType,
         is_model_class,
+        is_model_instance,
         )
 from .base import (
         KeyString,
@@ -347,8 +348,9 @@ class ApplyResult(IApplySession):
 
             # == Extension with single item ==
 
-            if not is_model_class(instance):
-                raise RuleApplyValueError(owner=self, msg=f"Expected list/tuple or model type, got: {instance}")
+            if not is_model_instance(instance):
+                # import pdb;pdb.set_trace() 
+                raise RuleApplyValueError(owner=self, msg=f"Expected list/tuple or model instance, got: {instance} : {type(instance)}")
 
 
             new_frame = StackFrame(

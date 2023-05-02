@@ -178,6 +178,15 @@ def is_model_class(klass: Any) -> bool:
     """
     return inspect.isclass(klass) and (is_dataclass(klass) or is_pydantic(klass))
 
+def is_model_instance(instance: ModelType) -> bool:
+    """
+    is_dataclass or is_pydantic (for now)
+    in future: sqlalchemy model, django orm model, attrs
+    """
+    if inspect.isclass(instance):
+        return False
+    return is_model_class(instance.__class__)
+
 def is_enum(maybe_enum: Any) -> bool:
     return isinstance(maybe_enum, type) and issubclass(maybe_enum, Enum)
 

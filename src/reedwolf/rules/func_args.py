@@ -63,11 +63,11 @@ class PreparedArguments:
     #          Fn.my_custom_function(1,2) 
     #   True - dot-chain mode -> value is set to first empty positional or
     #          kwarg when value_arg_name is predefined. E.g.
-    #          M.company.address_set.Count()
-    #          M.company.name.Length()
+    #          M.address_set.Count()
+    #          M.name.Length()
     #   False- dot-chain mode -> value is not set. Allowed only when there is
     #          any This ValueExpression within arguments, e.g.
-    #          M.company.Length(This.name)
+    #          M.Length(This.name)
     # TOOD: maybe change to True and adapt unit-tests?
     value_arg_implicit: Optional[bool] = field(repr=False)
 
@@ -173,7 +173,7 @@ class FunctionArguments:
             assert registries
             if not caller: 
                 # NOTE: currently not supporting Fn.Length(This.name) - since This is ambigous
-                raise RuleSetupValueError(owner=self, msg="ValueExpression cwn be used in dot-chain mode, e g. M.company.name.Lenght().")
+                raise RuleSetupValueError(owner=self, msg="ValueExpression cwn be used in dot-chain mode, e g. M.name.Lenght().")
 
             model_class = caller.type_info.type_
             assert model_class
@@ -312,7 +312,7 @@ class FunctionArguments:
             value_arg_implicit = None
         else:
             # value from chain / stream - previous dot-node. e.g. 
-            #   M.company.name.Lower() # value is passed from .name
+            #   M.name.Lower() # value is passed from .name
             if not isinstance(caller, IValueExpressionNode):
                 raise RuleInternalError(f"Caller is not IValueExpressionNode, got: {type(caller)} / {caller}")
 

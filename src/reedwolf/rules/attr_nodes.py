@@ -66,7 +66,7 @@ class AttrVexpNodeTypeEnum(str, Enum):
 class AttrVexpNode(IValueExpressionNode):
     """
     Name comes from dot-chaining nodes - e.g.
-        M.company.name
+        M.name
           company and name are AttrVexpNodes
     """
     name: str
@@ -210,20 +210,31 @@ class AttrVexpNode(IValueExpressionNode):
         attr_name = names[-1]
 
         if vexp_result is UNDEFINED:
-            # initial / first value - get from registry / namespace, e.g. M.company
+            # initial / first value - get from registry / namespace, e.g. M
             vexp_result = ExecResult()
             frame = apply_session.current_frame
 
             if frame.container.is_extension() or frame.on_component_only:
-                if not len(names)>1:
-                    raise RuleInternalError(owner=self, msg=f"Initial evaluation step for extension failed, expected multiple name members (e.g. M.company.address_set), got: {self.name}\n  == Compoonent: {frame.container}")
+                if not len(names)==1:
+                    raise RuleInternalError(owner=self, msg=f"Attribute node - execution initial step for extension failed, expected single name members (e.g. M), got: {self.name}\n  == Compoonent: {frame.container}")
+                # if not len(names)>1:
+                #     raise RuleInternalError(owner=self, msg=f"Initial evaluation step for extension failed, expected multiple name members (e.g. M.address_set), got: {self.name}\n  == Compoonent: {frame.container}")
             else:
                 if not len(names)==1:
-                    raise RuleInternalError(owner=self, msg=f"Initial evaluation step for non-extension failed, expected single name member (e.g. M.company), got: {self.name}\n  == Compoonent: {frame.container}")
+                    raise RuleInternalError(owner=self, msg=f"Initial evaluation step for non-extension failed, expected single name member (e.g. M), got: {self.name}\n  == Compoonent: {frame.container}")
 
             registry = apply_session.registries.get_registry(self.namespace)
             value_previous = registry.get_root_value(apply_session=apply_session)
-            do_fetch_by_name = registry.ROOT_VALUE_NEEDS_FETCH_BY_NAME
+
+            # == M.name mode
+            if apply_session.current_frame.on_component_only and registry.ROOT_VALUE_NEEDS_FETCH_BY_NAME:
+                # TODO: not nice solution
+                do_fetch_by_name = False
+            else:
+                do_fetch_by_name = True
+
+            # == M.company.name mode
+            # do_fetch_by_name = registry.ROOT_VALUE_NEEDS_FETCH_BY_NAME
         else:
             # 2+ value - based on previous result and evolved one step further
             assert len(names)>1
@@ -231,6 +242,9 @@ class AttrVexpNode(IValueExpressionNode):
             do_fetch_by_name = True
 
         if do_fetch_by_name:
+            if isinstance(value_previous, (list, tuple)):
+                raise RuleApplyNameError(owner=self, msg=f"Fetching attribute '{attr_name}' could not be read from list/tuple: '{to_repr(value_previous)}' : '{type(value_previous)}'")
+
             if isinstance(value_previous, IAttributeAccessorBase):
                 # NOTE: if this is last in chain - fetch final value
                 value_new = value_previous.get_attribute(
@@ -245,6 +259,13 @@ class AttrVexpNode(IValueExpressionNode):
                 value_new = getattr(value_previous, attr_name)
         else:
             value_new = value_previous
+
+        # TODO: if isinstance(value_new, (list, tuple))):
+        # TODO:     if not self.islist() 
+        # TODO:         raise RuleApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should not return list, got: '{to_repr(value_new)}' : '{type(value_new)}'")
+        # TODO: else:
+        # TODO:     if self.islist() 
+        # TODO:         raise RuleApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should return list, got: '{to_repr(value_new)}' : '{type(value_new)}'")
 
         # TODO: hm, changer_name is equal to attr_name, any problem / check / fix ... 
         vexp_result.set_value(attr_name=attr_name, changer_name=attr_name, value=value_new)

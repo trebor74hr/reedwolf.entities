@@ -11,7 +11,7 @@ and reference in attribute way- e.g. 'D.Countries' with no arguments
 2. Registered functions:
        functions = [Function("CountAll", py_function, params...)]
    In 'functions' case - function is registereed and can be used in
-       G.CountAll() 
+       Fn.CountAll() 
        M.addressses.CountAll()
    extra args could be passed and must be called as function.
 """
@@ -116,7 +116,7 @@ class IFunction(IFunctionVexpNode):
     value_arg_type_info : Optional[TypeInfo] = field(default=None)
 
     # 4. if value_arg_type_info is not supplied then it will be passed to first argument 
-    #   e.g. in chain: some-func-returns 100 -> G.my_custom_function(d=3) () # in this case: value_arg_name = "d", value = 3
+    #   e.g. in chain: some-func-returns 100 -> Fn.my_custom_function(d=3) () # in this case: value_arg_name = "d", value = 3
     value_arg_name      : Optional[str] = field(default=None)
 
     # 5. fixed arguments - when declared.
@@ -207,7 +207,7 @@ class IFunction(IFunctionVexpNode):
     def _call_arg_validators(self):
         """
         validate value from chain / stream - previous dot-node. e.g. 
-            M.company.name.Lower() # value is passed from .name
+            M.name.Lower() # value is passed from .name
         """
         assert self.arg_validators
 
@@ -411,7 +411,7 @@ def Function(py_function : Callable[..., Any],
              arg_validators : Optional[ValueArgValidatorPyFuncDictType] = None,
              ) -> CustomFunctionFactory:
     """
-    goes to Global namespace (G.)
+    goes to Global namespace (Fn.)
     can accept predefined params (like partial) 
     and in use (later) can be called with rest params.
     can not be used in ValueExpression chains (e.g. D.Country.SomeFunction()
@@ -424,7 +424,7 @@ def Function(py_function : Callable[..., Any],
         Add = Function(add, kwargs=dict(a=Fn.some_function))
 
         # reference and store in wrapped function
-        add_function = G.Add(b=This.value, c=3)
+        add_function = Fn.Add(b=This.value, c=3)
 
         # call / execute referenced function wrapper
         print (add_function.execute(ctx=this_ctx, registries)) 

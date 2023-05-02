@@ -195,8 +195,8 @@ class FieldBase(Component, IFieldBase, ABC):
             if self.bind.GetNamespace()!=namespace_only:
                 raise RuleSetupValueError(owner=self, msg=f"{self.bind}: 'bind' needs to be in {namespace_only} ValueExpression (e.g. M.status).")
             if len(self.bind.Path) not in (1,2,3,4):
-                # warn(f"{self.bind}: 'bind' needs to be 1-4 deep ValueExpression (e.g. M.status, M.company.city.country.name ).")
-                raise RuleSetupValueError(owner=self, msg=f"'bind' needs to be 1-4 deep ValueExpression (e.g. M.status, M.company.city.country.name ), got: {self.bind}")
+                # warn(f"{self.bind}: 'bind' needs to be 1-4 deep ValueExpression (e.g. M.status, M.city.country.name ).")
+                raise RuleSetupValueError(owner=self, msg=f"'bind' needs to be 1-4 deep ValueExpression (e.g. M.status, M.city.country.name ), got: {self.bind}")
 
             self.bound_attr_node = registries.get_vexp_node_by_vexp(self.bind)
             if not self.bound_attr_node:

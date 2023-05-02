@@ -135,7 +135,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             raise RuleSetupError(owner=self, msg="Rules(models=List[models]) is required.")
 
         for bound_model_name, bound_model in self.models.items():
-            assert bound_model_name == bound_model.name
+            assert bound_model_name.split(".")[-1] == bound_model.name
             self._register_bound_model(bound_model=bound_model)
 
     # ------------------------------------------------------------
@@ -166,26 +166,13 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
                 raise RuleSetupError(owner=self, msg=f"{bound_model.name}: ValueExpression should be in ModelsNS namespace, got: {model.GetNamespace()}")
 
             if is_extension_main_model:
-                # TODO: DRY this - the only difference is registries - extract common logic outside
+                # TODO: DRY this - the only difference is registries - extract common logic outside / 
                 # bound attr_node
                 assert hasattr(self, "owner_registries")
                 registries_from = self.owner_registries
-                # attr_node = self.owner_registries.get_vexp_node_by_vexp(vexp=model)
-                # if attr_node:
-                #     raise RuleInternalError(owner=self, msg=f"AttrVexpNode data already in registries: {model} -> {attr_node}")
-                # attr_node = model.Setup(registries=self.owner_registries, owner=bound_model, parent=None)
-
-                # NOTE: this will be done later
-                # # add bounded attr_node - from owner registries to this registries
-                # self.registries.register(attr_node, alt_attr_node_name=bound_model.name)
-
-                # # attr_node.add_bound_attr_node(BoundVar(self.registries.name, attr_node.namespace, bound_model.name))
-                # alias_saved = True
             else:
-                # Rules - top owner container
-                # normal case
+                # Rules - top owner container / normal case
                 registries_from = self.registries
-                # attr_node = model.Setup(registries=self.registries, owner=bound_model)
 
             attr_node = registries_from.get_vexp_node_by_vexp(vexp=model)
             if attr_node:
@@ -200,48 +187,25 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
             model   = attr_node.data.type_
             is_list = attr_node.data.is_list
-            # OLD: model, is_list = self.registries.get_vexp_type(vexp=model)
 
         if not is_model_class(model) and not (is_list and model in STANDARD_TYPE_LIST):
             raise RuleSetupError(owner=self, msg=f"Managed model {bound_model.name} needs to be a @dataclass, pydantic.BaseModel or List[{STANDARD_TYPE_LIST}], got: {type(model)}")
 
-        if not attr_node:
-            attr_node = self.registries.models_registry.create_attr_node(bound_model=bound_model)
 
-            # # standard DTO class attr_node
-            # if not bound_model.type_info:
-            #     bound_model.set_type_info()
-            # assert bound_model.type_info.type_==model
-            # attr_node = AttrVexpNode(
-            #                 name=bound_model.name,
-            #                 data=bound_model,
-            #                 namespace=ModelsNS,
-            #                 type_info=bound_model.type_info)
-            # # # print(f"{self} -> {bound_model} -> {attr_node}")
-            # # self.registries.register(attr_node)
+        # == M.name version
+        self.registries.models_registry.register_all_nodes(root_attr_node=attr_node, bound_model=bound_model, model=model)
 
-        # assert attr_node.name!=bound_model.name # not alias_saved and 
+        # == M.name version
+        # if not attr_node:
+        #     attr_node = self.registries.models_registry.create_root_attr_node(bound_model=bound_model) -> _create_root_attr_node()
+        # # self.registries.register(attr_node, alt_attr_node_name=bound_model.name if attr_node.name!=bound_model.name else None)
+        # self.registries.models_registry.register_attr_node(
+        #                             attr_node, 
+        #                             alt_attr_node_name=(
+        #                                 bound_model.name 
+        #                                 if attr_node.name!=bound_model.name 
+        #                                 else None))
 
-        # simgle place to register
-        # save attr_node with alias or not
-
-        # self.registries.register(attr_node, alt_attr_node_name=bound_model.name if attr_node.name!=bound_model.name else None)
-        self.registries.models_registry.register_attr_node(
-                                    attr_node, 
-                                    alt_attr_node_name=(
-                                        bound_model.name 
-                                        if attr_node.name!=bound_model.name 
-                                        else None))
-
-        # attr_node.add_bound_attr_node(BoundVar(self.registries.name, attr_node.namespace, bound_model.name))
-        # alias_saved = True
-
-        # if is_extension_main_model:
-        #     # can be fetched with self.get_bound_model_attr_node()
-        #     self.bound_attr_node = attr_node
-
-        # NOTE: bound_model not stored in registries, just bound_model.model
-        # registries.register(current_attr_node, alt_attr_node_name=copy_to_registries.attr_node_name)
 
         return attr_node
 
