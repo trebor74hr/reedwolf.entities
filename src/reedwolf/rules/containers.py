@@ -36,6 +36,8 @@ from .exceptions import (
         )
 from .namespaces import (
         ModelsNS,
+        DataNS,
+        FieldsNS,
         )
 from .meta import (
         STANDARD_TYPE_LIST,
@@ -63,7 +65,17 @@ from .models import (
         )
 from .attr_nodes import AttrVexpNode
 from .functions import CustomFunctionFactory
-from .registries import Registries
+from .registries import (
+        Registries,
+        ModelsRegistry,
+        DataRegistry,
+        FieldsRegistry,
+        FunctionsRegistry,
+        OperationsRegistry,
+        ContextRegistry,
+        ConfigRegistry,
+        )
+
 from .valid_children import (
         ICardinalityValidation
         )
@@ -81,15 +93,35 @@ from .config import (
         )
 
 # ------------------------------------------------------------
+
+def create_registries(
+        owner: ContainerBase,
+        config: Config,
+        functions: Optional[List[CustomFunctionFactory]] = None, 
+        context_class: Optional[IContext] = None,
+        ) -> Registries:
+    registries = Registries(owner=owner, functions=functions)
+
+    registries.add_registry(ModelsRegistry())
+    registries.add_registry(DataRegistry())
+    registries.add_registry(FieldsRegistry())
+    registries.add_registry(FunctionsRegistry())
+    registries.add_registry(OperationsRegistry())
+    registries.add_registry(ContextRegistry(context_class=context_class))
+    registries.add_registry(ConfigRegistry(config=config))
+
+    return registries
+
+# ------------------------------------------------------------
 # Rules
 # ------------------------------------------------------------
-
 
 class ContainerBase(IContainerBase, ComponentBase, ABC):
 
     def _get_function(self, name: str, strict:bool=True):
         if not self.functions:
             raise KeyError(f"{self.name}: Function '{name}' not found, no functions available.")
+        #return self.registries.functions_factory_registry.get(name, strict=strict)
         return self.registries.functions_factory_registry.get(name, strict=strict)
 
     def add_fieldgroup(self, fieldgroup:FieldGroup):
@@ -193,13 +225,13 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
 
         # == M.name version
-        self.registries.models_registry.register_all_nodes(root_attr_node=attr_node, bound_model=bound_model, model=model)
+        self.registries[ModelsNS].register_all_nodes(root_attr_node=attr_node, bound_model=bound_model, model=model)
 
         # == M.name version
         # if not attr_node:
-        #     attr_node = self.registries.models_registry.create_root_attr_node(bound_model=bound_model) -> _create_root_attr_node()
+        #     attr_node = self.registries[ModelsNS].create_root_attr_node(bound_model=bound_model) -> _create_root_attr_node()
         # # self.registries.register(attr_node, alt_attr_node_name=bound_model.name if attr_node.name!=bound_model.name else None)
-        # self.registries.models_registry.register_attr_node(
+        # self.registries[ModelsNS].register_attr_node(
         #                             attr_node, 
         #                             alt_attr_node_name=(
         #                                 bound_model.name 
@@ -216,7 +248,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         # A.2. DATAPROVIDERS - Collect all attr_nodes from dataproviders fieldgroup
         # ------------------------------------------------------------
         for data_var in self.data:
-            self.registries.data_registry.register(data_var)
+            self.registries[DataNS].register(data_var)
             # assert isinstance(data_var, IData)
             # function = data_var.value if is_function(data_var.value) else None
             # data_var_attr_node = AttrVexpNode(
@@ -238,7 +270,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
         # A.3. COMPONENTS - collect attr_nodes - previously flattened (recursive function fill_components)
         for component_name, component in self.components.items():
-            self.registries.fields_registry.register(component)
+            self.registries[FieldsNS].register(component)
             # if isinstance(component, (FieldBase, IData)):
             #     denied = False
             #     deny_reason = ""
@@ -282,7 +314,13 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         if self.registries is not None:
             raise RuleSetupError(owner=self, msg="Registries.setup() should be called only once")
 
-        self.registries = Registries(owner=self, functions=self.functions, context_class=self.context_class, config=self.config)
+        self.registries = create_registries(
+                                owner=self,
+                                functions = self.functions,
+                                config = self.config,
+                                context_class = self.context_class,
+                                )
+
 
         # ----------------------------------------
         # A. 1st level attr_nodes
@@ -311,7 +349,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         #       extension.setup() will do this within own tree dep (own .components / .registries)
 
         if not self.contains:
-            raise RuleSetupError(owner=self, msg=f"{self}: needs 'contains' attribute with list of components")
+            raise RuleSetupError(owner=self, msg=f"'contains' attribute is required with list of components")
 
         # iterate all subcomponents and call _setup() for each
         self._setup(registries=self.registries)
@@ -333,7 +371,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
     # ------------------------------------------------------------
 
     def get_bound_model_attr_node(self) -> AttrVexpNode:
-        return self.registries.models_registry.get_attr_node_by_bound_model(bound_model=self.bound_model)
+        return self.registries[ModelsNS].get_attr_node_by_bound_model(bound_model=self.bound_model)
 
     # ------------------------------------------------------------
 
@@ -341,7 +379,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         # TODO: currently components are retrieved only from contains - but should include validations + cardinality
         if name not in self.components:
             vars_avail = get_available_names_example(name, self.components.keys())
-            raise RuleNameNotFoundError(owner=self, msg=f"{self}: component '{name}' not found, some valid_are: {vars_avail}")
+            raise RuleNameNotFoundError(owner=self, msg=f"Component '{name}' not found, some valid_are: {vars_avail}")
         return self.components[name]
 
     # ------------------------------------------------------------

@@ -44,6 +44,43 @@ from .meta import (
 
 
 # ------------------------------------------------------------
+# interfaces / base classes
+# ------------------------------------------------------------
+
+# TODO: Inheriting ABC triggers:
+#   TypeError: Can't instantiate abstract class ModelsRegistry with abstract methods NAMESPACE, ...
+class IRegistry:
+
+    @abstractmethod
+    def get_root_value(self, apply_session: IApplySession) -> Any:
+        ...
+
+# ------------------------------------------------------------
+
+class IRegistries(ABC):
+
+    @abstractmethod
+    def get_registry(self, namespace: Namespace, strict:bool= True) -> IRegistry:
+        ...
+
+    @abstractmethod
+    def __getitem__(self, namespace: Namespace) -> IRegistry:
+        ...
+
+# ------------------------------------------------------------
+
+class IAttributeAccessorBase(ABC):
+    " used in registry "
+
+    @abstractmethod
+    def get_attribute(self, apply_session: 'IApplySession', attr_name:str, is_last:bool) -> IAttributeAccessorBase:
+        """ 
+        is_last -> True - need to get final literal value from object
+        (usually primitive type like int/str/date ...) 
+        """
+        ...
+
+# ------------------------------------------------------------
 # internal structs
 # ------------------------------------------------------------
 
@@ -491,14 +528,13 @@ class ValueExpression(DynamicAttrsBase):
 
     def _EnsureFinished(self):
         if self._status!=VExpStatusEnum.INITIALIZED:
-            raise RuleInternalError(msg=f"{self}: Setup() already called, further ValueExpression building is not possible (status={self._status}).")
+            raise RuleInternalError(owner=self, msg=f"Method Setup() already called, further ValueExpression building is not possible (status={self._status}).")
 
 
     def Setup(self, 
-            registries:"IRegistries",  # noqa: F821
+            registries:IRegistries,  # noqa: F821
             owner:"ComponentBase",  # noqa: F821
-            # local registry, not default by namespace
-            registry: Optional["IRegistry"]=None,  # noqa: F821
+            local_registries: Optional[IRegistries] = None,  # noqa: F821
             strict:bool = False,
             ) -> Optional['IValueExpressionNode']:
         """
@@ -509,16 +545,32 @@ class ValueExpression(DynamicAttrsBase):
 
         self._EnsureFinished()
 
-        if registry:
-            if not self._namespace._manual_setup:
-                raise RuleInternalError(f"{self}: registry should be passed only for namespace._manual_setup cases, got: {registry}")
-        else:
-            if self._namespace._manual_setup:
-                raise RuleInternalError(f"{self}: registry should be passed for namespace._manual_setup cases (usually manually created ThisRegistry()).")
+        registry = None
+        if local_registries:
+            # try to find in local repo
+            registry = local_registries.get_registry(self._namespace, strict=False)
+            if registry and not registry.NAMESPACE._manual_setup:
+                raise RuleInternalError(owner=self, msg=f"Registry should be passed only for namespace._manual_setup cases, got: {registry}")
+
+        if not registry:
+            # if local repo not available or ns not found in it, find in container repo
             registry = registries.get_registry(self._namespace)
+            if registry.NAMESPACE._manual_setup:
+                raise RuleInternalError(owner=self, msg=f"Registry should be passed for namespace._manual_setup cases (usually manually created ThisRegistry()), got: {registry}")
+
+        assert registry
+
+        # if registry:
+        #     if not registry.NAMESPACE._manual_setup:
+        #     # if not self._namespace._manual_setup:
+        #         raise RuleInternalError(owner=self, msg=f"Registry should be passed only for namespace._manual_setup cases, got: {registry}")
+        # else:
+        #     if self._namespace._manual_setup:
+        #         raise RuleInternalError(owner=self, msg=f"Registry should be passed for namespace._manual_setup cases (usually manually created ThisRegistry()).")
+        #     registry = registries.get_registry(self._namespace)
 
         if self._namespace != registry.NAMESPACE:
-            raise RuleInternalError(f"{self}: registry has diff namespace from variable: {self._namespace} != {registry.NAMESPACE}")
+            raise RuleInternalError(owner=self, msg=f"Registry has diff namespace from variable: {self._namespace} != {registry.NAMESPACE}")
 
         current_vexp_node = None
         last_vexp_node = None
@@ -554,7 +606,7 @@ class ValueExpression(DynamicAttrsBase):
                 elif bit._func_args:
                     if bnr==1:
                         if self._namespace != FunctionsNS:
-                            raise RuleSetupNameError(f"{self}: Only FunctionsNS (Fn.) namespace accepts direct function calls. Got '{bit}' on '{bit._namespace}) namespace.")
+                            raise RuleSetupNameError(owner=self, msg=f"Only FunctionsNS (Fn.) namespace accepts direct function calls. Got '{bit}' on '{bit._namespace}) namespace.")
 
                     func_args = FunctionArgumentsType(*bit._func_args)
 

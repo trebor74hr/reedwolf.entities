@@ -1,8 +1,6 @@
 # TODO: this module probably should be merged into expressions - since there is circular depencdency - see __getattr__
 from abc import ABC, abstractmethod
 
-from .exceptions import RuleSetupNameError
-
 # ------------------------------------------------------------
 # Namespaces - classes and singletons
 # ------------------------------------------------------------
@@ -38,7 +36,8 @@ class Namespace(DynamicAttrsBase):
 
     def __getattr__(self, aname):
         if aname in self.RESERVED_ATTR_NAMES: # , "%r -> %s" % (self._node, aname):
-            raise RuleSetupNameError(f"{self!r}: Namespace attribute {aname} is reserved, choose another name.")
+            from .exceptions import RuleSetupNameError
+            raise RuleSetupNameError(owner=self, msg=f"Namespace attribute {aname} is reserved, choose another name.")
 
         from .expressions import ValueExpression
         return ValueExpression(node=aname, namespace=self)

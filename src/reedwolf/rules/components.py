@@ -81,7 +81,7 @@ class Component(ComponentBase, ABC):
         # when not set then will be later defined - see set_owner()
         if self.name not in (None, "", UNDEFINED):
             if not self.name.isidentifier():
-                raise RuleSetupValueError(owner=self, msg=f"{self.name} -> attribute name needs to be valid python identifier name")
+                raise RuleSetupValueError(owner=self, msg=f"Attribute name needs to be valid python identifier name")
 
     def __post_init__(self):
         self.init_clean_base()
@@ -148,7 +148,7 @@ class DynamicData(IData, Component):
 
     def __post_init__(self):
         if not isinstance(self.function, CustomFunctionFactory):
-            raise RuleSetupValueError(owner=self, msg=f"{self.name} -> {self.function}: {type(self.function)} - not ValueExpression|Function()")
+            raise RuleSetupValueError(owner=self, msg=f"{self.function}: {type(self.function)} - not ValueExpression|Function()")
         # self.type_info = TypeInfo.extract_function_return_type_info(self.function)
         custon_function_factory: CustomFunctionFactory = self.function
         self.type_info = custon_function_factory.get_output_type_info()

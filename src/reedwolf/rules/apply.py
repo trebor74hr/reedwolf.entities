@@ -18,6 +18,13 @@ from .exceptions import (
         RuleInternalError,
         RuleApplyValueError,
         )
+from .expressions import (
+        ExecResult,
+        NotAvailableExecResult,
+        ValueExpression,
+        execute_available_vexp,
+        IRegistries,
+        )
 from .meta import (
         UNDEFINED,
         NoneType,
@@ -29,7 +36,6 @@ from .meta import (
 from .base import (
         KeyString,
         ComponentBase,
-        IRegistries,
         IApplySession,
         StackFrame,
         ValidationFailure,
@@ -37,12 +43,6 @@ from .base import (
         ChangeOpEnum,
         InstanceChange,
         get_instance_key_string_attrname_pair,
-        )
-from .expressions import (
-        ExecResult,
-        NotAvailableExecResult,
-        ValueExpression,
-        execute_available_vexp,
         )
 from .fields import (
         FieldBase,

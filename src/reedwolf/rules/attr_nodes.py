@@ -21,6 +21,11 @@ from .namespaces import (
         Namespace,
         ModelsNS,
         )
+from .expressions import (
+        ValueExpression,
+        IValueExpressionNode,
+        IAttributeAccessorBase,
+        )
 from .meta import (
         TypeInfo,
         is_model_class,
@@ -36,11 +41,6 @@ from .base import (
         IFieldBase,
         IApplySession,
         ExecResult,
-        IAttributeAccessorBase,
-        )
-from .expressions import (
-        ValueExpression,
-        IValueExpressionNode,
         )
 
 # ------------------------------------------------------------

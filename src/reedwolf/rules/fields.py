@@ -32,6 +32,7 @@ from .exceptions import (
         )
 from .namespaces import (
         ModelsNS,
+        FieldsNS,
         ThisNS,
         )
 from .meta import (
@@ -208,7 +209,7 @@ class FieldBase(Component, IFieldBase, ABC):
                     self.bound_attr_node = owner_registries.get_vexp_node_by_vexp(self.bind)
 
             # self.attr_node = registries.get_attr_node(FieldsNS, self.name, strict=True)
-            self.attr_node = registries.fields_registry.get(self.name)
+            self.attr_node = registries[FieldsNS].get(self.name)
 
             # self.registries.Fields[self.name]
             assert self.attr_node
@@ -412,7 +413,7 @@ class ChoiceField(FieldBase):
 
         # -- Factory cases
         if is_function(choices):
-            raise RuleInternalError(f"{self} - direct functions are not allowed, wrap with Function() instead. Got: {choices}")
+            raise RuleInternalError(owner=self, msg=f"Direct functions are not allowed, wrap with Function() instead. Got: {choices}")
         elif isinstance(choices, ValueExpression):
             # TODO: restrict to vexp only - no operation
             if choices._status!=VExpStatusEnum.BUILT:
@@ -446,10 +447,10 @@ class ChoiceField(FieldBase):
             elif isinstance(vexp_node, AttrVexpNode):
                 attr_node: AttrVexpNode = vexp_node  # better name
                 if is_enum(attr_node.data.value):
-                    raise RuleSetupValueError(owner=self, msg=f"{self.name}: {self.__class__.__name__}: {self.__class__.__name__} uses enum {attr_node.data.value}. Use EnumField instead.")
+                    raise RuleSetupValueError(owner=self, msg=f"Using enum {attr_node.data.value}. Use EnumField instead.")
 
                 if not hasattr(attr_node.data, "type_"):
-                    raise RuleSetupValueError(owner=self, msg=f"{self.name}: {self.__class__.__name__}: {self.__class__.__name__} has wrong type for choices: {attr_node.data} / {attr_node.data.value}. Use Function or DynamicData with Function.")
+                    raise RuleSetupValueError(owner=self, msg=f"Wrong type for choices: {attr_node.data} / {attr_node.data.value}. Use Function or DynamicData with Function.")
                 choices = attr_node.data.type_
                 is_list = attr_node.data.is_list
 
@@ -481,30 +482,30 @@ class ChoiceField(FieldBase):
                 # fun_return_type_info = TypeInfo.extract_function_return_type_info(function=choices) # parent=self, 
                 # model_class, is_list = fun_return_type_info.type_, fun_return_type_info.is_list
                 # if not is_list:
-                #     raise RuleSetupValueError(owner=self, msg=f"{self.name}: {self.__class__.__name__}: argument 'choices'={choices} is a function that does not return List[type]. Got: {fun_return_type}")
+                #     raise RuleSetupValueError(owner=self, msg=f"Argument 'choices'={choices} is a function that does not return List[type]. Got: {fun_return_type}")
             else:
                 assert not is_list
                 model_class = choices
 
-            this_registry = registries.create_this_registry(model_class)
+            local_registries = registries.create_local_registries(this_ns_model_class=model_class)
 
-            self.choice_value_attr_node = self._create_attr_node(this_registry, registries, "choice_value", vexp=self.choice_value, model_class=model_class)
-            self.choice_label_attr_node = self._create_attr_node(this_registry, registries, "choice_label", vexp=self.choice_label, model_class=model_class)
+            self.choice_value_attr_node = self._create_attr_node(local_registries, registries, "choice_value", vexp=self.choice_value, model_class=model_class)
+            self.choice_label_attr_node = self._create_attr_node(local_registries, registries, "choice_label", vexp=self.choice_label, model_class=model_class)
 
             if self.choice_label_attr_node.type_info.type_!=str:
-                raise RuleSetupValueError(owner=self, msg=f"{self.name}: choice_label needs to be bound to string attribute, got: {self.choice_label_attr_mode.type_info.type_}")
+                raise RuleSetupValueError(owner=self, msg=f"Attribute choice_label needs to be bound to string attribute, got: {self.choice_label_attr_mode.type_info.type_}")
             self.python_type = self.choice_value_attr_node.type_info.type_
 
 
         elif isinstance(choices, (list, tuple)):
             if len(choices)==0:
-                raise RuleSetupValueError(owner=self, msg=f"{self.name}: {self.__class__.__name__}: 'choices' is an empty list, Provide list of str/int/ChoiceOption.")
+                raise RuleSetupValueError(owner=self, msg=f"Attribute 'choices' is an empty list, Provide list of str/int/ChoiceOption.")
             if self.choice_value or self.choice_label:
-                raise RuleSetupValueError(owner=self, msg=f"{self.name}: {self.__class__.__name__}: when 'choices' is a list, choice_value and choice_label are not permitted.")
+                raise RuleSetupValueError(owner=self, msg=f"When 'choices' is a list, choice_value and choice_label are not permitted.")
             # now supports combining - but should have the same type
             for choice in choices:
                 if not isinstance(choice, (str, int, ChoiceOption)):
-                    raise RuleSetupValueError(owner=self, msg=f"{self.name}: {self.__class__.__name__}: choices has invalid choice, not one of str/int/ChoiceOption: {choice} / {type(choice)}")
+                    raise RuleSetupValueError(owner=self, msg=f"Attribute choices has invalid choice, not one of str/int/ChoiceOption: {choice} / {type(choice)}")
 
             if isinstance(choices[0], ChoiceOption):
                 self.python_type = type(choices[0].value)
@@ -512,7 +513,7 @@ class ChoiceField(FieldBase):
                 self.python_type = type(choices[0])
 
         else:
-            raise RuleSetupValueError(owner=self, msg=f"{self.name}: {self.__class__.__name__}: choices has invalid value, not Union[Function(), ValueExpression, Union[List[ChoiceOption], List[int], List[str]], got : {choices} / {type(choices)}")
+            raise RuleSetupValueError(owner=self, msg=f"Attribute choices has invalid value, not Union[Function(), ValueExpression, Union[List[ChoiceOption], List[int], List[str]], got : {choices} / {type(choices)}")
 
         if not self.python_type:
             warn(f"TODO: ChoiceField 'python_type' not set {self}")
@@ -525,7 +526,7 @@ class ChoiceField(FieldBase):
     # ------------------------------------------------------------
 
     def _create_attr_node(self, 
-            this_registry: ThisRegistry,
+            local_registries: Registries,
             registries: Registries, 
             aname: str, 
             vexp: ValueExpression, 
@@ -534,11 +535,11 @@ class ChoiceField(FieldBase):
         Create choice AttrVexpNode() within local ThisRegistry
         """
         if not (vexp and isinstance(vexp, ValueExpression) and vexp.GetNamespace()==ThisNS):
-            raise RuleSetupValueError(owner=self, msg=f"{self.name}: {self.__class__.__name__}: argument '{aname}' is not set or has wrong type - should be ValueExpression in This. namespace. Got: {vexp} / {type(vexp)}")
+            raise RuleSetupValueError(owner=self, msg=f"Argument '{aname}' is not set or has wrong type - should be ValueExpression in This. namespace. Got: {vexp} / {type(vexp)}")
 
-        attr_node = vexp.Setup(registries=registries, owner=self, registry=this_registry)
+        attr_node = vexp.Setup(registries=registries, owner=self, local_registries=local_registries)
         if vexp._status != VExpStatusEnum.BUILT:
-            raise RuleInternalError(owner=self, msg=f"{self.name}: {self.__class__.__name__}:  Setup failed for Vexp: {vexp} -> {vexp._status}")
+            raise RuleInternalError(owner=self, msg=f"Setup failed for Vexp: {vexp} -> {vexp._status}")
 
         return attr_node
 

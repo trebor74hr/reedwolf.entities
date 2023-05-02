@@ -59,6 +59,8 @@ from .expressions import (
         RawAttrValue,
         ExecResult,
         IFunctionVexpNode,
+        IRegistries,
+        # IRegistry,
         )
 from .functions import (
         CustomFunctionFactory,
@@ -656,33 +658,6 @@ class ComponentBase(SetOwnerMixin, ABC):
         instance_attr_value = apply_session.update_history[key_str][-1]
         return instance_attr_value.value
 
-
-# ------------------------------------------------------------
-
-# TODO: Inheriting ABC triggers:
-#   TypeError: Can't instantiate abstract class ModelsRegistry with abstract methods NAMESPACE, ...
-class IRegistry:
-    pass
-
-# ------------------------------------------------------------
-
-class IRegistries(ABC):
-
-    def get_registry(self, namespace:Namespace):
-        pass
-
-# ------------------------------------------------------------
-
-class IAttributeAccessorBase(ABC):
-    " used in registry "
-
-    @abstractmethod
-    def get_attribute(self, apply_session: IApplySession, attr_name:str, is_last:bool) -> IAttributeAccessorBase:
-        """ 
-        is_last -> True - need to get final literal value from object
-        (usually primitive type like int/str/date ...) 
-        """
-        ...
 
 
 # ------------------------------------------------------------

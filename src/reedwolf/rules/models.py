@@ -15,25 +15,22 @@ from .meta import (
         )
 from .base        import (
         BoundModelBase,
-        IRegistries,
         )
 from .expressions import (
         ValueExpression,
+        IRegistries,
         )
 from .functions import (
         CustomFunctionFactory,
         )
 
-class BoundModelMixin:
-
-    pass
 
 # ------------------------------------------------------------
 # BoundModel
 # ------------------------------------------------------------
 
 @dataclass
-class BoundModel(BoundModelMixin, BoundModelBase):
+class BoundModel(BoundModelBase):
     name            : str
     # label           : TransMessageType
 
@@ -81,7 +78,7 @@ class BoundModel(BoundModelMixin, BoundModelBase):
 # ------------------------------------------------------------
 
 @dataclass
-class BoundModelWithHandlers(BoundModelMixin, BoundModelBase):
+class BoundModelWithHandlers(BoundModelBase):
     # TODO: razdvoji save/read/.../unique check
     name         : str
     label        : str # TransMsg

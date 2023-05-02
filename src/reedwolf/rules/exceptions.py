@@ -1,11 +1,15 @@
 from abc import ABC
 from typing import (
-        Optional,
-        Dict,
-        )
+    Optional,
+    Dict,
+    )
 from .utils import (
-        message_truncate,
-        )
+    message_truncate,
+    )
+from .namespaces import (
+    DynamicAttrsBase,
+    )
+
 
 # TODO: check https://snarky.ca/unravelling-from/ - how to convert/transform exception
 
@@ -22,14 +26,18 @@ class RuleError(Exception, ABC):
         self.full_msg = self._get_full_msg() + (f" (item={repr(self.item)[:50]})" if self.item else "")
 
     def _get_full_msg(self) -> str:
-        return f"{self.owner.__class__.__name__}('{self.owner.name}') -> {self.msg}" if self.owner and getattr(self.owner, "name", None) \
-                        else (f"{str(self.owner)} -> {self.msg}" if self.owner else self.msg)
+        return f"{self.owner.__class__.__name__}('{self.owner.name}') -> {self.msg}" \
+                    if self.owner and not isinstance(self.owner, DynamicAttrsBase) and getattr(self.owner, "name", None) \
+                    else \
+                        (f"{self.owner.__class__.__name__}('{str(self.owner)}') -> {self.msg}" 
+                         if self.owner else 
+                         f"{self.owner.__class__.__name__} -> {self.msg}")
 
     def __str__(self):
         return f"{self.full_msg}"
 
     def __repr__(self):
-        return f"{self.__class__.__name__} ( {self.full_msg} )"
+        return f"{self.full_msg}"
 
 # ------------------------------------------------------------
 # General and internal errors

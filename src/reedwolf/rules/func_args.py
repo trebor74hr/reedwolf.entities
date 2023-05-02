@@ -171,20 +171,24 @@ class FunctionArguments:
                 raise RuleInternalError(owner=self, msg=f"ValueExpression is already setup {vexp}")
 
             assert registries
+
             if not caller: 
-                # NOTE: currently not supporting Fn.Length(This.name) - since This is ambigous
-                raise RuleSetupValueError(owner=self, msg="ValueExpression cwn be used in dot-chain mode, e g. M.name.Lenght().")
+                # NOTE: Namespace top level like: Fn.Length(This.name) 
+                #       This could be ambigous, but in this case container_owner is used.
+                container = registries.owner.get_container_owner()
+                container.bound_model.type_info
+                caller = container.bound_model
+                # raise RuleSetupValueError(owner=self, msg="ValueExpression cwn be used in dot-chain mode, e g. M.name.Lenght().")
 
             model_class = caller.type_info.type_
             assert model_class
 
-
             if is_model_class(model_class):
                 # pydantic / dataclasses
-                this_registry = registries.create_this_registry(
-                                    model_class=model_class)
+                assert registries
+                local_registries = registries.create_local_registries(this_ns_model_class=model_class)
             elif model_class in STANDARD_TYPE_LIST:
-                this_registry = None 
+                local_registries = None 
             else:
                 raise RuleSetupValueError(owner=self, msg=f"Unsupported type: {caller} / {model_class}")
 
@@ -192,7 +196,7 @@ class FunctionArguments:
                                 registries=registries, 
                                 # TODO: is this good?
                                 owner=self, 
-                                registry=this_registry)
+                                local_registries=local_registries)
 
             if isinstance(func_vexp_node, OperationVexpNode):
                 # Assumption - for all operations type_info of first operation

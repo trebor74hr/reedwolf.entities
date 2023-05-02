@@ -41,6 +41,14 @@ from .namespaces import (
         ConfigNS,
         OperationsNS,
         )
+from .expressions import (
+        ValueExpression,
+        IValueExpressionNode,
+        IFunctionVexpNode,
+        IRegistry,
+        IRegistries,
+        IAttributeAccessorBase,
+        )
 from .meta import (
         FunctionArgumentsType,
         EmptyFunctionArguments,
@@ -54,18 +62,10 @@ from .base import (
         ComponentBase,
         IData,
         extract_type_info,
-        IRegistry,
-        IRegistries,
         IApplySession,
-        IAttributeAccessorBase,
         )
 from .models import (
         BoundModelBase,
-        )
-from .expressions import (
-        ValueExpression,
-        IValueExpressionNode,
-        IFunctionVexpNode,
         )
 from .functions import (
         FunctionsFactoryRegistry,
@@ -98,6 +98,7 @@ from .config import (
         )
 
 
+# ------------------------------------------------------------
 
 
 def get_vexp_node_name(parent_name: Optional[str], 
@@ -131,8 +132,8 @@ def get_vexp_node_name(parent_name: Optional[str],
     return vexp_node_name
 
 
-
 # ------------------------------------------------------------
+
 
 class RegistryBase(IRegistry):
     """
@@ -146,8 +147,6 @@ class RegistryBase(IRegistry):
 
 
     def __init__(self):
-        # , functions_factory_registry: FunctionsFactoryRegistry):
-        # self.functions_factory_registry = functions_factory_registry
         self.store : Dict[str, AttrVexpNode] = {}
         self.finished: bool = False
 
@@ -197,17 +196,17 @@ class RegistryBase(IRegistry):
             available=(S.Countries.name != "test"),
         """
         if self.finished:
-            raise RuleInternalError(f"{self}.register({vexp_node}) - already finished, adding not possible.")
+            raise RuleInternalError(owner=self, msg=f"Register({vexp_node}) - already finished, adding not possible.")
 
         if not isinstance(vexp_node, IValueExpressionNode):
             raise RuleInternalError(f"{type(vexp_node)}->{vexp_node}")
         vexp_node_name = alt_vexp_node_name if alt_vexp_node_name else vexp_node.name
 
         if not vexp_node_name.count(".") == 0:
-            raise RuleInternalError(f"{self} -> {vexp_node_name} should not contain . - only first level vars allowed")
+            raise RuleInternalError(owner=self, msg=f"Node {vexp_node_name} should not contain . - only first level vars allowed")
 
         if vexp_node_name in self.store:
-            raise RuleSetupNameError(owner=self, msg=f"{self}: AttrVexpNode {vexp_node} does not have unique name within this registry, found: {self.store[vexp_node_name]}")
+            raise RuleSetupNameError(owner=self, msg=f"AttrVexpNode {vexp_node} does not have unique name within this registry, found: {self.store[vexp_node_name]}")
         self.store[vexp_node_name] = vexp_node
 
 
@@ -215,7 +214,7 @@ class RegistryBase(IRegistry):
         if not isinstance(attr_node, AttrVexpNode):
             raise RuleInternalError(f"{type(attr_node)}->{attr_node}")
         if not self.NAMESPACE == attr_node.namespace:
-            raise RuleInternalError(f"{self}.register({attr_node}) - namespace mismatch: {self.NAMESPACE} != {attr_node.namespace}")
+            raise RuleInternalError(owner=self, msg=f"Method register({attr_node}) - namespace mismatch: {self.NAMESPACE} != {attr_node.namespace}")
         return self.register_vexp_node(vexp_node=attr_node, alt_vexp_node_name=alt_attr_node_name)
 
     def pp(self):
@@ -232,7 +231,7 @@ class RegistryBase(IRegistry):
     # create_func_node - only Functions i.e. IFunctionVexpNode
     # ------------------------------------------------------------
     def create_func_node(self, 
-            registries: Registries,
+            registries: IRegistries,
             caller: IValueExpressionNode,
             attr_node_name:str,
             func_args:FunctionArgumentsType,
@@ -373,6 +372,18 @@ class RegistryBase(IRegistry):
 
 
 # ------------------------------------------------------------
+class RegistryUseDenied(RegistryBase):
+    def get_root_value(self, apply_session: IApplySession) -> Any:
+        raise RuleInternalError(owner=self, msg=f"Registry should not be used to get root value.")
+
+
+class FunctionsRegistry(RegistryUseDenied):
+    NAMESPACE = FunctionsNS
+
+class OperationsRegistry(RegistryUseDenied):
+    NAMESPACE = OperationsNS
+
+# ------------------------------------------------------------
 
 
 class ModelsRegistry(RegistryBase):
@@ -501,8 +512,8 @@ class ModelsRegistry(RegistryBase):
 
 # ------------------------------------------------------------
 
-
 class DataRegistry(RegistryBase):
+
     NAMESPACE = DataNS
 
     def create_vexp_node(self, data_var:IData) -> IValueExpressionNode:
@@ -575,6 +586,7 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
 # ------------------------------------------------------------
 
 class FieldsRegistry(RegistryBase):
+
     NAMESPACE = FieldsNS
 
     def create_attr_node(self, component:ComponentBase):
@@ -642,33 +654,11 @@ class FieldsRegistry(RegistryBase):
 # ------------------------------------------------------------
 
 
-class FunctionsRegistry(RegistryBase):
-    NAMESPACE = FunctionsNS
-
-    def __init__(self): # , functions_factory_registry: FunctionsFactoryRegistry):
-        super().__init__() # functions_factory_registry=functions_factory_registry)
-
-        # for func_name, function_factory in self.functions_factory_registry.items():
-        #     # print("here-3", func_name, function_factory)
-        #     self.register_vexp_node(function_factory)
-
-    def get_root_value(self, apply_session: IApplySession) -> Any:
-        raise NotImplementedError()
-
-
-class OperationsRegistry(RegistryBase):
-    NAMESPACE = OperationsNS
-
-    def get_root_value(self, apply_session: IApplySession) -> Any:
-        raise RuleInternalError(owner=self, msg=f"This registry should not be used to get root value.")
-
-# ------------------------------------------------------------
-
-
 class ThisRegistry(RegistryBase):
+
     NAMESPACE = ThisNS
 
-    def __init__(self, model_class: ModelType): # , functions_factory_registry: FunctionsFactoryRegistry
+    def __init__(self, model_class: ModelType):
         super().__init__() # functions_factory_registry=functions_factory_registry)
         self.model_class = model_class
         if not is_model_class(self.model_class):
@@ -686,11 +676,11 @@ class ThisRegistry(RegistryBase):
 
 
 class ContextRegistry(RegistryBase):
+
     NAMESPACE = ContextNS
 
     def __init__(self, 
                  context_class: Optional[Type[IContext]], 
-                 # functions_factory_registry: FunctionsFactoryRegistry, 
                  ):
         super().__init__() # functions_factory_registry=functions_factory_registry)
 
@@ -750,6 +740,7 @@ class ContextRegistry(RegistryBase):
 
 
 class ConfigRegistry(RegistryBase):
+
     NAMESPACE = ConfigNS
 
     def __init__(self, config: Config):
@@ -773,69 +764,48 @@ class ConfigRegistry(RegistryBase):
     def get_root_value(self, apply_session: IApplySession) -> Any:
         raise NotImplementedError()
 
+
 # ------------------------------------------------------------
 
 
-class Registries(IRegistries):
+class RegistriesBase(IRegistries):
 
     def __init__(self, 
             owner:'ContainerBase',  # noqa: F821
-            config: Config,
             functions: Optional[List[CustomFunctionFactory]] = None, 
-            context_class: Optional[IContext] = None,
+            functions_factory_registry: Optional[FunctionsFactoryRegistry] = None,
             ):
         """
         input param functions are custom_function_factories
         store 
         """
-        # self.registries : Dict[str, List[AttrVexpNode]] = {}
         self.owner: 'ContainerBase' = owner  # noqa: F821
-
+        self._registries : Dict[str, IRegistry] = {}
         self.name: str = owner.name
-        self.config: Config = config
-        self.context_class: IContext = context_class
-
-        self.functions_factory_registry: FunctionsFactoryRegistry = \
-                FunctionsFactoryRegistry(functions=functions, 
-                                         include_standard=self.owner.is_top_owner())
-
-        self.models_registry: IRegistry = ModelsRegistry() # self.functions_factory_registry)
-        self.data_registry: IRegistry = DataRegistry() # self.functions_factory_registry)
-        self.fields_registry: IRegistry = FieldsRegistry() # self.functions_factory_registry)
-        self.functions_registry: IRegistry = FunctionsRegistry() # self.functions_factory_registry)
-        # internal
-        self.operations_registry: IRegistry = OperationsRegistry()
-        # NOTE: could consider having the same registry for Rules and all Extensions?
-        #       but maybe is not needed.
-        self.context_registry: IRegistry = ContextRegistry(context_class=self.context_class)
-        self.config_registry: IRegistry = ConfigRegistry(config=self.config)
-
-
-        self.registries: Dict[str, IRegistry] = {
-            registry.NAMESPACE._name  : registry
-            for registry in [
-                self.models_registry,
-                self.data_registry,
-                self.fields_registry,
-                self.functions_registry,
-                self.context_registry,
-                self.config_registry,
-                self.operations_registry,
-            ]} 
-
         self.finished: bool = False
 
-    def create_this_registry(self, model_class: ModelType):
-        this_registry = ThisRegistry(
-                model_class=model_class,
-                # functions_factory_registry=self.functions_factory_registry
-                )
-        return this_registry
+        if functions_factory_registry:
+            # reuse
+            assert not functions
+            self.functions_factory_registry = functions_factory_registry
+        else:
+            self.functions_factory_registry: FunctionsFactoryRegistry = \
+                    FunctionsFactoryRegistry(functions=functions, 
+                                             include_standard=owner.is_top_owner())
+
+    def add_registry(self, registry: IRegistry):
+        if self.finished:
+            raise RuleInternalError(owner=self, msg=f"Registry already in finished satte, adding '{registry}' not possible.")
+        ns_name = registry.NAMESPACE._name
+        if ns_name in self._registries:
+            raise RuleInternalError(owner=self, msg=f"Registry {registry} already in registry")
+        self._registries[ns_name] = registry
+
 
     # ------------------------------------------------------------
 
     def __str__(self):
-        counts = ", ".join([f"{k}={v.count()}" for k, v in self.registries.items() if v])
+        counts = ", ".join([f"{k}={v.count()}" for k, v in self._registries.items() if v])
         # name={self.name},
         # cnt={self.entries_count}, 
         return f"Registries(owner={self.owner}, {counts})"
@@ -845,8 +815,15 @@ class Registries(IRegistries):
 
     # ------------------------------------------------------------
 
-    def get_registry(self, namespace:Namespace):
-        return self.registries[namespace._name]
+    def get_registry(self, namespace: Namespace, strict:bool= True) -> IRegistry:
+        if namespace._name not in self._registries:
+            if strict:
+                raise RuleInternalError(owner=self, msg=f"Registry '{namespace._name}' not found, available are: {self._registries.keys()}")
+            return UNDEFINED
+        return self._registries[namespace._name]
+
+    def __getitem__(self, namespace: Namespace) -> IRegistry:
+        return self._registries[namespace._name]
 
     # ------------------------------------------------------------
 
@@ -854,7 +831,7 @@ class Registries(IRegistries):
         # recursive: bool = False, depth: int = 0, 
         # has {self.entries_count} attr_node(s), 
         print(f"{self.owner}: Registries '{self.name}', finished={self.finished}. List:")
-        for ns_name, store in self.registries.items():
+        for ns_name, store in self._registries.items():
             store.pp()
 
         if with_functions:
@@ -868,9 +845,9 @@ class Registries(IRegistries):
         """
         assert not self.finished
         ns_name = attr_node.namespace._name
-        if ns_name not in self.registries:
-            raise RuleInternalError(f"{ns_name} not in .registries, available: {self.registries.keys()}")
-        self.registries[ns_name].register_attr_node(attr_node, alt_attr_node_name=alt_attr_node_name)
+        if ns_name not in self._registries:
+            raise RuleInternalError(f"{ns_name} not in .registries, available: {self._registries.keys()}")
+        self._registries[ns_name].register_attr_node(attr_node, alt_attr_node_name=alt_attr_node_name)
 
     # ------------------------------------------------------------
 
@@ -888,7 +865,7 @@ class Registries(IRegistries):
     def finish(self):
         if self.finished:
             raise RuleSetupError(owner=self, msg="Method finish() already called.")
-        for ns, registry in self.registries.items():
+        for ns, registry in self._registries.items():
             for vname, vexp_node in registry.items():
                 # do some basic validate
                 if isinstance(vexp_node, AttrVexpNode):
@@ -898,6 +875,24 @@ class Registries(IRegistries):
             registry.finish()
 
         self.finished = True
+
+
+# ------------------------------------------------------------
+
+class Registries(RegistriesBase):
+
+    def create_local_registries(self, this_ns_model_class: ModelType) -> Registries:
+        " func_args needs this "
+        # TODO: this is the only reference to specific repository - used in func_args.py
+        this_registry = ThisRegistry(
+                model_class=this_ns_model_class,
+                )
+        local_registries = RegistriesBase(owner=self.owner,
+                                functions_factory_registry=self.functions_factory_registry,
+                                )
+        local_registries.add_registry(this_registry)
+        return local_registries
+
 
 
 # ------------------------------------------------------------

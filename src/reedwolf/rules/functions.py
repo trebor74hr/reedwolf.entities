@@ -160,9 +160,9 @@ class IFunction(IFunctionVexpNode):
 
     def __post_init__(self):
         if not self.py_function:
-            raise RuleInternalError(f"{self.__class__.__name__}: py_function input parameter is obligatory")
+            raise RuleInternalError(owner=self, msg=f"py_function input parameter is obligatory")
         if not is_function(self.py_function):
-            raise RuleSetupValueError(f"{self.__class__.__name__}: py_function is not a function, got: {self.py_function}")
+            raise RuleSetupValueError(owenr=self, msg=f"py_function is not a function, got: {self.py_function}")
 
         self.func_name = self.py_function.__name__
 
