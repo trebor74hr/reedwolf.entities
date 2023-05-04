@@ -98,6 +98,8 @@ from .config import (
         )
 
 
+INSTANCE_ATTR_NAME = "Instance" 
+
 # ------------------------------------------------------------
 
 
@@ -164,10 +166,29 @@ class RegistryBase(IRegistry):
         return self.store.items()
 
     @classmethod
+    def _create_instance_attr_node(cls, model_class: ModelType) -> AttrVexpNode:
+        " used for This.Instance to return instance itself "
+        th_field = None
+        type_info = TypeInfo.get_or_create_by_type(
+                        py_type_hint=model_class,
+                        )
+        attr_node = AttrVexpNode(
+                        name=INSTANCE_ATTR_NAME,
+                        data=type_info,
+                        namespace=cls.NAMESPACE,
+                        type_info=type_info, 
+                        th_field=th_field,
+                        )
+        return attr_node
+
+    @classmethod
     def _create_attr_node_for_model_attr(cls, model_class: ModelType, attr_name:str) -> AttrVexpNode:
         # NOTE: will go again and again into get_model_fields()
         #       but shortcut like this didn't worked: 
         #           type_info: TypeInfo = TypeInfo.get_or_create_by_type(th_field)
+
+        if attr_name in (INSTANCE_ATTR_NAME,):
+            raise RuleSetupNameError(owner=self, msg=f"Sorry but model attribute name {attr_name} is reserved. Rename it and try again (model={model_class.__name__}).")
 
         # This one should not fail
         # , func_node
@@ -298,6 +319,7 @@ class RegistryBase(IRegistry):
                 raise RuleSetupNameNotFoundError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': Invalid attribute name '{full_vexp_node_name}'. {valid_names}")
 
             attr_node_template = self.store.get(full_vexp_node_name)
+
             # clone it - each attr_node must be unique - cached are used only as templates
             vexp_node = attr_node_template.clone()
             assert id(vexp_node) != attr_node_template
@@ -348,6 +370,8 @@ class RegistryBase(IRegistry):
             #     vexp_node = func_node
             # else:
 
+            assert type_info
+
             # --------------------------------------------------
             # Create()
             # --------------------------------------------------
@@ -362,6 +386,11 @@ class RegistryBase(IRegistry):
 
         if not isinstance(vexp_node, IValueExpressionNode):
             raise RuleInternalError(owner=owner, msg=f"Namespace {self.NAMESPACE}: Type of found object is not IValueExpressionNode, got: {type(vexp_node)}.")
+
+
+        # TODO: if not vexp_node.type_info:
+        # TODO:     raise RuleInternalError(owner=self, msg=f"type_info must be filled: {vexp_node}, {type(vexp_node)}")
+            
 
         return vexp_node
 
@@ -468,7 +497,6 @@ class ModelsRegistry(RegistryBase):
         # attr_node_name = bound_model.name
         # assert attr_node_name
         # # return self.store.get(attr_node_name, default)
-        # # if not attr_node_name in self.store: import pdb;pdb.set_trace() 
         # return self.store[attr_node_name]
 
     # ------------------------------------------------------------
@@ -605,8 +633,10 @@ class FieldsRegistry(RegistryBase):
             denied = False
             # not denied
             deny_reason = ""
-            # TODO: type_info = component.attr_node.type_info
             type_info = None
+            # TODO: type_info = component.type_info
+            # raise NotImplementedError(f"TODO: type_info logic required")
+
         # containers, validations, evaluations, # dropped: validators, evaluators, ValidatorBase
         elif isinstance(component, (BoundModel, BoundModelWithHandlers, ValidationBase, EvaluationBase, FieldGroup, Extension, Rules, )): # 
             # stored - but should not be used
@@ -668,6 +698,9 @@ class ThisRegistry(RegistryBase):
             # th_field: ModelField in .values()
             attr_node = self._create_attr_node_for_model_attr(self.model_class, attr_name)
             self.register_attr_node(attr_node)
+
+        instance_attr_node = self._create_instance_attr_node(model_class=model_class)
+        self.register_attr_node(instance_attr_node)
 
     def get_root_value(self, apply_session: IApplySession) -> Any:
         raise NotImplementedError()

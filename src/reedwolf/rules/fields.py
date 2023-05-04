@@ -156,6 +156,8 @@ class FieldBase(Component, IFieldBase, ABC):
     attr_node:       Union[AttrVexpNode, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
     bound_attr_node: Union[AttrVexpNode, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
     python_type:     Union[type, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
+    type_info:       Optional[TypeInfo] = field(init=False, repr=False, default=UNDEFINED)
+
     # will be set later
     # is_key:          bool = field(init=False, repr=False, default=False)
 
@@ -180,7 +182,9 @@ class FieldBase(Component, IFieldBase, ABC):
 
 
     def setup(self, registries:Registries):
+
         super().setup(registries=registries)
+
         if self.bind:
             # within all parents catch first with namespace_only attribute
             # if such - check if namespace of all children are right.
@@ -216,15 +220,15 @@ class FieldBase(Component, IFieldBase, ABC):
             if not self.bound_attr_node:
                 # warn(f"TODO: {self}.bind = {self.bind} -> bound_attr_node can not be found.")
                 raise RuleSetupValueError(owner=self, msg=f"bind={self.bind}: bound_attr_node can not be found.")
-            else:
-                # ALT: self.bound_attr_node.add_bound_attr_node(BoundVar(registries.name, self.attr_node.namespace, self.attr_node.name))
-                # self.attr_node.add_bound_attr_node(
-                #         BoundVar(registries.name,
-                #                  self.bound_attr_node.namespace,
-                #                  self.bound_attr_node.name))
-                # if not isinstance(self.bound_attr_node.data, TypeInfo):
-                #     raise RuleInternalError(owner=self, msg=f"Unhandled case, self.bound_attr_node.data is not TypeInfo, got: {self.bound_attr_node.data}")
-                self._check_py_type()
+            # else:
+            #     # ALT: self.bound_attr_node.add_bound_attr_node(BoundVar(registries.name, self.attr_node.namespace, self.attr_node.name))
+            #     # self.attr_node.add_bound_attr_node(
+            #     #         BoundVar(registries.name,
+            #     #                  self.bound_attr_node.namespace,
+            #     #                  self.bound_attr_node.name))
+            #     # if not isinstance(self.bound_attr_node.data, TypeInfo):
+            #     #     raise RuleInternalError(owner=self, msg=f"Unhandled case, self.bound_attr_node.data is not TypeInfo, got: {self.bound_attr_node.data}")
+            #     self._set_type_info()
 
         # NOTE: can have multiple Evaluation-s
         evaluations = [cleaner for cleaner in self.cleaners if isinstance(cleaner, EvaluationBase) and cleaner.REQUIRES_AUTOCOMPUTE] \
@@ -242,49 +246,49 @@ class FieldBase(Component, IFieldBase, ABC):
             if missing:
                 missing_names = ", ".join([validation.__name__ for validation in missing])
                 raise RuleSetupError(owner=self, msg=f"'{self.__class__.__name__}' requires following Validations (cleaners attribute): {missing_names}")
+
         return self
 
-    # def mark_as_key(self):
-    #     assert not self.is_finished
-    #     assert not self.is_key
-    #     self.is_key = True
+    # ------------------------------------------------------------
 
+    def post_setup(self):
+        " to validate all internal values "
+        if not self.python_type:
+            if self.PYTHON_TYPE:
+                self.python_type = self.PYTHON_TYPE
+            else:
+                raise RuleInternalError(owner=self, msg=f"python_type must be set in custom setup() method or define PYTHON_TYPE class constant")
+        self._set_type_info()
 
-    # def get_attr_node(self, registries:Registries) -> AttrVexpNode:
-    #     assert self.attr_node
-    #     return self.attr_node
+    # ------------------------------------------------------------
 
+    def _set_type_info(self):
+        if not self.python_type:
+            raise RuleInternalError(owner=self, msg=f"python_type not defined") 
 
-    # def get_bound_attr_node(self, registries:Registries) -> AttrVexpNode:
-    #     assert self.bind._all_ok, self.bind._status
-    #     assert self.bound_attr_node
+        # TODO: explain old message "static declared types. Dynamic types can be processed later"
 
-
-    def _check_py_type(self):
-        if self.PYTHON_TYPE is UNDEFINED:
-            # NOTE: self.python_type should will be defined later in custom
-            #       setup() method.  Aee EnumField and ChoiceField
-            return
-        # static declared types. Dynamic types can be processed later
-        my_type_info = TypeInfo.get_or_create_by_type(
-                                py_type_hint=self.PYTHON_TYPE, 
+        self.type_info = TypeInfo.get_or_create_by_type(
+                                py_type_hint=self.python_type, 
                                 )
+
         expected_type_info = None
-        if isinstance(self.bound_attr_node.data, TypeInfo):
-            expected_type_info = self.bound_attr_node.data
-        elif hasattr(self.bound_attr_node.data, "type_info"):
-            expected_type_info = self.bound_attr_node.data.type_info
+        if self.bound_attr_node:
+            if isinstance(self.bound_attr_node.data, TypeInfo):
+                expected_type_info = self.bound_attr_node.data
+            elif hasattr(self.bound_attr_node.data, "type_info"):
+                expected_type_info = self.bound_attr_node.data.type_info
 
         if not expected_type_info:
-            raise RuleInternalError(owner=self, msg=f"Can't extract type_info from: {type(self.bound_attr_node.data)} / {self.bound_attr_node.data}")
+            raise RuleInternalError(owner=self, msg=f"Can't extract type_info from bound_attr_node: {self.bound_attr_node} ")
 
-        err_msg = expected_type_info.check_compatible(my_type_info)
+        err_msg = expected_type_info.check_compatible(self.type_info)
         if err_msg:
-            raise RuleSetupTypeError(owner=self, msg=f"Given data type '{my_type_info}' is not compatible underneath model type '{expected_type_info}: {err_msg}'")
-            # raise RuleSetupError(owner=self, msg=f"PYTHON_TYPE={self.PYTHON_TYPE} -> [ {my_type_info.as_str()} ], does not match bound attr_node type: {self.bound_attr_node.name}.data =[ {self.bound_attr_node.data.as_str()} ]")
+            expected_type_info.check_compatible(self.type_info)
+            raise RuleSetupTypeError(owner=self, msg=f"Given data type '{self.type_info}' is not compatible underneath model type '{expected_type_info}: {err_msg}'")
 
-        self.python_type = self.PYTHON_TYPE
 
+    # ------------------------------------------------------------
 
     def try_adapt_value(self, value: Any) -> Any:
         " apply phase: can change value type or value itself, must return same value or changed one. SHOULD NOT raise any Validation error."
@@ -404,7 +408,9 @@ class ChoiceField(FieldBase):
     # ------------------------------------------------------------
 
     def setup(self, registries:Registries):
+
         super().setup(registries=registries)
+
         choices = self.choices
         choices_checked = False
         is_list = UNDEFINED

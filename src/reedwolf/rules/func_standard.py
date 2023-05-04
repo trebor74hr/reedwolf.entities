@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sized
 from typing import (
+        TypeVar,
         Dict,
         Optional,
         List,
@@ -57,6 +58,8 @@ def get_builtin_function_factories_dict() -> Dict[str, BuiltinFunctionFactory]:
 # ------------------------------------------------------------
 # Standard functions
 # ------------------------------------------------------------
+T = TypeVar("T", bound=Any)
+
 
 def count(value_list: List[ItemType]) -> int:
     """ for objects from datastores - e.g. rows, iterables """

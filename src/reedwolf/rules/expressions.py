@@ -644,6 +644,10 @@ class ValueExpression(DynamicAttrsBase):
                                 owner=owner,
                                 # func_args=bit._func_args,
                                 )
+                    # TODO: assert current_vexp_node.type_info, f"{current_vexp_node}, {type(current_vexp_node)}"
+
+                    # if not current_vexp_node.type_info:
+                    #     import pdb;pdb.set_trace() 
 
                 # add node to evaluator
                 vexp_evaluator.add(current_vexp_node)

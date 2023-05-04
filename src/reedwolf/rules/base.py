@@ -341,6 +341,16 @@ class ComponentBase(SetOwnerMixin, ABC):
 
     # ------------------------------------------------------------
 
+    @abstractmethod
+    def setup(self, registries: IRegistries):
+        ...
+
+    def post_setup(self):
+        " to validate all internal values "
+        pass
+
+    # ------------------------------------------------------------
+
     def _invoke_component_setup(self, 
                     subcomponent_name: str, 
                     subcomponent: Union[ComponentBase, ValueExpression], 
@@ -367,6 +377,7 @@ class ComponentBase(SetOwnerMixin, ABC):
             assert "Rules(" not in repr(subcomponent)
             # assert not isinstance(subcomponent, Rules), subcomponent
             subcomponent.setup(registries=registries)  # , owner=self)
+            subcomponent.post_setup()
             called = True
         elif isinstance(subcomponent, (dict, list, tuple)):
             raise RuleSetupValueError(owner=self, msg=f"Subcomponents should not be dictionaries, lists or tuples, got: {type(subcomponent)} / {subcomponent}")

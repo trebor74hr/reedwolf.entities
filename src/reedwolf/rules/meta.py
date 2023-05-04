@@ -166,6 +166,15 @@ EmptyFunctionArguments  = FunctionArgumentsType([], {})
 
 # ------------------------------------------------------------
 
+def get_underlying_types(type_: type):
+    underlying_types = inspect.getmro(type_)
+    idx = underlying_types.index(object)
+    if idx>=0:
+        underlying_types = list(underlying_types)
+        del underlying_types[idx]
+        underlying_types = tuple(underlying_types)
+    return underlying_types
+
 
 def is_pydantic(maybe_pydantic_class: Any) -> bool:
     # TODO: ALT: maybe fails for partial functions: isinstance(maybe_pydantic_class) and issubclass(maybe_pydantic_class, PydBaseModel)
@@ -497,6 +506,9 @@ class TypeInfo:
         """
         returns error message when input type is not compatible with given type
         """
+        if other is None:
+            raise RuleInternalError(owner=self, msg=f"check_compatible({other}) - type_info of other not supplied")
+
         if self==other:
             return None
 
@@ -521,7 +533,7 @@ class TypeInfo:
             return None
 
         found = False
-        other_underlying_types = inspect.getmro(other.type_)
+        other_underlying_types = get_underlying_types(other.type_)
 
         for type_ in self.types:
             if (type_ in (ItemType, Any) 
@@ -531,23 +543,22 @@ class TypeInfo:
                 found = True
                 break
 
+            if is_enum(type_):
+                enum_1st_member_py_type = get_enum_member_py_type(type_)
+                if other.type_ == enum_1st_member_py_type:
+                    found = True
+
         if not found:
             # TODO: can be that underlying type is not a "type"
             accepted_types = [type_as_str(type_) for type_ in self.types]
             accepted_types = format_arg_name_list(accepted_types)
+            # add_msg = f" HINT: For classes that inherit Enum, inherit additional python type like `class {enum_types}(str, Enum):` " \
+            #          if enum_types else ""
             return f"underlying type '{type_as_str(other.type_)}' is not compatible with {accepted_types}"
 
         return None
 
-    # def is_type_equal(self, other: TypeInfo) -> bool:
-    #     return self.type_ == other.type_ \
-    #             and self.is_list == other.is_list \
-    #             and self.is_optional == other.is_optional
-
-    # def is_type_inherited(self, other: TypeInfo) -> bool:
-    #     return other.type_ in inspect.getmro(self.type_) \
-    #             and self.is_list == other.is_list \
-    #             and self.is_optional == other.is_optional
+    # ------------------------------------------------------------
 
     def as_str(self) -> str:
         out = [f"{', '.join([type_as_str(ty) for ty in self.types])}"]

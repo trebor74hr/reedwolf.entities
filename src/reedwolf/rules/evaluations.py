@@ -40,8 +40,8 @@ class Evaluation(PresaveEvaluationBase):
     # TODO: check in Setup phase if type of evaluated VExpression has correct
     #       type - e.g.  for EnumField evaluated value must be within enum values.
     name:           str
-    label:          TransMessageType
     value:          ValueExpression
+    label:          Optional[TransMessageType] = None
     available:      Optional[Union[bool, ValueExpression]] = True
 
     def __post_init__(self):

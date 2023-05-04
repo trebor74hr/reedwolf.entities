@@ -51,7 +51,9 @@ class PrepArg:
     # TODO: Union[NoneType, StdPyTypes (Literal[]), IValueExpressionNode
     value_or_vexp: Any = field(repr=True)
 
-
+    def __post_init__(self):
+        if self.type_info is None:
+            raise RuleInternalError(owner=self, msg=f"type_info not supplied")
 
 @dataclass
 class PreparedArguments:
@@ -165,12 +167,10 @@ class FunctionArguments:
             # TODO: should be ValueExpression or IValueExpressionNode
             value_or_vexp = UNDEFINED 
         elif isinstance(value_object, ValueExpression):
-            # TODO: need setup
             vexp: ValueExpression = value_object
+
             if vexp.IsFinished():
                 raise RuleInternalError(owner=self, msg=f"ValueExpression is already setup {vexp}")
-
-            assert registries
 
             if not caller: 
                 # NOTE: Namespace top level like: Fn.Length(This.name) 
@@ -192,6 +192,9 @@ class FunctionArguments:
             else:
                 raise RuleSetupValueError(owner=self, msg=f"Unsupported type: {caller} / {model_class}")
 
+            if not registries:
+                raise RuleInternalError(owner=self, msg=f"Registries is required for ValueExpression() function argument case") 
+
             func_vexp_node = vexp.Setup(
                                 registries=registries, 
                                 # TODO: is this good?
@@ -204,6 +207,8 @@ class FunctionArguments:
                 type_info = func_vexp_node.get_first_type_info()
             else:
                 type_info = func_vexp_node.type_info
+
+            assert type_info
 
             value_or_vexp = vexp
 
