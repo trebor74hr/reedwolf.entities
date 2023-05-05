@@ -150,10 +150,19 @@ class RegistryBase(IRegistry):
 
     def __init__(self):
         self.store : Dict[str, AttrVexpNode] = {}
+        self.registries = UNDEFINED
         self.finished: bool = False
 
+    def set_registries(self, registries: IRegistries):
+        if self.registries:
+            raise RuleInternalError(owner=self, msg=f"registries already set: {self.registries}") 
+        self.registries = registries
+
     def finish(self):
-        assert not self.finished
+        if self.finished:
+            raise RuleInternalError(owner=self, msg=f"already finished") 
+        if not self.registries:
+            raise RuleInternalError(owner=self, msg=f"registries not set, function set_registries() not called") 
         self.finished = True
 
     def count(self) -> int:
@@ -560,7 +569,7 @@ class DataRegistry(RegistryBase):
             # TODO: consider storing CustomFactoryFunction instead of CustomFunction instances
             #       to allow extra arguments when referenced
             vexp_node = data_var.function.create_function(
-                            registries=None,
+                            registries=self.registries,
                             caller=None,
                             func_args=EmptyFunctionArguments, 
                             name=data_var.name) 
@@ -804,17 +813,20 @@ class ConfigRegistry(RegistryBase):
 class RegistriesBase(IRegistries):
 
     def __init__(self, 
-            owner:'ContainerBase',  # noqa: F821
+            # usually 'ContainerBase'
+            owner:  Optional[Any],  # noqa: F821
             functions: Optional[List[CustomFunctionFactory]] = None, 
             functions_factory_registry: Optional[FunctionsFactoryRegistry] = None,
+            include_standard_functions: bool = True,
             ):
         """
         input param functions are custom_function_factories
         store 
         """
-        self.owner: 'ContainerBase' = owner  # noqa: F821
-        self._registries : Dict[str, IRegistry] = {}
-        self.name: str = owner.name
+        # owner is usually: 'ContainerBase'
+        self.owner: Optional[Any] = owner  # noqa: F821
+        self._registry_dict : Dict[str, IRegistry] = {}
+        self.name: str = owner.name if owner else "no-owner"
         self.finished: bool = False
 
         if functions_factory_registry:
@@ -824,21 +836,23 @@ class RegistriesBase(IRegistries):
         else:
             self.functions_factory_registry: FunctionsFactoryRegistry = \
                     FunctionsFactoryRegistry(functions=functions, 
-                                             include_standard=owner.is_top_owner())
+                                             include_standard=include_standard_functions)
+                                             # owner.is_top_owner())
 
     def add_registry(self, registry: IRegistry):
         if self.finished:
             raise RuleInternalError(owner=self, msg=f"Registry already in finished satte, adding '{registry}' not possible.")
         ns_name = registry.NAMESPACE._name
-        if ns_name in self._registries:
+        if ns_name in self._registry_dict:
             raise RuleInternalError(owner=self, msg=f"Registry {registry} already in registry")
-        self._registries[ns_name] = registry
+        self._registry_dict[ns_name] = registry
+        registry.set_registries(self)
 
 
     # ------------------------------------------------------------
 
     def __str__(self):
-        counts = ", ".join([f"{k}={v.count()}" for k, v in self._registries.items() if v])
+        counts = ", ".join([f"{k}={v.count()}" for k, v in self._registry_dict.items() if v])
         # name={self.name},
         # cnt={self.entries_count}, 
         return f"Registries(owner={self.owner}, {counts})"
@@ -849,14 +863,14 @@ class RegistriesBase(IRegistries):
     # ------------------------------------------------------------
 
     def get_registry(self, namespace: Namespace, strict:bool= True) -> IRegistry:
-        if namespace._name not in self._registries:
+        if namespace._name not in self._registry_dict:
             if strict:
-                raise RuleInternalError(owner=self, msg=f"Registry '{namespace._name}' not found, available are: {self._registries.keys()}")
+                raise RuleInternalError(owner=self, msg=f"Registry '{namespace._name}' not found, available are: {self._registry_dict.keys()}")
             return UNDEFINED
-        return self._registries[namespace._name]
+        return self._registry_dict[namespace._name]
 
     def __getitem__(self, namespace: Namespace) -> IRegistry:
-        return self._registries[namespace._name]
+        return self._registry_dict[namespace._name]
 
     # ------------------------------------------------------------
 
@@ -864,7 +878,7 @@ class RegistriesBase(IRegistries):
         # recursive: bool = False, depth: int = 0, 
         # has {self.entries_count} attr_node(s), 
         print(f"{self.owner}: Registries '{self.name}', finished={self.finished}. List:")
-        for ns_name, store in self._registries.items():
+        for ns_name, store in self._registry_dict.items():
             store.pp()
 
         if with_functions:
@@ -878,9 +892,9 @@ class RegistriesBase(IRegistries):
         """
         assert not self.finished
         ns_name = attr_node.namespace._name
-        if ns_name not in self._registries:
-            raise RuleInternalError(f"{ns_name} not in .registries, available: {self._registries.keys()}")
-        self._registries[ns_name].register_attr_node(attr_node, alt_attr_node_name=alt_attr_node_name)
+        if ns_name not in self._registry_dict:
+            raise RuleInternalError(f"{ns_name} not in .registries, available: {self._registry_dict.keys()}")
+        self._registry_dict[ns_name].register_attr_node(attr_node, alt_attr_node_name=alt_attr_node_name)
 
     # ------------------------------------------------------------
 
@@ -898,7 +912,7 @@ class RegistriesBase(IRegistries):
     def finish(self):
         if self.finished:
             raise RuleSetupError(owner=self, msg="Method finish() already called.")
-        for ns, registry in self._registries.items():
+        for ns, registry in self._registry_dict.items():
             for vname, vexp_node in registry.items():
                 # do some basic validate
                 if isinstance(vexp_node, AttrVexpNode):

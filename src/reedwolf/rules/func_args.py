@@ -51,9 +51,9 @@ class PrepArg:
     # TODO: Union[NoneType, StdPyTypes (Literal[]), IValueExpressionNode
     value_or_vexp: Any = field(repr=True)
 
-    def __post_init__(self):
-        if self.type_info is None:
-            raise RuleInternalError(owner=self, msg=f"type_info not supplied")
+    # RT: def __post_init__(self):
+    # RT:     if self.type_info is None:
+    # RT:         raise RuleInternalError(owner=self, msg=f"type_info not supplied")
 
 @dataclass
 class PreparedArguments:
@@ -208,7 +208,8 @@ class FunctionArguments:
             else:
                 type_info = func_vexp_node.type_info
 
-            assert type_info
+            # RT: if not type_info:
+            # RT:     raise RuleInternalError(owner=self, msg=f"{func_vexp_node}: type_info not set") 
 
             value_or_vexp = vexp
 
@@ -286,10 +287,10 @@ class FunctionArguments:
     def parse_func_args(self, 
                  caller              : Union[Namespace, IValueExpressionNode],
                  func_args           : FunctionArgumentsType,
+                 registries          : "Registries" = field(repr=False),  # noqa: F821
                  fixed_args          : Optional[FunctionArgumentsType] = field(default=None),
                  value_arg_type_info : Optional[TypeInfo] = field(default=None),
                  value_arg_name      : Optional[str] = field(default=None),
-                 registries          : Optional["Registries"] = field(repr=False, default=None),  # noqa: F821
                  ) -> PreparedArguments:
         """
         Although default argument values are processed, they are not filled.
@@ -300,6 +301,8 @@ class FunctionArguments:
         #       so plain Dict could be used.
         expected_args: Dict[str, Optional[PrepArg]] = OrderedDict([(arg.name, None) for arg in self.func_arg_list])
 
+        if not registries:
+            raise RuleInternalError(owner=self, msg=f"registries is empty") 
 
         # ==== 1/3 : FIX_ARGS - by registration e.g. Function(my_py_function, args=(1,), kwargs={"b":2})
 
@@ -411,10 +414,13 @@ class FunctionArguments:
         err_messages = []
         for prep_arg in prepared_args:
             exp_arg : FuncArg = self.func_arg_dict[prep_arg.name]
-            err_msg = exp_arg.type_info.check_compatible(prep_arg.type_info)
-            if err_msg:
-                msg = f"[{prep_arg.name}]: {err_msg}"
-                err_messages.append(msg)
+
+            # TODO: 
+            if True:
+                err_msg = exp_arg.type_info.check_compatible(prep_arg.type_info)
+                if err_msg:
+                    msg = f"[{prep_arg.name}]: {err_msg}"
+                    err_messages.append(msg)
 
         if err_messages:
             msg = ', '.join(err_messages)

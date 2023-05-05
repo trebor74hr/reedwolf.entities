@@ -437,7 +437,8 @@ class ChoiceField(FieldBase):
         elif isinstance(choices, CustomFunctionFactory):
             custom_function_factory : CustomFunctionFactory = choices
             vexp_node = custom_function_factory.create_function(
-                            registries=None,
+                            # NOTE: was None before
+                            registries=registries,
                             caller=None,
                             func_args=EmptyFunctionArguments,
                             )

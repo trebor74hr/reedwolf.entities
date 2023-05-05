@@ -100,8 +100,10 @@ def create_registries(
         functions: Optional[List[CustomFunctionFactory]] = None, 
         context_class: Optional[IContext] = None,
         ) -> Registries:
-    registries = Registries(owner=owner, functions=functions)
-
+    registries = Registries(
+                    owner=owner, 
+                    functions=functions,
+                    include_standard_functions=owner.is_top_owner())
     registries.add_registry(ModelsRegistry())
     registries.add_registry(DataRegistry())
     registries.add_registry(FieldsRegistry())

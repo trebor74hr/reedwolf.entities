@@ -111,29 +111,33 @@ class IFunction(IFunctionVexpNode):
     #   e.g. in chain .my_custom_function(a=1, b=2) # in this case: {"a": 1, "b": 2}
     func_args           : FunctionArgumentsType
 
-    # 3. in usage when in chain (value)
+    # 3. Registries are required for validation and type *data* of function
+    #     arguments, e.g. creating ThisNS, getting vars from ContextNS, DataNS etc.
+    registries         : "Registries" = field(repr=False)  # noqa: F821
+
+    # 4. in usage when in chain (value)
     #   e.g. some_struct_str_attr.lower() #  in this case: some_struct_str_attr
     value_arg_type_info : Optional[TypeInfo] = field(default=None)
 
-    # 4. if value_arg_type_info is not supplied then it will be passed to first argument 
+    # 5. if value_arg_type_info is not supplied then it will be passed to first argument 
     #   e.g. in chain: some-func-returns 100 -> Fn.my_custom_function(d=3) () # in this case: value_arg_name = "d", value = 3
     value_arg_name      : Optional[str] = field(default=None)
 
-    # 5. fixed arguments - when declared.
+    # 6. fixed arguments - when declared.
     #  e.g. Function(my_py_custom_function, c=3)
     #  e.g. Function(my_py_custom_function, fixed_args = ([1, 2], {"a": 3, "b": 4}))
     fixed_args          : FunctionArgumentsType = EmptyFunctionArguments
 
-    # 6. if not provided, then autocomputed
+    # 7. if not provided, then autocomputed
     name                : Optional[str] = field(default=None)
 
-    # 7. if not provided, then autocomputed from py_function type_hints
+    # 8. if not provided, then autocomputed from py_function type_hints
     function_arguments  : Optional[FunctionArguments] = field(repr=False, default=None)
 
-    # 8. caller - value expression node which calls function, can be None
+    # 9. caller - value expression node which calls function, can be None
     caller              : Optional[IValueExpressionNode] = field(default=None)
 
-    # 9. extra validations of input arguments, list of python functions, 
+    # 10. extra validations of input arguments, list of python functions, 
     #    e.g. Length() can operate on objects that have __len__ function (btw.
     #    collection.abc.Sized is used in this case).
     #    Functions are plain python functions, lists of validation functions
@@ -144,9 +148,10 @@ class IFunction(IFunctionVexpNode):
     #       * raise RuleSetupError based error
     arg_validators      : Optional[ValueArgValidatorPyFuncDictType] = field(repr=False, default=None)
 
-    # 10. Registries are required for validation and type *data* of function
+    # 11. Registries are required for validation and type *data* of function
     #     arguments, e.g. creating ThisNS, getting vars from ContextNS, DataNS etc.
-    registries         : Optional["Registries"] = field(repr=False, default=None)  # noqa: F821
+    # registries         : Optional["Registries"] = field(repr=False, default=None)  # noqa: F821
+
 
     # --- Autocomputed
     # required for IValueExpressionNode
@@ -381,10 +386,10 @@ class IFunctionFactory(ABC):
 
     def create_function(self, 
                 func_args:FunctionArgumentsType, 
+                registries         : Registries,
                 value_arg_type_info: Optional[TypeInfo] = None,
                 name               : Optional[str] = None,
                 caller             : Optional[IValueExpressionNode] = None,
-                registries         : Optional["Registries"] = None,  # noqa: F821
                 ) -> IFunction:
         custom_function = self.FUNCTION_CLASS(
                 py_function         = self.py_function,     # noqa: E251
