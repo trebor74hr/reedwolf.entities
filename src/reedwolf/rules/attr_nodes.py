@@ -168,33 +168,28 @@ class AttrVexpNode(IValueExpressionNode):
 
     def finish(self):
         if self.type_info is None:
-            # NOTE: can be done with isinstance(TypeInfo)
+
             if self.attr_node_type == AttrVexpNodeTypeEnum.FIELD:
                 type_info = self.data
                 if not type_info.bound_attr_node:
                     raise RuleInternalError(owner=self, msg=f"AttrVexpNode {self.data} .bound_attr_node not set.")
                 if not type_info.bound_attr_node.type_info:
                     raise RuleInternalError(owner=self, msg=f"AttrVexpNode data.bound_attr_node={self.data} -> {self.data.bound_attr_node} .type_info not set.")
+
                 # transfer type_info from type_info.bound attr_node
                 self.type_info = type_info.bound_attr_node.type_info
-            # NOTE: can be done with isinstance(ComponentBase)
 
-            # NOTE: maybe simplier:
-            #     if not isinstance(self.data, (CardinalityValidation, ComponentBase)):
-            #         print("here2", self)
+            elif self.attr_node_type == AttrVexpNodeTypeEnum.DATA:
+                self.type_info = self.data.type_info
             elif self.attr_node_type not in (
                     AttrVexpNodeTypeEnum.CONTAINER,
                     AttrVexpNodeTypeEnum.COMPONENT,
-                    # AttrVexpNodeTypeEnum.VALIDATOR,
-                    # AttrVexpNodeTypeEnum.EVALUATOR,
-                    AttrVexpNodeTypeEnum.DATA,
                     ):
                 # all other require type_info
                 raise RuleInternalError(owner=self, msg=f"For attr_node {self.attr_node_type} .type_info not set (type={type(self.data)}).")
 
-            # if not self.type_info:
-            #     # print(f"2: {self.full_name}, {self.attr_node_type}")  # , {type(self.data)}
-            #     raise RuleInternalError(owner=self, msg=f"For attr_node {self.attr_node_type} .type_info could not not set (type={type(self.data)}).")
+            if not self.denied and not self.type_info:
+                raise RuleInternalError(owner=self, msg=f"For attr_node {self.attr_node_type} .type_info could not not set (type={type(self.data)}).")
 
 
     def get_type_info(self) -> TypeInfo:

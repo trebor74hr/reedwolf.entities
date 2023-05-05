@@ -53,9 +53,8 @@ class PrepArg:
 
     def __post_init__(self):
         if self.type_info is None:
-            ...
-            # import pdb;pdb.set_trace() 
             # raise RuleInternalError(owner=self, msg=f"type_info not supplied")
+            ...
 
 @dataclass
 class PreparedArguments:
@@ -417,7 +416,9 @@ class FunctionArguments:
         for prep_arg in prepared_args:
             exp_arg : FuncArg = self.func_arg_dict[prep_arg.name]
             # TODO: 
-            if True:
+
+            # TODO: if True:
+            if prep_arg.type_info is not None:
                 err_msg = exp_arg.type_info.check_compatible(prep_arg.type_info)
                 if err_msg:
                     msg = f"[{prep_arg.name}]: {err_msg}"
