@@ -189,18 +189,19 @@ class IFunction(IFunctionVexpNode):
         # else: Can be cloned object (.clone()) - reuse same object or not?
 
         # put this in self.parsed_arguments
-        try:
-            self.prepared_args = self.function_arguments.parse_func_args(
-                    registries=self.registries,
-                    caller=self.caller,
-                    func_args=self.func_args,
-                    fixed_args=self.fixed_args,
-                    value_arg_type_info=self.value_arg_type_info,
-                    value_arg_name=self.value_arg_name)
-        except RuleSetupTypeError as ex:
-            ex.set_msg(f"{self.as_str()}: {ex.msg}")
-            # raise ex.__class__(f"{self.as_str()}: {ex.msg}")
-            raise
+        # try:
+        self.prepared_args = self.function_arguments.parse_func_args(
+                registries=self.registries,
+                caller=self.caller,
+                owner_name=f"{self.as_str()}",
+                func_args=self.func_args,
+                fixed_args=self.fixed_args,
+                value_arg_type_info=self.value_arg_type_info,
+                value_arg_name=self.value_arg_name)
+        # except RuleSetupTypeError as ex:
+        #     ex.set_msg(f"{self.as_str()}: {ex.msg}")
+        #     # raise ex.__class__(f"{self.as_str()}: {ex.msg}")
+        #     raise
 
         # first validate value type matches
         # if self.prepared_args.value_arg_implicit==True:

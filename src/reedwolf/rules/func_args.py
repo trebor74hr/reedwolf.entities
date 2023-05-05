@@ -47,7 +47,14 @@ from .expressions import (
 @dataclass
 class PrepArg:
     name: str
-    type_info: TypeInfo
+
+    owner_name: str = field(repr=False)
+
+    # can be None on creation, but filled later after complete finish is done
+    # Example: F. namespace (FieldsNS.)
+    type_info: Optional[TypeInfo]
+
+
     # TODO: Union[NoneType, StdPyTypes (Literal[]), IValueExpressionNode
     value_or_vexp: Any = field(repr=True)
 
@@ -59,6 +66,8 @@ class PrepArg:
 @dataclass
 class PreparedArguments:
     prep_arg_list: List[PrepArg]
+
+    owner_name: str = field(repr=False)
 
     # TODO: is this field really used/required?
     # How value_arg (dot-chain mode) is filled:
@@ -77,10 +86,11 @@ class PreparedArguments:
     # autocomputed
     prep_arg_dict: Dict[str, PrepArg] = field(init=False, repr=False)
 
+
     def __post_init__(self):
         names_unfilled = [prep_arg.name for prep_arg in self.prep_arg_list if not prep_arg]
         if names_unfilled:
-            raise RuleInternalError(f"Following prepared arguments are left unfilled: {', '.join(names_unfilled)}")
+            raise RuleInternalError(f"{self.owner_name}: Following prepared arguments are left unfilled: {', '.join(names_unfilled)}")
 
         self.prep_arg_dict = {
                 prep_arg.name: prep_arg 
@@ -159,6 +169,7 @@ class FunctionArguments:
 
     def _create_prep_arg(self, 
                         caller: Union[Namespace, IValueExpressionNode],
+                        owner_name: str,
                         registries: Optional["Registries"],  # noqa: F821
                         arg_name: str, 
                         value_object: Any
@@ -171,7 +182,7 @@ class FunctionArguments:
             vexp: ValueExpression = value_object
 
             if vexp.IsFinished():
-                raise RuleInternalError(owner=self, msg=f"ValueExpression is already setup {vexp}")
+                raise RuleInternalError(owner=self, msg=f"{owner_name}: ValueExpression is already setup {vexp}")
 
             if not caller: 
                 # NOTE: Namespace top level like: Fn.Length(This.name) 
@@ -179,7 +190,7 @@ class FunctionArguments:
                 container = registries.owner.get_container_owner()
                 container.bound_model.type_info
                 caller = container.bound_model
-                # raise RuleSetupValueError(owner=self, msg="ValueExpression cwn be used in dot-chain mode, e g. M.name.Lenght().")
+                # raise RuleSetupValueError(owner=self, msg="{owner_name}: ValueExpression cwn be used in dot-chain mode, e g. M.name.Lenght().")
 
             model_class = caller.type_info.type_
             assert model_class
@@ -191,10 +202,10 @@ class FunctionArguments:
             elif model_class in STANDARD_TYPE_LIST:
                 local_registries = None 
             else:
-                raise RuleSetupValueError(owner=self, msg=f"Unsupported type: {caller} / {model_class}")
+                raise RuleSetupValueError(owner=self, msg=f"{owner_name}: Unsupported type: {caller} / {model_class}")
 
             if not registries:
-                raise RuleInternalError(owner=self, msg=f"Registries is required for ValueExpression() function argument case") 
+                raise RuleInternalError(owner=self, msg=f"{owner_name}: Registries is required for ValueExpression() function argument case") 
 
             func_vexp_node = vexp.Setup(
                                 registries=registries, 
@@ -225,7 +236,11 @@ class FunctionArguments:
             value_or_vexp = value_object
 
 
-        prep_arg = PrepArg(name=arg_name, type_info=type_info, value_or_vexp=value_or_vexp)
+        prep_arg = PrepArg(
+                        name=arg_name, 
+                        type_info=type_info, 
+                        value_or_vexp=value_or_vexp,
+                        owner_name=owner_name)
 
         return prep_arg
 
@@ -233,8 +248,8 @@ class FunctionArguments:
 
     def _try_fill_given_args(self, 
                         caller: Union[Namespace, IValueExpressionNode],
+                        owner_name: str,
                         registries: Optional["Registries"],  # noqa: F821
-
                         args_title: str, 
                         expected_args: OrderedDict, 
                         given_args:List, 
@@ -247,13 +262,14 @@ class FunctionArguments:
         given_args_count = len(given_args)
 
         if given_args_count > expected_args_unfilled_count:
-            raise RuleSetupValueError(owner=self, msg=f"Function takes at most {expected_args_unfilled_count} unfilled argument{plural_suffix(expected_args_unfilled_count)} but {given_args_count} positional {be_conjugate(given_args_count)} given ({args_title})")
+            raise RuleSetupValueError(owner=self, msg=f"{owner_name}: Function takes at most {expected_args_unfilled_count} unfilled argument{plural_suffix(expected_args_unfilled_count)} but {given_args_count} positional {be_conjugate(given_args_count)} given ({args_title})")
 
         # --- Fill unfilled positional arguments in correct order - needs 2 jumps
         for unfill_index, value_object in enumerate(given_args):
             arg_name = expected_args_unfilled_names[unfill_index]
             # expected_args[arg_name] = value_object
             expected_args[arg_name] = self._create_prep_arg(
+                                                owner_name=owner_name,
                                                 registries=registries, 
                                                 caller=caller,
                                                 arg_name=arg_name, 
@@ -265,18 +281,19 @@ class FunctionArguments:
         expected_arg_names = list(expected_args.keys())
         unknown_arg_names = [arg_name for arg_name in given_kwargs.keys() if arg_name not in expected_arg_names]
         if unknown_arg_names:
-            raise RuleSetupTypeError(owner=self, msg=f"Function got an unexpected keyword argument{plural_suffix(len(unknown_arg_names))}: {format_arg_name_list(unknown_arg_names)} ({args_title})")
+            raise RuleSetupTypeError(owner=self, msg=f"{owner_name}: Function got an unexpected keyword argument{plural_suffix(len(unknown_arg_names))}: {format_arg_name_list(unknown_arg_names)} ({args_title})")
 
         # any multiple kwargs / named arguments? filled by positional and kwargs
         multiple_arg_names = [arg_name for arg_name in given_kwargs.keys() if expected_args[arg_name]]
         if multiple_arg_names:
-            raise RuleSetupTypeError(owner=self, msg=f"Function got multiple values for argument{plural_suffix(len(multiple_arg_names))}: {format_arg_name_list(multiple_arg_names)} ({args_title})")
+            raise RuleSetupTypeError(owner=self, msg=f"{owner_name}: Function got multiple values for argument{plural_suffix(len(multiple_arg_names))}: {format_arg_name_list(multiple_arg_names)} ({args_title})")
 
         # --- Finally fill named arguments
         for arg_name, value_object in given_kwargs.items():
             # expected_args[arg_name] = value_object
             expected_args[arg_name] = self._create_prep_arg(
                                                 caller=caller,
+                                                owner_name=owner_name,
                                                 registries=registries, 
                                                 arg_name=arg_name, 
                                                 value_object=value_object)
@@ -287,6 +304,7 @@ class FunctionArguments:
 
     def parse_func_args(self, 
                  caller              : Union[Namespace, IValueExpressionNode],
+                 owner_name          : str,
                  func_args           : FunctionArgumentsType,
                  registries          : "Registries" = field(repr=False),  # noqa: F821
                  fixed_args          : Optional[FunctionArgumentsType] = field(default=None),
@@ -303,13 +321,14 @@ class FunctionArguments:
         expected_args: Dict[str, Optional[PrepArg]] = OrderedDict([(arg.name, None) for arg in self.func_arg_list])
 
         if not registries:
-            raise RuleInternalError(owner=self, msg=f"registries is empty") 
+            raise RuleInternalError(owner=self, msg=f"{owner_name}: registries is empty") 
 
         # ==== 1/3 : FIX_ARGS - by registration e.g. Function(my_py_function, args=(1,), kwargs={"b":2})
 
         args, kwargs = self._process_func_args_raw(fixed_args)
         self._try_fill_given_args(
                 caller=caller,
+                owner_name=owner_name,
                 registries=registries,
                 args_title="fixed arguments", 
                 expected_args=expected_args, 
@@ -327,14 +346,14 @@ class FunctionArguments:
             # value from chain / stream - previous dot-node. e.g. 
             #   M.name.Lower() # value is passed from .name
             if not isinstance(caller, IValueExpressionNode):
-                raise RuleInternalError(f"Caller is not IValueExpressionNode, got: {type(caller)} / {caller}")
+                raise RuleInternalError(f"{owner_name}: Caller is not IValueExpressionNode, got: {type(caller)} / {caller}")
 
             value_arg_implicit = UNDEFINED
 
             if not self.func_arg_list:
                 # no arguments could be accepted at all, nor fixed nor value_arg nor func_args
                 # will raise error later - wrong nr. of arguments
-                raise RuleSetupTypeError(owner=self, msg=f"Filling dot-chain argument value from '{caller.full_name}' failed, function accepts no arguments.")
+                raise RuleSetupTypeError(owner=self, msg=f"{owner_name}: Filling dot-chain argument value from '{caller.full_name}' failed, function accepts no arguments.")
             elif value_arg_name:
                 # value to kwarg 'value_arg_name' value argument
                 # value_object = expected_args.get(value_arg_name, UNDEFINED)
@@ -343,7 +362,7 @@ class FunctionArguments:
                     value_or_vexp = prep_arg.value_or_vexp
                     if not (isinstance(value_or_vexp, ValueExpression) 
                             and value_or_vexp._namespace == ThisNS):
-                        raise RuleSetupTypeError(owner=self, msg=f"Function can not fill argument '{value_arg_name}' from '{caller.full_name}', argument is already filled with value '{value_or_vexp}'. Change arguments' setup or use 'This.' value expression.")
+                        raise RuleSetupTypeError(owner=self, msg=f"{owner_name}: Function can not fill argument '{value_arg_name}' from '{caller.full_name}', argument is already filled with value '{value_or_vexp}'. Change arguments' setup or use 'This.' value expression.")
                     value_arg_implicit = False
             else:
                 # value to first unfilled positional argument
@@ -355,7 +374,7 @@ class FunctionArguments:
                                                    and isinstance(prep_arg.value_or_vexp, ValueExpression) 
                                                    and prep_arg.value_or_vexp._namespace == ThisNS]
                     if not prep_args_within_thisns:
-                        raise RuleSetupTypeError(owner=self, msg=f"Function can not take additional argument from '{caller.full_name}'. Remove at least one predefined argument or use value expression argument within 'This.' namespace.")
+                        raise RuleSetupTypeError(owner=self, msg=f"{owner_name}: Function can not take additional argument from '{caller.full_name}'. Remove at least one predefined argument or use value expression argument within 'This.' namespace.")
                     value_arg_implicit = False
 
             if value_arg_implicit is UNDEFINED:
@@ -374,6 +393,7 @@ class FunctionArguments:
                 self._try_fill_given_args(
                         registries=registries,
                         caller=caller,
+                        owner_name=owner_name,
                         args_title="dot-chain argument", 
                         expected_args=expected_args, 
                         given_args=args, 
@@ -384,6 +404,7 @@ class FunctionArguments:
         args, kwargs = self._process_func_args_raw(func_args)
         self._try_fill_given_args(
                 caller=caller,
+                owner_name=owner_name,
                 registries=registries,
                 args_title="invoke arguments", 
                 expected_args=expected_args, 
@@ -397,26 +418,32 @@ class FunctionArguments:
         unfilled = [arg_name for arg_name, type_info in expected_args.items() 
                     if not type_info and self.func_arg_dict[arg_name].default is UNDEFINED]
         if unfilled:
-            raise RuleSetupTypeError(owner=self, msg=f"Function missing {len(unfilled)} required argument{plural_suffix(len(unfilled))}: {format_arg_name_list(unfilled)}")
+            raise RuleSetupTypeError(owner=self, msg=f"{owner_name}: Function missing {len(unfilled)} required argument{plural_suffix(len(unfilled))}: {format_arg_name_list(unfilled)}")
 
         # ---- Convert to common instance - will be used for later invocation
         prepared_args = PreparedArguments(
+                    owner_name=owner_name,
                     value_arg_implicit=value_arg_implicit,
                     # NOTE: currently value_or_vexp could not be fetched here - need more info
                     # PrepArg(name=arg_name, type_info=type_info, value_or_vexp=UNDEFINED) 
                     #  for arg_name, type_info in expected_args.items() 
-                    prep_arg_list=[prep_arg
-                          for arg_name, prep_arg in expected_args.items() 
-                          if prep_arg is not None]
+                    prep_arg_list=[
+                        prep_arg
+                        for arg_name, prep_arg in expected_args.items() 
+                        if prep_arg is not None
+                        ]
                     )
 
-        # ---- CHECK IF ALL TYPES MATCH
+        self.check_prepared_arguments(prepared_args)
 
+        return prepared_args
+
+
+    def check_prepared_arguments(self, prepared_args: PreparedArguments):
+        " check if all types match "
         err_messages = []
         for prep_arg in prepared_args:
             exp_arg : FuncArg = self.func_arg_dict[prep_arg.name]
-            # TODO: 
-
             # TODO: if True:
             if prep_arg.type_info is not None:
                 err_msg = exp_arg.type_info.check_compatible(prep_arg.type_info)
@@ -426,10 +453,8 @@ class FunctionArguments:
 
         if err_messages:
             msg = ', '.join(err_messages)
-            raise RuleSetupTypeError(f"{len(err_messages)} data type issue(s) => {msg}")
+            raise RuleSetupTypeError(f"{prepared_args.owner_name}: {len(err_messages)} data type issue(s) => {msg}")
 
-
-        return prepared_args
 
 
 # ------------------------------------------------------------
