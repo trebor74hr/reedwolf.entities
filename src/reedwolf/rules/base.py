@@ -58,6 +58,7 @@ from .expressions import (
         ValueExpression,
         RawAttrValue,
         ExecResult,
+        IValueExpressionNode,
         IFunctionVexpNode,
         IRegistries,
         # IRegistry,
@@ -1152,12 +1153,15 @@ def extract_type_info(
 
     # function - callable and not class and not pydantic?
     parent_type_info = None
-    if isinstance(inspect_object, CustomFunctionFactory):
-        parent_type_info = inspect_object.get_output_type_info()
+    if isinstance(inspect_object, IValueExpressionNode):
+        parent_type_info = inspect_object.get_type_info()
         parent_object = parent_type_info.type_
-    elif isinstance(inspect_object, IFunctionVexpNode):
-        parent_type_info = inspect_object.output_type_info
-        parent_object = parent_type_info.type_
+    # if isinstance(inspect_object, CustomFunctionFactory):
+    #     parent_type_info = inspect_object.output_type_info
+    #     parent_object = parent_type_info.type_
+    # elif isinstance(inspect_object, IFunctionVexpNode):
+    #     parent_type_info = inspect_object.output_type_info
+    #     parent_object = parent_type_info.type_
     elif is_function(inspect_object):
         raise Exception("should not happen, use Function/Factory-ies")
     else:

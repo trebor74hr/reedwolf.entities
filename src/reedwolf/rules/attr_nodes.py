@@ -197,6 +197,9 @@ class AttrVexpNode(IValueExpressionNode):
             #     raise RuleInternalError(owner=self, msg=f"For attr_node {self.attr_node_type} .type_info could not not set (type={type(self.data)}).")
 
 
+    def get_type_info(self) -> TypeInfo:
+        return self.type_info
+
     def execute_node(self, 
                  apply_session: IApplySession, 
                  # previous - can be undefined too

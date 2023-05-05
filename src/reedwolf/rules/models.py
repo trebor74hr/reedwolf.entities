@@ -104,7 +104,7 @@ class BoundModelWithHandlers(BoundModelBase):
         # ------------------------------------------------------------
         # TODO: do it better 
         # ------------------------------------------------------------
-        self.type_info = self.read_handler.get_output_type_info() # factory
+        self.type_info = self.read_handler.output_type_info # factory
         self.model = self.type_info.type_
 
         if not is_model_class(self.model):

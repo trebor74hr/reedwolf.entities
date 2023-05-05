@@ -155,13 +155,12 @@ class IFunction(IFunctionVexpNode):
 
     # --- Autocomputed
     # required for IValueExpressionNode
-    output_type_info    : TypeInfo = field(init=False)
+    output_type_info    : TypeInfo = field(init=False, repr=False)
     # required for IValueExpressionNode
     func_name           : str = field(init=False, repr=False)
 
     # computed from function_arguments(fixed_args, func_args)
     prepared_args       : PreparedArguments = field(init=False, repr=False)
-
 
     def __post_init__(self):
         if not self.py_function:
@@ -181,7 +180,8 @@ class IFunction(IFunctionVexpNode):
         self.engine: FunctionEngineBase = DEFAULT_ENGINE
         # chain_arg_type_info
         # self.value_arg_type_info = self.get_value_arg_type_info()
-        self.output_type_info = self.get_output_type_info()
+
+        self.output_type_info = TypeInfo.extract_function_return_type_info(self.py_function)
 
         if not self.function_arguments:
             self.function_arguments = create_function_arguments(self.py_function)
@@ -207,6 +207,10 @@ class IFunction(IFunctionVexpNode):
         # self._validate_value_arg_type(vexp_node=self.caller)
         if self.arg_validators:
             self._call_arg_validators()
+
+
+    def get_type_info(self) -> TypeInfo:
+        return self.output_type_info
 
 
     def _call_arg_validators(self):
@@ -260,9 +264,7 @@ class IFunction(IFunctionVexpNode):
             raise RuleSetupValueError(owner=self, msg=f"'List' type not valid: {type_info}.")
 
 
-    def get_output_type_info(self) -> TypeInfo:
-        return TypeInfo.extract_function_return_type_info(
-                self.py_function)
+    # def get_output_type_info(self) -> TypeInfo: return TypeInfo.extract_function_return_type_info(self.py_function)
 
     # TODO: execute_arg - i.e. from ValueExpression to standard pythoh types
     #       this will need new input parameter: contexts/attr_node/...
@@ -287,7 +289,7 @@ class IFunction(IFunctionVexpNode):
 
         # TODO: check all input arguments and output type match:
         #       check first / vexp_result argument that matches self.value_arg_type_info
-        #       check output type that matches get_output_type_info()
+        #       check output type that matches output_type_info
         """
         assert isinstance(vexp_result, ExecResult), vexp_result
 
@@ -370,6 +372,8 @@ class IFunctionFactory(ABC):
     # # validator function - see details in IFunction.arg_validators
     arg_validators : Optional[ValueArgValidatorPyFuncDictType] = field(default=None, repr=False)
 
+    # autocomputed
+    output_type_info: TypeInfo = field(init=False, repr=False)
 
     def __post_init__(self):
         if not is_function(self.py_function):
@@ -379,10 +383,9 @@ class IFunctionFactory(ABC):
             self.name = self.py_function.__name__
         if self.fixed_args is None:
             self.fixed_args = ()
+        self.output_type_info = TypeInfo.extract_function_return_type_info(self.py_function)
 
-    def get_output_type_info(self) -> TypeInfo:
-        return TypeInfo.extract_function_return_type_info(
-                self.py_function)
+    # def get_output_type_info(self) -> TypeInfo: return self.output_type_info
 
     def create_function(self, 
                 func_args:FunctionArgumentsType, 

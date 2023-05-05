@@ -51,9 +51,11 @@ class PrepArg:
     # TODO: Union[NoneType, StdPyTypes (Literal[]), IValueExpressionNode
     value_or_vexp: Any = field(repr=True)
 
-    # RT: def __post_init__(self):
-    # RT:     if self.type_info is None:
-    # RT:         raise RuleInternalError(owner=self, msg=f"type_info not supplied")
+    def __post_init__(self):
+        if self.type_info is None:
+            ...
+            # import pdb;pdb.set_trace() 
+            # raise RuleInternalError(owner=self, msg=f"type_info not supplied")
 
 @dataclass
 class PreparedArguments:
@@ -201,12 +203,12 @@ class FunctionArguments:
                                 owner=self, 
                                 local_registries=local_registries)
 
-            if isinstance(func_vexp_node, OperationVexpNode):
-                # Assumption - for all operations type_info of first operation
-                # argumnent will persist to result
-                type_info = func_vexp_node.get_first_type_info()
-            else:
-                type_info = func_vexp_node.type_info
+            type_info = func_vexp_node.get_type_info()
+            # if isinstance(func_vexp_node, OperationVexpNode):
+            #     # Assumption - for all operations type_info of first operation
+            #     # argumnent will persist to result
+            # else:
+            #     type_info = func_vexp_node.type_info
 
             # RT: if not type_info:
             # RT:     raise RuleInternalError(owner=self, msg=f"{func_vexp_node}: type_info not set") 
@@ -414,7 +416,6 @@ class FunctionArguments:
         err_messages = []
         for prep_arg in prepared_args:
             exp_arg : FuncArg = self.func_arg_dict[prep_arg.name]
-
             # TODO: 
             if True:
                 err_msg = exp_arg.type_info.check_compatible(prep_arg.type_info)

@@ -151,7 +151,7 @@ class DynamicData(IData, Component):
             raise RuleSetupValueError(owner=self, msg=f"{self.function}: {type(self.function)} - not ValueExpression|Function()")
         # self.type_info = TypeInfo.extract_function_return_type_info(self.function)
         custon_function_factory: CustomFunctionFactory = self.function
-        self.type_info = custon_function_factory.get_output_type_info()
+        self.type_info = custon_function_factory.output_type_info
         # TODO: check function output is Callable[..., RuleDatatype]
         if not self.label:
             self.label = varname_to_title(self.name)

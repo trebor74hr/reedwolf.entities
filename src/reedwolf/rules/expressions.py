@@ -37,6 +37,7 @@ from .namespaces import (
         Namespace,
         )
 from .meta import (
+        TypeInfo,
         FunctionArgumentsType,
         FunctionArgumentsTupleType,
         STANDARD_TYPE_W_NONE_LIST,
@@ -151,6 +152,33 @@ def execute_available_vexp(
 
 
 # ------------------------------------------------------------
+# IValueExpressionNode
+# ------------------------------------------------------------
+
+@dataclass
+class IValueExpressionNode(ABC):
+    """ wrapper around one element in ValueExpression e.g. M.name.Count()
+    .company, .name, .Count() are nodes
+    """
+    def clone(self):
+        # If already setup then copy it and reuse
+        return dataclasses_replace(self)
+
+    @abstractmethod
+    def execute_node(self, 
+                 apply_session: "IApplySession", 
+                 # previous - can be undefined too
+                 vexp_result: Union[ExecResult, UndefinedType],
+                 is_last: bool,
+                 ) -> ExecResult:
+        ...
+
+    @abstractmethod
+    def get_type_info(self) -> TypeInfo:
+        ...
+
+
+# ------------------------------------------------------------
 # execute_vexp_or_node
 # ------------------------------------------------------------
 
@@ -183,50 +211,6 @@ def execute_vexp_or_node(
 
     return vexp_result
 
-# ------------------------------------------------------------
-# get_type_info_from_vexp_or_node
-# ------------------------------------------------------------
-def get_type_info_from_vexp_or_node(
-        # IValueExpressionNode == Union[OperationVexpNode, IFunctionVexpNode, AttrVexpNode, LiteralVexpNode]
-        vexp_node: IValueExpressionNode,
-        ) -> TypeInfo:
-    # TODO: remove the function and expose same function (abstract) to all vexpnode types: get_output_type_info()
-    if isinstance(vexp_node, IFunctionVexpNode):
-        type_info = vexp_node.get_output_type_info()
-    elif isinstance(vexp_node, OperationVexpNode):
-        # Assumption - for all operations type_info of first operation
-        # argumnent will persist to result
-        type_info = vexp_node.get_first_type_info()
-    elif isinstance(vexp_node, IValueExpressionNode):
-        # TODO: AttrVexpNode?
-        type_info = vexp_node.type_info
-    else:
-        # TODO: what with LiteralVexpNode
-        raise RuleSetupTypeError(msg=f"Unsupported type: {type(vexp_node)} / {vexp_node}")
-    return type_info
-
-# ------------------------------------------------------------
-# IValueExpressionNode
-# ------------------------------------------------------------
-
-@dataclass
-class IValueExpressionNode(ABC):
-    """ wrapper around one element in ValueExpression e.g. M.name.Count()
-    .company, .name, .Count() are nodes
-    """
-    def clone(self):
-        # If already setup then copy it and reuse
-        return dataclasses_replace(self)
-
-    @abstractmethod
-    def execute_node(self, 
-                 apply_session: "IApplySession", 
-                 # previous - can be undefined too
-                 vexp_result: Union[ExecResult, UndefinedType],
-                 is_last: bool,
-                 ) -> ExecResult:
-        raise NotImplementedError()
-
 
 
 # ------------------------------------------------------------
@@ -246,10 +230,15 @@ class LiteralVexpNode(IValueExpressionNode):
 
     value : Any
     vexp_result: ExecResult = field(repr=False, init=False)
+    type_info: TypeInfo = field(repr=False, init=False)
 
     def __post_init__(self):
         self.vexp_result = ExecResult()
         self.vexp_result.set_value(self.value, attr_name="", changer_name="")
+        self.type_info = TypeInfo.get_or_create_by_type(type(self.value))
+
+    def get_type_info(self) -> TypeInfo:
+        return self.type_info
 
     def execute_node(self, 
                  apply_session: "IApplySession", 
@@ -333,22 +322,30 @@ class OperationVexpNode(IValueExpressionNode):
     _first_vexp_node : Optional[IValueExpressionNode] = field(repr=False, init=False, default=None)
     _second_vexp_node : Optional[IValueExpressionNode] = field(repr=False, init=False, default=None)
 
+
     def __post_init__(self):
-        self.op_function = self.get_op_function(self.op)
+        self.op_function = self._get_op_function(self.op)
         self._status : VExpStatusEnum = VExpStatusEnum.INITIALIZED
         self._all_ok : Optional[bool] = None
-
+        self._output_type_info: Union[TypeInfo, UNDEFINED] = UNDEFINED 
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
 
-    def get_first_type_info(self):
-        return self._first_vexp_node.type_info
 
-    def get_op_function(self, op: str) -> Callable[..., Any]:
+    def _get_op_function(self, op: str) -> Callable[..., Any]:
         op_function = OPCODE_TO_FUNCTION.get(op, None)
         if op_function is None:
             raise RuleSetupValueError(owner=self, msg="Invalid operation code, {self.op} not one of: {', '.join(self.OP_TO_CODE.keys())}")
         return op_function
 
+    def get_type_info(self) -> TypeInfo:
+        " type_info from first node "
+        # Assumption - for all operations type_info of first operation
+        #       argumnent will persist to result
+        # TODO: consider also last node if available
+        #       return getattr(self._second_vexp_node if self._second_vexp_node else self._first_vexp_node, "type_info", self._first_vexp_node.type_info)
+        if self._output_type_info is UNDEFINED:
+            self._output_type_info = self._first_vexp_node.type_info
+        return self._output_type_info
 
     @staticmethod
     def create_vexp_node(
@@ -612,7 +609,7 @@ class ValueExpression(DynamicAttrsBase):
 
                     vexp_node_name = bit._node
                     if last_vexp_node:
-                        parent_arg_type_info = get_type_info_from_vexp_or_node(last_vexp_node)
+                        parent_arg_type_info = last_vexp_node.get_type_info()
                     else:
                         parent_arg_type_info = None
 
@@ -821,4 +818,27 @@ class ValueExpression(DynamicAttrsBase):
     #   operator.__irshift__(a, b) - a >>= b.
     #         When(a > b) >>= 25
 
+
+
+# def get_type_info_from_vexp_or_node(
+#         # IValueExpressionNode == Union[OperationVexpNode, IFunctionVexpNode, AttrVexpNode, LiteralVexpNode]
+#         vexp_node: IValueExpressionNode,
+#         ) -> TypeInfo:
+#     # TODO: remove the function and expose same function (abstract) to all vexpnode types: output_type_info
+#     type_info = vexp_node.get_type_info()
+# 
+#     # if isinstance(vexp_node, IFunctionVexpNode):
+#     #     type_info = vexp_node.output_type_info
+#     # elif isinstance(vexp_node, OperationVexpNode):
+#     #     # Assumption - for all operations type_info of first operation
+#     #     # argumnent will persist to result
+#     #     type_info = vexp_node.get_type_info()
+#     # elif isinstance(vexp_node, LiteralVexpNode):
+#     #     type_info = vexp_node.type_info
+#     # elif isinstance(vexp_node, IValueExpressionNode):
+#     #     # e.g.: AttrVexpNode?
+#     #     type_info = vexp_node.type_info
+#     # else:
+#     #     raise RuleSetupTypeError(msg=f"Unsupported type: {type(vexp_node)} / {vexp_node}")
+#     return type_info
 
