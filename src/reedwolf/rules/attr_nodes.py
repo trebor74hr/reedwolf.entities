@@ -89,6 +89,7 @@ class AttrVexpNode(IValueExpressionNode):
     # ----- Later evaluated ------
     # could live without this attribute but ...
     attr_node_type: Union[AttrVexpNodeTypeEnum] = field(init=False)
+    is_finished: bool = field(init=False, repr=False, default=False)
 
     def __post_init__(self):
         self.full_name = f"{self.namespace._name}.{self.name}"
@@ -130,7 +131,6 @@ class AttrVexpNode(IValueExpressionNode):
             else:
                 self.attr_node_type = AttrVexpNodeTypeEnum.VEXP
             self.data_supplier_name = f"{self.data!r}"
-            # print(self)
 
 
         # ---------------------------------------------
@@ -153,7 +153,6 @@ class AttrVexpNode(IValueExpressionNode):
 
             self.attr_node_type = AttrVexpNodeTypeEnum.TH_FIELD
             # self.data_supplier_name = f"TH[{type_info.var_type.name}: {type_info.type_.__name__}]"
-            # print(f"here: {type(self.th_field)} {self.name}\n    data={self.data} : {type(self.data)}\n    {self.data.type_} : {type(self.data.type_)}\n    namespace={self.namespace}")
             self.data_supplier_name = f"TH[{self.data.type_.__name__}]"
         else:
             if is_function(self.data):
@@ -162,22 +161,29 @@ class AttrVexpNode(IValueExpressionNode):
                 raise RuleSetupValueError(owner=self, msg=f"Node '.{self.name}' is a function. Maybe you forgot to wrap it with 'reedwolf.rules.Function()'?")
             raise RuleSetupValueError(owner=self, msg=f"AttrVexpNode {self.name} should be based on PYD/DC class, got: {self.data}")
 
+
         # NOTE: .type_info could be calculated later in finish() method
 
 
 
     def finish(self):
+        " fill type_info, must be available for all nodes - with exceptions those with .denied don't have it "
+        super().finish()
+
         if self.type_info is None:
 
             if self.attr_node_type == AttrVexpNodeTypeEnum.FIELD:
+
                 type_info = self.data
                 if not type_info.bound_attr_node:
                     raise RuleInternalError(owner=self, msg=f"AttrVexpNode {self.data} .bound_attr_node not set.")
-                if not type_info.bound_attr_node.type_info:
+
+                bound_type_info = type_info.bound_attr_node.get_type_info()
+                if not bound_type_info:
                     raise RuleInternalError(owner=self, msg=f"AttrVexpNode data.bound_attr_node={self.data} -> {self.data.bound_attr_node} .type_info not set.")
 
                 # transfer type_info from type_info.bound attr_node
-                self.type_info = type_info.bound_attr_node.type_info
+                self.type_info = bound_type_info
 
             elif self.attr_node_type == AttrVexpNodeTypeEnum.DATA:
                 self.type_info = self.data.type_info
@@ -195,12 +201,16 @@ class AttrVexpNode(IValueExpressionNode):
     def get_type_info(self) -> TypeInfo:
         return self.type_info
 
+
     def execute_node(self, 
                  apply_session: IApplySession, 
                  # previous - can be undefined too
                  vexp_result: Union[ExecResult, UndefinedType],
                  is_last: bool,
                  ) -> ExecResult:
+
+        if is_last and not self.is_finished:
+            raise RuleInternalError(owner=self, msg=f"Last vexp node is not finished.") 
 
         # TODO: not nicest way - string split
         #       for extension: [p._name for p in frame.container.bound_model.model.Path]
@@ -313,101 +323,3 @@ class AttrVexpNode(IValueExpressionNode):
     def __repr__(self):
         return str(self)
 
-# DELTHIS: @dataclass
-# DELTHIS: class ContainerAttrVexpNode(AttrVexpNode):
-# DELTHIS:     data: IContainerBase  # noqa: F821
-# DELTHIS: 
-# DELTHIS: @dataclass
-# DELTHIS: class FieldAttrVexpNode(AttrVexpNode):
-# DELTHIS:     data: Any
-# DELTHIS: 
-# DELTHIS: @dataclass
-# DELTHIS: class ComponentAttrVexpNode(AttrVexpNode):
-# DELTHIS:     data: Any
-# DELTHIS: 
-# DELTHIS: @dataclass
-# DELTHIS: class IDataAttrVexpNode(AttrVexpNode):
-# DELTHIS:     data: Any
-# DELTHIS: 
-# DELTHIS: @dataclass
-# DELTHIS: class FunctioAttrVexpNode(AttrVexpNode):
-# DELTHIS:     data: Any
-# DELTHIS: 
-# DELTHIS: @dataclass
-# DELTHIS: class ValueExpressionAttrVexpNode(AttrVexpNode):
-# DELTHIS:     data: Any
-# DELTHIS: 
-# DELTHIS: @dataclass
-# DELTHIS: class ValueExpressionFunctionAttrVexpNode(AttrVexpNode):
-# DELTHIS:     data: Any
-# DELTHIS: 
-# DELTHIS: @dataclass
-# DELTHIS: class ValidatorAttrVexpNode(AttrVexpNode):
-# DELTHIS:     data: Any
-# DELTHIS: 
-# DELTHIS: @dataclass
-# DELTHIS: class EvaluatorAttrVexpNode(AttrVexpNode):
-# DELTHIS:     data: Any
-# DELTHIS: 
-# DELTHIS: @dataclass
-# DELTHIS: class ModelClassAttrVexpNode(AttrVexpNode):
-# DELTHIS:     data: Any
-# DELTHIS: 
-# DELTHIS: @dataclass
-# DELTHIS: class TypeHintedFunctionAttrVexpNode(AttrVexpNode):
-# DELTHIS:     data: Any
-# DELTHIS: 
-# DELTHIS: @dataclass
-# DELTHIS: class TypeHintedFieldAttrVexpNode(AttrVexpNode):
-# DELTHIS:     data: Any
-# DELTHIS: 
-
-
-# ------------------------------------------------------------
-# OBSOLETE 
-# ------------------------------------------------------------
-# if not self.type_info:
-#     if self.attr_node_type == AttrVexpNodeTypeEnum.MODEL_CLASS:
-#         self.type_info = TypeInfo.get_or_create_by_type(py_type_hint=self.data, parent_object=None, th_field=None, function=None)
-#     elif self.attr_node_type == AttrVexpNodeTypeEnum.FUNCTION:
-#         self.type_info = TypeInfo.extract_function_return_type_info(function=self.data)
-#     else:
-#         pass
-#         # if self.attr_node_type == AttrVexpNodeTypeEnum.COMPONENT:
-#         # raise RuleSetupValueError(owner=self, msg=f"AttrVexpNode {self.name} should have type_info passed, got None")
-#     #elif self.attr_node_type == AttrVexpNodeTypeEnum.VEXP_FUNC:
-#     #elif self.attr_node_type == AttrVexpNodeTypeEnum.VEXP :
-#     #elif self.attr_node_type == AttrVexpNodeTypeEnum.CLEANER:
-#     #elif self.attr_node_type == AttrVexpNodeTypeEnum.TH_FUNC:
-#     #elif self.attr_node_type == AttrVexpNodeTypeEnum.TH_FIELD:
-
-# def add_bound_attr_node(self, bound_attr_node:BoundVar):
-#     # for now just info field
-#     self.bound_list.append(bound_attr_node)
-
-# def add_reference(self, component_name:str):
-#     self.references.append(component_name)
-
-# elif isinstance(self.data, IFunctionVexpNode):
-#     if self.function != self.data:
-#         raise RuleInternalError(owner=self, msg=f"self.function != self.data ({self.function} != {self.data})")
-#     self.attr_node_type = AttrVexpNodeTypeEnum.FUNCTION
-#     self.data_supplier_name = f"{self.data!r}"
-
-# references: List[str] = field(init=False, default_factory=list, repr=False)
-# bound_list: List[BoundVar] = field(init=False, default_factory=list, repr=False)
-
-# parent: AttrVexpNode? Any?
-
-# type_info = self.data
-# if self.function:
-#     self.attr_node_type = AttrVexpNodeTypeEnum.TH_FUNC
-# else:
-
-# TODO:
-# if not isinstance(self.data.type_, (type, TypeAnnotation)):
-#     raise RuleInternalError(owner=self, msg="Expected some type, got: {self.data.type_}")
-# # if not inspect.isclass(self.data):
-# # TODO: to support this or not
-# self.attr_node_type = AttrVexpNodeTypeEnum.OBJECT
-# self.data_supplier_name = f"{self.data.__class__.__name__}"

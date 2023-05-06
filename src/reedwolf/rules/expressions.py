@@ -54,6 +54,7 @@ class IRegistry:
 
     @abstractmethod
     def get_root_value(self, apply_session: IApplySession) -> Any:
+        " used in apply phase "
         ...
 
 # ------------------------------------------------------------
@@ -67,6 +68,17 @@ class IRegistries(ABC):
     @abstractmethod
     def __getitem__(self, namespace: Namespace) -> IRegistry:
         ...
+
+    @abstractmethod
+    def register_vexp_node(self, vexp_node: IValueExpressionNode):
+        " TODO: can be done here "
+        ...
+
+    @abstractmethod
+    def add_hook_on_finished_all(self, hook_function: HookOnFinishedAllCallable):
+        " TODO: can be done here "
+        ...
+
 
 # ------------------------------------------------------------
 
@@ -177,6 +189,11 @@ class IValueExpressionNode(ABC):
     def get_type_info(self) -> TypeInfo:
         ...
 
+    def finish(self):
+        if self.is_finished:
+            raise RuleInternalError(owner=self, msg=f"already finished") 
+        self.is_finished = True
+
 
 # ------------------------------------------------------------
 # execute_vexp_or_node
@@ -231,6 +248,9 @@ class LiteralVexpNode(IValueExpressionNode):
     value : Any
     vexp_result: ExecResult = field(repr=False, init=False)
     type_info: TypeInfo = field(repr=False, init=False)
+
+    # later evaluated
+    is_finished: bool = field(init=False, repr=False, default=False)
 
     def __post_init__(self):
         self.vexp_result = ExecResult()
@@ -322,6 +342,7 @@ class OperationVexpNode(IValueExpressionNode):
     _first_vexp_node : Optional[IValueExpressionNode] = field(repr=False, init=False, default=None)
     _second_vexp_node : Optional[IValueExpressionNode] = field(repr=False, init=False, default=None)
 
+    is_finished: bool = field(init=False, repr=False, default=False)
 
     def __post_init__(self):
         self.op_function = self._get_op_function(self.op)
@@ -342,9 +363,8 @@ class OperationVexpNode(IValueExpressionNode):
         # Assumption - for all operations type_info of first operation
         #       argumnent will persist to result
         # TODO: consider also last node if available
-        #       return getattr(self._second_vexp_node if self._second_vexp_node else self._first_vexp_node, "type_info", self._first_vexp_node.type_info)
         if self._output_type_info is UNDEFINED:
-            self._output_type_info = self._first_vexp_node.type_info
+            self._output_type_info = self._first_vexp_node.get_type_info()
         return self._output_type_info
 
     @staticmethod
@@ -375,9 +395,11 @@ class OperationVexpNode(IValueExpressionNode):
 
         # just to check if all ok
         self._first_vexp_node = self.create_vexp_node(self.first, label="First", registries=registries, owner=owner)
+        registries.register_vexp_node(self._first_vexp_node)
 
         if self.second is not UNDEFINED:
             self._second_vexp_node = self.create_vexp_node(self.second, label="second", registries=registries, owner=owner)
+            registries.register_vexp_node(self._second_vexp_node)
 
         self._status=VExpStatusEnum.BUILT
 
@@ -399,6 +421,9 @@ class OperationVexpNode(IValueExpressionNode):
                  is_last: bool,
                  ) -> ExecResult:
         # this should be included: context.this_registry: ThisRegistry
+
+        if is_last and not self.is_finished:
+            raise RuleInternalError(owner=self, msg=f"Last vexp node is not finished.") 
 
         if vexp_result:
             raise NotImplementedError("TODO:")
@@ -641,10 +666,6 @@ class ValueExpression(DynamicAttrsBase):
                                 owner=owner,
                                 # func_args=bit._func_args,
                                 )
-                    # TODO: assert current_vexp_node.type_info, f"{current_vexp_node}, {type(current_vexp_node)}"
-
-                    # if not current_vexp_node.type_info:
-                    #     import pdb;pdb.set_trace() 
 
                 # add node to evaluator
                 vexp_evaluator.add(current_vexp_node)
@@ -654,7 +675,6 @@ class ValueExpression(DynamicAttrsBase):
                 #     registries.add(current_vexp_node, alt_vexp_node_name=copy_to_registries.vexp_node_name)
 
             except NotImplementedError as ex:
-                # print(f"XX {self} -> {ex}")
                 if strict:
                     raise
                 self._status = VExpStatusEnum.ERR_TO_IMPLEMENT
@@ -662,20 +682,6 @@ class ValueExpression(DynamicAttrsBase):
                 break
 
             last_vexp_node = current_vexp_node
-
-            # except (RuleError) as ex:
-            # NOTE: RL 221104 strict mode - do not tolerate attr_node not found any more
-            # except (RuleSetupNameNotFoundError) as ex:
-            #     if False:
-            #         self._status = VExpStatusEnum.ERR_NOT_FOUND
-            #         # current_vexp_node = registries.get(namespace=bit._namespace, vexp_node_name=vexp_node_name, owner=owner, parent=current_vexp_node)
-            #         print(f"== TODO: RuleSetupError - {self} -> Registries error {bit}: {ex}")
-            #         break
-            #     else:
-            #         raise RuleSetupError(owner=self, msg=f"Registries {registries!r} attribute {vexp_node_name} not found: {ex}")
-
-            # if not isinstance(current_vexp_node, AttrVexpNode):
-            #     raise RuleInternalError(owner=self, msg=f"Type of found object is not AttrVexpNode, got: {type(current_vexp_node)}.")
 
             # can be Component/IData or can be managed Model dataclass Field - when .denied is not appliable
             if hasattr(current_vexp_node, "denied") and current_vexp_node.denied:
@@ -690,7 +696,7 @@ class ValueExpression(DynamicAttrsBase):
             self._all_ok = True
             self._evaluator = vexp_evaluator
             self._vexp_node = vexp_evaluator.last_node()
-
+            registries.register_vexp_node(self._vexp_node)
         else:
             # TODO: raise RuleSetupError()
             self._all_ok = False
@@ -741,20 +747,14 @@ class ValueExpression(DynamicAttrsBase):
     # --------------------------------
     # ------- Reserved methods -------
     # --------------------------------
-
     # NOTE: each method should be listed in RESERVED_ATTR_NAMES
-
-    # --------------------------------
-    # ------- Terminate methods ------
-    #           return plain python objects
 
     # ----------------------------------
     # ------- Internal methods ---------
-
     # https://realpython.com/python-bitwise-operators/#custom-data-types
     # comparison operators <, <=, ==, !=, >=, >
 
-    # NOTE: Operations are in internal OperationsNS
+    # NOTE: Operations are put in internal OperationsNS
 
     def __eq__(self, other):        self._EnsureFinished(); return ValueExpression(OperationVexpNode("==", self, other), namespace=OperationsNS)  # noqa: E702
     def __ne__(self, other):        self._EnsureFinished(); return ValueExpression(OperationVexpNode("!=", self, other), namespace=OperationsNS)  # noqa: E702
@@ -782,36 +782,23 @@ class ValueExpression(DynamicAttrsBase):
 
     # ------------------------------------------------------------
 
-    # def __rshift__(self, other):
-    #     """
-    #     Streaming:
-    #         List[Instance] >> Function() # receives Qs/List, like Map(Function, List) -> List
-    #         Instance >> Function()       # receives Instance, returns
-    #     """
-    #     return ValueExpression(StreamOperation(">>", self, other), namespace=OperationsNS)  # >>
-
-
-
-    # __abs__ - abs()
-    # __xor__ ==> ^
-    # <<, >>
-    # ** 	__pow__(self, object) 	Exponentiation
-    # Matrix Multiplication 	a @ b 	matmul(a, b)
-    # Positive 	+ a 	pos(a)
-    # Slice Assignment 	seq[i:j] = values 	setitem(seq, slice(i, j), values)
-    # Slice Deletion 	del seq[i:j] 	delitem(seq, slice(i, j))
-    # Slicing 	seq[i:j] 	getitem(seq, slice(i, j))
-    # String Formatting 	s % obj 	mod(s, obj)
-    #       % 	__mod__(self, object) 	Modulus
-    # Truth Test 	obj 	truth(obj)
+    # NOTE: good candidates for future operator's implementations: 
+    #   [i], [i:j]          Slicing 	seq[i:j] 	getitem(seq, slice(i, j))
+    #   ^   __xor__         Return the bitwise exclusive or of a and b.
+    #   <<  __lshift__      Return a shifted left by b.
+    #   >>  __rshift__      Return a shifted right by b.
+    #   ** 	__pow__ 	    Exponentiation
+    #   @   __matmul__      Matrix Multiplication 	a @ b 	matmul(a, b)
+    #   %   __mod__         String Formatting / Modulus	/ mod(s, obj)
 
     # https://docs.python.org/3/library/operator.html
-    #   operator.__lshift__(a, b) - a << b - Return a shifted left by b.
-    #   operator.__rshift__(a, b) - a >> b - Return a shifted right by b.
-    #   operator.__mod__(a, b) - Return a % b.
-    #   operator.__matmul__(a, b) -  Return a @ b.
-    #   operator.__pow__(a, b) - Return a ** b, for a and b numbers.
-    #   operator.__xor__(a, b) -  a ^ b Return the bitwise exclusive or of a and b.
+
+    # other:
+    #   __abs__ - abs()
+    #   Positive 	+ a 	pos(a)
+    #   Slice Assignment 	seq[i:j] = values 	setitem(seq, slice(i, j), values)
+    #   Slice Deletion 	del seq[i:j] 	delitem(seq, slice(i, j))
+    #   Truth Test 	obj 	truth(obj)
     #   setitem(seq, slice(i, j), values) - seq[i:j] = values
     #       When[ a > b : 25 ], When[ a > b : 25 ]
     #   operator.__ixor__(a, b) - a ^= b.
@@ -819,26 +806,11 @@ class ValueExpression(DynamicAttrsBase):
     #         When(a > b) >>= 25
 
 
-
-# def get_type_info_from_vexp_or_node(
-#         # IValueExpressionNode == Union[OperationVexpNode, IFunctionVexpNode, AttrVexpNode, LiteralVexpNode]
-#         vexp_node: IValueExpressionNode,
-#         ) -> TypeInfo:
-#     # TODO: remove the function and expose same function (abstract) to all vexpnode types: output_type_info
-#     type_info = vexp_node.get_type_info()
-# 
-#     # if isinstance(vexp_node, IFunctionVexpNode):
-#     #     type_info = vexp_node.output_type_info
-#     # elif isinstance(vexp_node, OperationVexpNode):
-#     #     # Assumption - for all operations type_info of first operation
-#     #     # argumnent will persist to result
-#     #     type_info = vexp_node.get_type_info()
-#     # elif isinstance(vexp_node, LiteralVexpNode):
-#     #     type_info = vexp_node.type_info
-#     # elif isinstance(vexp_node, IValueExpressionNode):
-#     #     # e.g.: AttrVexpNode?
-#     #     type_info = vexp_node.type_info
-#     # else:
-#     #     raise RuleSetupTypeError(msg=f"Unsupported type: {type(vexp_node)} / {vexp_node}")
-#     return type_info
+    # def __rshift__(self, other):
+    #     """
+    #     Streaming:
+    #         List[Instance] >> Function() # receives Qs/List, like Map(Function, List) -> List
+    #         Instance >> Function()       # receives Instance, returns
+    #     """
+    #     return ValueExpression(StreamOperation(">>", self, other), namespace=OperationsNS)  # >>
 

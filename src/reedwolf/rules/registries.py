@@ -333,17 +333,16 @@ class RegistryBase(IRegistry):
             vexp_node = attr_node_template.clone()
             assert id(vexp_node) != attr_node_template
 
-            # TODO: 
-            # print(type(vexp_node))
-            # if isinstance(parent_vexp_node.data, IFunctionVexpNode):
-            #     inspect_object = parent_vexp_node.data.output_type_info
+            # TODO: needed?
+            #       if isinstance(parent_vexp_node.data, IFunctionVexpNode):
+            #           inspect_object = parent_vexp_node.data.get_type_info()
         else:
             # --------------------------------------------------------------
             # IN-DEPTH LEVEL 2+, e.g. M.company.<this-node-and-next>
             # ---------------------------------------------------------------
 
             if isinstance(parent_vexp_node, IFunctionVexpNode):
-                inspect_object = parent_vexp_node.output_type_info
+                inspect_object = parent_vexp_node.get_type_info()
             else:
                 assert isinstance(parent_vexp_node, AttrVexpNode)
 
@@ -396,10 +395,7 @@ class RegistryBase(IRegistry):
         if not isinstance(vexp_node, IValueExpressionNode):
             raise RuleInternalError(owner=owner, msg=f"Namespace {self.NAMESPACE}: Type of found object is not IValueExpressionNode, got: {type(vexp_node)}.")
 
-
-        # TODO: if not vexp_node.type_info:
-        # TODO:     raise RuleInternalError(owner=self, msg=f"type_info must be filled: {vexp_node}, {type(vexp_node)}")
-            
+        # NOTE: vexp_node.type_info can be None, will be filled later in finish()
 
         return vexp_node
 
@@ -642,11 +638,13 @@ class FieldsRegistry(RegistryBase):
             denied = False
             # not denied
             deny_reason = ""
-            type_info = None
-            # TODO: type_info = component.type_info
-            # raise NotImplementedError(f"TODO: type_info logic required")
+            type_info = component.type_info if component.type_info else None
+            # TODO: consider to set like in preparg logic:
+            #    if not type_info_or_callable: 
+            #           type_info_or_callable = component.get_type_info
 
-        # containers, validations, evaluations, # dropped: validators, evaluators, ValidatorBase
+        # TODO: to have standard types in some global list in fields.py
+        #   containers, validations, evaluations, # dropped: validators, evaluators, ValidatorBase
         elif isinstance(component, (BoundModel, BoundModelWithHandlers, ValidationBase, EvaluationBase, FieldGroup, Extension, Rules, )): # 
             # stored - but should not be used
             denied = True
@@ -815,6 +813,7 @@ class RegistriesBase(IRegistries):
     def __init__(self, 
             # usually 'ContainerBase'
             owner:  Optional[Any],  # noqa: F821
+            owner_registries: Optional[IRegistries], 
             functions: Optional[List[CustomFunctionFactory]] = None, 
             functions_factory_registry: Optional[FunctionsFactoryRegistry] = None,
             include_standard_functions: bool = True,
@@ -825,8 +824,23 @@ class RegistriesBase(IRegistries):
         """
         # owner is usually: 'ContainerBase'
         self.owner: Optional[Any] = owner  # noqa: F821
+        self.owner_registries: Optional[IRegistries] = owner_registries
+
+        self.is_top_registries: bool = (self.owner_registries is None)
+
+        if self.is_top_registries:
+            self.top_owner_registries = self
+        else:
+            self.top_owner_registries = self.owner_registries
+            while self.top_owner_registries.owner_registries:
+                self.top_owner_registries = self.top_owner_registries.owner_registries
+
+        assert self.top_owner_registries
+
+        # compputed
         self._registry_dict : Dict[str, IRegistry] = {}
         self.name: str = owner.name if owner else "no-owner"
+        self.vexp_node_dict: Dict[str, IValueExpressionNode] = {}
         self.finished: bool = False
 
         if functions_factory_registry:
@@ -839,14 +853,8 @@ class RegistriesBase(IRegistries):
                                              include_standard=include_standard_functions)
                                              # owner.is_top_owner())
 
-    def add_registry(self, registry: IRegistry):
-        if self.finished:
-            raise RuleInternalError(owner=self, msg=f"Registry already in finished satte, adding '{registry}' not possible.")
-        ns_name = registry.NAMESPACE._name
-        if ns_name in self._registry_dict:
-            raise RuleInternalError(owner=self, msg=f"Registry {registry} already in registry")
-        self._registry_dict[ns_name] = registry
-        registry.set_registries(self)
+        self.hook_on_finished_all_list: Optional[List[HookOnFinishedAllCallable]] =  \
+            [] if self.is_top_registries else None
 
 
     # ------------------------------------------------------------
@@ -862,6 +870,18 @@ class RegistriesBase(IRegistries):
 
     # ------------------------------------------------------------
 
+    def add_registry(self, registry: IRegistry):
+        if self.finished:
+            raise RuleInternalError(owner=self, msg=f"Registry already in finished satte, adding '{registry}' not possible.")
+        ns_name = registry.NAMESPACE._name
+        if ns_name in self._registry_dict:
+            raise RuleInternalError(owner=self, msg=f"Registry {registry} already in registry")
+        self._registry_dict[ns_name] = registry
+        registry.set_registries(self)
+
+
+    # ------------------------------------------------------------
+
     def get_registry(self, namespace: Namespace, strict:bool= True) -> IRegistry:
         if namespace._name not in self._registry_dict:
             if strict:
@@ -871,6 +891,18 @@ class RegistriesBase(IRegistries):
 
     def __getitem__(self, namespace: Namespace) -> IRegistry:
         return self._registry_dict[namespace._name]
+
+
+    # ------------------------------------------------------------
+
+    def add_hook_on_finished_all(self, hook_function: HookOnFinishedAllCallable):
+        self.top_owner_registries.hook_on_finished_all_list.append(hook_function)
+
+    def call_hooks_on_finished_all(self):
+        if not self.is_top_registries:
+            raise RuleInternalError(owner=self, msg=f"call_hooks_on_finished_all() can be called on top registries") 
+        for hook_function in self.hook_on_finished_all_list:
+            hook_function()
 
     # ------------------------------------------------------------
 
@@ -889,6 +921,7 @@ class RegistriesBase(IRegistries):
     def _register_attr_node(self, attr_node:AttrVexpNode, alt_attr_node_name=None):
         """
         !!!!! NOTE helper method - USED ONLY IN UNIT TESTING !!!!!
+        TODO: replace with register_vexp_node
         """
         assert not self.finished
         ns_name = attr_node.namespace._name
@@ -909,17 +942,36 @@ class RegistriesBase(IRegistries):
 
     # ------------------------------------------------------------
 
+    def register_vexp_node(self, vexp_node: IValueExpressionNode):
+        " used to validate if all value expressions are completely setup (called finish() and similar) in setup phase " 
+        # TODO: this could be cache - to reuse M.name, F.id, etc. (not for functions and operations)
+        #       key = vexp_node.name
+
+        key = id(vexp_node)
+        if key in self.vexp_node_dict:
+            if self.vexp_node_dict[key] != vexp_node:
+                raise RuleInternalError(owner=self, msg=f"vexp key {key}: vexp_node already registered with different object: \n  == {self.vexp_node_dict[key]} / {id(self.vexp_node_dict[key])}\n  got:\n  == {vexp_node} / {id(vexp_node)}")  
+        else:
+            self.vexp_node_dict[key] = vexp_node
+
+    # ------------------------------------------------------------
+
     def finish(self):
         if self.finished:
             raise RuleSetupError(owner=self, msg="Method finish() already called.")
         for ns, registry in self._registry_dict.items():
             for vname, vexp_node in registry.items():
+                assert isinstance(vexp_node, IValueExpressionNode)
                 # do some basic validate
-                if isinstance(vexp_node, AttrVexpNode):
-                    vexp_node.finish()
-                else:
-                    assert not hasattr(vexp_node, "finish"), vexp_node
+                vexp_node.finish()
+
             registry.finish()
+
+        for vexp_node in self.vexp_node_dict.values():
+            if not vexp_node.is_finished:
+                vexp_node.finish()
+            if not vexp_node.is_finished:
+                raise RuleInternalError(owner=self, msg=f"VexpNode {vexp_node} still not finished, finish() moethod did not set is_finished")  
 
         self.finished = True
 
@@ -934,7 +986,9 @@ class Registries(RegistriesBase):
         this_registry = ThisRegistry(
                 model_class=this_ns_model_class,
                 )
-        local_registries = RegistriesBase(owner=self.owner,
+        local_registries = RegistriesBase(
+                                owner=self.owner,
+                                owner_registries=None,
                                 functions_factory_registry=self.functions_factory_registry,
                                 )
         local_registries.add_registry(this_registry)

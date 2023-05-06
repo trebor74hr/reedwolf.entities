@@ -79,9 +79,6 @@ class DatatypeCardinalityEnum(Enum):
     SINGLE  = 301
     LIST    = 302
 
-# input_types : Tuple[ DatatypeType ]
-# output_types: List[ DatatypeType ]
-
 class FunctionEngineBase:
     pass
 
@@ -155,12 +152,15 @@ class IFunction(IFunctionVexpNode):
 
     # --- Autocomputed
     # required for IValueExpressionNode
-    output_type_info    : TypeInfo = field(init=False, repr=False)
+    _output_type_info    : TypeInfo = field(init=False, repr=False)
     # required for IValueExpressionNode
     func_name           : str = field(init=False, repr=False)
 
     # computed from function_arguments(fixed_args, func_args)
     prepared_args       : PreparedArguments = field(init=False, repr=False)
+
+    is_finished: bool = field(init=False, repr=False, default=False)
+
 
     def __post_init__(self):
         if not self.py_function:
@@ -181,7 +181,7 @@ class IFunction(IFunctionVexpNode):
         # chain_arg_type_info
         # self.value_arg_type_info = self.get_value_arg_type_info()
 
-        self.output_type_info = TypeInfo.extract_function_return_type_info(self.py_function)
+        self._output_type_info = TypeInfo.extract_function_return_type_info(self.py_function)
 
         if not self.function_arguments:
             self.function_arguments = create_function_arguments(self.py_function)
@@ -209,9 +209,11 @@ class IFunction(IFunctionVexpNode):
         if self.arg_validators:
             self._call_arg_validators()
 
+        # self.registries.register_vexp_node(self)
+
 
     def get_type_info(self) -> TypeInfo:
-        return self.output_type_info
+        return self._output_type_info
 
 
     def _call_arg_validators(self):
@@ -294,6 +296,9 @@ class IFunction(IFunctionVexpNode):
         """
         assert isinstance(vexp_result, ExecResult), vexp_result
 
+        if is_last and not self.is_finished:
+            raise RuleInternalError(owner=self, msg=f"Last vexp-node is not finished")  # , {id(self)} / {type(self)}
+
         input_value = vexp_result.value
 
         args = []
@@ -340,6 +345,7 @@ class IFunction(IFunctionVexpNode):
 class CustomFunction(IFunction):
     pass
 
+
 @dataclass
 class BuiltinFunction(IFunction):
     pass
@@ -374,7 +380,7 @@ class IFunctionFactory(ABC):
     arg_validators : Optional[ValueArgValidatorPyFuncDictType] = field(default=None, repr=False)
 
     # autocomputed
-    output_type_info: TypeInfo = field(init=False, repr=False)
+    _output_type_info: TypeInfo = field(init=False, repr=False)
 
     def __post_init__(self):
         if not is_function(self.py_function):
@@ -384,9 +390,9 @@ class IFunctionFactory(ABC):
             self.name = self.py_function.__name__
         if self.fixed_args is None:
             self.fixed_args = ()
-        self.output_type_info = TypeInfo.extract_function_return_type_info(self.py_function)
+        self._output_type_info = TypeInfo.extract_function_return_type_info(self.py_function)
 
-    # def get_output_type_info(self) -> TypeInfo: return self.output_type_info
+    # def get_type_info(self) -> TypeInfo: return self._output_type_info
 
     def create_function(self, 
                 func_args:FunctionArgumentsType, 
@@ -407,6 +413,9 @@ class IFunctionFactory(ABC):
                 arg_validators      = self.arg_validators,  # noqa: E251
                 )
         return custom_function
+
+    def get_type_info(self) -> TypeInfo:
+        return self._output_type_info
 
 
 # ------------------------------------------------------------

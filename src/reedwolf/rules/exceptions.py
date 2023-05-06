@@ -31,7 +31,7 @@ class RuleError(Exception, ABC):
                     else \
                         (f"{self.owner.__class__.__name__}('{str(self.owner)}') -> {self.msg}" 
                          if self.owner else 
-                         f"{self.owner.__class__.__name__} -> {self.msg}")
+                         f"{self.msg}")
 
     def __str__(self):
         return f"{self.full_msg}"

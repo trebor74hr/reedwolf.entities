@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import inspect
 from collections import OrderedDict
+from functools import partial
 
 from typing import (
         Dict,
@@ -42,6 +43,8 @@ from .expressions import (
         )
 
 
+TypeInfoCallable = Callable[[], TypeInfo]
+
 # In Python 3.7, dictionaries are ordered.
 # Dict[arg_name: str, type_info: TypeInfo]:
 @dataclass
@@ -52,16 +55,22 @@ class PrepArg:
 
     # can be None on creation, but filled later after complete finish is done
     # Example: F. namespace (FieldsNS.)
-    type_info: Optional[TypeInfo]
-
+    type_info_or_callable: Union[TypeInfo, TypeInfoCallable]
 
     # TODO: Union[NoneType, StdPyTypes (Literal[]), IValueExpressionNode
     value_or_vexp: Any = field(repr=True)
 
     def __post_init__(self):
-        if self.type_info is None:
-            # raise RuleInternalError(owner=self, msg=f"type_info not supplied")
-            ...
+        if self.type_info_or_callable is None:
+            raise RuleInternalError(owner=self, msg=f"type_info / 'xallable() -> type_info' not supplied")
+
+    @property
+    def type_info(self) -> Optional[TypeInfo]:
+        " in some cases type_info is not available, then callable is provided which will start returning non-None value after finish() is completed "
+        return self.type_info_or_callable() \
+                if callable(self.type_info_or_callable) \
+                else self.type_info_or_callable
+
 
 @dataclass
 class PreparedArguments:
@@ -86,6 +95,7 @@ class PreparedArguments:
     # autocomputed
     prep_arg_dict: Dict[str, PrepArg] = field(init=False, repr=False)
 
+    # any_prep_arg_lack_type_info: bool = field(init=False, repr=False)
 
     def __post_init__(self):
         names_unfilled = [prep_arg.name for prep_arg in self.prep_arg_list if not prep_arg]
@@ -96,6 +106,13 @@ class PreparedArguments:
                 prep_arg.name: prep_arg 
                 for prep_arg in self.prep_arg_list
                 }
+        self.any_prep_arg_lack_type_info()
+
+    def any_prep_arg_lack_type_info(self):
+        return any((
+                not bool(pa.type_info) 
+                for pa in self.prep_arg_dict.values() 
+                ))
 
     def get(self, attr_name:str) -> Optional[PrepArg]:
         return self.prep_arg_dict.get(attr_name, None)
@@ -175,7 +192,7 @@ class FunctionArguments:
                         value_object: Any
                         ) -> PrepArg:
         if isinstance(value_object, TypeInfo):
-            type_info = value_object
+            type_info_or_callable = value_object
             # TODO: should be ValueExpression or IValueExpressionNode
             value_or_vexp = UNDEFINED 
         elif isinstance(value_object, ValueExpression):
@@ -207,38 +224,33 @@ class FunctionArguments:
             if not registries:
                 raise RuleInternalError(owner=self, msg=f"{owner_name}: Registries is required for ValueExpression() function argument case") 
 
-            func_vexp_node = vexp.Setup(
+            vexp_node = vexp.Setup(
                                 registries=registries, 
                                 # TODO: is this good?
                                 owner=self, 
                                 local_registries=local_registries)
 
-            type_info = func_vexp_node.get_type_info()
-            # if isinstance(func_vexp_node, OperationVexpNode):
-            #     # Assumption - for all operations type_info of first operation
-            #     # argumnent will persist to result
-            # else:
-            #     type_info = func_vexp_node.type_info
-
-            # RT: if not type_info:
-            # RT:     raise RuleInternalError(owner=self, msg=f"{func_vexp_node}: type_info not set") 
-
+            # NOTE: pass callable since type_info for some Vexp-s are not avaialble (e.g. FieldsNS, F.name)
+            type_info_or_callable = vexp_node.get_type_info()
+            if not type_info_or_callable:
+                # if type_info is not provided then set callable which will start to return values after finish is completed
+                type_info_or_callable = vexp_node.get_type_info
             value_or_vexp = vexp
 
         elif inspect.isclass(value_object):
-            type_info = TypeInfo.get_or_create_by_type(value_object)
+            type_info_or_callable = TypeInfo.get_or_create_by_type(value_object)
             value_or_vexp = value_object
 
         else:
             # check that these are standard classes
-            type_info = TypeInfo.get_or_create_by_type(type(value_object))
+            type_info_or_callable = TypeInfo.get_or_create_by_type(type(value_object))
             # TODO: Literal()
             value_or_vexp = value_object
 
 
         prep_arg = PrepArg(
                         name=arg_name, 
-                        type_info=type_info, 
+                        type_info_or_callable=type_info_or_callable, 
                         value_or_vexp=value_or_vexp,
                         owner_name=owner_name)
 
@@ -386,7 +398,7 @@ class FunctionArguments:
                     value_args = [value_arg_type_info]
                     value_kwargs = {}
 
-                # TODO: validates vexp_node.type_info matches value_arg_type_info
+                # TODO: validates vexp_node.get_type_info() matches value_arg_type_info
 
                 args, kwargs = self._process_func_args_raw((FunctionArgumentsType(value_args, value_kwargs)))
                 # vexp_node : IValueExpressionNode = caller
@@ -434,26 +446,42 @@ class FunctionArguments:
                         ]
                     )
 
-        self.check_prepared_arguments(prepared_args)
+        kwargs = dict(func_arg_dict=self.func_arg_dict, prepared_args=prepared_args)
+
+        if not prepared_args.any_prep_arg_lack_type_info():
+            check_prepared_arguments(**kwargs)
+        else:
+            registries.add_hook_on_finished_all(
+                partial(check_prepared_arguments, **kwargs)
+                )
 
         return prepared_args
 
 
-    def check_prepared_arguments(self, prepared_args: PreparedArguments):
-        " check if all types match "
-        err_messages = []
-        for prep_arg in prepared_args:
-            exp_arg : FuncArg = self.func_arg_dict[prep_arg.name]
-            # TODO: if True:
-            if prep_arg.type_info is not None:
-                err_msg = exp_arg.type_info.check_compatible(prep_arg.type_info)
-                if err_msg:
-                    msg = f"[{prep_arg.name}]: {err_msg}"
-                    err_messages.append(msg)
+# ------------------------------------------------------------
 
-        if err_messages:
-            msg = ', '.join(err_messages)
-            raise RuleSetupTypeError(f"{prepared_args.owner_name}: {len(err_messages)} data type issue(s) => {msg}")
+def check_prepared_arguments(
+        func_arg_dict: Dict[str, FuncArg],
+        prepared_args: PreparedArguments):
+    """ 
+    check if all types match 
+    set to be pure function since to make it a bit easier to call later
+    """
+    # assert not prepared_args.any_prep_arg_lack_type_info()
+    err_messages = []
+    for prep_arg in prepared_args:
+        exp_arg : FuncArg = func_arg_dict[prep_arg.name]
+        if prep_arg.type_info is None:
+            raise RuleInternalError(f"{prepared_args.owner_name} -> Argument '{prep_arg}' type_info is not set")
+
+        err_msg = exp_arg.type_info.check_compatible(prep_arg.type_info)
+        if err_msg:
+            msg = f"[{prep_arg.name}]: {err_msg}"
+            err_messages.append(msg)
+
+    if err_messages:
+        msg = ', '.join(err_messages)
+        raise RuleSetupTypeError(f"{prepared_args.owner_name}: {len(err_messages)} data type issue(s) => {msg}")
 
 
 

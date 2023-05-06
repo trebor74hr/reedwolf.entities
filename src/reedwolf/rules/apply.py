@@ -442,8 +442,7 @@ class ApplyResult(IApplySession):
                             updated_values = updated_values,
                         ))
 
-
-        # print(f"depth={depth}, comp={component.name}, bind={bind} => {vexp_result}")
+        # TODO: logger: apply_session.config.logger.debug(f"depth={depth}, comp={component.name}, bind={bind} => {vexp_result}")
 
         return
 
@@ -456,7 +455,7 @@ class ApplyResult(IApplySession):
                 vexp_result: ExecResult = \
                         attr_value._evaluator.execute_vexp(
                                 apply_session=self)
-                # print(f"{parent.name if parent else ''}.{component.name}.{attr_name} = VExp[{attr_value}] -> {vexp_result}")
+                # TODO: apply_session.config.logger.debug(f"{parent.name if parent else ''}.{component.name}.{attr_name} = VExp[{attr_value}] -> {vexp_result}")
 
 
     # ------------------------------------------------------------

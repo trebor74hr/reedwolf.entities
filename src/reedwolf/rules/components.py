@@ -95,7 +95,6 @@ class Component(ComponentBase, ABC):
         key_string = GlobalConfig.ID_NAME_SEPARATOR.join(
                 [container_key_string, self.name] 
                 )
-        # print("comp:", self.name, key_string)
         return key_string
         
     def is_extension(self):
@@ -121,7 +120,7 @@ class StaticData(IData, Component):
 
     def __post_init__(self):
         if isinstance(self.value, ValueExpression):
-            print("TODO: should be model or enum")
+            # TODO: should be model or enum
             # raise RuleSetupValueError(owner=self, msg=f"{self.name} -> {type(self.value)}: {type(self.value)} - to be done a ValueExpression")
             raise NotImplementedError(f"{self.name} -> {type(self.value)}: {type(self.value)} - to be done a ValueExpression")
         self.type_info = TypeInfo.get_or_create_by_type(self.value)
@@ -151,7 +150,7 @@ class DynamicData(IData, Component):
             raise RuleSetupValueError(owner=self, msg=f"{self.function}: {type(self.function)} - not ValueExpression|Function()")
         # self.type_info = TypeInfo.extract_function_return_type_info(self.function)
         custon_function_factory: CustomFunctionFactory = self.function
-        self.type_info = custon_function_factory.output_type_info
+        self.type_info = custon_function_factory.get_type_info()
         # TODO: check function output is Callable[..., RuleDatatype]
         if not self.label:
             self.label = varname_to_title(self.name)

@@ -103,6 +103,7 @@ def create_registries(
     registries = Registries(
                     owner=owner, 
                     functions=functions,
+                    owner_registries=owner.registries if owner.owner else None,
                     include_standard_functions=owner.is_top_owner())
     registries.add_registry(ModelsRegistry())
     registries.add_registry(DataRegistry())
@@ -251,15 +252,6 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         # ------------------------------------------------------------
         for data_var in self.data:
             self.registries[DataNS].register(data_var)
-            # assert isinstance(data_var, IData)
-            # function = data_var.value if is_function(data_var.value) else None
-            # data_var_attr_node = AttrVexpNode(
-            #                         name=data_var.name,
-            #                         data=data_var,
-            #                         namespace=DatasNS,
-            #                         type_info=data_var.type_info,
-            #                         function=function)
-            # self.registries.register(data_var_attr_node)
 
     # ------------------------------------------------------------
 
@@ -273,33 +265,6 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         # A.3. COMPONENTS - collect attr_nodes - previously flattened (recursive function fill_components)
         for component_name, component in self.components.items():
             self.registries[FieldsNS].register(component)
-            # if isinstance(component, (FieldBase, IData)):
-            #     denied = False
-            #     deny_reason = ""
-            #     # TODO: type_info = component.attr_node.type_info
-            #     # print("here-7", component)
-            #     type_info = None
-            # # containers, validations, validators, evaluations, evaluators
-            # elif isinstance(component, (BoundModel, BoundModelWithHandlers, ValidationBase, EvaluationBase, FieldGroup, Extension, Rules, ValidatorBase)):
-            #     # stored - but should not be used
-            #     denied = True
-            #     deny_reason = "Component of type {component.__class__.__name__} can not be referenced in ValueExpressions"
-            #     if hasattr(component, "type_info"):
-            #         type_info=component.type_info
-            #     else:
-            #         type_info=None
-            # else:
-            #     valid_types = ', '.join([t.__name__ for t in (StringField, ChoiceField, BooleanField, EnumField, ValidationBase, EvaluationBase, FieldGroup, Extension, Rules, ValidatorBase, EvaluatorBase)])
-            #     raise RuleSetupError(owner=self, msg=f"RuleSetup does not support type {type(component)}: {repr(component)[:100]}. Valid type of objects or objects inherited from are: {valid_types}")
-
-            # attr_node = AttrVexpNode(
-            #                 name=component_name,
-            #                 data=component,
-            #                 namespace=FieldsNS,
-            #                 type_info=type_info,
-            #                 denied=denied,
-            #                 deny_reason=deny_reason)
-            # self.registries.register(attr_node) # , is_list=False))
 
     # ------------------------------------------------------------
 
@@ -368,6 +333,9 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             # Inner BoundModel can have self.bound_model.model = ValueExpression
             self.keys.validate(self.bound_model.get_type_info().type_)
 
+        if self.is_top_owner():
+            self.registries.call_hooks_on_finished_all()
+
         return self
 
     # ------------------------------------------------------------
@@ -419,11 +387,12 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
                 key_string = self.name
             apply_session.key_string_container_cache[instance_id] = key_string
             apply_session.instance_by_key_string_cache[key_string] = instance
+            from_cache = "new"
+        else:
+            from_cache = "cache"
 
-        #     from_cache = "new"
-        # else:
-        #     from_cache = "cache"
-        # print("cont:", self.name, key_string, f"[{from_cache}]")
+        # TODO: apply_session.config.logger.debug("cont:", self.name, key_string, f"[{from_cache}]")
+
         return key_string
 
 
@@ -593,6 +562,12 @@ class Rules(ContainerBase):
         # if self.functions:
         #     for function in self.functions:
         #         assert isinstance(function, IFunctionFactory), function
+
+
+    # def setup(self):
+    #     ret = super().setup()
+    #     self.registries.call_hooks_on_finished_all()
+    #     return ret
 
     def bind_to(self, 
                 bound_model:Optional[BoundModel]=None, 

@@ -429,10 +429,6 @@ class ChoiceField(FieldBase):
                 vexp_node = registries.get_vexp_node_by_vexp(vexp=choices)
                 if not vexp_node:
                     vexp_node = choices.Setup(registries=registries, owner=self)
-                #     print(f"Choice - not found: {choices}")
-                #     # raise NotImplementedError("unexpected, vexp should have been created")
-                # else:
-                #     print(f"Choice - found: {choices}")
 
         elif isinstance(choices, CustomFunctionFactory):
             custom_function_factory : CustomFunctionFactory = choices
@@ -447,8 +443,8 @@ class ChoiceField(FieldBase):
         if vexp_node:
             if isinstance(vexp_node, IFunctionVexpNode):
                 func_node: IFunctionVexpNode = vexp_node  # better name
-                choices = func_node.output_type_info.type_
-                is_list = func_node.output_type_info.is_list
+                choices = func_node.get_type_info().type_
+                is_list = func_node.get_type_info().is_list
                 choice_from_function = True
 
             elif isinstance(vexp_node, AttrVexpNode):
@@ -576,10 +572,7 @@ class EnumField(FieldBase):
                 enum_attr_node = registries.get_vexp_node_by_vexp(vexp=self.enum)
                 if not enum_attr_node:
                     enum_attr_node = self.enum.Setup(registries=registries, owner=self)
-                #     print(f"Enum - not found: {self.enum}")
-                #     raise NotImplementedError("unexpected, vexp should have been created")
-                # else:
-                #     print(f"Enum - found: {self.enum}")
+
                 self.enum = enum_attr_node.data.value
                 if not is_enum(self.enum):
                     raise RuleSetupValueError(owner=self, msg=f"Data type of attr_node expression {self.enum} should Enum, got: {type(self.enum)}")

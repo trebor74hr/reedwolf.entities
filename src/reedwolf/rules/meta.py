@@ -109,6 +109,9 @@ RuleDatatype            = Union[StandardType, List[StandardType,], Dict[str, Sta
 
 FunctionArgumentsTupleType = Tuple[List[Any], Dict[str, Any]]
 
+
+HookOnFinishedAllCallable = Callable[[], None]
+
 # ------------------------------------------------------------
 # Commonly/Internally used type symbols
 # ------------------------------------------------------------
