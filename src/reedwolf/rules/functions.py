@@ -294,19 +294,25 @@ class IFunction(IFunctionVexpNode):
         #       check first / vexp_result argument that matches self.value_arg_type_info
         #       check output type that matches output_type_info
         """
-        assert isinstance(vexp_result, ExecResult), vexp_result
-
         if is_last and not self.is_finished:
             raise RuleInternalError(owner=self, msg=f"Last vexp-node is not finished")  # , {id(self)} / {type(self)}
 
-        input_value = vexp_result.value
-
         args = []
         kwargs = {}
-        if self.value_arg_name:
-            kwargs[self.value_arg_name] = input_value
+
+        if vexp_result is UNDEFINED:
+            # namespace toplevel call, e.g. Fn.Length()
+            vexp_result = ExecResult()
+            top_level_call = True
         else:
-            args.insert(0, input_value)
+            if not isinstance(vexp_result, ExecResult):
+                raise RuleInternalError(owner=self, msg=f"vexp_result is not ExecResult, got: {vexp_result}") 
+            top_level_call = False
+            input_value = vexp_result.value
+            if self.value_arg_name:
+                kwargs[self.value_arg_name] = input_value
+            else:
+                args.insert(0, input_value)
 
         if self.func_args:
             # TODO: copy all arguments or not?
