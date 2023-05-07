@@ -36,9 +36,9 @@ class IContext(ABC):
     def get_session(self) -> NoneType:
         return None
 
-    # TODO: should be combined with config.debug_mode
-    def is_debug_mode(self) -> bool:
-        return False
+    # # TODO: should be combined with config.debug_mode
+    # def is_debug(self) -> bool:
+    #     return False
 
     def get_now(self) -> datetime:
         return datetime.now()
@@ -52,7 +52,7 @@ class IContext(ABC):
         return {
             "User" : cls.get_user,
             "Session" : cls.get_session,
-            "IsDebug" : cls.is_debug_mode,
+            # "IsDebug" : cls.is_debug_mode,
             "Now" : cls.get_now,
             }
 

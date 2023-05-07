@@ -15,6 +15,6 @@ class Config:
     and beloinging.
     This is plain class, no setup()/Setup() process.
     """
-    debug_mode: bool = False
+    debug: bool = False
 
 
