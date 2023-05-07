@@ -802,8 +802,13 @@ class ConfigRegistry(RegistryBase):
             self.register_attr_node(attr_node)
 
     def get_root_value(self, apply_session: IApplySession) -> Any:
-        raise NotImplementedError()
-
+        # ALT: config = apply_session.rules.config
+        config = self.config
+        if config in (UNDEFINED, None):
+            component = apply_session.current_frame.component
+            raise RuleInternalError(owner=self, 
+                msg=f"ConfigNS attribute '{component.name}' can not be fetched since config is not set ({type(config)}).")
+        return config
 
 # ------------------------------------------------------------
 
