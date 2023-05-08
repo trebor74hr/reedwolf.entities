@@ -91,6 +91,8 @@ STANDARD_TYPE_W_NONE_LIST = (NoneType,) + STANDARD_TYPE_LIST
 
 StandardType            = Union[str, int, float, bool, Decimal, date, datetime, timedelta, time]
 
+LiteralType             = Any
+
 NUMBER_TYPES            = (int, float, Decimal)
 
 NumberType              = Union[int, float, Decimal]

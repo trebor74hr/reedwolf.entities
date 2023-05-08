@@ -16,7 +16,7 @@ from abc import ABC
 from typing import Union, Optional
 from dataclasses import dataclass
 
-from .meta          import TransMessageType
+from .meta          import TransMessageType, LiteralType
 from .components    import EvaluationBase
 from .expressions   import ValueExpression, ExecResult, execute_available_vexp
 
@@ -73,7 +73,7 @@ class Default(PresaveEvaluationBase):
         for EnumField should have default within enum values.
     """
 
-    value:          Any # can be: ValueExpression
+    value:          Union[LiteralType, ValueExpression]
     name:           Optional[str] = None
     label:          Optional[TransMessageType] = None
     available:      Optional[Union[bool, ValueExpression]] = True
@@ -84,10 +84,11 @@ class Default(PresaveEvaluationBase):
         # assert isinstance(self.value, ValueExpression), self.value
         pass
 
-
     def execute(self, apply_session: IApplySession) -> Optional[ExecResult]:
         if isinstance(self.value, ValueExpression):
-            value = self.value._evaluator.execute_vexp(apply_session=apply_session)
+            vexp_result = self.value._evaluator.execute_vexp(apply_session=apply_session)
+            value = vexp_result.value
         else:
             value = self.value
         return ExecResult.create(value)
+
