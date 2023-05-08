@@ -153,6 +153,7 @@ def execute_available_vexp(
         available_vexp: Optional[Union[bool, ValueExpression]], 
         apply_session: IApplySession) \
             -> Optional[NotAvailableExecResult]:
+    " returns NotAvailableExecResult when not available with details in instance, if all ok -> returns None "
     if isinstance(available_vexp, ValueExpression):
         available_vexp_result = available_vexp._evaluator.execute_vexp(apply_session=apply_session)
         if not bool(available_vexp_result.value):
@@ -160,6 +161,7 @@ def execute_available_vexp(
     elif isinstance(available_vexp, bool):
         if available_vexp == False:
             return NotAvailableExecResult.create(available_vexp_result=None)
+    # all ok
     return None
 
 

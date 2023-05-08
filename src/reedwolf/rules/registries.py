@@ -221,7 +221,7 @@ class RegistryBase(IRegistry):
         Data can register IFunctionVexpNode-s instances since the
         output will be used directly as data and not as a function call.
             data=[DynamicData(name="Countries", label="Countries", 
-                                         function=Function(CatalogManager.get_countries))],
+                              function=Function(CatalogManager.get_countries))],
             ...
             available=(S.Countries.name != "test"),
         """
@@ -400,14 +400,22 @@ class RegistryBase(IRegistry):
         return vexp_node
 
     @abstractmethod
-    def get_root_value(self, apply_session: IApplySession) -> Any:
-        # NOTE: abstractmethod does not work - its complicated ...
+    def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
+        """ 
+        Apply phase - Namespace.<attr_name> - 
+        function returns the instance (root value) from which attr_name will be read from 
+
+        attr_name is not used for fetching the value, but for rare cases when 
+        different source / instance is used based on different attr_name. See
+        ThisNS.Instance.
+        """
         ...
 
 
 # ------------------------------------------------------------
 class RegistryUseDenied(RegistryBase):
-    def get_root_value(self, apply_session: IApplySession) -> Any:
+
+    def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
         raise RuleInternalError(owner=self, msg=f"Registry should not be used to get root value.")
 
 
@@ -506,7 +514,7 @@ class ModelsRegistry(RegistryBase):
 
     # ------------------------------------------------------------
 
-    def get_root_value(self, apply_session: IApplySession) -> Any:
+    def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
         # ROOT_VALUE_NEEDS_FETCH_BY_NAME = False
         component = apply_session.current_frame.component
         instance = apply_session.current_frame.instance
@@ -559,7 +567,7 @@ class DataRegistry(RegistryBase):
                                     data=data_var,
                                     namespace=DataNS,
                                     type_info=data_var.type_info,
-                                    ) # function=function
+                                    )
         elif isinstance(data_var, DynamicData):
             assert isinstance(data_var.function, CustomFunctionFactory)
             # TODO: consider storing CustomFactoryFunction instead of CustomFunction instances
@@ -583,7 +591,7 @@ class DataRegistry(RegistryBase):
         self.register_vexp_node(vexp_node)
         return vexp_node
 
-    def get_root_value(self, apply_session: IApplySession) -> Any:
+    def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
         raise NotImplementedError()
 
 # ------------------------------------------------------------
@@ -677,15 +685,11 @@ class FieldsRegistry(RegistryBase):
         self.register_attr_node(attr_node) # , is_list=False))
         return attr_node
 
-    def get_root_value(self, apply_session: IApplySession) -> Any:
+    def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
         # container = apply_session.current_frame.component.get_container_owner()
         component = apply_session.current_frame.component
         instance  = apply_session.current_frame.instance
         top_attr_accessor = ComponentAttributeAccessor(component, instance)
-        # attr_accessor = top_attr_accessor.get_attribute(
-        #                         apply_session=apply_session, 
-        #                         attr_name=name, 
-        #                         is_last=is_last)
         return top_attr_accessor
 
 # ------------------------------------------------------------
@@ -709,7 +713,7 @@ class ThisRegistry(RegistryBase):
         instance_attr_node = self._create_instance_attr_node(model_class=model_class)
         self.register_attr_node(instance_attr_node)
 
-    def get_root_value(self, apply_session: IApplySession) -> Any:
+    def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
         raise NotImplementedError()
 
 # ------------------------------------------------------------
@@ -768,7 +772,7 @@ class ContextRegistry(RegistryBase):
             self.register_attr_node(attr_node, attr_name)
 
 
-    def get_root_value(self, apply_session: IApplySession) -> Any:
+    def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
         context = apply_session.context
         if context in (UNDEFINED, None):
             component = apply_session.current_frame.component
@@ -801,7 +805,7 @@ class ConfigRegistry(RegistryBase):
             attr_node = self._create_attr_node_for_model_attr(config_class, attr_name)
             self.register_attr_node(attr_node)
 
-    def get_root_value(self, apply_session: IApplySession) -> Any:
+    def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
         # ALT: config = apply_session.rules.config
         config = self.config
         if config in (UNDEFINED, None):

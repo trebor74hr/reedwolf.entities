@@ -232,7 +232,7 @@ class AttrVexpNode(IValueExpressionNode):
                     raise RuleInternalError(owner=self, msg=f"Initial evaluation step for non-extension failed, expected single name member (e.g. M), got: {self.name}\n  == Compoonent: {frame.container}")
 
             registry = apply_session.registries.get_registry(self.namespace)
-            value_previous = registry.get_root_value(apply_session=apply_session)
+            value_previous = registry.get_root_value(apply_session=apply_session, attr_name=attr_name)
 
             # == M.name mode
             if apply_session.current_frame.on_component_only and registry.ROOT_VALUE_NEEDS_FETCH_BY_NAME:
