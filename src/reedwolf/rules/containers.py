@@ -50,7 +50,6 @@ from .meta import (
 from .base import (
         ComponentBase,
         IContainerBase,
-        IData,
         BoundModelBase,
         GlobalConfig,
         KeyPairs,
@@ -519,7 +518,6 @@ class Rules(ContainerBase):
     # will be filled automatically with Config() if not supplied
     config          : Optional[Type[Config]] = field(repr=False, default=None)
     context_class   : Optional[Type[IContext]] = field(repr=False, default=None)
-    data            : Optional[List[IData]] = field(repr=False, default_factory=list)
     functions       : Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list)
     # --- only list of model names allowed
     keys            : Optional[KeysBase] = field(repr=False, default=None)
@@ -570,7 +568,6 @@ class Rules(ContainerBase):
                 bound_model:Optional[BoundModel]=None, 
                 config: Optional[Config]=None,
                 context_class: Optional[IContext]=None,
-                data:Optional[List[IData]]=None, 
                 functions: Optional[List[CustomFunctionFactory]]=None,
                 do_setup:bool = True,
                 ):
@@ -583,10 +580,10 @@ class Rules(ContainerBase):
                 raise RuleSetupError(owner=self, msg="bound_model already already set, late binding not allowed.")
             self.bound_model = bound_model
 
-        if data:
-            if self.data:
-                raise RuleSetupError(owner=self, msg="data already set, late binding not allowed.")
-            self.data = data
+        # if data:
+        #     if self.data:
+        #         raise RuleSetupError(owner=self, msg="data already set, late binding not allowed.")
+        #     self.data = data
 
         if functions:
             if self.functions:
@@ -683,7 +680,6 @@ class Extension(ContainerBase):
     contains        : List[Component] = field(repr=False)
 
     label           : Optional[TransMessageType] = field(repr=False, default=None)
-    data            : Optional[List[IData]] = field(repr=False, default_factory=list)
     functions       : Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list)
     # --- can be index based or standard key-fields names
     keys            : Optional[KeysBase] = field(repr=False, default=None)

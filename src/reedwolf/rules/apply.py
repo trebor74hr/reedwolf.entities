@@ -1,15 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import dataclass
 from typing import (
-        Callable, 
-        Any,
         Dict,
+        Optional,
+        Tuple,
         )
 from contextlib import AbstractContextManager
-from dataclasses import dataclass
-from enum import Enum
 from collections import OrderedDict, defaultdict
 
 from .exceptions import (
@@ -23,17 +20,17 @@ from .expressions import (
         NotAvailableExecResult,
         ValueExpression,
         execute_available_vexp,
-        IRegistries,
         )
 from .meta import (
         UNDEFINED,
         NoneType,
-        TypeInfo,
         ModelType,
         is_model_class,
         is_model_instance,
         )
 from .base import (
+        AttrValue,
+        AttrName,
         KeyString,
         ComponentBase,
         IApplySession,
@@ -132,7 +129,7 @@ class ApplyResult(IApplySession):
 
     def raise_if_failed(self):
         if not self.finished:
-            raise RuleApplyError(owner=self, msg=f"Apply process is not finished")
+            raise RuleApplyError(owner=self, msg="Apply process is not finished")
 
         if self.errors:
             raise RuleValidationError(owner=self.rules, errors=self.errors)
@@ -298,7 +295,6 @@ class ApplyResult(IApplySession):
 
                     instances_by_key[key] = (instance, index0, item_instance_new)
 
-                
                 if new_instances_by_key:
                     index0_new = len(instances_by_key)
                     new_keys = [key for key in new_instances_by_key.keys() if key not in instances_by_key]
@@ -329,9 +325,7 @@ class ApplyResult(IApplySession):
                                 component = component, 
                                 instance = instance, 
                                 index0 = index0,
-                                instance_new = item_instance_new,
-                        )):
-
+                                instance_new = item_instance_new)):
                         # Recursion with prevention to hit this code again
                         self._apply(parent=parent, 
                                     component=component, 
@@ -376,8 +370,6 @@ class ApplyResult(IApplySession):
         process_further = True
 
         with self.use_stack_frame(new_frame):
-                # self.push_frame_to_stack(new_frame)
-
             # obnly when full apply or partial apply
             if not (self.component_only and not in_component_only_tree):
                 # ============================================================
@@ -395,7 +387,6 @@ class ApplyResult(IApplySession):
                                 msg=f"Component.enables can be applied only for Boolean or None values, got: {value} : {type(value)}")
                     if not value: 
                         process_further = False
-
 
             # ------------------------------------------------------------
             # NOTE: used only for test if all Vexp values could evaluate ...
@@ -418,7 +409,7 @@ class ApplyResult(IApplySession):
             # ---------------------------------------------------------------------
             # Check which attributes are changed and collect original + new value
             # ---------------------------------------------------------------------
-            updated_values_dict: Dict[KeyString, Dict[AttrName, Tuple[AttrValue, AttrValue]] ] = defaultdict(dict)
+            updated_values_dict: Dict[KeyString, Dict[AttrName, Tuple[AttrValue, AttrValue]]] = defaultdict(dict)
             for key_string, instance_attr_values in self.update_history.items():
                 if len(instance_attr_values)>1:
                     first_val = instance_attr_values[0]
@@ -452,11 +443,9 @@ class ApplyResult(IApplySession):
         # used only for testing
         for attr_name, attr_value in vars(component).items():
             if isinstance(attr_value, ValueExpression):
-                vexp_result: ExecResult = \
-                        attr_value._evaluator.execute_vexp(
-                                apply_session=self)
+                # vexp_result: ExecResult = 
+                attr_value._evaluator.execute_vexp(apply_session=self)
                 # TODO: apply_session.config.logger.debug(f"{parent.name if parent else ''}.{component.name}.{attr_name} = VExp[{attr_value}] -> {vexp_result}")
-
 
     # ------------------------------------------------------------
 
@@ -467,7 +456,6 @@ class ApplyResult(IApplySession):
 
         if all ok - Result.instance contains a new instance (clone + update) of the bound model type 
         if not ok - errors contain all details.
-
         """
         self._apply(parent=None, component=self.rules)
         self.set_finished()
@@ -497,7 +485,7 @@ class ApplyResult(IApplySession):
 
         if isinstance(self.instance_new, (list, tuple)):
             if not self.instance_new:
-                raise RuleInternalError(owner=self, msg=f"Instance is an empty list, can not detect type of base  structure")
+                raise RuleInternalError(owner=self, msg="Instance is an empty list, can not detect type of base  structure")
             # test only first
             instance_to_test = self.instance_new[0]
         else:
@@ -619,10 +607,10 @@ class ApplyResult(IApplySession):
                 elif isinstance(cleaner, EvaluationBase):
                     if not bind_vexp_result:
                         # TODO: this belongs to Setup phase
-                        raise RuleApplyError(owner=self, msg=f"Evaluator can be defined only for components with 'bind' defined. Remove 'Evaluation' or define 'bind'.")
+                        raise RuleApplyError(owner=self, msg="Evaluator can be defined only for components with 'bind' defined. Remove 'Evaluation' or define 'bind'.")
                     self.execute_evaluation(component=component, evaluation=cleaner)
                 else:
-                    raise RuleApplyError(owner=self, msg=f"Unknown cleaner type {type(cleeaner)}. Expected Evaluation or Validation.")
+                    raise RuleApplyError(owner=self, msg=f"Unknown cleaner type {type(cleaner)}. Expected Evaluation or Validation.")
 
         # NOTE: initial value from instance is not checked - only
         #       intermediate and the last value
@@ -727,7 +715,7 @@ class ApplyResult(IApplySession):
             #   - return None (default)
             return NotAvailableExecResult.create(reason="Missing instance attribute")
 
-        value =  getattr(instance, attr_name)
+        value = getattr(instance, attr_name)
 
         exec_result = ExecResult()
         exec_result.set_value(value, attr_name, changer_name=f"{component.name}.ATTR")

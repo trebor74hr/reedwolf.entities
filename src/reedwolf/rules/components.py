@@ -8,7 +8,6 @@ from typing import (
         Union, 
         List, 
         Optional, 
-        Any,
         ClassVar,
         )
 from dataclasses import dataclass, field
@@ -23,12 +22,10 @@ from .exceptions import (
         )
 from .meta import (
         TransMessageType,
-        TypeInfo,
         )
 from .base import (
         BaseOnlyArgs,
         ComponentBase,
-        IData,
         IApplySession,
         GlobalConfig,
         ValidationFailure,
@@ -105,60 +102,6 @@ class Component(ComponentBase, ABC):
 
 
 # ------------------------------------------------------------
-#
-# NOTE: obsolete - it was used for enums only - replaced with special functiohn factory function: functions=[EnumMembers()]
-# 
-# @dataclass
-# class StaticData(IData, Component):
-#     # TODO: Data - maybe should not be component at all?
-#     name:           str
-#     # TODO: ModelField or Enum or ...
-#     value:          Any 
-#     label:          Optional[TransMessageType] = field(repr=False, default=None)
-#     type_info:      TypeInfo = field(init=False)
-#     # evaluate:       bool = False # TODO: describe
-# 
-#     def __post_init__(self):
-#         if isinstance(self.value, ValueExpression):
-#             # TODO: should be model or enum
-#             # raise RuleSetupValueError(owner=self, msg=f"{self.name} -> {type(self.value)}: {type(self.value)} - to be done a ValueExpression")
-#             raise NotImplementedError(f"{self.name} -> {type(self.value)}: {type(self.value)} - to be done a ValueExpression")
-#         self.type_info = TypeInfo.get_or_create_by_type(self.value)
-#         if not self.label:
-#             self.label = varname_to_title(self.name)
-#         super().__post_init__()
-
-# # ------------------------------------------------------------
-#
-# NOTE: obsolete - replaced with simple functions=[Function()]
-# 
-# @dataclass
-# class DynamicData(IData, Component):
-#     # TODO: Data - maybe should not be component at all?
-#     """
-#     Function is invoked which returns data.
-#     See functions.py for details.
-#     """
-#     name:           str
-#     # NOTE: the name function is exposed and Function() is used, but internally
-#     #       this will be function_factory instance
-#     function:       CustomFunctionFactory
-#     label:          Optional[TransMessageType] = field(repr=False, default=None)
-#     type_info:      TypeInfo = field(init=False)
-#     # evaluate:       bool = False # TODO: describe
-# 
-#     def __post_init__(self):
-#         if not isinstance(self.function, CustomFunctionFactory):
-#             raise RuleSetupValueError(owner=self, msg=f"{self.function}: {type(self.function)} - not ValueExpression|Function()")
-#         # self.type_info = TypeInfo.extract_function_return_type_info(self.function)
-#         custon_function_factory: CustomFunctionFactory = self.function
-#         self.type_info = custon_function_factory.get_type_info()
-#         # TODO: check function output is Callable[..., RuleDatatype]
-#         if not self.label:
-#             self.label = varname_to_title(self.name)
-#         super().__post_init__()
-
-# ------------------------------------------------------------
 # Clenaers (cleaners) == Validations OR Evaluations
 # ------------------------------------------------------------
 
@@ -220,3 +163,58 @@ class FieldGroup(Component):
     @staticmethod
     def can_apply_partial() -> bool:
         return True
+
+# ------------------------------------------------------------
+#
+# NOTE: obsolete - it was used for enums only - replaced with special functiohn factory function: functions=[EnumMembers()]
+# 
+# @dataclass
+# class StaticData(IData, Component):
+#     # TODO: Data - maybe should not be component at all?
+#     name:           str
+#     # TODO: ModelField or Enum or ...
+#     value:          Any 
+#     label:          Optional[TransMessageType] = field(repr=False, default=None)
+#     type_info:      TypeInfo = field(init=False)
+#     # evaluate:       bool = False # TODO: describe
+# 
+#     def __post_init__(self):
+#         if isinstance(self.value, ValueExpression):
+#             # TODO: should be model or enum
+#             # raise RuleSetupValueError(owner=self, msg=f"{self.name} -> {type(self.value)}: {type(self.value)} - to be done a ValueExpression")
+#             raise NotImplementedError(f"{self.name} -> {type(self.value)}: {type(self.value)} - to be done a ValueExpression")
+#         self.type_info = TypeInfo.get_or_create_by_type(self.value)
+#         if not self.label:
+#             self.label = varname_to_title(self.name)
+#         super().__post_init__()
+
+# # ------------------------------------------------------------
+#
+# NOTE: obsolete - replaced with simple functions=[Function()]
+# 
+# @dataclass
+# class DynamicData(IData, Component):
+#     # TODO: Data - maybe should not be component at all?
+#     """
+#     Function is invoked which returns data.
+#     See functions.py for details.
+#     """
+#     name:           str
+#     # NOTE: the name function is exposed and Function() is used, but internally
+#     #       this will be function_factory instance
+#     function:       CustomFunctionFactory
+#     label:          Optional[TransMessageType] = field(repr=False, default=None)
+#     type_info:      TypeInfo = field(init=False)
+#     # evaluate:       bool = False # TODO: describe
+# 
+#     def __post_init__(self):
+#         if not isinstance(self.function, CustomFunctionFactory):
+#             raise RuleSetupValueError(owner=self, msg=f"{self.function}: {type(self.function)} - not ValueExpression|Function()")
+#         # self.type_info = TypeInfo.extract_function_return_type_info(self.function)
+#         custon_function_factory: CustomFunctionFactory = self.function
+#         self.type_info = custon_function_factory.get_type_info()
+#         # TODO: check function output is Callable[..., RuleDatatype]
+#         if not self.label:
+#             self.label = varname_to_title(self.name)
+#         super().__post_init__()
+

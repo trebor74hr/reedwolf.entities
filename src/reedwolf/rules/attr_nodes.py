@@ -20,7 +20,6 @@ from .exceptions import (
         )
 from .namespaces import (
         Namespace,
-        ModelsNS,
         )
 from .expressions import (
         ValueExpression,
@@ -32,12 +31,10 @@ from .meta import (
         is_model_class,
         is_function,
         ModelField,
-        ModelType,
         )
 from .base import (
         UndefinedType,
         ComponentBase,
-        IData,
         IContainerBase,
         IFieldBase,
         IApplySession,
@@ -116,9 +113,9 @@ class AttrVexpNode(IValueExpressionNode):
         # elif isinstance(self.data, EvaluatorBase):
         #     # self.attr_node_type = AttrVexpNodeTypeEnum.EVALUATOR
         #     self.data_supplier_name = f"{self.data.name}"
-        elif isinstance(self.data, IData):
-            self.attr_node_type = AttrVexpNodeTypeEnum.DATA
-            self.data_supplier_name = f"{self.data.name}"
+        # elif isinstance(self.data, IData):
+        #     self.attr_node_type = AttrVexpNodeTypeEnum.DATA
+        #     self.data_supplier_name = f"{self.data.name}"
         elif isinstance(self.data, ComponentBase):
             self.attr_node_type = AttrVexpNodeTypeEnum.COMPONENT
             self.data_supplier_name = f"{self.data.name}"
@@ -212,7 +209,7 @@ class AttrVexpNode(IValueExpressionNode):
                  ) -> ExecResult:
 
         if is_last and not self.is_finished:
-            raise RuleInternalError(owner=self, msg=f"Last vexp node is not finished.") 
+            raise RuleInternalError(owner=self, msg="Last vexp node is not finished.") 
 
         # TODO: not nicest way - string split
         #       for extension: [p._name for p in frame.container.bound_model.model.Path]
@@ -311,24 +308,9 @@ class AttrVexpNode(IValueExpressionNode):
 
     def isoptional(self):
         return self.type_info.is_optional if self.type_info else False
-        # if isinstance(self.data, TypeInfo):
-        #     out = self.data.is_optional
-        # # TODO: IData and others
-        # #   from .components import IData
-        # else:
-        #     out = False
-        # return out
 
     def islist(self):
-        # TODO: currently IData needs to be Component, needs to setup owner properly. Move IData to this module!
-        # from .components import IData
-        # if isinstance(self.data, TypeInfo):
-        #     out = self.data.is_list
-        # if isinstance(self.data, IData):
-        #     # TODO: IData to have TypeInfo too
-        #     return isinstance(self.data.datatype, list)
         return self.type_info.is_list if self.type_info else False
-
 
     def pp(self):
         # pretty print

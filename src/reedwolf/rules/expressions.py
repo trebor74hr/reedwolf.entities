@@ -694,9 +694,10 @@ class ValueExpression(DynamicAttrsBase):
 
             last_vexp_node = current_vexp_node
 
-            # can be Component/IData or can be managed Model dataclass Field - when .denied is not appliable
+            # can be Component or can be managed Model dataclass Field - when .denied is not appliable
             if hasattr(current_vexp_node, "denied") and current_vexp_node.denied:
                 # '{vexp_node_name}' 
+                import pdb;pdb.set_trace() 
                 raise RuleSetupValueError(owner=self, msg=f"VexpNode (owner={owner.name}) references '{current_vexp_node.name}' what is not allowed due: {current_vexp_node.deny_reason}.")
 
         vexp_evaluator.finish()

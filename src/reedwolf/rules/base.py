@@ -1,10 +1,7 @@
-# TODO: Typehinting ContainerBase, Registries and AttrVexpNode could not defined
-#       here, due circular imports
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 import inspect
-from decimal import Decimal
 from enum import Enum
 from typing import (
         List, 
@@ -14,6 +11,8 @@ from typing import (
         Optional, 
         Tuple,
         Sequence,
+        ClassVar,
+        Callable,
         )
 from dataclasses import (
         dataclass,
@@ -32,6 +31,7 @@ from .exceptions import (
         RuleSetupNameError,
         RuleSetupValueError,
         RuleSetupNameNotFoundError,
+        RuleApplyError,
         )
 from .namespaces import (
         DynamicAttrsBase,
@@ -56,15 +56,10 @@ from .meta import (
         )
 from .expressions import (
         ValueExpression,
-        RawAttrValue,
         ExecResult,
         IValueExpressionNode,
         IFunctionVexpNode,
         IRegistries,
-        # IRegistry,
-        )
-from .functions import (
-        CustomFunctionFactory,
         )
 from .contexts import (
         IContext,
@@ -144,13 +139,13 @@ class SetOwnerMixin:
     # ------------------------------------------------------------
 
     def set_owner(self, owner: ComponentBase):
-        if not self.owner is UNDEFINED:
+        if self.owner is not UNDEFINED:
             raise RuleInternalError(owner=self, msg=f"Owner already defined, got: {owner}")
 
         assert owner is None or isinstance(owner, ComponentBase), owner
         self.owner = owner
 
-        if not self.owner_name is UNDEFINED:
+        if self.owner_name is not UNDEFINED:
             raise RuleInternalError(owner=self, msg=f"Owner name already defined, got: {owner}")
 
         self.owner_name = owner.name if owner else ""
@@ -342,9 +337,9 @@ class ComponentBase(SetOwnerMixin, ABC):
 
     # ------------------------------------------------------------
 
-    @abstractmethod
-    def setup(self, registries: IRegistries):
-        ...
+    # @abstractmethod
+    # def setup(self, registries: IRegistries):
+    #     ...
 
     def post_setup(self):
         " to validate all internal values "
@@ -355,7 +350,7 @@ class ComponentBase(SetOwnerMixin, ABC):
     def _invoke_component_setup(self, 
                     subcomponent_name: str, 
                     subcomponent: Union[ComponentBase, ValueExpression], 
-                    registries: 'Registries'):  # noqa: F821
+                    registries: IRegistries):  # noqa: F821
         called = False
 
         if isinstance(subcomponent, (ValueExpression, )): # Operation
@@ -389,7 +384,7 @@ class ComponentBase(SetOwnerMixin, ABC):
 
     # ------------------------------------------------------------
 
-    def setup(self, registries: 'Registries'):  # noqa: F821
+    def setup(self, registries: IRegistries):  # noqa: F821
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(self)
 
         ret = self._setup(registries=registries)
@@ -481,7 +476,7 @@ class ComponentBase(SetOwnerMixin, ABC):
                or subcomponent_name[0] == "_"):
                 # TODO: this should be main way how to check ...
                 if subcomponent_name not in ("owner", "owner_container") and \
-                    (hasattr(subcomponent, "setup") or hasattr(subcomponent, "setup")):
+                  (hasattr(subcomponent, "setup") or hasattr(subcomponent, "setup")):
                     raise RuleInternalError(f"ignored attribute name '{subcomponent_name}' has setup()/Setup(). Is attribute list ok or value is not proper class (got component='{subcomponent}').")
                 continue
 
@@ -545,7 +540,7 @@ class ComponentBase(SetOwnerMixin, ABC):
     # ------------------------------------------------------------
 
 
-    def _setup(self, registries: 'Registries'):  # noqa: F821
+    def _setup(self, registries: IRegistries):  # noqa: F821
         if self.owner is UNDEFINED:
             raise RuleInternalError(owner=self, msg="Owner not set")
 
@@ -590,21 +585,18 @@ class ComponentBase(SetOwnerMixin, ABC):
         return name
 
 
-    def get_container_owner(self) -> 'ContainerBase':  # noqa: F821
+    def get_container_owner(self) -> IContainerBase:  # noqa: F821
         """ traverses up the component tree and find first container
         """
-        # TODO: remove dep somehow - interface?
-        from .containers import ContainerBase
-
         if self.owner is UNDEFINED:
             raise RuleSetupError(owner=self, msg="Owner is not set. Call .setup() method first.")
 
-        if isinstance(self, ContainerBase):
+        if isinstance(self, IContainerBase):
             return self
 
         owner_container = self.owner
         while owner_container is not None:
-            if isinstance(owner_container, ContainerBase):
+            if isinstance(owner_container, IContainerBase):
                 break
             owner_container = owner_container.owner
         if owner_container in (None, UNDEFINED):
@@ -673,12 +665,6 @@ class ComponentBase(SetOwnerMixin, ABC):
 
 
 # ------------------------------------------------------------
-# IData
-# ------------------------------------------------------------
-class IData(ABC):
-    pass
-
-# ------------------------------------------------------------
 # IFieldBase
 # ------------------------------------------------------------
 
@@ -686,15 +672,15 @@ class IFieldBase(ABC):
     ...
 
     # @abstractmethod
-    # def get_attr_node(self, registries:"Registries") -> "AttrVexpNode":  # noqa: F821
+    # def get_attr_node(self, registries: IRegistries) -> "AttrVexpNode":  # noqa: F821
     #     ...
 
     # @abstractmethod
-    # def get_bound_attr_node(self, registries:"Registries") -> "AttrVexpNode":  # noqa: F821
+    # def get_bound_attr_node(self, registries: IRegistries) -> "AttrVexpNode":  # noqa: F821
     #     ...
 
 # ------------------------------------------------------------
-# ContainerBase
+# IContainerBase
 # ------------------------------------------------------------
 
 class IContainerBase(ABC):
@@ -736,7 +722,7 @@ class IContainerBase(ABC):
 class BoundModelBase(ComponentBase, ABC):
 
 
-    def get_full_name(self, owner: Optional[BoundModelBaes] = None, depth: int = 0, init: bool = False):
+    def get_full_name(self, owner: Optional[BoundModelBase] = None, depth: int = 0, init: bool = False):
         if not hasattr(self, "_name"):
             assert init
             assert depth < 20
@@ -767,7 +753,7 @@ class BoundModelBase(ComponentBase, ABC):
         return models
 
     # Not used:
-    # def get_attr_node(self, registries: 'Registries') -> Union["AttrVexpNode", UndefinedType]:  # noqa: F821
+    # def get_attr_node(self, registries: IRegistries) -> Union["AttrVexpNode", UndefinedType]:  # noqa: F821
     #     return registries.models_registry.get_attr_node_by_bound_model(bound_model=self)
 
 # ------------------------------------------------------------
@@ -816,7 +802,7 @@ class InstanceChange:
     key_pairs: KeyPairs = field()
     operation: ChangeOpEnum
     instance: ModelType = field(repr=True)
-    updated_values: Optional[ Dict[AttrName, Tuple[AttrValue, AttrValue]] ] = field(default=None)
+    updated_values: Optional[Dict[AttrName, Tuple[AttrValue, AttrValue]]] = field(default=None)
 
 @dataclass
 class InstanceAttrValue:
@@ -842,7 +828,7 @@ class InstanceAttrValue:
 class StackFrame:
     # current container data instance which will be procesed: changed/validated/evaluated
     instance: DataclassType
-    container: 'ContainerBase' = field(repr=False)
+    container: IContainerBase = field(repr=False)
     component: ComponentBase
 
     # UPDATE by this instance - can be RULES_LIKE or MODELS_LIKE (same dataclass) struct
@@ -866,8 +852,7 @@ class StackFrame:
     bound_model_root : Optional[BoundModelBase] = field(repr=False, init=False, default=None)
 
     def __post_init__(self):
-        from .containers import ContainerBase
-        assert isinstance(self.container, ContainerBase)
+        assert isinstance(self.container, IContainerBase)
         assert isinstance(self.component, ComponentBase)
 
         if self.index0 is not None:
@@ -875,8 +860,8 @@ class StackFrame:
 
         if self.on_component_only:
             self.bound_model_root = (self.on_component_only 
-                                     if   self.on_component_only.is_extension()
-                                     else self.on_component_only.get_container_owner()\
+                                     if self.on_component_only.is_extension()
+                                     else self.on_component_only.get_container_owner()
                                     ).bound_model
             # can be list in this case
             # TODO: check if list only: if self.bound_model_root.type_info.is_list:
@@ -925,7 +910,7 @@ class StructEnum(str, Enum):
 class IApplySession:
     # TODO: možda bi ovo trebalo izbaciti ... - link na IRegistry u vexp node-ovima 
     registries: IRegistries = field(repr=False)
-    rules: "Rules" = field(repr=False) # ex. ComponentBase 
+    rules: IContainerBase = field(repr=False) 
     instance: Any = field(repr=False)
     # TODO: consider: instance_new: Union[ModelType, UndefinedType] = UNDEFINED,
     instance_new: Optional[ModelType] = field(repr=False)
@@ -1089,7 +1074,7 @@ class IApplySession:
         return self.frames_stack.pop(0)
 
     @property
-    def current_frame(self) -> StaciFrame:
+    def current_frame(self) -> StackFrame:
         assert self.frames_stack
         return self.frames_stack[0]
 
