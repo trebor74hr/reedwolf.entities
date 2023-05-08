@@ -26,7 +26,6 @@ from .models import (
         )
 from .components import (  # noqa: F401
         StaticData,
-        DynamicData,
         FieldGroup,
         _,
         msg,
@@ -118,7 +117,6 @@ __all__ = [
 
     # components
     "StaticData",
-    "DynamicData",
 
     "FieldGroup",
 

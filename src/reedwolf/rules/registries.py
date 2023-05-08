@@ -85,7 +85,6 @@ from .models import (
         )
 from .components import (
         StaticData,
-        DynamicData,
         FieldGroup,
         ValidationBase,
         EvaluationBase,
@@ -220,8 +219,8 @@ class RegistryBase(IRegistry):
         """
         Data can register IFunctionVexpNode-s instances since the
         output will be used directly as data and not as a function call.
-            data=[DynamicData(name="Countries", label="Countries", 
-                              function=Function(CatalogManager.get_countries))],
+            function=[Function(name="Countries", label="Countries", 
+                              py_function=CatalogManager.get_countries)],
             ...
             available=(S.Countries.name != "test"),
         """
@@ -348,8 +347,8 @@ class RegistryBase(IRegistry):
 
                 if isinstance(parent_vexp_node.data, StaticData):
                     inspect_object = parent_vexp_node.data.value
-                elif isinstance(parent_vexp_node.data, DynamicData):
-                    raise NotImplementedError("TODO")
+                # elif isinstance(parent_vexp_node.data, DynamicData):
+                #     raise NotImplementedError("TODO")
                 elif isinstance(parent_vexp_node.data, BoundModelBase):
                     inspect_object = parent_vexp_node.data.model
                 else:
@@ -568,15 +567,15 @@ class DataRegistry(RegistryBase):
                                     namespace=DataNS,
                                     type_info=data_var.type_info,
                                     )
-        elif isinstance(data_var, DynamicData):
-            assert isinstance(data_var.function, CustomFunctionFactory)
-            # TODO: consider storing CustomFactoryFunction instead of CustomFunction instances
-            #       to allow extra arguments when referenced
-            vexp_node = data_var.function.create_function(
-                            registries=self.registries,
-                            caller=None,
-                            func_args=EmptyFunctionArguments, 
-                            name=data_var.name) 
+        # elif isinstance(data_var, DynamicData):
+        #     assert isinstance(data_var.function, CustomFunctionFactory)
+        #     # TODO: consider storing CustomFactoryFunction instead of CustomFunction instances
+        #     #       to allow extra arguments when referenced
+        #     vexp_node = data_var.function.create_function(
+        #                     registries=self.registries,
+        #                     caller=None,
+        #                     func_args=EmptyFunctionArguments, 
+        #                     name=data_var.name) 
         else:
             # TODO: does Operation needs special handling?
             # if not isinstance(data_var, IData:

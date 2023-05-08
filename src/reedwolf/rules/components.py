@@ -128,33 +128,35 @@ class StaticData(IData, Component):
             self.label = varname_to_title(self.name)
         super().__post_init__()
 
-# ------------------------------------------------------------
-
-@dataclass
-class DynamicData(IData, Component):
-    # TODO: Data - maybe should not be component at all?
-    """
-    Function is invoked which returns data.
-    See functions.py for details.
-    """
-    name:           str
-    # NOTE: the name function is exposed and Function() is used, but internally
-    #       this will be function_factory instance
-    function:       CustomFunctionFactory
-    label:          Optional[TransMessageType] = field(repr=False, default=None)
-    type_info:      TypeInfo = field(init=False)
-    # evaluate:       bool = False # TODO: describe
-
-    def __post_init__(self):
-        if not isinstance(self.function, CustomFunctionFactory):
-            raise RuleSetupValueError(owner=self, msg=f"{self.function}: {type(self.function)} - not ValueExpression|Function()")
-        # self.type_info = TypeInfo.extract_function_return_type_info(self.function)
-        custon_function_factory: CustomFunctionFactory = self.function
-        self.type_info = custon_function_factory.get_type_info()
-        # TODO: check function output is Callable[..., RuleDatatype]
-        if not self.label:
-            self.label = varname_to_title(self.name)
-        super().__post_init__()
+# # ------------------------------------------------------------
+#
+# NOTE: obsolete - replaced with simple functions=[Function()]
+# 
+# @dataclass
+# class DynamicData(IData, Component):
+#     # TODO: Data - maybe should not be component at all?
+#     """
+#     Function is invoked which returns data.
+#     See functions.py for details.
+#     """
+#     name:           str
+#     # NOTE: the name function is exposed and Function() is used, but internally
+#     #       this will be function_factory instance
+#     function:       CustomFunctionFactory
+#     label:          Optional[TransMessageType] = field(repr=False, default=None)
+#     type_info:      TypeInfo = field(init=False)
+#     # evaluate:       bool = False # TODO: describe
+# 
+#     def __post_init__(self):
+#         if not isinstance(self.function, CustomFunctionFactory):
+#             raise RuleSetupValueError(owner=self, msg=f"{self.function}: {type(self.function)} - not ValueExpression|Function()")
+#         # self.type_info = TypeInfo.extract_function_return_type_info(self.function)
+#         custon_function_factory: CustomFunctionFactory = self.function
+#         self.type_info = custon_function_factory.get_type_info()
+#         # TODO: check function output is Callable[..., RuleDatatype]
+#         if not self.label:
+#             self.label = varname_to_title(self.name)
+#         super().__post_init__()
 
 # ------------------------------------------------------------
 # Clenaers (cleaners) == Validations OR Evaluations

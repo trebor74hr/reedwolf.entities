@@ -453,7 +453,7 @@ class ChoiceField(FieldBase):
                     raise RuleSetupValueError(owner=self, msg=f"Using enum {attr_node.data.value}. Use EnumField instead.")
 
                 if not hasattr(attr_node.data, "type_"):
-                    raise RuleSetupValueError(owner=self, msg=f"Wrong type for choices: {attr_node.data} / {attr_node.data.value}. Use Function or DynamicData with Function.")
+                    raise RuleSetupValueError(owner=self, msg=f"Wrong type for choices: {attr_node.data} / {attr_node.data.value}. You can use Function().")
                 choices = attr_node.data.type_
                 is_list = attr_node.data.is_list
 
