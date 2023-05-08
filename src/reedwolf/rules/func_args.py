@@ -39,7 +39,6 @@ from .meta import (
 from .expressions import (
         ValueExpression,
         IValueExpressionNode,
-        OperationVexpNode,
         )
 
 
@@ -62,7 +61,7 @@ class PrepArg:
 
     def __post_init__(self):
         if self.type_info_or_callable is None:
-            raise RuleInternalError(owner=self, msg=f"type_info / 'xallable() -> type_info' not supplied")
+            raise RuleInternalError(owner=self, msg="type_info / 'xallable() -> type_info' not supplied")
 
     @property
     def type_info(self) -> Optional[TypeInfo]:

@@ -165,8 +165,8 @@ class Readonly(SimpleValidationBase):
                                 validation_name=self.name,
                                 validation_label=self.label,
                                 details="Readonly value is changed" 
-                                " from '{message_truncate(initial_value, 15)}'"
-                                " to '{message_truncate(last_value, 15)}'"
+                                " from '{message_truncate(initial_value, 15)}'" # noqa: E331
+                                    " to '{message_truncate(last_value, 15)}'"
                                 )
         return None
 
@@ -216,7 +216,7 @@ class MinLength(ValidationBase):
     def __post_init__(self):
         # TODO: define standard label and error message
         if not to_int(self.value, 0) > 0:
-            raise RuleSetupError(owner=self, msg="'value' must be integer > 0")
+            raise RuleSetupError(owner=self, msg=f"'value' must be integer > 0")
         if not self.error:
             self.error = f"Provide value with length at least {self.value}"
 

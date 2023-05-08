@@ -65,7 +65,6 @@ from .functions import (
         )
 from .registries import (
         Registries,
-        ThisRegistry,
         )
 from .validations   import (
         MaxLength,
@@ -257,14 +256,14 @@ class FieldBase(Component, IFieldBase, ABC):
             if self.PYTHON_TYPE:
                 self.python_type = self.PYTHON_TYPE
             else:
-                raise RuleInternalError(owner=self, msg=f"python_type must be set in custom setup() method or define PYTHON_TYPE class constant")
+                raise RuleInternalError(owner=self, msg="python_type must be set in custom setup() method or define PYTHON_TYPE class constant")
         self._set_type_info()
 
     # ------------------------------------------------------------
 
     def _set_type_info(self):
         if not self.python_type:
-            raise RuleInternalError(owner=self, msg=f"python_type not defined") 
+            raise RuleInternalError(owner=self, msg="python_type not defined") 
 
         # TODO: explain old message "static declared types. Dynamic types can be processed later"
 
@@ -306,15 +305,14 @@ class FieldBase(Component, IFieldBase, ABC):
             error = f"Value type '{type(value)}' is not compoatible with '{self.PYTHON_TYPE}' " \
                     f"(value is '{message_truncate(value)}')"
             return ValidationFailure(
-                            component_key_string = \
-                                    component.get_key_string(apply_session),
+                            component_key_string = component.get_key_string(apply_session),
                             error=error, 
                             validation_name=self.name,
                             validation_label="Type validation",
                             details="Provide value with correct type",
                             )
         return None
-        
+
 
 # ------------------------------------------------------------
 # StringField
@@ -502,9 +500,9 @@ class ChoiceField(FieldBase):
 
         elif isinstance(choices, (list, tuple)):
             if len(choices)==0:
-                raise RuleSetupValueError(owner=self, msg=f"Attribute 'choices' is an empty list, Provide list of str/int/ChoiceOption.")
+                raise RuleSetupValueError(owner=self, msg="Attribute 'choices' is an empty list, Provide list of str/int/ChoiceOption.")
             if self.choice_value or self.choice_label:
-                raise RuleSetupValueError(owner=self, msg=f"When 'choices' is a list, choice_value and choice_label are not permitted.")
+                raise RuleSetupValueError(owner=self, msg="When 'choices' is a list, choice_value and choice_label are not permitted.")
             # now supports combining - but should have the same type
             for choice in choices:
                 if not isinstance(choice, (str, int, ChoiceOption)):
@@ -577,7 +575,7 @@ class EnumField(FieldBase):
                 self.enum = enum_attr_node.data
                 # EnumMembers
                 if not self.enum:
-                    raise RuleSetupValueError(owner=self, msg=f"Underlying data type of attr_node expression is not enum. You should use: functions=[... Fn.EnumMembers(enum=<EnumType>)]")
+                    raise RuleSetupValueError(owner=self, msg="Underlying data type of attr_node expression is not enum. You should use: functions=[... Fn.EnumMembers(enum=<EnumType>)]")
                 elif not is_enum(self.enum):
                     raise RuleSetupValueError(owner=self, msg=f"Data type of attr_node expression {self.enum} should Enum, got: {type(self.enum)}. You should use: functions=[... Fn.EnumMembers(enum=<EnumType>)]")
                 # attr_node.data.py_type_hint

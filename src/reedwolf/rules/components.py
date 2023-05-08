@@ -32,12 +32,10 @@ from .base import (
         )
 from .expressions import (
         ValueExpression,
+        ExecResult,
         )
 from .attr_nodes import (
         AttrVexpNode,
-        )
-from .functions import (
-        CustomFunctionFactory,
         )
 
 # ------------------------------------------------------------
@@ -78,7 +76,7 @@ class Component(ComponentBase, ABC):
         # when not set then will be later defined - see set_owner()
         if self.name not in (None, "", UNDEFINED):
             if not self.name.isidentifier():
-                raise RuleSetupValueError(owner=self, msg=f"Attribute name needs to be valid python identifier name")
+                raise RuleSetupValueError(owner=self, msg="Attribute name needs to be valid python identifier name")
 
     def __post_init__(self):
         self.init_clean_base()
@@ -93,7 +91,7 @@ class Component(ComponentBase, ABC):
                 [container_key_string, self.name] 
                 )
         return key_string
-        
+
     def is_extension(self):
         return False
 

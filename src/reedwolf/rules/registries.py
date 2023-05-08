@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import inspect
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from abc import abstractmethod
+from dataclasses import dataclass
 
 from typing import (
         Any,
@@ -50,12 +50,12 @@ from .expressions import (
         )
 from .meta import (
         FunctionArgumentsType,
-        EmptyFunctionArguments,
         FunctionArgumentsTupleType,
         is_model_class,
         ModelType,
         get_model_fields,
         TypeInfo,
+        HookOnFinishedAllCallable,
         )
 from .base import (
         ComponentBase,
@@ -63,8 +63,6 @@ from .base import (
         IContainerBase,
         extract_type_info,
         IApplySession,
-        )
-from .models import (
         BoundModelBase,
         )
 from .functions import (
@@ -72,16 +70,8 @@ from .functions import (
         CustomFunctionFactory,
         try_create_function,
         )
-# from .validators import (
-#         ValidatorBase,
-#         )
-# from .evaluators import (
-#         EvaluatorBase,
-#         )
-from .attr_nodes import AttrVexpNode
-from .models import (
-        BoundModel,
-        BoundModelWithHandlers,
+from .attr_nodes import (
+        AttrVexpNode,
         )
 from .components import (
         FieldGroup,
@@ -158,9 +148,9 @@ class RegistryBase(IRegistry):
 
     def finish(self):
         if self.finished:
-            raise RuleInternalError(owner=self, msg=f"already finished") 
+            raise RuleInternalError(owner=self, msg="already finished") 
         if not self.registries:
-            raise RuleInternalError(owner=self, msg=f"registries not set, function set_registries() not called") 
+            raise RuleInternalError(owner=self, msg="registries not set, function set_registries() not called") 
         self.finished = True
 
     def count(self) -> int:
@@ -195,7 +185,7 @@ class RegistryBase(IRegistry):
         #           type_info: TypeInfo = TypeInfo.get_or_create_by_type(th_field)
 
         if attr_name in (INSTANCE_ATTR_NAME,):
-            raise RuleSetupNameError(owner=self, msg=f"Sorry but model attribute name {attr_name} is reserved. Rename it and try again (model={model_class.__name__}).")
+            raise RuleSetupNameError(msg=f"Sorry but model attribute name {attr_name} is reserved. Rename it and try again (model={model_class.__name__}).")
 
         # This one should not fail
         # , func_node
@@ -416,7 +406,7 @@ class RegistryBase(IRegistry):
 class RegistryUseDenied(RegistryBase):
 
     def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
-        raise RuleInternalError(owner=self, msg=f"Registry should not be used to get root value.")
+        raise RuleInternalError(owner=self, msg="Registry should not be used to get root value.")
 
 
 class FunctionsRegistry(RegistryUseDenied):
@@ -516,7 +506,7 @@ class ModelsRegistry(RegistryBase):
 
     def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
         # ROOT_VALUE_NEEDS_FETCH_BY_NAME = False
-        component = apply_session.current_frame.component
+        # component = apply_session.current_frame.component
         instance = apply_session.current_frame.instance
 
         # bound_model = apply_session.current_frame.container.bound_model
@@ -810,8 +800,7 @@ class RegistriesBase(IRegistries):
         else:
             self.functions_factory_registry: FunctionsFactoryRegistry = \
                     FunctionsFactoryRegistry(functions=functions, 
-                                             include_builtin=include_builtin_functions)
-                                             # owner.is_top_owner())
+                                            include_builtin=include_builtin_functions)
 
         self.hook_on_finished_all_list: Optional[List[HookOnFinishedAllCallable]] =  \
             [] if self.is_top_registries else None
@@ -860,7 +849,7 @@ class RegistriesBase(IRegistries):
 
     def call_hooks_on_finished_all(self):
         if not self.is_top_registries:
-            raise RuleInternalError(owner=self, msg=f"call_hooks_on_finished_all() can be called on top registries") 
+            raise RuleInternalError(owner=self, msg="call_hooks_on_finished_all() can be called on top registries") 
         for hook_function in self.hook_on_finished_all_list:
             hook_function()
 

@@ -13,6 +13,11 @@ from typing import (
         Callable,
         Any,
         )
+
+from .exceptions import (
+        RuleApplyValueError,
+        RuleSetupValueError,
+        )
 from .functions import (
         create_builtin_function_factory, 
         BuiltinFunctionFactory,
@@ -71,11 +76,10 @@ def EnumMembers(
                 )
 
 
-
-
 # ------------------------------------------------------------
 # Builtin functions
 # ------------------------------------------------------------
+
 T = TypeVar("T", bound=Any)
 
 
@@ -83,7 +87,7 @@ def count(value_list: List[ItemType]) -> int:
     """ for objects from datastores - e.g. rows, iterables """
     return len(value_list)
 
-Count = create_builtin_function_factory(
+Count = create_builtin_function_factory( # noqa: E305
             count, name="Count", 
             # arg_validators={"value_list": ensure_is_list},
             )
@@ -93,27 +97,27 @@ def length(value_sized: Sized) -> int:
     """ TODO: for string and other similar """
     return len(value_sized)
 
-Length = create_builtin_function_factory(
+Length = create_builtin_function_factory( # noqa: E305
             length, name="Length", 
             # arg_validators={"value_list": ensure_has_len},
             )
 
 def upper(str_value: str) -> str:
     return str.upper(str_value)
-Upper = create_builtin_function_factory(upper, name="Upper")
+Upper = create_builtin_function_factory(upper, name="Upper") # noqa: E305
 
 def lower(str_value: str) -> str:
     return str.lower(str_value)
-Lower = create_builtin_function_factory(lower, name="Lower")
+Lower = create_builtin_function_factory(lower, name="Lower") # noqa: E305
 
 
 def substring(str_value: str, start:Optional[int], end:Optional[int]=None) -> str:
     return str_value[start:end]
-Substring = create_builtin_function_factory(substring, name="Substring")
+Substring = create_builtin_function_factory(substring, name="Substring") # noqa: E305
 
 def startswith(str_value: str, prefix:str) -> bool:
     return str_value.startswith(prefix)
-Startswith = create_builtin_function_factory(startswith, name="Startswith")
+Startswith = create_builtin_function_factory(startswith, name="Startswith") # noqa: E305
 
 
 # ------------------------------------------------------------

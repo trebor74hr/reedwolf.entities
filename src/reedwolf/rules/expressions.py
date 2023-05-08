@@ -19,9 +19,11 @@ from typing import (
         Union,
         Any,
         Callable,
+        Tuple,
         )
 from .utils import (
         UNDEFINED,
+        UndefinedType,
         )
 from .exceptions import (
         RuleSetupValueError,
@@ -41,6 +43,7 @@ from .meta import (
         FunctionArgumentsType,
         FunctionArgumentsTupleType,
         STANDARD_TYPE_W_NONE_LIST,
+        HookOnFinishedAllCallable,
         )
 
 
@@ -53,7 +56,7 @@ from .meta import (
 class IRegistry:
 
     @abstractmethod
-    def get_root_value(self, apply_session: IApplySession) -> Any:
+    def get_root_value(self, apply_session: IApplySession) -> Any: # noqa: F821
         " used in apply phase "
         ...
 
@@ -86,7 +89,7 @@ class IAttributeAccessorBase(ABC):
     " used in registry "
 
     @abstractmethod
-    def get_attribute(self, apply_session: 'IApplySession', attr_name:str, is_last:bool) -> IAttributeAccessorBase:
+    def get_attribute(self, apply_session: 'IApplySession', attr_name:str, is_last:bool) -> IAttributeAccessorBase: # noqa: F821
         """ 
         is_last -> True - need to get final literal value from object
         (usually primitive type like int/str/date ...) 
@@ -152,14 +155,14 @@ class NotAvailableExecResult(ExecResult):
 def execute_available_vexp(
         available_vexp: Optional[Union[bool, ValueExpression]], 
         apply_session: IApplySession) \
-            -> Optional[NotAvailableExecResult]:
+                -> Optional[NotAvailableExecResult]: # noqa: F821
     " returns NotAvailableExecResult when not available with details in instance, if all ok -> returns None "
     if isinstance(available_vexp, ValueExpression):
         available_vexp_result = available_vexp._evaluator.execute_vexp(apply_session=apply_session)
         if not bool(available_vexp_result.value):
             return NotAvailableExecResult.create(available_vexp_result=available_vexp_result)
     elif isinstance(available_vexp, bool):
-        if available_vexp == False:
+        if available_vexp is False:
             return NotAvailableExecResult.create(available_vexp_result=None)
     # all ok
     return None
@@ -180,7 +183,7 @@ class IValueExpressionNode(ABC):
 
     @abstractmethod
     def execute_node(self, 
-                 apply_session: "IApplySession", 
+                 apply_session: "IApplySession", # noqa: F821
                  # previous - can be undefined too
                  vexp_result: Union[ExecResult, UndefinedType],
                  is_last: bool,
@@ -194,7 +197,7 @@ class IValueExpressionNode(ABC):
 
     def finish(self):
         if self.is_finished:
-            raise RuleInternalError(owner=self, msg=f"already finished") 
+            raise RuleInternalError(owner=self, msg="already finished") 
         self.is_finished = True
 
 
@@ -208,7 +211,7 @@ def execute_vexp_or_node(
         vexp_node: Union[IValueExpressionNode, Any], 
         prev_node_type_info: TypeInfo,
         vexp_result: ExecResult,
-        apply_session: "IApplySession"
+        apply_session: "IApplySession" # noqa: F821
         ) -> ExecResult:
 
     # TODO: this function has ugly interface - solve this better
@@ -266,7 +269,7 @@ class LiteralVexpNode(IValueExpressionNode):
         return self.type_info
 
     def execute_node(self, 
-                 apply_session: "IApplySession", 
+                 apply_session: "IApplySession", # noqa: F821
                  vexp_result: ExecResult,
                  is_last: bool,
                  prev_node_type_info: TypeInfo,
@@ -377,7 +380,7 @@ class OperationVexpNode(IValueExpressionNode):
     def create_vexp_node(
                    vexp_or_other: Union[ValueExpression, Any], 
                    label: str,
-                   registries: "Registries", 
+                   registries: "Registries", # noqa: F821
                    owner: Any) -> IValueExpressionNode:
         if isinstance(vexp_or_other, ValueExpression):
             vexp_node = vexp_or_other.Setup(registries, owner=owner)
@@ -422,7 +425,7 @@ class OperationVexpNode(IValueExpressionNode):
 
 
     def execute_node(self, 
-                 apply_session: "IApplySession", 
+                 apply_session: "IApplySession", # noqa: F821
                  vexp_result: ExecResult,
                  is_last: bool,
                  prev_node_type_info: TypeInfo,
@@ -430,7 +433,7 @@ class OperationVexpNode(IValueExpressionNode):
         # this should be included: context.this_registry: ThisRegistry
 
         if is_last and not self.is_finished:
-            raise RuleInternalError(owner=self, msg=f"Last vexp node is not finished.") 
+            raise RuleInternalError(owner=self, msg="Last vexp node is not finished.") 
 
         if vexp_result:
             raise NotImplementedError("TODO:")
@@ -697,7 +700,6 @@ class ValueExpression(DynamicAttrsBase):
             # can be Component or can be managed Model dataclass Field - when .denied is not appliable
             if hasattr(current_vexp_node, "denied") and current_vexp_node.denied:
                 # '{vexp_node_name}' 
-                import pdb;pdb.set_trace() 
                 raise RuleSetupValueError(owner=self, msg=f"VexpNode (owner={owner.name}) references '{current_vexp_node.name}' what is not allowed due: {current_vexp_node.deny_reason}.")
 
         vexp_evaluator.finish()

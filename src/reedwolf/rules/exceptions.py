@@ -29,9 +29,9 @@ class RuleError(Exception, ABC):
         return f"{self.owner.__class__.__name__}('{self.owner.name}') -> {self.msg}" \
                     if self.owner and not isinstance(self.owner, DynamicAttrsBase) and getattr(self.owner, "name", None) \
                     else \
-                        (f"{self.owner.__class__.__name__}('{str(self.owner)}') -> {self.msg}" 
-                         if self.owner else 
-                         f"{self.msg}")
+                    (f"{self.owner.__class__.__name__}('{str(self.owner)}') -> {self.msg}" 
+                     if self.owner else 
+                     f"{self.msg}")
 
     def __str__(self):
         return f"{self.full_msg}"
@@ -105,7 +105,7 @@ class RuleValidationError(RuleError):
                     component_key, 
                     message_truncate("; ".join(err_msg), self.MAX_ERR_DESC_ONE)))
         msg = f"Validation failed ({len(msg)}): \n  - " + message_truncate("\n  - ".join(msg), self.MAX_ERR_DESC_ALL)
-        
+
         super().__init__(msg=msg, owner=owner)
 
 # class RuleValidationFieldError(RuleError):
@@ -119,5 +119,4 @@ class RuleValidationError(RuleError):
 # TODO: consider renaming Validation -> Validator ?
 class RuleValidationCardinalityError(RuleValidationError):
     pass
-
 

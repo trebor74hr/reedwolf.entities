@@ -343,7 +343,6 @@ class ApplyResult(IApplySession):
             # == Extension with single item ==
 
             if not is_model_instance(instance):
-                # import pdb;pdb.set_trace() 
                 raise RuleApplyValueError(owner=self, msg=f"Expected list/tuple or model instance, got: {instance} : {type(instance)}")
 
 

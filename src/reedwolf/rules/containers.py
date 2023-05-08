@@ -6,12 +6,13 @@ from abc import (
         abstractmethod,
         )
 from typing import (
+        Tuple,
+        Any,
         Dict,
         List,
         Optional,
         Union,
         Type,
-        Sequence,
         )
 # https://peps.python.org/pep-0673/
 # python 3.11+ from typing import Self
@@ -27,11 +28,10 @@ from .utils import (
 from .exceptions import (
         RuleSetupError,
         RuleSetupValueError,
+        RuleSetupNameError,
         RuleInternalError,
         RuleNameNotFoundError,
         RuleSetupNameNotFoundError,
-        # apply
-        RuleApplyError,
         RuleApplyNameNotFoundError,
         )
 from .namespaces import (
@@ -53,6 +53,7 @@ from .base import (
         BoundModelBase,
         GlobalConfig,
         KeyPairs,
+        IApplySession,
         )
 from .expressions import (
         ValueExpression,
@@ -120,7 +121,6 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
     def _get_function(self, name: str, strict:bool=True):
         if not self.functions:
             raise KeyError(f"{self.name}: Function '{name}' not found, no functions available.")
-        #return self.registries.functions_factory_registry.get(name, strict=strict)
         return self.registries.functions_factory_registry.get(name, strict=strict)
 
     def add_fieldgroup(self, fieldgroup:FieldGroup):
@@ -312,7 +312,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         #       extension.setup() will do this within own tree dep (own .components / .registries)
 
         if not self.contains:
-            raise RuleSetupError(owner=self, msg=f"'contains' attribute is required with list of components")
+            raise RuleSetupError(owner=self, msg="'contains' attribute is required with list of components")
 
         # iterate all subcomponents and call _setup() for each
         self._setup(registries=self.registries)
@@ -373,19 +373,19 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
                 key_pairs = self.get_key_pairs(instance)
                 assert key_pairs
                 key_string = "{}[{}]".format(
-                                self.name, GlobalConfig.ID_NAME_SEPARATOR.join(
-                                [f"{name}={value}" 
-                                    for name, value in key_pairs
-                                ]))
+                                self.name, 
+                                GlobalConfig.ID_NAME_SEPARATOR.join(
+                                    [f"{name}={value}" for name, value in key_pairs]
+                                ))
             elif index0 is not None:
                 key_string = f"{self.name}[{index0}]"
             else:
                 key_string = self.name
             apply_session.key_string_container_cache[instance_id] = key_string
             apply_session.instance_by_key_string_cache[key_string] = instance
-            from_cache = "new"
-        else:
-            from_cache = "cache"
+        #     from_cache = "new"
+        # else:
+        #     from_cache = "cache"
 
         # TODO: apply_session.config.logger.debug("cont:", self.name, key_string, f"[{from_cache}]")
 
@@ -407,12 +407,13 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
     def get_key_pairs(self, instance: ModelType) -> List[(str, Any)]:
         if not self.keys:
-            raise RuleInternalError(msg=f"get_key_pairs() should be called only when 'keys' are defined")
+            raise RuleInternalError(msg="get_key_pairs() should be called only when 'keys' are defined")
         key_pairs = self.keys.get_key_pairs(instance)
         return key_pairs
-        
+
 
 # ------------------------------------------------------------
+
 
 class KeysBase(ABC):
 
@@ -458,7 +459,7 @@ class KeyFields(KeysBase):
 
     def __post_init__(self):
         if not self.field_names:
-            raise RuleSetupError(f"field_names are required")
+            raise RuleSetupError("field_names are required")
         for field_name in self.field_names:
             if not isinstance(field_name, str):
                 raise RuleSetupNameError(f"Fields needs to be list of strings, got '{field_name}'")

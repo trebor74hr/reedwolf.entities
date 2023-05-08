@@ -13,13 +13,28 @@ TODO: demo Evaluation - created/updated by/at: current user, timestamp
 from __future__ import annotations
 
 from abc import ABC
-from typing import Union, Optional
+from typing import (
+        Union, 
+        Optional,
+        ClassVar,
+        )
 from dataclasses import dataclass
 
-from .meta          import TransMessageType, LiteralType
-from .components    import EvaluationBase
-from .expressions   import ValueExpression, ExecResult, execute_available_vexp
-
+from .meta import (
+        TransMessageType, 
+        LiteralType,
+        )
+from .base import (
+        IApplySession,
+        )
+from .components  import (
+        EvaluationBase,
+        )
+from .expressions import (
+        ValueExpression, 
+        ExecResult, 
+        execute_available_vexp,
+        )
 
 # ------------------------------------------------------------
 # Evaluation - generic

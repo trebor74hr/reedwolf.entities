@@ -174,19 +174,16 @@ class ThreadSafeCounter:
     def __init__(self):
         self._counter = 0
         self._lock = Lock()
- 
+
     def get_new(self):
         with self._lock:
             self._counter += 1
             return self._counter
- 
-    # def value(self):
-    #     with self._lock:
-    #         return self._counter
 
 # ------------------------------------------------------------
 
-REPR_MAX_LEN = 100
+REPR_MAX_LEN = 100 # noqa: E305
+
 
 def to_repr(instance: Any, max_len: int = REPR_MAX_LEN):
     out = repr(instance)
@@ -196,10 +193,10 @@ def to_repr(instance: Any, max_len: int = REPR_MAX_LEN):
 
 # ------------------------------------------------------------
 
-_RE_ID_NAME_1, _RE_ID_NAME_2 = "a-zA-Z", "a-zA-Z0-9_"
-# _RE_ID_NAME = re.compile(f"^[{_RE_ID_NAME_1}][{_RE_ID_NAME_2}]*$")
+_RE_ID_NAME_1, _RE_ID_NAME_2 = "a-zA-Z", "a-zA-Z0-9_" # noqa: E305
 
-def check_identificator_name(vexp_node_name: str): #  -> str:
+
+def check_identificator_name(vexp_node_name: str):
     """ When attr_node/paremeter/argument name is valid 
         it returns the same value. """
     from .exceptions import RuleSetupNameError

@@ -27,7 +27,6 @@ from dataclasses import (
         field,
         )
 from typing import (
-        Any,
         List,
         )
 from .utils import (
@@ -35,7 +34,6 @@ from .utils import (
         )
 from .exceptions import (
         RuleInternalError,
-        RuleSetupError,
         RuleApplyError,
         )
 from .expressions import (
@@ -59,7 +57,7 @@ class ValueExpressionEvaluator:
 
     def add(self, node:IValueExpressionNode):
         if self.finished:
-            raise RuleInternalError(owner=self, msg=f"Already finished.")
+            raise RuleInternalError(owner=self, msg="Already finished.")
         if not isinstance(node, IValueExpressionNode):
             raise RuleInternalError(owner=self, msg=f"node not 'IValueExpressionNode', got: {node}")
         self.attr_node_list.append(node)
@@ -69,17 +67,17 @@ class ValueExpressionEvaluator:
 
     def last_node(self) -> IValueExpressionNode:
         if not self.finished:
-            raise RuleInternalError(owner=self, msg=f"Not finished.")
+            raise RuleInternalError(owner=self, msg="Not finished.")
         return self.attr_node_list[-1]
 
     def failed(self, reason:str):
         if self.finished:
-            raise RuleInternalError(owner=self, msg=f"Already finished.")
+            raise RuleInternalError(owner=self, msg="Already finished.")
         self.failed_reasons.append(reason)
 
     def finish(self):
         if self.finished:
-            raise RuleInternalError(owner=self, msg=f"Already finished.")
+            raise RuleInternalError(owner=self, msg="Already finished.")
         if not self.attr_node_list:
             raise RuleInternalError(owner=self, msg=f"attr_node_list is empty, failed reasons: {self.failed_reasons}")
 
@@ -87,9 +85,9 @@ class ValueExpressionEvaluator:
         # TODO:     raise RuleInternalError(owner=self, msg=f"Empty attr_node_list.")
         self.finished = True
 
-    def execute_vexp(self, apply_session: "IApplySession") -> ExecResult:
+    def execute_vexp(self, apply_session: "IApplySession") -> ExecResult: # noqa: F821
         if not self.finished:
-            raise RuleInternalError(owner=self, msg=f"Not yet finished.")
+            raise RuleInternalError(owner=self, msg="Not yet finished.")
         if self.failed_reasons:
             raise RuleApplyError(owner=self, msg=f"Failed in creation: {'; '.join(self.failed_reasons)}.")
 
@@ -113,7 +111,7 @@ class ValueExpressionEvaluator:
                                     prev_node_type_info=prev_node_type_info,
                                     )
                 prev_node_type_info = node.get_type_info()
-                
+
 
         return vexp_result
 

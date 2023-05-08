@@ -165,7 +165,7 @@ class IFunction(IFunctionVexpNode):
 
     def __post_init__(self):
         if not self.py_function:
-            raise RuleInternalError(owner=self, msg=f"py_function input parameter is obligatory")
+            raise RuleInternalError(owner=self, msg="py_function input parameter is obligatory")
         if not is_function(self.py_function):
             raise RuleSetupValueError(owenr=self, msg=f"py_function is not a function, got: {self.py_function}")
 
@@ -274,7 +274,7 @@ class IFunction(IFunctionVexpNode):
     #       this will need new input parameter: contexts/attr_node/...
     @staticmethod
     def execute_arg(
-            apply_session: "IApplySession", 
+            apply_session: "IApplySession", # noqa: F821
             arg_value: Any,
             prev_node_type_info:TypeInfo, 
             ) -> Any:
@@ -292,11 +292,11 @@ class IFunction(IFunctionVexpNode):
 
     # TODO: IApplySession is in base.py which imports .functions just for one case ...
     def execute_node(self, 
-                    apply_session: "IApplySession", 
-                    vexp_result: ExecResult, 
-                    is_last:bool,
-                    prev_node_type_info: TypeInfo,
-                    ) -> Any:
+            apply_session: "IApplySession", # noqa: F821
+            vexp_result: ExecResult, 
+            is_last:bool,
+            prev_node_type_info: TypeInfo,
+            ) -> Any:
         """
         will be called when actual function logic needs to be executed. Input
         is/are function argument(s).
@@ -306,19 +306,19 @@ class IFunction(IFunctionVexpNode):
         #       check output type that matches output_type_info
         """
         if is_last and not self.is_finished:
-            raise RuleInternalError(owner=self, msg=f"Last vexp-node is not finished")  # , {id(self)} / {type(self)}
+            raise RuleInternalError(owner=self, msg="Last vexp-node is not finished")  # , {id(self)} / {type(self)}
 
         args = []
         kwargs = {}
 
         if vexp_result is UNDEFINED:
+            # top_level_call = True
             # namespace toplevel call, e.g. Fn.Length()
             vexp_result = ExecResult()
-            top_level_call = True
         else:
+            # top_level_call = False
             if not isinstance(vexp_result, ExecResult):
                 raise RuleInternalError(owner=self, msg=f"vexp_result is not ExecResult, got: {vexp_result}") 
-            top_level_call = False
             input_value = vexp_result.value
             if self.value_arg_name:
                 kwargs[self.value_arg_name] = input_value
@@ -418,7 +418,7 @@ class IFunctionFactory(ABC):
 
     def create_function(self, 
                 func_args:FunctionArgumentsType, 
-                registries         : Registries,
+                registries         : "IRegistries", # noqa: F821
                 value_arg_type_info: Optional[TypeInfo] = None,
                 name               : Optional[str] = None,
                 caller             : Optional[IValueExpressionNode] = None,
