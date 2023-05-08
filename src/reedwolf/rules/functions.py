@@ -272,20 +272,30 @@ class IFunction(IFunctionVexpNode):
     # TODO: execute_arg - i.e. from ValueExpression to standard pythoh types
     #       this will need new input parameter: contexts/attr_node/...
     @staticmethod
-    def execute_arg(apply_session: "IApplySession", arg_value: Any) -> Any:
+    def execute_arg(
+            apply_session: "IApplySession", 
+            arg_value: Any,
+            prev_node_type_info:TypeInfo, 
+            ) -> Any:
         if isinstance(arg_value, (ValueExpression, IValueExpressionNode)):
             # arg_value._evaluator.execute(apply_session=apply_session)
             vexp_result = execute_vexp_or_node(
                             arg_value,
                             arg_value,
                             vexp_result = None,
+                            prev_node_type_info=prev_node_type_info,
                             apply_session=apply_session)
             arg_value = vexp_result.value
 
         return arg_value
 
     # TODO: IApplySession is in base.py which imports .functions just for one case ...
-    def execute_node(self, apply_session: "IApplySession", vexp_result: ExecResult, is_last:bool) -> Any:
+    def execute_node(self, 
+                    apply_session: "IApplySession", 
+                    vexp_result: ExecResult, 
+                    is_last:bool,
+                    prev_node_type_info: TypeInfo,
+                    ) -> Any:
         """
         will be called when actual function logic needs to be executed. Input
         is/are function argument(s).
@@ -329,8 +339,10 @@ class IFunction(IFunctionVexpNode):
                 kwargs.update(self.fixed_args.kwargs)
 
 
-        args   = [self.execute_arg(apply_session, arg_value) for arg_value in args]
-        kwargs = {arg_name: self.execute_arg(apply_session, arg_value) for arg_name, arg_value in kwargs.items()}
+        args   = [self.execute_arg(apply_session, arg_value, prev_node_type_info=prev_node_type_info) 
+                  for arg_value in args]
+        kwargs = {arg_name: self.execute_arg(apply_session, arg_value,prev_node_type_info=prev_node_type_info) 
+                  for arg_name, arg_value in kwargs.items()}
 
         try:
             ouptut_value = self.py_function(*args, **kwargs)

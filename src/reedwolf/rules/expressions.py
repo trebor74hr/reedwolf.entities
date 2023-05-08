@@ -184,6 +184,7 @@ class IValueExpressionNode(ABC):
                  # previous - can be undefined too
                  vexp_result: Union[ExecResult, UndefinedType],
                  is_last: bool,
+                 prev_node_type_info: TypeInfo,
                  ) -> ExecResult:
         ...
 
@@ -205,6 +206,7 @@ def execute_vexp_or_node(
         vexp_or_value: Union[ValueExpression, Any],
         # Union[OperationVexpNode, IFunctionVexpNode, LiteralVexpNode]
         vexp_node: Union[IValueExpressionNode, Any], 
+        prev_node_type_info: TypeInfo,
         vexp_result: ExecResult,
         apply_session: "IApplySession"
         ) -> ExecResult:
@@ -222,6 +224,7 @@ def execute_vexp_or_node(
         vexp_result = vexp_node.execute_node(
                             apply_session=apply_session, 
                             vexp_result=vexp_result,
+                            prev_node_type_info=prev_node_type_info,
                             is_last=True,
                             )
     else:
@@ -265,7 +268,8 @@ class LiteralVexpNode(IValueExpressionNode):
     def execute_node(self, 
                  apply_session: "IApplySession", 
                  vexp_result: ExecResult,
-                 is_last: bool
+                 is_last: bool,
+                 prev_node_type_info: TypeInfo,
                  ) -> ExecResult:
         assert not vexp_result
         return self.vexp_result
@@ -421,6 +425,7 @@ class OperationVexpNode(IValueExpressionNode):
                  apply_session: "IApplySession", 
                  vexp_result: ExecResult,
                  is_last: bool,
+                 prev_node_type_info: TypeInfo,
                  ) -> ExecResult:
         # this should be included: context.this_registry: ThisRegistry
 
@@ -431,14 +436,18 @@ class OperationVexpNode(IValueExpressionNode):
             raise NotImplementedError("TODO:")
 
         first_vexp_result = execute_vexp_or_node(
-                                self.first, self._first_vexp_node, 
+                                self.first, 
+                                self._first_vexp_node, 
+                                prev_node_type_info=prev_node_type_info,
                                 vexp_result=vexp_result,
                                 apply_session=apply_session)
 
         # if self.second is not in (UNDEFINED, None):
         if self._second_vexp_node is not None:
             second_vexp_result = execute_vexp_or_node(
-                                    self.second, self._second_vexp_node, 
+                                    self.second, 
+                                    self._second_vexp_node, 
+                                    prev_node_type_info=prev_node_type_info,
                                     vexp_result=vexp_result,
                                     apply_session=apply_session)
             # binary operation second argument adaption?

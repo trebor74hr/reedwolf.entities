@@ -97,11 +97,23 @@ class ValueExpressionEvaluator:
         if apply_session.current_frame.on_component_only:
             # M.address_set -> process only address_set 
             node = self.attr_node_list[-1]
-            vexp_result = node.execute_node(apply_session, vexp_result, is_last=True)
+            vexp_result = node.execute_node(
+                                apply_session, 
+                                vexp_result, 
+                                is_last=True, 
+                                prev_node_type_info=None)
         else:
             idx_last = len(self.attr_node_list)
+            prev_node_type_info = None
             for idx, node in enumerate(self.attr_node_list, 1):
-                vexp_result = node.execute_node(apply_session, vexp_result, is_last=(idx_last==idx))
+                vexp_result = node.execute_node(
+                                    apply_session, 
+                                    vexp_result, 
+                                    is_last=(idx_last==idx),
+                                    prev_node_type_info=prev_node_type_info,
+                                    )
+                prev_node_type_info = node.get_type_info()
+                
 
         return vexp_result
 

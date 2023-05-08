@@ -16,6 +16,7 @@ from .exceptions import (
         RuleSetupValueError,
         RuleInternalError,
         RuleApplyNameError,
+        RuleApplyValueError,
         )
 from .namespaces import (
         Namespace,
@@ -206,6 +207,7 @@ class AttrVexpNode(IValueExpressionNode):
                  apply_session: IApplySession, 
                  # previous - can be undefined too
                  vexp_result: Union[ExecResult, UndefinedType],
+                 prev_node_type_info: TypeInfo,
                  is_last: bool,
                  ) -> ExecResult:
 
@@ -250,30 +252,56 @@ class AttrVexpNode(IValueExpressionNode):
             do_fetch_by_name = True
 
         if do_fetch_by_name:
-            if isinstance(value_previous, (list, tuple)):
-                raise RuleApplyNameError(owner=self, msg=f"Fetching attribute '{attr_name}' could not be read from list/tuple: '{to_repr(value_previous)}' : '{type(value_previous)}'")
 
-            if isinstance(value_previous, IAttributeAccessorBase):
-                # NOTE: if this is last in chain - fetch final value
-                value_new = value_previous.get_attribute(
-                                apply_session=apply_session, 
-                                attr_name=attr_name, 
-                                is_last=is_last)
+            # convert previous value to list, process all and convert back to
+            # single object when previous_value is not a list
+            result_is_list = isinstance(value_previous, (list, tuple))
+
+            if not result_is_list:
+                # TODO: handle None, UNDEFINED?
+                if prev_node_type_info and prev_node_type_info.is_list:
+                    raise RuleApplyNameError(owner=self, msg=f"Fetching attribute '{attr_name}' expected list and got: '{to_repr(value_previous)}' : '{type(value_previous)}'")
+                value_prev_as_list = [value_previous]
             else:
-                if not hasattr(value_previous, attr_name):
-                    # TODO: list which fields are available
-                    # if all types match - could be internal problem?
-                    raise RuleApplyNameError(owner=self, msg=f"Attribute '{attr_name}' not found in '{to_repr(value_previous)}' : '{type(value_previous)}'")
-                value_new = getattr(value_previous, attr_name)
+                if prev_node_type_info and not prev_node_type_info.is_list:
+                    raise RuleApplyNameError(owner=self, msg=f"Fetching attribute '{attr_name}' got list what is not expected, got: '{to_repr(value_previous)}' : '{type(value_previous)}'")
+                value_prev_as_list = value_previous
+
+            # ------------------------------------------------------------
+            value_new_as_list = []
+
+            for val_prev in value_prev_as_list:
+                if isinstance(val_prev, IAttributeAccessorBase):
+                    # NOTE: if this is last in chain - fetch final value
+                    value_new = val_prev.get_attribute(
+                                    apply_session=apply_session, 
+                                    attr_name=attr_name, 
+                                    is_last=is_last)
+                else:
+                    if not hasattr(val_prev, attr_name):
+                        # TODO: list which fields are available
+                        # if all types match - could be internal problem?
+                        raise RuleApplyNameError(owner=self, msg=f"Attribute '{attr_name}' not found in '{to_repr(val_prev)}' : '{type(val_prev)}'")
+                    value_new = getattr(val_prev, attr_name)
+
+                value_new_as_list.append(value_new)
+
+            value_new = value_new_as_list[0] if not result_is_list else value_new_as_list
         else:
             value_new = value_previous
 
-        # TODO: if isinstance(value_new, (list, tuple))):
-        # TODO:     if not self.islist() 
-        # TODO:         raise RuleApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should not return list, got: '{to_repr(value_new)}' : '{type(value_new)}'")
-        # TODO: else:
-        # TODO:     if self.islist() 
-        # TODO:         raise RuleApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should return list, got: '{to_repr(value_new)}' : '{type(value_new)}'")
+        # TODO: check type_info match too - and put in all types of nodes - functions/operators
+        if apply_session.component_name_only and apply_session.instance_new == value_new:
+            # TODO: this is workaround when single instance is passed to update single item in Extension[List]
+            #       not good solution
+            ...
+        elif isinstance(value_new, (list, tuple)):
+            if not self.islist():
+                raise RuleApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should not return list, got: '{to_repr(value_new)}' : '{type(value_new)}'")
+        else:
+            if self.islist():
+                # apply_session.rules.get_component(apply_session.component_name_only)
+                raise RuleApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should return list, got: '{to_repr(value_new)}' : '{type(value_new)}'")
 
         # TODO: hm, changer_name is equal to attr_name, any problem / check / fix ... 
         vexp_result.set_value(attr_name=attr_name, changer_name=attr_name, value=value_new)
