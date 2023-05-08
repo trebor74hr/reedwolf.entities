@@ -824,7 +824,7 @@ class RegistriesBase(IRegistries):
             owner_registries: Optional[IRegistries], 
             functions: Optional[List[CustomFunctionFactory]] = None, 
             functions_factory_registry: Optional[FunctionsFactoryRegistry] = None,
-            include_standard_functions: bool = True,
+            include_builtin_functions: bool = True,
             ):
         """
         input param functions are custom_function_factories
@@ -858,7 +858,7 @@ class RegistriesBase(IRegistries):
         else:
             self.functions_factory_registry: FunctionsFactoryRegistry = \
                     FunctionsFactoryRegistry(functions=functions, 
-                                             include_standard=include_standard_functions)
+                                             include_builtin=include_builtin_functions)
                                              # owner.is_top_owner())
 
         self.hook_on_finished_all_list: Optional[List[HookOnFinishedAllCallable]] =  \

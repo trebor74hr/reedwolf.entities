@@ -104,7 +104,7 @@ def create_registries(
                     owner=owner, 
                     functions=functions,
                     owner_registries=owner.registries if owner.owner else None,
-                    include_standard_functions=owner.is_top_owner())
+                    include_builtin_functions=owner.is_top_owner())
     registries.add_registry(ModelsRegistry())
     registries.add_registry(DataRegistry())
     registries.add_registry(FieldsRegistry())

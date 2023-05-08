@@ -523,7 +523,7 @@ class BuiltinFunctionFactory(IFunctionFactory):
 class FunctionsFactoryRegistry:
 
     def __init__(self, functions: Optional[List[CustomFunctionFactory]] = None,
-                 include_standard:bool = True, 
+                 include_builtin:bool = True, 
                  ):
         """
         functions are custom_function_factories
@@ -531,10 +531,10 @@ class FunctionsFactoryRegistry:
         # TODO: typing is not good
         #       Union[type(IFunction), CustomFunctionFactory]
         self.store: Dict[str, Type(IFunction)]= {}
-        self.include_standard:bool = include_standard
+        self.include_builtin:bool = include_builtin
 
-        if self.include_standard:
-            self.register_standard_functions()
+        if self.include_builtin:
+            self.register_builtin_functions()
 
         if functions:
             for function_factory in functions:
@@ -543,7 +543,7 @@ class FunctionsFactoryRegistry:
                 self.add(function_factory)
 
     def __str__(self):
-        return f"{self.__class__.__name__}(functions={', '.join(self.store.keys())}, include_standard={self.include_standard})"
+        return f"{self.__class__.__name__}(functions={', '.join(self.store.keys())}, include_builtin={self.include_builtin})"
     __repr__ = __str__
 
     def items(self) -> List[Tuple[str, Type(IFunction)]]:
@@ -591,13 +591,13 @@ class FunctionsFactoryRegistry:
             return out
         return list(self.store.keys())
 
-    def register_standard_functions(self) -> int:
+    def register_builtin_functions(self) -> int:
         # init_functions_factory_registry
         """
         Traverse all classes that inherit IFunction and register them
         This function needs to be inside of this module or change to: import .functions; for ... vars(functions)
         """
-        from .func_standard import get_builtin_function_factories_dict
+        from .func_builtin import get_builtin_function_factories_dict
 
         items = get_builtin_function_factories_dict().items()
         for func_name, builtin_function in items:
