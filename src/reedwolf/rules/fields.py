@@ -573,9 +573,13 @@ class EnumField(FieldBase):
                 if not enum_attr_node:
                     enum_attr_node = self.enum.Setup(registries=registries, owner=self)
 
-                self.enum = enum_attr_node.data.value
-                if not is_enum(self.enum):
-                    raise RuleSetupValueError(owner=self, msg=f"Data type of attr_node expression {self.enum} should Enum, got: {type(self.enum)}")
+                # self.enum = enum_attr_node.data.value
+                self.enum = enum_attr_node.data
+                # EnumMembers
+                if not self.enum:
+                    raise RuleSetupValueError(owner=self, msg=f"Underlying data type of attr_node expression is not enum. You should use: functions=[... Fn.EnumMembers(enum=<EnumType>)]")
+                elif not is_enum(self.enum):
+                    raise RuleSetupValueError(owner=self, msg=f"Data type of attr_node expression {self.enum} should Enum, got: {type(self.enum)}. You should use: functions=[... Fn.EnumMembers(enum=<EnumType>)]")
                 # attr_node.data.py_type_hint
 
             # when not found -> it will be raised in other place

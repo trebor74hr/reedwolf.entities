@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from enum import Enum
 from collections.abc import Sized
 from typing import (
         TypeVar,
+        Tuple,
         Dict,
         Optional,
         List,
@@ -14,11 +16,15 @@ from typing import (
 from .functions import (
         create_builtin_function_factory, 
         BuiltinFunctionFactory,
+        CustomFunctionFactory,
+        FunctionArgumentsType,
         )
 from .meta import (
         ItemType,
         NumberType,
         NumberAttrNameType,
+        is_enum,
+        get_enum_members,
         )
 from .utils import (
         UNDEFINED,
@@ -35,28 +41,40 @@ def get_builtin_function_factories_dict() -> Dict[str, BuiltinFunctionFactory]:
     return out
 
 
-# ----------------------------------------------------------------------------
-# ValueArgValidatorPyFuncType -> functions for value argument type validation
-# ----------------------------------------------------------------------------
+# ------------------------------------------------------------
+# Builtin function factories
+# ------------------------------------------------------------
+def enum_members(enum: Enum) -> List[Tuple[str, Any]]:
+    if not is_enum(enum):
+        raise RuleApplyValueError(msg=f"Expecting enum type, got: {enum} / {type(enum)}")
+    return get_enum_members(enum)
 
-#    For validation error cases should:
-#       * return string error message, or
-#       * raise RuleSetupError based error
 
-# def ensure_is_number(arg_name: str, value_arg_type_info : TypeInfo) -> Optional[str]:
-#     if not value_arg_type_info.type_ in (int, float, Decimal):
-#         raise RuleSetupTypeError(f"Expected origin type to be int/float/Decimal type, got: {value_arg_type_info.py_type_hint}")
-# 
-# def ensure_is_list(arg_name: str, value_arg_type_info : TypeInfo) -> Optional[str]:
-#     if not value_arg_type_info.is_list:
-#         raise RuleSetupTypeError(f"Expected list/tuple/sequence type, got: {value_arg_type_info.py_type_hint}")
-# 
-# def ensure_has_len(arg_name: str, value_arg_type_info : TypeInfo) -> Optional[str]:
-#     if not hasattr(value_arg_type_info.type_, "__len__"):
-#         raise RuleSetupTypeError(f"Expected type with __len__ method implemented, got: {value_arg_type_info.py_type_hint}")
+def EnumMembers(
+        enum: Enum, 
+        name: Optional[str] = None,
+        ) -> CustomFunctionFactory:
+    """
+    used for EnumField(choices=...) - instead of obsolete data=[StaticData] and DataNs.
+    it is not BuiltinFunctionFactory since it is added to functions= argument.
+    """
+    if not is_enum(enum):
+        raise RuleSetupValueError(msg=f"Expecting enum type, got: {enum} / {type(enum)}")
+    if not name:
+        name = enum.__name__
+    kwargs: Dict[str, Enum] = {"enum" : enum}
+    return CustomFunctionFactory(
+                py_function=enum_members,
+                name=name,
+                fixed_args=FunctionArgumentsType((), kwargs),
+                data=enum,
+                )
+
+
+
 
 # ------------------------------------------------------------
-# Standard functions
+# Builtin functions
 # ------------------------------------------------------------
 T = TypeVar("T", bound=Any)
 
@@ -225,6 +243,27 @@ Last = create_builtin_function_factory(
             )
 
 
+
+# ----------------------------------------------------------------------------
+# ValueArgValidatorPyFuncType -> functions for value argument type validation
+# ----------------------------------------------------------------------------
+
+#    For validation error cases should:
+#       * return string error message, or
+#       * raise RuleSetupError based error
+
+# def ensure_is_number(arg_name: str, value_arg_type_info : TypeInfo) -> Optional[str]:
+#     if not value_arg_type_info.type_ in (int, float, Decimal):
+#         raise RuleSetupTypeError(f"Expected origin type to be int/float/Decimal type, got: {value_arg_type_info.py_type_hint}")
+# 
+# def ensure_is_list(arg_name: str, value_arg_type_info : TypeInfo) -> Optional[str]:
+#     if not value_arg_type_info.is_list:
+#         raise RuleSetupTypeError(f"Expected list/tuple/sequence type, got: {value_arg_type_info.py_type_hint}")
+# 
+# def ensure_has_len(arg_name: str, value_arg_type_info : TypeInfo) -> Optional[str]:
+#     if not hasattr(value_arg_type_info.type_, "__len__"):
+#         raise RuleSetupTypeError(f"Expected type with __len__ method implemented, got: {value_arg_type_info.py_type_hint}")
+
 # TODO: ove implementiraj - da rade na listi i da rade na jednom item-u
 #       Oldest - same as First, but for date/datetime fields ?
 #       Newest - same as Last, but for date/datetime fields?
@@ -232,6 +271,9 @@ Last = create_builtin_function_factory(
 #       Reduce
 #       CountDistinct
 
+# ------------------------------------------------------------
+# Common validators
+# ------------------------------------------------------------
 
 # standardne funkcije za primitivne podatke, npr. upper, abs, substring, (može i [:])
 # upiti prema podobjektima: kao django ORM <podobjekt>_set, npr. address_set
@@ -248,3 +290,4 @@ Last = create_builtin_function_factory(
 #
 #          aggregatation
 #            sum, min, max, count, avg, stddev, countDistinct
+

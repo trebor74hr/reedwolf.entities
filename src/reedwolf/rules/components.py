@@ -105,28 +105,28 @@ class Component(ComponentBase, ABC):
 
 
 # ------------------------------------------------------------
-
-# TODO: consider ExpressionData - to be based on ValueExpression
-
-@dataclass
-class StaticData(IData, Component):
-    # TODO: Data - maybe should not be component at all?
-    name:           str
-    # TODO: ModelField or Enum or ...
-    value:          Any 
-    label:          Optional[TransMessageType] = field(repr=False, default=None)
-    type_info:      TypeInfo = field(init=False)
-    # evaluate:       bool = False # TODO: describe
-
-    def __post_init__(self):
-        if isinstance(self.value, ValueExpression):
-            # TODO: should be model or enum
-            # raise RuleSetupValueError(owner=self, msg=f"{self.name} -> {type(self.value)}: {type(self.value)} - to be done a ValueExpression")
-            raise NotImplementedError(f"{self.name} -> {type(self.value)}: {type(self.value)} - to be done a ValueExpression")
-        self.type_info = TypeInfo.get_or_create_by_type(self.value)
-        if not self.label:
-            self.label = varname_to_title(self.name)
-        super().__post_init__()
+#
+# NOTE: obsolete - it was used for enums only - replaced with special functiohn factory function: functions=[EnumMembers()]
+# 
+# @dataclass
+# class StaticData(IData, Component):
+#     # TODO: Data - maybe should not be component at all?
+#     name:           str
+#     # TODO: ModelField or Enum or ...
+#     value:          Any 
+#     label:          Optional[TransMessageType] = field(repr=False, default=None)
+#     type_info:      TypeInfo = field(init=False)
+#     # evaluate:       bool = False # TODO: describe
+# 
+#     def __post_init__(self):
+#         if isinstance(self.value, ValueExpression):
+#             # TODO: should be model or enum
+#             # raise RuleSetupValueError(owner=self, msg=f"{self.name} -> {type(self.value)}: {type(self.value)} - to be done a ValueExpression")
+#             raise NotImplementedError(f"{self.name} -> {type(self.value)}: {type(self.value)} - to be done a ValueExpression")
+#         self.type_info = TypeInfo.get_or_create_by_type(self.value)
+#         if not self.label:
+#             self.label = varname_to_title(self.name)
+#         super().__post_init__()
 
 # # ------------------------------------------------------------
 #

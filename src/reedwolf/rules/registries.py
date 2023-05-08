@@ -33,7 +33,6 @@ from .exceptions import (
 from .namespaces import (
         Namespace,
         ModelsNS,
-        DataNS,
         FieldsNS,
         ThisNS,
         FunctionsNS,
@@ -84,7 +83,6 @@ from .models import (
         BoundModelWithHandlers,
         )
 from .components import (
-        StaticData,
         FieldGroup,
         ValidationBase,
         EvaluationBase,
@@ -291,7 +289,7 @@ class RegistryBase(IRegistry):
         Will create a new attr_node when missing, even in the case when the var
         is just "on the path" to final attr_node needed.
 
-        Namespace usually is: ModelsNS, FunctionsNS, DataNS
+        Namespace usually is: ModelsNS, FunctionsNS
 
         """
         # can return ValueExpression / class member / object member
@@ -345,8 +343,10 @@ class RegistryBase(IRegistry):
             else:
                 assert isinstance(parent_vexp_node, AttrVexpNode)
 
-                if isinstance(parent_vexp_node.data, StaticData):
-                    inspect_object = parent_vexp_node.data.value
+                if False:
+                    ...
+                # elif isinstance(parent_vexp_node.data, StaticData):
+                #     inspect_object = parent_vexp_node.data.value
                 # elif isinstance(parent_vexp_node.data, DynamicData):
                 #     raise NotImplementedError("TODO")
                 elif isinstance(parent_vexp_node.data, BoundModelBase):
@@ -550,48 +550,52 @@ class ModelsRegistry(RegistryBase):
         # return instance
 
 
-# ------------------------------------------------------------
-
-class DataRegistry(RegistryBase):
-
-    NAMESPACE = DataNS
-
-    def create_vexp_node(self, data_var:IData) -> IValueExpressionNode:
-        # ------------------------------------------------------------
-        # A.2. DATAPROVIDERS - Collect all vexp_nodes from dataproviders fieldgroup
-        # ------------------------------------------------------------
-        if isinstance(data_var, StaticData):
-            vexp_node = AttrVexpNode(
-                                    name=data_var.name,
-                                    data=data_var,
-                                    namespace=DataNS,
-                                    type_info=data_var.type_info,
-                                    )
-        # elif isinstance(data_var, DynamicData):
-        #     assert isinstance(data_var.function, CustomFunctionFactory)
-        #     # TODO: consider storing CustomFactoryFunction instead of CustomFunction instances
-        #     #       to allow extra arguments when referenced
-        #     vexp_node = data_var.function.create_function(
-        #                     registries=self.registries,
-        #                     caller=None,
-        #                     func_args=EmptyFunctionArguments, 
-        #                     name=data_var.name) 
-        else:
-            # TODO: does Operation needs special handling?
-            # if not isinstance(data_var, IData:
-            raise RuleSetupError(owner=self, msg=f"Register expexted IData, got {data_var} / {type(data_var)}.")
-
-        return vexp_node
-
-    def register(self, data_var:IData):
-        vexp_node = self.create_vexp_node(data_var)
-        # can be AttrVexpNode or FunctionVexpNode
-        # alt_vexp_node_name=data_var.name
-        self.register_vexp_node(vexp_node)
-        return vexp_node
-
-    def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
-        raise NotImplementedError()
+# # ------------------------------------------------------------
+# 
+# # obsolete - using FunctionNS() , functions, EnumMembers instead
+# 
+# class DataRegistry(RegistryBase):
+# 
+#     NAMESPACE = DataNS
+# 
+#     def create_vexp_node(self, data_var:IData) -> IValueExpressionNode:
+#         # ------------------------------------------------------------
+#         # A.2. DATAPROVIDERS - Collect all vexp_nodes from dataproviders fieldgroup
+#         # ------------------------------------------------------------
+#         if False:
+#             ...
+#         # elif isinstance(data_var, StaticData):
+#         #     vexp_node = AttrVexpNode(
+#         #                             name=data_var.name,
+#         #                             data=data_var,
+#         #                             namespace=DataNS,
+#         #                             type_info=data_var.type_info,
+#         #                             )
+#         # elif isinstance(data_var, DynamicData):
+#         #     assert isinstance(data_var.function, CustomFunctionFactory)
+#         #     # TODO: consider storing CustomFactoryFunction instead of CustomFunction instances
+#         #     #       to allow extra arguments when referenced
+#         #     vexp_node = data_var.function.create_function(
+#         #                     registries=self.registries,
+#         #                     caller=None,
+#         #                     func_args=EmptyFunctionArguments, 
+#         #                     name=data_var.name) 
+#         else:
+#             # TODO: does Operation needs special handling?
+#             # if not isinstance(data_var, IData:
+#             raise RuleSetupError(owner=self, msg=f"Register expexted IData, got {data_var} / {type(data_var)}.")
+# 
+#         return vexp_node
+# 
+#     def register(self, data_var:IData):
+#         vexp_node = self.create_vexp_node(data_var)
+#         # can be AttrVexpNode or FunctionVexpNode
+#         # alt_vexp_node_name=data_var.name
+#         self.register_vexp_node(vexp_node)
+#         return vexp_node
+# 
+#     def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
+#         raise NotImplementedError()
 
 # ------------------------------------------------------------
 

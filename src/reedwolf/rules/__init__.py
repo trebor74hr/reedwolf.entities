@@ -1,8 +1,6 @@
 from .namespaces import (  # noqa: F401
         FieldsNS,
         F,
-        DataNS,
-        D,
         ModelsNS,
         M,
         FunctionsNS,
@@ -25,7 +23,6 @@ from .models import (
         BoundModelWithHandlers,
         )
 from .components import (  # noqa: F401
-        StaticData,
         FieldGroup,
         _,
         msg,
@@ -83,6 +80,10 @@ from .functions import (
         )
 from . import functions
 
+from .func_builtin import (
+        EnumMembers,
+        )
+
 from .apply import ApplyResult
 
 
@@ -91,7 +92,6 @@ __all__ = [
     "FunctionsNS",
     "ModelsNS",
     "FieldsNS",
-    "DatasNS",
     "ThisNS",
     "ContextNS",
     "ConfigNS",
@@ -116,7 +116,7 @@ __all__ = [
     # "BoundModelHandler",
 
     # components
-    "StaticData",
+    "EnumMembers",
 
     "FieldGroup",
 

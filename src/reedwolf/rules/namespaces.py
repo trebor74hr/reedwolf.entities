@@ -53,9 +53,9 @@ OperationsNS = Namespace("Op")
 # managed models
 ModelsNS = Namespace("Models")
 
-# Data/D - can be list, primitive type, object, Option etc.
-#   evaluated from functions or Expressions
-DataNS = Namespace("D")
+# # Data/D - can be list, primitive type, object, Option etc.
+# #   evaluated from functions or Expressions
+# DataNS = Namespace("D")
 
 # Field/F - all componenents in current container - including chain
 #           from current owner to top owner, including all their children (e.g.
@@ -81,13 +81,13 @@ ConfigNS = Namespace("Cfg")
 # aliases
 Fn = FunctionsNS
 M = ModelsNS
-D = DataNS
+# D = DataNS
 F = FieldsNS
 This = ThisNS
 Ctx = ContextNS
 Cfg = ConfigNS
 
-# ALL_NS_OBJECTS = (ContextNS, DataNS, FieldsNS, ThisNS, UtilsNS, FunctionsNS)
+# ALL_NS_OBJECTS = (ContextNS, FieldsNS, ThisNS, UtilsNS, FunctionsNS)
 
 # # Context - Direct access to managed models underneath and global Rules objects like Validation/FieldGroup etc
 # ContextNS = Namespace("Context")

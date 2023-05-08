@@ -1,19 +1,18 @@
-# Copied and adapted from Reedwolf project (project by robert.lujo@gmail.com - git@bitbucket.org:trebor74hr/reedwolf.git)
 """
-Functions can be registered and used / refereneced in 2 ways:
-1. registration and usage of DynanicData:
+Functions can be registered and used only if registered within container attribute:
 
-    data  = [DynanicData(name="Countries", function=Function(py_function, parrams))[
+    functions=[Function(),...]
 
-In S case the function will be called with passed params
-and reference in attribute way- e.g. 'D.Countries' with no arguments
+e.g.:
 
-2. Registered functions:
-       functions = [Function("CountAll", py_function, params...)]
-   In 'functions' case - function is registereed and can be used in
-       Fn.CountAll() 
-       M.addressses.CountAll()
-   extra args could be passed and must be called as function.
+   functions = [Function("CountAll", py_function, params...)]
+
+function is registereed and can be used in
+
+   Fn.CountAll() 
+   M.addressses.CountAll()
+
+extra args could be passed and must be called as function.
 """
 from __future__ import annotations
 
@@ -109,7 +108,7 @@ class IFunction(IFunctionVexpNode):
     func_args           : FunctionArgumentsType
 
     # 3. Registries are required for validation and type *data* of function
-    #     arguments, e.g. creating ThisNS, getting vars from ContextNS, DataNS etc.
+    #     arguments, e.g. creating ThisNS, getting vars from ContextNS, etc.
     registries         : "Registries" = field(repr=False)  # noqa: F821
 
     # 4. in usage when in chain (value)
@@ -146,9 +145,11 @@ class IFunction(IFunctionVexpNode):
     arg_validators      : Optional[ValueArgValidatorPyFuncDictType] = field(repr=False, default=None)
 
     # 11. Registries are required for validation and type *data* of function
-    #     arguments, e.g. creating ThisNS, getting vars from ContextNS, DataNS etc.
+    #     arguments, e.g. creating ThisNS, getting vars from ContextNS etc.
     # registries         : Optional["Registries"] = field(repr=False, default=None)  # noqa: F821
 
+    # misc data, used in EnumMembers
+    data: Optional[Any] = field(default=None, repr=False)
 
     # --- Autocomputed
     # required for IValueExpressionNode
@@ -394,8 +395,11 @@ class IFunctionFactory(ABC):
     # for dot-chained - when kwarg to use, target parameter
     value_arg_name : Optional[str] = field(default=None) 
 
-    # # validator function - see details in IFunction.arg_validators
+    # validator function - see details in IFunction.arg_validators
     arg_validators : Optional[ValueArgValidatorPyFuncDictType] = field(default=None, repr=False)
+
+    # misc data, used in EnumMembers
+    data: Optional[Any] = field(default=None, repr=False)
 
     # autocomputed
     _output_type_info: TypeInfo = field(init=False, repr=False)
@@ -429,6 +433,7 @@ class IFunctionFactory(ABC):
                 caller              = caller,               # noqa: E251
                 registries          = registries,           # noqa: E251
                 arg_validators      = self.arg_validators,  # noqa: E251
+                data                = self.data,
                 )
         return custom_function
 
@@ -450,7 +455,6 @@ def Function(py_function : Callable[..., Any],
     goes to Global namespace (Fn.)
     can accept predefined params (like partial) 
     and in use (later) can be called with rest params.
-    can not be used in ValueExpression chains (e.g. D.Country.SomeFunction()
 
     Usage: 
         def add(a, b, c=0):
@@ -486,7 +490,7 @@ def create_builtin_function_factory(
             args   : Optional[List[ValueExpression]] = None,
             kwargs: Optional[Dict[str, ValueExpression]] = None,
             arg_validators : Optional[ValueArgValidatorPyFuncDictType] = None,
-            ) -> CustomFunctionFactory:
+            ) -> BuiltinFunctionFactory:
     """
     wrapper around BuiltinFunctionFactory - better api look
     TODO: consider creating decorator

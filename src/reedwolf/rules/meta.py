@@ -204,10 +204,16 @@ def is_model_instance(instance: ModelType) -> bool:
 def is_enum(maybe_enum: Any) -> bool:
     return isinstance(maybe_enum, type) and issubclass(maybe_enum, Enum)
 
-def get_enum_member_py_type(enum_kls):
+def get_enum_member_py_type(enum_kls) -> type:
     " teke first member value and return its type "
     assert is_enum(enum_kls)
     return type(list(enum_kls.__members__.values())[0].value)
+
+def get_enum_members(enum_kls) -> List[Tuple[str, Any]]:
+    " teke first member value and return its type "
+    assert is_enum(enum_kls)
+    return [(k, ev.value) for k, ev in enum_kls.__members__.items()]
+
 
 # def is_method(obj, name):
 #     return hasattr(obj, name) and inspect.ismethod(getattr(obj, name))

@@ -36,7 +36,6 @@ from .exceptions import (
         )
 from .namespaces import (
         ModelsNS,
-        DataNS,
         FieldsNS,
         )
 from .meta import (
@@ -68,7 +67,6 @@ from .functions import CustomFunctionFactory
 from .registries import (
         Registries,
         ModelsRegistry,
-        DataRegistry,
         FieldsRegistry,
         FunctionsRegistry,
         OperationsRegistry,
@@ -106,7 +104,6 @@ def create_registries(
                     owner_registries=owner.registries if owner.owner else None,
                     include_builtin_functions=owner.is_top_owner())
     registries.add_registry(ModelsRegistry())
-    registries.add_registry(DataRegistry())
     registries.add_registry(FieldsRegistry())
     registries.add_registry(FunctionsRegistry())
     registries.add_registry(OperationsRegistry())
@@ -246,12 +243,12 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
     # ------------------------------------------------------------
 
-    def _register_data_attr_nodes(self):
-        # ------------------------------------------------------------
-        # A.2. DATAPROVIDERS - Collect all attr_nodes from dataproviders fieldgroup
-        # ------------------------------------------------------------
-        for data_var in self.data:
-            self.registries[DataNS].register(data_var)
+    # def _register_data_attr_nodes(self):
+    #     # ------------------------------------------------------------
+    #     # A.2. DATAPROVIDERS - Collect all attr_nodes from dataproviders fieldgroup
+    #     # ------------------------------------------------------------
+    #     for data_var in self.data:
+    #         self.registries[DataNS].register(data_var)
 
     # ------------------------------------------------------------
 
@@ -295,8 +292,8 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         # ModelsNS
         self._register_model_attr_nodes()
 
-        # DataNS
-        self._register_data_attr_nodes()
+        # # DataNS
+        # self._register_data_attr_nodes()
 
         # FieldsNS
         self._register_fields_components_attr_nodes()
