@@ -173,7 +173,7 @@ class SubcomponentWrapper:
             raise RuleInternalError(owner=self, msg=f"name={self.name}, path={self.path}, subcomp={self.subcomponent}, th_field={self.th_field}")
 
         # TODO: strange - ValueExpression in (None, UNDEFINED) returns True??
-        if not bool(self.subcomponent) and self.subcomponent not in (None, UNDEFINED):
+        if not bool(self.subcomponent) and self.subcomponent in (None, UNDEFINED):
             raise RuleInternalError(owner=self, msg=f"name={self.name}, path={self.path}, subcomp={self.subcomponent}, th_field={self.th_field}")
 
         # TODO: list all types available and include this check
