@@ -32,9 +32,10 @@ from .meta import (
 from .components import (
         ValidationBase,
         )
-# from .base import (
-#         SetOwnerMixin,
-#         )
+from .base import (
+        ValidationFailure,
+        IApplySession,
+        )
 
 
 # class ValidatorBase(SetOwnerMixin, ABC):
@@ -204,6 +205,9 @@ class Unique: # namespace holder
         owner           : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
         owner_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
+        def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
+            raise NotImplementedError()
+
     @dataclass
     class Children(IUniqueValidator):
         " within extension records "
@@ -213,6 +217,9 @@ class Unique: # namespace holder
 
         owner           : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
         owner_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+
+        def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
+            raise NotImplementedError()
 
 
 # ALT: names for IChildrenValidator

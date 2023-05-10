@@ -479,7 +479,7 @@ class ApplyResult(IApplySession):
         else:
             # FieldGroup supported only - partial with matched compoonent
             # raise NotImplementedError(f"TODO: currently not supported: {component}")
-            container = component.get_container_owner()
+            container = component.get_container_owner(include_self=True)
             model = container.bound_model.type_info.type_
 
         if isinstance(self.instance_new, (list, tuple)):
@@ -521,7 +521,7 @@ class ApplyResult(IApplySession):
                 else:
                     on_component_only = None
 
-                # container = component.get_container_owner() if not component.is_extension() else component
+                # container = component.get_container_owner(include_self=True) if not component.is_extension() else component
                 with self.use_stack_frame(
                         StackFrame(
                             container = self.current_frame.container, 

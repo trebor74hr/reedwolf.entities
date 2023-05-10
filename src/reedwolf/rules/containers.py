@@ -646,7 +646,7 @@ class Rules(ContainerBase):
         TODO: check that this is container / extension / fieldgroup
         """
         from .apply import ApplyResult
-        container = self.get_container_owner()
+        container = self.get_container_owner(include_self=True)
 
         apply_result = \
                 ApplyResult(registries=container.registries, 
@@ -693,14 +693,19 @@ class Extension(ContainerBase):
     models          : Dict[str, Union[type, ValueExpression]] = field(repr=False, init=False, default_factory=dict)
     owner           : Union[ComponentBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     owner_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
-    # copy from owner
-    context_class   : Optional[Type[IContext]] = field(repr=False, init=False, default=None)
-    config          : Optional[Type[Config]] = field(repr=False, default=None)
-
 
     # extension specific - is this top owner or what? what is the difference to self.owner
+
+    # in owners' chain (including self) -> first container
     owner_container : Union[ContainerBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+
+    # in owners' chain (not including self) -> first container's registries
     owner_registries: Optional[Registries] = field(init=False, repr=False, default=None)
+
+    # copy from first non-self container owner
+    context_class   : Optional[Type[IContext]] = field(repr=False, init=False, default=None)
+    config          : Optional[Type[Config]] = field(repr=False, init=False, default=None)
+
     # bound_attr_node  : Union[AttrVexpNode, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
 
     # Class attributes
@@ -711,12 +716,18 @@ class Extension(ContainerBase):
             self.label = varname_to_title(self.name)
         super().__post_init__()
 
-
     def set_owner(self, owner:ContainerBase):
         super().set_owner(owner=owner)
-        self.owner_container = self.get_container_owner()
-        self.context_class = owner.context_class
-        self.config = owner.config
+
+        # can be self
+        self.owner_container     = self.get_container_owner(include_self=True)
+
+        # take from real first container owner
+        non_self_owner_container = self.get_container_owner(include_self=False)
+        self.context_class = non_self_owner_container.context_class
+        self.config = non_self_owner_container.config
+        if not self.config:
+            raise RuleInternalError(owner=self, msg=f"Config not set from owner: {self.owner_container}") 
 
     def setup(self, registries:Registries):
         # NOTE: registries is not used, can be reached with owner.registries(). left param

@@ -627,7 +627,7 @@ class FieldsRegistry(RegistryBase):
         return attr_node
 
     def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
-        # container = apply_session.current_frame.component.get_container_owner()
+        # container = apply_session.current_frame.component.get_container_owner(include_self=True)
         component = apply_session.current_frame.component
         instance  = apply_session.current_frame.instance
         top_attr_accessor = ComponentAttributeAccessor(component, instance)
@@ -679,7 +679,7 @@ class ContextRegistry(RegistryBase):
                     parent_vexp_node: IValueExpressionNode, 
                     owner: ComponentBase,
                     ) -> IValueExpressionNode:
-        if not owner.get_container_owner().context_class:
+        if not owner.get_container_owner(include_self=True).context_class:
             raise RuleSetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}' (referenced by '{self.NAMESPACE}.{vexp_node_name}') should not be used since 'Rules.context_class' is not set. Define 'context_class' to 'Rules()' constructor and try again.")
         return super().create_node(
                 vexp_node_name=vexp_node_name,

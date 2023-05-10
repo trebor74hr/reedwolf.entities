@@ -203,7 +203,7 @@ class FunctionArguments:
             if not caller: 
                 # NOTE: Namespace top level like: Fn.Length(This.name) 
                 #       This could be ambigous, but in this case container_owner is used.
-                container = registries.owner.get_container_owner()
+                container = registries.owner.get_container_owner(include_self=True)
                 container.bound_model.type_info
                 caller = container.bound_model
                 # raise RuleSetupValueError(owner=self, msg="{owner_name}: ValueExpression cwn be used in dot-chain mode, e g. M.name.Lenght().")

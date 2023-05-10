@@ -205,7 +205,7 @@ class FieldBase(Component, IFieldBase, ABC):
             self.bound_attr_node = registries.get_vexp_node_by_vexp(self.bind)
             if not self.bound_attr_node:
                 # TODO: not nice :(
-                owner_container = self.get_container_owner()
+                owner_container = self.get_container_owner(include_self=True)
                 owner_registries = getattr(owner_container, "owner_registries", owner_container.registries)
                 if owner_registries!=registries:
                     # TODO: does not goes deeper - should be done with while loop until the top
