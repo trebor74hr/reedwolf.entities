@@ -564,7 +564,8 @@ class ValueExpression(DynamicAttrsBase):
 
     def _EnsureFinished(self):
         if self._status!=VExpStatusEnum.INITIALIZED:
-            raise RuleInternalError(owner=self, msg=f"Method Setup() already called, further ValueExpression building is not possible (status={self._status}).")
+            # TODO: this should be RuleSetupValueError instead
+            raise RuleInternalError(owner=self, msg=f"Method Setup() already called, further ValueExpression building/operator-building is not possible (status={self._status}).")
 
 
     def Setup(self, 

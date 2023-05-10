@@ -168,7 +168,14 @@ class SubcomponentWrapper:
 
 
     def __post_init__(self):
-        assert self.name and self.path and self.subcomponent and self.th_field
+        # subcomponent can have literal value
+        if not (self.name and self.path and self.th_field):
+            raise RuleInternalError(owner=self, msg=f"name={self.name}, path={self.path}, subcomp={self.subcomponent}, th_field={self.th_field}")
+
+        # TODO: strange - ValueExpression in (None, UNDEFINED) returns True??
+        if not bool(self.subcomponent) and self.subcomponent not in (None, UNDEFINED):
+            raise RuleInternalError(owner=self, msg=f"name={self.name}, path={self.path}, subcomp={self.subcomponent}, th_field={self.th_field}")
+
         # TODO: list all types available and include this check
         # if not isinstance(self.subcomponent, (ComponentBase, ValueExpression)):
         #     raise RuleInternalError(owner=self, msg=f"wrong type of subcomponent {type(self.subcomponent)} / {self.subcomponent}")
