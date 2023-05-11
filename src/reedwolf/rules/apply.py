@@ -41,6 +41,9 @@ from .base import (
         InstanceChange,
         get_instance_key_string_attrname_pair,
         )
+from .models import (
+        BoundModelWithHandlers,
+        )
 from .fields import (
         FieldBase,
         )
@@ -215,6 +218,15 @@ class ApplyResult(IApplySession):
 
 
         if depth==0:
+            # ---- Rules case -----
+
+            # TODO: put this in BoundModel class
+            children_bound_models = getattr(component.bound_model, "contains", None)
+            if children_bound_models:
+                for child_bound_model in children_bound_models:
+                    assert isinstance(child_bound_model, BoundModelWithHandlers), child_bound_model
+                    # TODO: raise NotImplementedError()
+
             assert parent is None
             new_frame = StackFrame(
                             container = component, 
@@ -224,10 +236,14 @@ class ApplyResult(IApplySession):
                             )
 
         elif not extension_list_mode and component.is_extension():
-            assert isinstance(component.bound_model.model, ValueExpression), \
-                    component.bound_model.model
+            # ---- Extension case -----
 
-            # NOTE: this one has no 'available' attribute
+            component : Extension = component
+            if not isinstance(component.bound_model.model, ValueExpression):
+                raise RuleInternalError(owner=self, msg=f"For Extension `bound_model` needs to be ValueExpression, got: {component.bound_model.model}") 
+
+            if getattr(component.bound_model, "contains", None):
+                raise RuleInternalError(owner=self, msg=f"For Extension complex `bound_model` is currently not supported (e.g. `contains`), use simple BoundModel, got: {component.bound_model}") 
 
             # original instance
             vexp_result: ExecResult = component.bound_model.model \

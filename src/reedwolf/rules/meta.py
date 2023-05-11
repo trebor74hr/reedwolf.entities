@@ -430,6 +430,9 @@ class TypeInfo:
     def __post_init__(self):
         # if self.th_field and self.th_field.name=='company_type': ...
 
+        if isinstance(self.py_type_hint, str):
+            raise RuleSetupValueError(owner=self, msg=f"Python type hint is sttring, probably not resolved properly: {self.py_type_hint}. Hint: if you have `from __future__ import annotations` remove, stabilize and try again.")
+
         self._extract_type_hint_details()
 
         # if not self.is_list and not self.is_optional:
@@ -531,7 +534,7 @@ class TypeInfo:
                 err_msg = "expecting a list compatible type"
             else:
                 err_msg = "did not expect a list compatible type"
-            return err_msg + f" ({self.py_type_hint}), got {other.py_type_hint}"
+            return err_msg + f"\n  expected:\n    {self.py_type_hint}\n  got:\n    {other.py_type_hint}"
 
         if not self.is_optional and other.is_optional:
             return "can not accept None values (Optional)"

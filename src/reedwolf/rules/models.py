@@ -1,6 +1,13 @@
-from typing       import Optional, List, Union
-from dataclasses  import dataclass, field
-
+from typing       import (
+        Optional, 
+        List, 
+        Union,
+        Dict,
+        )
+from dataclasses  import (
+        dataclass, 
+        field,
+        )
 from .utils import (
         UNDEFINED,
         UndefinedType,
@@ -12,6 +19,7 @@ from .meta import (
         TypeInfo,
         is_model_class,
         ModelType,
+        get_model_fields,
         )
 from .base        import (
         BoundModelBase,
@@ -23,6 +31,16 @@ from .expressions import (
 from .functions import (
         CustomFunctionFactory,
         )
+
+
+# ------------------------------------------------------------
+
+@dataclass
+class ModelWithHandlers:
+    name: str
+    in_model: bool 
+    read_handler: CustomFunctionFactory = field(repr=False)
+    type_info: TypeInfo = field(repr=False)
 
 
 # ------------------------------------------------------------
@@ -43,6 +61,8 @@ class BoundModel(BoundModelBase):
     # Filled from from model
     type_info : Optional[TypeInfo] = field(init=False, default=None, repr=False)
 
+    models_with_handlers_dict : Dict[str, ModelWithHandlers] = field(init=False, default_factory=dict)
+    
 
     def get_type_info(self):
         if not self.type_info:
@@ -68,10 +88,52 @@ class BoundModel(BoundModelBase):
         super().setup(registries=registries)
         if not self.type_info:
             self._set_type_info()
+
+        # ALT: self.get_children()
+        if self.contains:
+            if not self.owner.is_top_owner:
+                raise RuleSetupValueError(owner=self, msg=f"Child bound models supported only for top contaainers, got: {self.contains}")
+
+            assert not self.models_with_handlers_dict
+
+            # TODO: cache this, it is used multiple times ... 
+            model_fields = get_model_fields(self.model)
+
+            for child_bound_model in self.contains:
+                if not isinstance(child_bound_model, BoundModelWithHandlers):
+                    raise RuleSetupValueError(owner=self, msg=f"Child bound model should be BoundModelWithHandlers, got: {BoundModelWithHandlers}")
+
+                model_name = child_bound_model.name
+                if model_name in self.models_with_handlers_dict:
+                    raise RuleSetupValueError(owner=self, msg=f"Child bound model should be unique, got duplicate name: {model_name}")
+
+                field = model_fields.get(model_name, None)
+                read_handler_type_info = child_bound_model.read_handler.get_type_info()
+
+                if not field:
+                    if child_bound_model.in_model:
+                        raise RuleSetupValueError(owner=self, msg=f"Child bound model `{model_name}` not found in model. Choose existing model attribute name or use `in_model=False` property.")
+                else:
+                    if not child_bound_model.in_model:
+                        raise RuleSetupValueError(owner=self, msg=f"Child bound model `{model_name}` is marked with `in_model=True`, but field already exists. Unset property or use another model name.")
+                    field_type_info = TypeInfo.get_or_create_by_type(field.type)
+
+                    type_err_msg = field_type_info.check_compatible(read_handler_type_info)
+                    if type_err_msg:
+                        raise RuleSetupValueError(owner=self, msg=f"Child bound model `{model_name}` is not compatible with underlying field: {type_err_msg}")
+
+                # NOTE: currently copies from BoundModelWithHandlers, convert to BoundModelWithHandlers reference
+                self.models_with_handlers_dict[model_name] = \
+                        ModelWithHandlers(
+                            name=model_name,
+                            in_model=child_bound_model.in_model,
+                            read_handler=child_bound_model.read_handler,
+                            type_info=read_handler_type_info,
+                            )
+
+
         self._finished = True
 
-    # def __post_init__(self):
-    #     super().__post_init__()
 
 # ------------------------------------------------------------
 # BoundModelWithHandlers
@@ -84,14 +146,14 @@ class BoundModelWithHandlers(BoundModelBase):
     label        : str # TransMsg
     # return type is used as model
     read_handler : CustomFunctionFactory
-    # save_handler : Optinoal[CustomFunctionFactory]
+    in_model     : bool = field(default=True)
 
     # --- evaluated later
     # Filled from from .read_hanlder -> (.type_info: TypeInfo).type_
     model        : ModelType = field(init=False, metadata={"skip_traverse": True})
     owner        : Union[BoundModelBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     owner_name   : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
-    type_info : Union[TypeInfo, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    type_info    : Union[TypeInfo, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
 
 
     def __post_init__(self):
@@ -111,6 +173,8 @@ class BoundModelWithHandlers(BoundModelBase):
             raise RuleSetupValueError(f"Model got from read_handler output type - should not be Model class (DC/PYD), got: {self.model}")
 
         super().__post_init__()
+
+        # self.read_handler
 
         # TODO: check read handler params (args)
 
