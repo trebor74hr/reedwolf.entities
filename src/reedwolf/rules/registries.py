@@ -64,6 +64,7 @@ from .base import (
         extract_type_info,
         IApplySession,
         BoundModelBase,
+        ReservedAttributeNames,
         )
 from .functions import (
         FunctionsFactoryRegistry,
@@ -84,9 +85,6 @@ from .contexts import (
 from .config import (
         Config,
         )
-
-
-INSTANCE_ATTR_NAME = "Instance" 
 
 # ------------------------------------------------------------
 
@@ -170,7 +168,7 @@ class RegistryBase(IRegistry):
                         py_type_hint=model_class,
                         )
         attr_node = AttrVexpNode(
-                        name=INSTANCE_ATTR_NAME,
+                        name=ReservedAttributeNames.INSTANCE_ATTR_NAME,
                         data=type_info,
                         namespace=cls.NAMESPACE,
                         type_info=type_info, 
@@ -184,7 +182,7 @@ class RegistryBase(IRegistry):
         #       but shortcut like this didn't worked: 
         #           type_info: TypeInfo = TypeInfo.get_or_create_by_type(th_field)
 
-        if attr_name in (INSTANCE_ATTR_NAME,):
+        if attr_name in (ReservedAttributeNames.INSTANCE_ATTR_NAME,):
             raise RuleSetupNameError(msg=f"Sorry but model attribute name {attr_name} is reserved. Rename it and try again (model={model_class.__name__}).")
 
         # This one should not fail
@@ -655,7 +653,9 @@ class ThisRegistry(RegistryBase):
         self.register_attr_node(instance_attr_node)
 
     def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
-        raise NotImplementedError()
+        if not isinstance(apply_session.current_frame.instance, self.model_class):
+            raise RuleInternalError(owner=self, msg=f"Type of apply session's instance expected to be '{self.model_class}, got: {apply_session.current_frame.instance}") 
+        return apply_session.current_frame.instance
 
 # ------------------------------------------------------------
 

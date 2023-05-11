@@ -319,11 +319,13 @@ class IFunction(IFunctionVexpNode):
             # top_level_call = False
             if not isinstance(vexp_result, ExecResult):
                 raise RuleInternalError(owner=self, msg=f"vexp_result is not ExecResult, got: {vexp_result}") 
-            input_value = vexp_result.value
-            if self.value_arg_name:
-                kwargs[self.value_arg_name] = input_value
-            else:
-                args.insert(0, input_value)
+
+            if vexp_result.value is not UNDEFINED:
+                input_value = vexp_result.value
+                if self.value_arg_name:
+                    kwargs[self.value_arg_name] = input_value
+                else:
+                    args.insert(0, input_value)
 
         if self.func_args:
             # TODO: copy all arguments or not?
@@ -338,7 +340,6 @@ class IFunction(IFunctionVexpNode):
                 args.extend(self.fixed_args.args)
             if self.fixed_args.kwargs:
                 kwargs.update(self.fixed_args.kwargs)
-
 
         args   = [self.execute_arg(apply_session, arg_value, prev_node_type_info=prev_node_type_info) 
                   for arg_value in args]

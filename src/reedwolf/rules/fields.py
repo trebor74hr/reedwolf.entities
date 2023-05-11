@@ -405,7 +405,7 @@ class ChoiceField(FieldBase):
 
     # ------------------------------------------------------------
 
-    def setup(self, registries:Registries):
+    def setup(self, registries: Registries):
 
         super().setup(registries=registries)
 

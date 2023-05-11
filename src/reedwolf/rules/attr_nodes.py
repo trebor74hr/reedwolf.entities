@@ -39,6 +39,7 @@ from .base import (
         IFieldBase,
         IApplySession,
         ExecResult,
+        ReservedAttributeNames,
         )
 
 # ------------------------------------------------------------
@@ -230,7 +231,13 @@ class AttrVexpNode(IValueExpressionNode):
                 if not len(names)==1:
                     raise RuleInternalError(owner=self, msg=f"Initial evaluation step for non-extension failed, expected single name member (e.g. M), got: {self.name}\n  == Compoonent: {frame.container}")
 
-            registry = apply_session.registries.get_registry(self.namespace)
+            registry = None
+            if apply_session.current_frame.local_registries:
+                registry = apply_session.current_frame.local_registries.get_registry(self.namespace, strict=False)
+
+            if not registry:
+                registry = apply_session.registries.get_registry(self.namespace)
+
             value_previous = registry.get_root_value(apply_session=apply_session, attr_name=attr_name)
 
             # == M.name mode
@@ -267,7 +274,7 @@ class AttrVexpNode(IValueExpressionNode):
             # ------------------------------------------------------------
             value_new_as_list = []
 
-            for val_prev in value_prev_as_list:
+            for idx, val_prev in enumerate(value_prev_as_list, 0):
                 if isinstance(val_prev, IAttributeAccessorBase):
                     # NOTE: if this is last in chain - fetch final value
                     value_new = val_prev.get_attribute(
@@ -275,11 +282,14 @@ class AttrVexpNode(IValueExpressionNode):
                                     attr_name=attr_name, 
                                     is_last=is_last)
                 else:
-                    if not hasattr(val_prev, attr_name):
-                        # TODO: list which fields are available
-                        # if all types match - could be internal problem?
-                        raise RuleApplyNameError(owner=self, msg=f"Attribute '{attr_name}' not found in '{to_repr(val_prev)}' : '{type(val_prev)}'")
-                    value_new = getattr(val_prev, attr_name)
+                    if idx==0 and attr_name==ReservedAttributeNames.INSTANCE_ATTR_NAME:
+                        value_new = val_prev
+                    else:
+                        if not hasattr(val_prev, attr_name):
+                            # TODO: list which fields are available
+                            # if all types match - could be internal problem?
+                            raise RuleApplyNameError(owner=self, msg=f"Attribute '{attr_name}' not found in '{to_repr(val_prev)}' : '{type(val_prev)}'")
+                        value_new = getattr(val_prev, attr_name)
 
                 value_new_as_list.append(value_new)
 

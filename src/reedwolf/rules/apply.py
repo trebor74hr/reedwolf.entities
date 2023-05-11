@@ -27,6 +27,7 @@ from .meta import (
         ModelType,
         is_model_class,
         is_model_instance,
+        EmptyFunctionArguments,
         )
 from .base import (
         AttrValue,
@@ -218,22 +219,53 @@ class ApplyResult(IApplySession):
 
 
         if depth==0:
+            assert parent is None
+
             # ---- Rules case -----
 
             # TODO: put this in BoundModel class
             children_bound_models = getattr(component.bound_model, "contains", None)
-            if children_bound_models:
-                for child_bound_model in children_bound_models:
-                    assert isinstance(child_bound_model, BoundModelWithHandlers), child_bound_model
-                    # TODO: raise NotImplementedError()
 
-            assert parent is None
+            if children_bound_models:
+                local_registries = self.registries.create_local_registries(
+                                                    this_ns_model_class=self.bound_model.model)
+
+                with self.use_stack_frame(
+                        StackFrame(
+                            container = component, 
+                            component = self.bound_model, 
+                            instance = self.instance,
+                            instance_new = self.instance_new,
+                            local_registries=local_registries,
+                            )):
+
+                    for model_with_handler in self.bound_model.models_with_handlers_dict.values():
+                        model_with_handler: ModelWithHandlers = model_with_handler
+
+                        current_value = getattr(self.instance, model_with_handler.name, UNDEFINED)
+
+                        # TODO: warn: 
+                        #   if current_value is UNDEFINED and model_with_handler.in_model:
+                        #   elif current_value is not UNDEFINED and not model_with_handler.in_model:
+
+                        # NOTE: can check 'model_with_handler.type_info'
+
+                        rh_vexp_result = model_with_handler.read_handler_vexp.execute_node(
+                                            apply_session=self, 
+                                            vexp_result=ExecResult(),
+                                            prev_node_type_info=None,
+                                            is_last=True)
+
+                        setattr(self.instance, model_with_handler.name, rh_vexp_result.value)
+
+
             new_frame = StackFrame(
                             container = component, 
                             component = component, 
                             instance = self.instance,
                             instance_new = self.instance_new,
                             )
+
 
         elif not extension_list_mode and component.is_extension():
             # ---- Extension case -----

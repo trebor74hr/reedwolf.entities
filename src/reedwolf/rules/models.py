@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing       import (
         Optional, 
         List, 
@@ -20,6 +22,7 @@ from .meta import (
         is_model_class,
         ModelType,
         get_model_fields,
+        EmptyFunctionArguments,
         )
 from .base        import (
         BoundModelBase,
@@ -30,6 +33,7 @@ from .expressions import (
         )
 from .functions import (
         CustomFunctionFactory,
+        IFunction,
         )
 
 
@@ -39,7 +43,7 @@ from .functions import (
 class ModelWithHandlers:
     name: str
     in_model: bool 
-    read_handler: CustomFunctionFactory = field(repr=False)
+    read_handler_vexp: IFunction = field(repr=False)
     type_info: TypeInfo = field(repr=False)
 
 
@@ -53,7 +57,7 @@ class BoundModel(BoundModelBase):
     # label           : TransMessageType
 
     model           : Union[ModelType, ValueExpression] = field(repr=False)
-    contains        : Optional[List[BoundModelBase]] = field(repr=False, default_factory=list)
+    contains        : Optional[List[BoundModelWithHandlers]] = field(repr=False, default_factory=list)
 
     # evaluated later
     owner           : Union[BoundModelBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
@@ -68,6 +72,7 @@ class BoundModel(BoundModelBase):
         if not self.type_info:
             self._set_type_info()
         return self.type_info
+
 
     def _set_type_info(self):
         # NOTE: model: ValueExpression - would be hard to fill automatically
@@ -99,7 +104,12 @@ class BoundModel(BoundModelBase):
             # TODO: cache this, it is used multiple times ... 
             model_fields = get_model_fields(self.model)
 
+            # TODO: currently validatiojn of function argument types is done only in StackFrame() in apply(), 
+            #       but should be here used for check attrs in setup() phase ... Define here: 
+            #           self.local_registries = registries.create_local_registries(this_ns_model_class=self.model)
+            #       later reuse it and use it here to check func args types.
             for child_bound_model in self.contains:
+
                 if not isinstance(child_bound_model, BoundModelWithHandlers):
                     raise RuleSetupValueError(owner=self, msg=f"Child bound model should be BoundModelWithHandlers, got: {BoundModelWithHandlers}")
 
@@ -122,14 +132,20 @@ class BoundModel(BoundModelBase):
                     if type_err_msg:
                         raise RuleSetupValueError(owner=self, msg=f"Child bound model `{model_name}` is not compatible with underlying field: {type_err_msg}")
 
-                # NOTE: currently copies from BoundModelWithHandlers, convert to BoundModelWithHandlers reference
-                self.models_with_handlers_dict[model_name] = \
-                        ModelWithHandlers(
+                read_handler_vexp = child_bound_model.read_handler.create_function(
+                                        func_args  = EmptyFunctionArguments,
+                                        registries = registries,
+                                        name       = f"{child_bound_model.name}__{child_bound_model.read_handler.name}")
+                read_handler_vexp.finish()
+
+                model_with_handlers = ModelWithHandlers(
                             name=model_name,
                             in_model=child_bound_model.in_model,
-                            read_handler=child_bound_model.read_handler,
+                            read_handler_vexp=read_handler_vexp,
                             type_info=read_handler_type_info,
                             )
+
+                self.models_with_handlers_dict[model_name] = model_with_handlers
 
 
         self._finished = True
@@ -142,6 +158,7 @@ class BoundModel(BoundModelBase):
 @dataclass
 class BoundModelWithHandlers(BoundModelBase):
     # TODO: razdvoji save/read/.../unique check
+    # TODO: nesting with 'contains: List[BoundModelWithHandlers]' currently not supported.
     name         : str
     label        : str # TransMsg
     # return type is used as model

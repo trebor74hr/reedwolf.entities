@@ -108,6 +108,13 @@ def list_to_strlist(args, before, after):
 # ------------------------------------------------------------
 
 
+class ReservedAttributeNames(str, Enum):
+    INSTANCE_ATTR_NAME = "Instance" 
+
+
+# ------------------------------------------------------------
+
+
 class BaseOnlyArgs:  # noqa: SIM119
 
     def __init__(self, *args):
@@ -857,6 +864,10 @@ class StackFrame:
     # filled only when container list member
     index0: Optional[int] = None
 
+    # for ThisNS / This. namespace 
+    local_registries: Optional[Registries] = field(repr=False, default=None)
+
+    # -- autocomputed
     # internal - filled in __post_init__
     key_string: Optional[str] = field(init=False, repr=False, default=None)
 

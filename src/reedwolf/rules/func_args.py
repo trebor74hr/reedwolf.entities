@@ -500,8 +500,16 @@ def create_function_arguments(
     if not args_default==args_types:
         # TODO: when unbound method is attached, then first set has "self" and other does not
         #       in this case report ValueError - unbound method not supported
+        diff_left = args_default - args_types
+        diff_right = args_types - args_default
+        if "self" in diff_left:
+            raise RuleInternalError(owner=py_function, 
+                    msg=f"Function's default arguments '{args_default}' not same as all arguments:  {args_types}. Found 'self' in diference. Did you forget to instatiate object or mark method as class/static?")
+
+        diff_left = ", ".join(list(diff_left))
+        diff_right = ", ".join(list(diff_right))
         raise RuleInternalError(owner=py_function, 
-                msg=f"Function's default arguments '{args_default}' not same as all arguments:  {args_types}. Args extraction issue...")
+                msg=f"Function's default arguments '{args_default}' not same as all arguments:  {args_types} (diff: {diff_left} / {diff_right})). Args extraction issue...")
 
     func_args_specs = FunctionArguments()
 
