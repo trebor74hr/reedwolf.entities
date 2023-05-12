@@ -5,17 +5,22 @@ from typing       import (
         List, 
         Union,
         Dict,
+        ClassVar,
         )
 from dataclasses  import (
         dataclass, 
         field,
         )
+
 from .utils import (
         UNDEFINED,
         UndefinedType,
         )
 from .exceptions import (
         RuleSetupValueError,
+        )
+from .namespaces import (
+        ModelsNS,
         )
 from .meta import (
         TypeInfo,
@@ -30,6 +35,9 @@ from .base        import (
 from .expressions import (
         ValueExpression,
         IRegistries,
+        )
+from .attr_nodes import (
+        AttrVexpNode,
         )
 from .functions import (
         CustomFunctionFactory,
@@ -53,6 +61,11 @@ class ModelWithHandlers:
 
 @dataclass
 class BoundModel(BoundModelBase):
+
+    # setup must be called first for this component, and later for others
+    # bigger comes first, 0 is ValueExpression default, 1 is for other copmonents default
+    SETUP_PRIORITY  : ClassVar[int] = 9
+
     name            : str
     # label           : TransMessageType
 
@@ -97,58 +110,81 @@ class BoundModel(BoundModelBase):
         # ALT: self.get_children()
         if self.contains:
             if not self.owner.is_top_owner:
-                raise RuleSetupValueError(owner=self, msg=f"Child bound models supported only for top contaainers, got: {self.contains}")
-
-            assert not self.models_with_handlers_dict
-
-            # TODO: cache this, it is used multiple times ... 
-            model_fields = get_model_fields(self.model)
-
-            # TODO: currently validatiojn of function argument types is done only in StackFrame() in apply(), 
-            #       but should be here used for check attrs in setup() phase ... Define here: 
-            #           self.local_registries = registries.create_local_registries(this_ns_model_class=self.model)
-            #       later reuse it and use it here to check func args types.
-            for child_bound_model in self.contains:
-
-                if not isinstance(child_bound_model, BoundModelWithHandlers):
-                    raise RuleSetupValueError(owner=self, msg=f"Child bound model should be BoundModelWithHandlers, got: {BoundModelWithHandlers}")
-
-                model_name = child_bound_model.name
-                if model_name in self.models_with_handlers_dict:
-                    raise RuleSetupValueError(owner=self, msg=f"Child bound model should be unique, got duplicate name: {model_name}")
-
-                field = model_fields.get(model_name, None)
-                read_handler_type_info = child_bound_model.read_handler.get_type_info()
-
-                if not field:
-                    if child_bound_model.in_model:
-                        raise RuleSetupValueError(owner=self, msg=f"Child bound model `{model_name}` not found in model. Choose existing model attribute name or use `in_model=False` property.")
-                else:
-                    if not child_bound_model.in_model:
-                        raise RuleSetupValueError(owner=self, msg=f"Child bound model `{model_name}` is marked with `in_model=True`, but field already exists. Unset property or use another model name.")
-                    field_type_info = TypeInfo.get_or_create_by_type(field.type)
-
-                    type_err_msg = field_type_info.check_compatible(read_handler_type_info)
-                    if type_err_msg:
-                        raise RuleSetupValueError(owner=self, msg=f"Child bound model `{model_name}` is not compatible with underlying field: {type_err_msg}")
-
-                read_handler_vexp = child_bound_model.read_handler.create_function(
-                                        func_args  = EmptyFunctionArguments,
-                                        registries = registries,
-                                        name       = f"{child_bound_model.name}__{child_bound_model.read_handler.name}")
-                read_handler_vexp.finish()
-
-                model_with_handlers = ModelWithHandlers(
-                            name=model_name,
-                            in_model=child_bound_model.in_model,
-                            read_handler_vexp=read_handler_vexp,
-                            type_info=read_handler_type_info,
-                            )
-
-                self.models_with_handlers_dict[model_name] = model_with_handlers
-
+                raise RuleSetupValueError(owner=self, msg=f"Currently child bound models supported only for top contaainers, got: {self.contains}")
+            self._register_nested_models(registries)
 
         self._finished = True
+
+
+    def _register_nested_models(self, registries:IRegistries):
+
+        if not self.contains:
+            return False
+
+        assert not self.models_with_handlers_dict
+
+        # TODO: cache this, it is used multiple times ... 
+        model_fields = get_model_fields(self.model)
+
+        models_registry = registries.get_registry(ModelsNS)
+
+        # TODO: currently validatiojn of function argument types is done only in StackFrame() in apply(), 
+        #       but should be here used for check attrs in setup() phase ... Define here: 
+        #           self.local_registries = registries.create_local_registries(this_ns_model_class=self.model)
+        #       later reuse it and use it here to check func args types.
+        for child_bound_model in self.contains:
+
+            if not isinstance(child_bound_model, BoundModelWithHandlers):
+                raise RuleSetupValueError(owner=self, msg=f"Child bound model should be BoundModelWithHandlers, got: {BoundModelWithHandlers}")
+
+            model_name = child_bound_model.name
+            if model_name in self.models_with_handlers_dict:
+                raise RuleSetupValueError(owner=self, msg=f"Child bound model should be unique, got duplicate name: {model_name}")
+
+            field = model_fields.get(model_name, None)
+            read_handler_type_info = child_bound_model.read_handler.get_type_info()
+
+            if not field:
+                if child_bound_model.in_model:
+                    raise RuleSetupValueError(owner=self, msg=f"Child bound model `{model_name}` not found in model. Choose existing model attribute name or use `in_model=False` property.")
+            else:
+                if not child_bound_model.in_model:
+                    raise RuleSetupValueError(owner=self, msg=f"Child bound model `{model_name}` is marked with `in_model=True`, but field already exists. Unset property or use another model name.")
+                field_type_info = TypeInfo.get_or_create_by_type(field.type)
+
+                type_err_msg = field_type_info.check_compatible(read_handler_type_info)
+                if type_err_msg:
+                    raise RuleSetupValueError(owner=self, msg=f"Child bound model `{model_name}` is not compatible with underlying field: {type_err_msg}")
+
+            # 1. if it is non-model -> Register new attribute node within M. / ModelsNS registry
+            if not child_bound_model.in_model:
+                model_attr_vexp_node = AttrVexpNode(
+                                            name=child_bound_model.name,
+                                            data=read_handler_type_info,
+                                            namespace=models_registry.NAMESPACE,
+                                            type_info=read_handler_type_info, 
+                                            th_field=None,
+                                            )
+
+                models_registry.register_attr_node(attr_node=model_attr_vexp_node)
+
+            # 2. Register all read handlers (with type_info) in local registry - will be called in apply phase
+            read_handler_vexp = child_bound_model.read_handler.create_function(
+                                    func_args  = EmptyFunctionArguments,
+                                    registries = registries,
+                                    name       = f"{child_bound_model.name}__{child_bound_model.read_handler.name}")
+            read_handler_vexp.finish()
+
+            model_with_handlers = ModelWithHandlers(
+                        name=model_name,
+                        in_model=child_bound_model.in_model,
+                        read_handler_vexp=read_handler_vexp,
+                        type_info=read_handler_type_info,
+                        )
+
+            self.models_with_handlers_dict[model_name] = model_with_handlers
+
+
 
 
 # ------------------------------------------------------------

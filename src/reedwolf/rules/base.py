@@ -367,6 +367,8 @@ class ComponentBase(SetOwnerMixin, ABC):
                     registries: IRegistries):  # noqa: F821
         called = False
 
+        # print(f"_invoke_component_setup({subcomponent})")
+
         if isinstance(subcomponent, (ValueExpression, )): # Operation
             # copy_to_registries=copy_to_registries,
             vexp: ValueExpression = subcomponent
@@ -430,12 +432,36 @@ class ComponentBase(SetOwnerMixin, ABC):
                 collect all attributes that have setup() and Setup()
               check if this is true and if so, implement.
         """
+
+        # caching
+        if hasattr(self, "_subcomponent_list"):
+            return self._subcomponent_list
+
         # returns name, subcomponent
         fields = get_model_fields(self.__class__)
-        subcomponent_list = []
+
+
+
+        # ==== Order to have bound_model first, then components, then value
+        #      expressions. In the same group order by name
 
         # NOTE: with vars() not the best way, other is to put metadata in field()
-        for subcomponent_name, subcomponent in vars(self).items():
+        subcomponent_items = []
+        for sc_pair in vars(self).items():
+            if isinstance(sc_pair[1], ValueExpression):
+                priority = 0
+            else:
+                priority = getattr(sc_pair[1], "SETUP_PRIORITY", 1)
+            subcomponent_items.append((priority, sc_pair))
+        subcomponent_items = sorted(subcomponent_items, reverse=True)
+        subcomponent_items = [sc_pair for _, sc_pair in subcomponent_items]
+
+
+        # ==== Iterate all components and setup() each
+
+        subcomponent_list = []
+
+        for subcomponent_name, subcomponent in subcomponent_items:
 
             if not isinstance(subcomponent, ValueExpression):
                 if subcomponent_name.startswith("_"):
@@ -548,7 +574,9 @@ class ComponentBase(SetOwnerMixin, ABC):
                             subcomponent=subcomponent, 
                             th_field=th_field))
 
-        return subcomponent_list
+        self._subcomponent_list = subcomponent_list
+
+        return self._subcomponent_list
 
 
     # ------------------------------------------------------------

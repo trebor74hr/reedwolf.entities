@@ -190,6 +190,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         # alias_saved = False
         is_list = False
 
+
         if isinstance(model, ValueExpression):
             # TODO: for functions value expressions need to be stored
             #       with all parameters (func_args)
@@ -226,7 +227,11 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         # == M.name version
         self.registries[ModelsNS].register_all_nodes(root_attr_node=attr_node, bound_model=bound_model, model=model)
 
-        # == M.name version
+        # if not isinstance(model, ValueExpression) and isinstance(bound_model, BoundModel):
+        #     bound_model._register_nested_models(self.registries)
+
+
+        # == M.company.name version
         # if not attr_node:
         #     attr_node = self.registries[ModelsNS].create_root_attr_node(bound_model=bound_model) -> _create_root_attr_node()
         # # self.registries.register(attr_node, alt_attr_node_name=bound_model.name if attr_node.name!=bound_model.name else None)
@@ -269,10 +274,11 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         if self.bound_model is None:
             raise RuleSetupError(owner=self, msg="bound_model not set. Initialize in constructor or call bind_to() first.")
 
+        if not self.contains:
+            raise RuleSetupError(owner=self, msg="'contains' attribute is required with list of components")
+
         if self.is_finished():
             raise RuleSetupError(owner=self, msg="setup() should be called only once")
-
-        # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(self)
 
         if self.registries is not None:
             raise RuleSetupError(owner=self, msg="Registries.setup() should be called only once")
@@ -310,9 +316,6 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         #   if component is another container i.e. is_extension() - it will
         #       process only that component and will not go deeper. later
         #       extension.setup() will do this within own tree dep (own .components / .registries)
-
-        if not self.contains:
-            raise RuleSetupError(owner=self, msg="'contains' attribute is required with list of components")
 
         # iterate all subcomponents and call _setup() for each
         self._setup(registries=self.registries)
