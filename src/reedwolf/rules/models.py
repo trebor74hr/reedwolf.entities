@@ -135,7 +135,7 @@ class BoundModel(BoundModelBase):
         for child_bound_model in self.contains:
 
             if not isinstance(child_bound_model, BoundModelWithHandlers):
-                raise RuleSetupValueError(owner=self, msg=f"Child bound model should be BoundModelWithHandlers, got: {BoundModelWithHandlers}")
+                raise RuleSetupValueError(owner=self, msg=f"Child bound model should be BoundModelWithHandlers, got: {child_bound_model.name} : {type(child_bound_model)}")
 
             model_name = child_bound_model.name
             if model_name in self.models_with_handlers_dict:

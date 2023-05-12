@@ -431,7 +431,7 @@ class TypeInfo:
         # if self.th_field and self.th_field.name=='company_type': ...
 
         if isinstance(self.py_type_hint, str):
-            raise RuleSetupValueError(owner=self, msg=f"Python type hint is sttring, probably not resolved properly: {self.py_type_hint}. Hint: if you have `from __future__ import annotations` remove, stabilize and try again.")
+            raise RuleSetupValueError(owner=self, msg=f"Python type hint is string, probably not resolved properly: {self.py_type_hint}. Hint: if you have `from __future__ import annotations` remove, stabilize and try again.")
 
         self._extract_type_hint_details()
 
