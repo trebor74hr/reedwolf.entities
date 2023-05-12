@@ -58,7 +58,7 @@ from .base import (
 from .expressions import (
         ValueExpression,
         )
-from .models import (
+from .bound_models import (
         BoundModel,
         BoundModelWithHandlers,
         )

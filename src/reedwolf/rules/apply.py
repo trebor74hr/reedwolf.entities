@@ -42,7 +42,7 @@ from .base import (
         InstanceChange,
         get_instance_key_string_attrname_pair,
         )
-from .models import (
+from .bound_models import (
         BoundModelWithHandlers,
         )
 from .fields import (

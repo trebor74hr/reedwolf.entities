@@ -18,7 +18,7 @@ from .exceptions import (
         RuleValidationError,
         RuleNameNotFoundError,
         )
-from .models import (
+from .bound_models import (
         BoundModel,
         BoundModelWithHandlers,
         )
