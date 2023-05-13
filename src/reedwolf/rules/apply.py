@@ -127,6 +127,9 @@ class ApplyResult(IApplySession):
     # ------------------------------------------------------------
 
     def use_stack_frame(self, frame: ApplyStackFrame) -> UseApplyStackFrame:
+        if not isinstance(frame, ApplyStackFrame):
+            raise RuleInternalError(owner=self, msg=f"Expected ApplyStackFrame, got frame: {frame}") 
+
         return UseApplyStackFrame(apply_session=self, frame=frame)
 
     # ------------------------------------------------------------
@@ -505,7 +508,7 @@ class ApplyResult(IApplySession):
         if not ok - errors contain all details.
         """
         self._apply(parent=None, component=self.rules)
-        self.set_finished()
+        self.finish()
 
         return self
 

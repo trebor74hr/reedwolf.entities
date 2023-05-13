@@ -66,6 +66,7 @@ from .base import (
         IApplySession,
         BoundModelBase,
         ReservedAttributeNames,
+        SetupStackFrame,
         )
 from .functions import (
         FunctionsFactoryRegistry,
@@ -476,7 +477,7 @@ class SetupSessionBase(ISetupSession):
     functions_factory_registry  : Optional[FunctionsFactoryRegistry] = field(repr=False, default=None)
     include_builtin_functions   : bool = field(repr=False, default=True)
 
-    # autocomputed
+    # autocomputed and internals
     is_top_setup_session        : bool = field(init=False, repr=False)
     top_owner_setup_session     : ISetupSession = field(init=False, repr=False)
 
@@ -485,6 +486,11 @@ class SetupSessionBase(ISetupSession):
     vexp_node_dict              : Dict[str, IValueExpressionNode] = field(init=False, repr=False, default_factory=dict)
     finished                    : bool = field(init=False, repr=False, default=False)
     hook_on_finished_all_list   : Optional[List[HookOnFinishedAllCallable]] = field(init=False, repr=False)
+
+    # stack of frames - first frame is current. On the end of the process the
+    # stack must be empty
+    frames_stack: List[StackyStackFrame] = field(repr=False, init=False, default_factory=list)
+
 
     # def __init__(self, 
     #         # usually 'ContainerBase'
@@ -556,9 +562,27 @@ class SetupSessionBase(ISetupSession):
     # ------------------------------------------------------------
 
     def use_stack_frame(self, frame: SetupStackFrame) -> UseSetupStackFrame:
+        if not isinstance(frame, SetupStackFrame):
+            raise RuleInternalError(owner=self, msg=f"Expected SetupStackFrame, got frame: {frame}") 
+
         return UseSetupStackFrame(setup_session=self, frame=frame)
 
     # ------------------------------------------------------------
+
+    def push_frame_to_stack(self, frame: ApplyStackFrame):
+        self.frames_stack.insert(0, frame)
+
+    def pop_frame_from_stack(self) -> ApplyStackFrame:
+        assert self.frames_stack
+        return self.frames_stack.pop(0)
+
+    @property
+    def current_frame(self) -> ApplyStackFrame:
+        assert self.frames_stack
+        return self.frames_stack[0]
+
+    # ------------------------------------------------------------
+
 
     def get_registry(self, namespace: Namespace, strict:bool= True) -> IRegistry:
         if namespace._name not in self._registry_dict:
@@ -637,6 +661,10 @@ class SetupSessionBase(ISetupSession):
     def finish(self):
         if self.finished:
             raise RuleSetupError(owner=self, msg="Method finish() already called.")
+
+        if not len(self.frames_stack) == 0:
+            raise RuleInternalError(owner=self, msg=f"Stack frames not released: {self.frames_stack}") 
+
         for ns, registry in self._registry_dict.items():
             for vname, vexp_node in registry.items():
                 assert isinstance(vexp_node, IValueExpressionNode)

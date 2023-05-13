@@ -403,7 +403,14 @@ class ComponentBase(SetOwnerMixin, ABC):
     def setup(self, setup_session: ISetupSession):  # noqa: F821
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(self)
 
-        ret = self._setup(setup_session=setup_session)
+        container = self.get_container_owner(consider_self=True)
+
+        with setup_session.use_stack_frame(
+                SetupStackFrame(
+                    container = container, 
+                    component = self, 
+                )) as frame:
+            ret = self._setup(setup_session=setup_session)
 
         return ret
 
@@ -1160,9 +1167,13 @@ class IApplySession:
         assert self.frames_stack
         return self.frames_stack[0]
 
-    def set_finished(self):
-        assert not self.finished
-        assert len(self.frames_stack) == 0
+    def finish(self):
+        if self.finished:
+            raise RuleSetupError(owner=self, msg="Method finish() already called.")
+
+        if not len(self.frames_stack) == 0:
+            raise RuleInternalError(owner=self, msg=f"Stack frames not released: {self.frames_stack}") 
+
         self.finished = True
 
     def register_instance_validation_failed(self, component: ComponentBase, failure: ValidationFailure):

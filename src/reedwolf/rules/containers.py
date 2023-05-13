@@ -54,6 +54,7 @@ from .base import (
         GlobalConfig,
         KeyPairs,
         IApplySession,
+        SetupStackFrame,
         )
 from .expressions import (
         ValueExpression,
@@ -318,7 +319,12 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         #       extension.setup() will do this within own tree dep (own .components / .setup_session)
 
         # iterate all subcomponents and call _setup() for each
-        self._setup(setup_session=self.setup_session)
+        with self.setup_session.use_stack_frame(
+                SetupStackFrame(
+                    container = self, 
+                    component = self, 
+                )) as frame:
+            self._setup(setup_session=self.setup_session)
 
         # check all ok?
         for component_name, component in self.components.items():
