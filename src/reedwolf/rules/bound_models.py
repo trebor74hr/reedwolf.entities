@@ -77,7 +77,7 @@ class NestedBoundModelMixin:
 
         models_registry = setup_session.get_registry(ModelsNS)
 
-        # TODO: currently validatiojn of function argument types is done only in StackFrame() in apply(), 
+        # TODO: currently validatiojn of function argument types is done only in ApplyStackFrame() in apply(), 
         #       but should be here used for check attrs in setup() phase ... Define here: 
         #           self.local_setup_session = setup_session.create_local_setup_session(this_ns_model_class=self.model)
         #       later reuse it and use it here to check func args types.

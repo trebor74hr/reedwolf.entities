@@ -35,7 +35,7 @@ from .base import (
         KeyString,
         ComponentBase,
         IApplySession,
-        StackFrame,
+        ApplyStackFrame,
         ValidationFailure,
         StructEnum,
         ChangeOpEnum,
@@ -62,10 +62,10 @@ from .containers import (
 MAX_RECURSIONS = 30
 
 
-class UseStackFrame(AbstractContextManager):
+class UseApplyStackFrame(AbstractContextManager):
     " with() ... custom context manager "
     # ALT: from contextlib import contextmanager
-    def __init__(self, apply_session: IApplySession, frame: StackFrame):
+    def __init__(self, apply_session: IApplySession, frame: ApplyStackFrame):
         self.apply_session = apply_session
         self.frame = frame
 
@@ -126,8 +126,8 @@ class ApplyResult(IApplySession):
 
     # ------------------------------------------------------------
 
-    def use_stack_frame(self, frame: StackFrame) -> UseStackFrame:
-        return UseStackFrame(apply_session=self, frame=frame)
+    def use_stack_frame(self, frame: ApplyStackFrame) -> UseApplyStackFrame:
+        return UseApplyStackFrame(apply_session=self, frame=frame)
 
     # ------------------------------------------------------------
 
@@ -231,7 +231,7 @@ class ApplyResult(IApplySession):
                                                     this_ns_model_class=self.bound_model.model)
 
                 with self.use_stack_frame(
-                        StackFrame(
+                        ApplyStackFrame(
                             container = component, 
                             component = self.bound_model, 
                             instance = self.instance,
@@ -259,7 +259,7 @@ class ApplyResult(IApplySession):
                         setattr(self.instance, model_with_handler.name, rh_vexp_result.value)
 
 
-            new_frame = StackFrame(
+            new_frame = ApplyStackFrame(
                             container = component, 
                             component = component, 
                             instance = self.instance,
@@ -368,7 +368,7 @@ class ApplyResult(IApplySession):
                 for key, (instance, index0, item_instance_new) in instances_by_key.items():
                     # Apply for all items
                     with self.use_stack_frame(
-                            StackFrame(
+                            ApplyStackFrame(
                                 container = component,
                                 component = component, 
                                 instance = instance, 
@@ -394,7 +394,7 @@ class ApplyResult(IApplySession):
                 raise RuleApplyValueError(owner=self, msg=f"Expected list/tuple or model instance, got: {instance} : {type(instance)}")
 
 
-            new_frame = StackFrame(
+            new_frame = ApplyStackFrame(
                             container = component, 
                             component = component, 
                             instance = instance,
@@ -405,7 +405,7 @@ class ApplyResult(IApplySession):
 
         if not new_frame:
             # register non-container frame - only component is new. take instance from previous frame
-            new_frame = StackFrame(
+            new_frame = ApplyStackFrame(
                             container = self.current_frame.container, 
                             component = component, 
                             # copy
@@ -571,7 +571,7 @@ class ApplyResult(IApplySession):
 
                 # container = component.get_container_owner(consider_self=True) if not component.is_extension() else component
                 with self.use_stack_frame(
-                        StackFrame(
+                        ApplyStackFrame(
                             container = self.current_frame.container, 
                             component = self.current_frame.component, 
                             # only this is changed
@@ -706,7 +706,7 @@ class ApplyResult(IApplySession):
             if self.instance_new_struct_type == StructEnum.MODELS_LIKE:
 
                 with self.use_stack_frame(
-                        StackFrame(container=self.current_frame.container, 
+                        ApplyStackFrame(container=self.current_frame.container, 
                                    component=self.current_frame.component, 
                                    # only this is changed
                                    instance=self.current_frame.instance_new,

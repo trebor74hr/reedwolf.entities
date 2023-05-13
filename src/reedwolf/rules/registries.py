@@ -423,11 +423,12 @@ class ThisRegistry(RegistryBase):
 class SetupSession(SetupSessionBase):
 
     def create_local_setup_session(self, this_ns_model_class: ModelType) -> SetupSession:
-        " func_args needs this "
-        # TODO: this is the only reference to specific repository - used in func_args.py
+        " Currently creates only local ThisNS registry, which is used for some local context, e.g. Component This. vexps "
+
         this_registry = ThisRegistry(
                 model_class=this_ns_model_class,
                 )
+
         local_setup_session = SetupSessionBase(
                                 owner=self.owner,
                                 owner_setup_session=None,
