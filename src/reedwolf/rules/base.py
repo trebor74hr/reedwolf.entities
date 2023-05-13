@@ -627,7 +627,7 @@ class ComponentBase(SetOwnerMixin, ABC):
         return name
 
 
-    def get_container_owner(self, include_self: bool) -> IContainerBase:  # noqa: F821
+    def get_container_owner(self, consider_self: bool) -> IContainerBase:  # noqa: F821
         """ 
         traverses up the component tree up (owners) and find first container
         including self ( -> if self is container then it returns self)
@@ -635,7 +635,7 @@ class ComponentBase(SetOwnerMixin, ABC):
         if self.owner is UNDEFINED:
             raise RuleSetupError(owner=self, msg="Owner is not set. Call .setup() method first.")
 
-        if include_self and isinstance(self, IContainerBase):
+        if consider_self and isinstance(self, IContainerBase):
             return self
 
         owner_container = self.owner
@@ -645,7 +645,7 @@ class ComponentBase(SetOwnerMixin, ABC):
             owner_container = owner_container.owner
 
         if owner_container in (None, UNDEFINED):
-            if include_self:
+            if consider_self:
                 raise RuleSetupError(owner=self, msg="Did not found container in parents. Every component needs to be in some container object tree (Rules/Extension).")
             return None
 
@@ -767,6 +767,9 @@ class IContainerBase(ABC):
 # ------------------------------------------------------------
 
 class BoundModelBase(ComponentBase, ABC):
+
+    def is_top_owner(self):
+        return False
 
 
     def get_full_name(self, owner: Optional[BoundModelBase] = None, depth: int = 0, init: bool = False):
@@ -912,7 +915,7 @@ class StackFrame:
         if self.on_component_only:
             self.bound_model_root = (self.on_component_only 
                                      if self.on_component_only.is_extension()
-                                     else self.on_component_only.get_container_owner(include_self=True)
+                                     else self.on_component_only.get_container_owner(consider_self=True)
                                     ).bound_model
             # can be list in this case
             # TODO: check if list only: if self.bound_model_root.type_info.is_list:

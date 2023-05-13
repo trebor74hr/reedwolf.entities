@@ -203,12 +203,13 @@ class FunctionArguments:
             if not caller: 
                 # NOTE: Namespace top level like: Fn.Length(This.name) 
                 #       This could be ambigous, but in this case container_owner is used.
-                container = registries.owner.get_container_owner(include_self=True)
-                container.bound_model.type_info
-                caller = container.bound_model
-                # raise RuleSetupValueError(owner=self, msg="{owner_name}: ValueExpression cwn be used in dot-chain mode, e g. M.name.Lenght().")
+                container = registries.owner.get_container_owner(consider_self=True)
+                # container.bound_model.type_info
+                # caller = container.bound_model
+                model_class = container.bound_model.type_info.type_
+            else:
+                model_class = caller.type_info.type_
 
-            model_class = caller.type_info.type_
             assert model_class
 
             if is_model_class(model_class):

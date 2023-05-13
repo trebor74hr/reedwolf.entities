@@ -15,9 +15,11 @@ from dataclasses  import (
 from .utils import (
         UNDEFINED,
         UndefinedType,
+        to_repr,
         )
 from .exceptions import (
         RuleSetupValueError,
+        RuleInternalError,
         )
 from .namespaces import (
         ModelsNS,
@@ -55,73 +57,20 @@ class ModelWithHandlers:
     type_info: TypeInfo = field(repr=False)
 
 
-# ------------------------------------------------------------
-# BoundModel
-# ------------------------------------------------------------
-
-@dataclass
-class BoundModel(BoundModelBase):
-
-    # setup must be called first for this component, and later for others
-    # bigger comes first, 0 is ValueExpression default, 1 is for other copmonents default
-    SETUP_PRIORITY  : ClassVar[int] = 9
-
-    name            : str
-    # label           : TransMessageType
-
-    model           : Union[ModelType, ValueExpression] = field(repr=False)
-    contains        : Optional[List[BoundModelWithHandlers]] = field(repr=False, default_factory=list)
-
-    # evaluated later
-    owner           : Union[BoundModelBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    owner_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
-    # Filled from from model
-    type_info : Optional[TypeInfo] = field(init=False, default=None, repr=False)
-
-    models_with_handlers_dict : Dict[str, ModelWithHandlers] = field(init=False, default_factory=dict)
-    
-
-    def get_type_info(self):
-        if not self.type_info:
-            self._set_type_info()
-        return self.type_info
-
-
-    def _set_type_info(self):
-        # NOTE: model: ValueExpression - would be hard to fill automatically
-        #           when ValueExpression, vexp is evaluated setup() what is a bit late in
-        #           container.setup().
-        assert not self.type_info
-        if not (is_model_class(self.model) or isinstance(self.model, ValueExpression)):
-            raise RuleSetupValueError(f"Model should be Model class (DC/PYD) or ValueExpression, got: {self.model}")
-
-        if isinstance(self.model, ValueExpression):
-            self.type_info = self.model._evaluator.last_node().type_info
-        else:
-            self.type_info = TypeInfo.get_or_create_by_type(
-                                    py_type_hint=self.model,
-                                    )
-
-    def setup(self, registries:IRegistries):
-        super().setup(registries=registries)
-        if not self.type_info:
-            self._set_type_info()
-
-        # ALT: self.get_children()
-        if self.contains:
-            if not self.owner.is_top_owner:
-                raise RuleSetupValueError(owner=self, msg=f"Currently child bound models supported only for top contaainers, got: {self.contains}")
-            self._register_nested_models(registries)
-
-        self._finished = True
-
+class NestedBoundModelMixin:
 
     def _register_nested_models(self, registries:IRegistries):
-
+        # ALT: self.get_children()
         if not self.contains:
             return False
 
-        assert not self.models_with_handlers_dict
+        container_owner = self.owner.get_container_owner(consider_self=True)
+
+        if not container_owner or not container_owner.is_top_owner():
+            raise RuleSetupValueError(owner=self, msg=f"Currently child bound models ('contains') supported only for top contaainers owners (i.e. Rules), got: {self.owner} / {container_owner}")
+
+        if self.models_with_handlers_dict:
+            raise RuleInternalError(owner=self, msg=f"models_with_handlers_dict should be empty, got: {to_repr(self.models_with_handlers_dict)}. Have you called setup for 2nd time?") 
 
         # TODO: cache this, it is used multiple times ... 
         model_fields = get_model_fields(self.model)
@@ -156,7 +105,8 @@ class BoundModel(BoundModelBase):
                 if type_err_msg:
                     raise RuleSetupValueError(owner=self, msg=f"Child bound model `{model_name}` is not compatible with underlying field: {type_err_msg}")
 
-            # 1. if it is non-model -> Register new attribute node within M. / ModelsNS registry
+            # 1. if it is non-model -> Register new attribute node within M. /
+            #    ModelsNS registry
             if not child_bound_model.in_model:
                 model_attr_vexp_node = AttrVexpNode(
                                             name=child_bound_model.name,
@@ -168,7 +118,9 @@ class BoundModel(BoundModelBase):
 
                 models_registry.register_attr_node(attr_node=model_attr_vexp_node)
 
-            # 2. Register all read handlers (with type_info) in local registry - will be called in apply phase
+            # 2. Create function object and register that read handlers (with
+            #    type_info) in local registry - will be called in apply phase
+            # print("here-1", repr(child_bound_model.read_handler))
             read_handler_vexp = child_bound_model.read_handler.create_function(
                                     func_args  = EmptyFunctionArguments,
                                     registries = registries,
@@ -186,13 +138,71 @@ class BoundModel(BoundModelBase):
 
 
 
+# ------------------------------------------------------------
+# BoundModel
+# ------------------------------------------------------------
+
+@dataclass
+class BoundModel(NestedBoundModelMixin, BoundModelBase):
+
+    # setup must be called first for this component, and later for others
+    # bigger comes first, 0 is ValueExpression default, 1 is for other copmonents default
+    SETUP_PRIORITY  : ClassVar[int] = 9
+
+    name            : str
+    # label           : TransMessageType
+
+    model           : Union[ModelType, ValueExpression] = field(repr=False)
+    contains        : Optional[List[BoundModelWithHandlers]] = field(repr=False, default_factory=list)
+
+    # evaluated later
+    owner           : Union[BoundModelBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    owner_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+
+    # Filled from from model
+    type_info : Optional[TypeInfo] = field(init=False, default=None, repr=False)
+    models_with_handlers_dict : Dict[str, ModelWithHandlers] = field(init=False, default_factory=dict)
+    
+
+    def get_type_info(self):
+        if not self.type_info:
+            self._set_type_info()
+        return self.type_info
+
+
+    def _set_type_info(self):
+        # NOTE: model: ValueExpression - would be hard to fill automatically
+        #           when ValueExpression, vexp is evaluated setup() what is a bit late in
+        #           container.setup().
+        assert not self.type_info
+        if not (is_model_class(self.model) or isinstance(self.model, ValueExpression)):
+            raise RuleSetupValueError(f"Model should be Model class (DC/PYD) or ValueExpression, got: {self.model}")
+
+        if isinstance(self.model, ValueExpression):
+            self.type_info = self.model._evaluator.last_node().type_info
+        else:
+            self.type_info = TypeInfo.get_or_create_by_type(
+                                    py_type_hint=self.model,
+                                    )
+
+    def setup(self, registries:IRegistries):
+        super().setup(registries=registries)
+        if not self.type_info:
+            self._set_type_info()
+
+        self._register_nested_models(registries)
+
+        self._finished = True
+
+
+
 
 # ------------------------------------------------------------
 # BoundModelWithHandlers
 # ------------------------------------------------------------
 
 @dataclass
-class BoundModelWithHandlers(BoundModelBase):
+class BoundModelWithHandlers(NestedBoundModelMixin, BoundModelBase):
     # TODO: razdvoji save/read/.../unique check
     # TODO: nesting with 'contains: List[BoundModelWithHandlers]' currently not supported.
     name         : str
@@ -201,13 +211,16 @@ class BoundModelWithHandlers(BoundModelBase):
     read_handler : CustomFunctionFactory
     in_model     : bool = field(default=True)
 
+    contains        : Optional[List[BoundModelWithHandlers]] = field(repr=False, default_factory=list)
+
     # --- evaluated later
     # Filled from from .read_hanlder -> (.type_info: TypeInfo).type_
     model        : ModelType = field(init=False, metadata={"skip_traverse": True})
     owner        : Union[BoundModelBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     owner_name   : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
-    type_info    : Union[TypeInfo, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
 
+    type_info    : Union[TypeInfo, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    models_with_handlers_dict : Dict[str, ModelWithHandlers] = field(init=False, default_factory=dict)
 
     def __post_init__(self):
 
@@ -237,12 +250,19 @@ class BoundModelWithHandlers(BoundModelBase):
         #       if read_params_found != read_params_expected:
         #           raise RuleSetupValueError(owner=self, msg=f"read_handler={self.read_handler} has arguments '{read_params_found}' and expected '{read_params_expected}'. Check function declaration or inject_params.")
 
+
+    def setup(self, registries:IRegistries):
+        super().setup(registries=registries)
+
+        self._register_nested_models(registries)
+
+        self._finished = True
+
+
     def get_type_info(self):
         assert self.type_info
         return self.type_info
 
-    # def read(self, *args, **kwargs):
-    #     return self.fn_read(*args, **kwargs)
 
 # ------------------------------------------------------------
 # BoundModelHandler

@@ -649,7 +649,7 @@ class Rules(ContainerBase):
         TODO: check that this is container / extension / fieldgroup
         """
         from .apply import ApplyResult
-        container = self.get_container_owner(include_self=True)
+        container = self.get_container_owner(consider_self=True)
 
         apply_result = \
                 ApplyResult(registries=container.registries, 
@@ -723,10 +723,10 @@ class Extension(ContainerBase):
         super().set_owner(owner=owner)
 
         # can be self
-        self.owner_container     = self.get_container_owner(include_self=True)
+        self.owner_container     = self.get_container_owner(consider_self=True)
 
         # take from real first container owner
-        non_self_owner_container = self.get_container_owner(include_self=False)
+        non_self_owner_container = self.get_container_owner(consider_self=False)
         self.context_class = non_self_owner_container.context_class
         self.config = non_self_owner_container.config
         if not self.config:

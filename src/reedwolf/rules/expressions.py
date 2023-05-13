@@ -47,6 +47,9 @@ from .meta import (
         )
 
 
+# CallerType = Union[Namespace, IValueExpressionNode]
+
+
 # ------------------------------------------------------------
 # interfaces / base classes
 # ------------------------------------------------------------
