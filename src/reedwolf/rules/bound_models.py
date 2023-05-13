@@ -33,6 +33,7 @@ from .meta import (
         )
 from .base        import (
         BoundModelBase,
+        SetupStackFrame,
         )
 from .expressions import (
         ValueExpression,
@@ -126,12 +127,19 @@ class NestedBoundModelMixin:
             # TODO:     import pdb;pdb.set_trace() 
             # TODO:     self.model
 
-            # TODO: pass self.model ...
+            assert read_handler_type_info
 
-            read_handler_vexp = child_bound_model.read_handler.create_function(
-                                    func_args  = EmptyFunctionArguments,
-                                    setup_session = setup_session,
-                                    name       = f"{child_bound_model.name}__{child_bound_model.read_handler.name}")
+            with setup_session.use_stack_frame(
+                    SetupStackFrame(
+                        container = setup_session.current_frame.container,
+                        component = self, 
+                        # bound_model_type_info=read_handler_type_info,
+                    )) as frame:
+                read_handler_vexp = child_bound_model.read_handler.create_function(
+                                        func_args  = EmptyFunctionArguments,
+                                        setup_session = setup_session,
+                                        name       = f"{child_bound_model.name}__{child_bound_model.read_handler.name}")
+
             read_handler_vexp.finish()
 
             model_with_handlers = ModelWithHandlers(

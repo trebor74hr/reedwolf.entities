@@ -205,12 +205,10 @@ class FunctionArguments:
 
             if not caller: 
                 # NOTE: Namespace top level like: Fn.Length(This.name) 
-                #       This could be ambigous, but in this case container_owner is used.
-                container = setup_session.owner.get_container_owner(consider_self=True)
-                # container.bound_model.type_info
-                # caller = container.bound_model
-                model_class = container.bound_model.type_info.type_
+                #       BoundModelWithHandlers with read_handlers case
+                model_class = setup_session.current_frame.bound_model.model
             else:
+                # TODO: drop this case - change to 'setup_session.current_frame' case
                 model_class = caller.type_info.type_
 
             assert model_class

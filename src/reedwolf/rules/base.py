@@ -818,24 +818,37 @@ class BoundModelBase(ComponentBase, ABC):
 
 @dataclass
 class SetupStackFrame:
+    # current container
     container: IContainerBase = field(repr=False)
+
+    # current component - can be BoundModel too
     component: ComponentBase
+
+    # used for ThisNS in some cases
     local_setup_session: Optional[ISetupSession] = field(repr=False, default=None)
 
-    # bound_model      : Optional[BoundModelBase] = field(repr=False, init=False, default=None)
-    # bound_model_root : Optional[BoundModelBase] = field(repr=False, init=False, default=None)
-
-    # current container data instance which will be procesed: changed/validated/evaluated
-    # type_info: TypeInfo
+    # Computed from container/component
+    # used for BoundModelWithHandlers cases (read_handlers()), 
+    bound_model: Optional[BoundModelBase] = field(init=False, repr=False, default=None)
 
     # -- autocomputed
-    # used to check root value in models registry 
+    # bound_model_root : Optional[BoundModelBase] = field(repr=False, init=False, default=None)
+    # current container data instance which will be procesed: changed/validated/evaluated
+    # type_info: TypeInfo
 
     def __post_init__(self):
         assert isinstance(self.container, IContainerBase)
         assert isinstance(self.component, ComponentBase)
         if self.local_setup_session:
             assert isinstance(self.local_setup_session, ISetupSession)
+
+        # if self.bound_model:
+        #     # set in BoundModelWithHandlers cases (read_handlers())
+        #     assert isinstance(self.bound_model, BoundModelBase)
+        if isinstance(self.component, BoundModelBase):
+            self.bound_model = self.component
+        else:
+            self.bound_model = self.container.bound_model
 
         # self.bound_model_root = (self.on_component_only 
         #                          if self.on_component_only.is_extension()
