@@ -571,15 +571,12 @@ class ValueExpression(DynamicAttrsBase):
             raise RuleInternalError(owner=self, msg=f"Method Setup() already called, further ValueExpression building/operator-building is not possible (status={self._status}).")
 
 
-    def Setup(self, 
-            setup_session:ISetupSession,  # noqa: F821
-            owner:"ComponentBase",  # noqa: F821
-            # local_setup_session: Optional[ISetupSession] = None,  # noqa: F821
-            # strict:bool = False,
-            ) -> Optional['IValueExpressionNode']:
+    def Setup(self, setup_session:ISetupSession, owner:"ComponentBase") -> Optional['IValueExpressionNode']:
         """
         Owner used just for reference count.
         """
+        # TODO: consider dropping owner parameter and use setup_session.current_frame.component or owner instead?
+
         # TODO: circular dependency - maybe to pass eval class to this method
         from .expression_evaluators import ValueExpressionEvaluator
 

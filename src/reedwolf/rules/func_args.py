@@ -20,9 +20,6 @@ from .utils import (
         be_conjugate,
         plural_suffix,
         )
-from .base import (
-        SetupStackFrame,
-        )
 from .namespaces import ( 
         ThisNS,
         Namespace,
@@ -44,7 +41,9 @@ from .expressions import (
         IValueExpressionNode,
         ISetupSession,
         )
-
+from .base import (
+        SetupStackFrame,
+        )
 
 TypeInfoCallable = Callable[[], TypeInfo]
 
