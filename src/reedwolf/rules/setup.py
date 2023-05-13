@@ -577,8 +577,10 @@ class SetupSessionBase(ISetupSession):
         return self.frames_stack.pop(0)
 
     @property
-    def current_frame(self) -> ApplyStackFrame:
-        assert self.frames_stack
+    def current_frame(self) -> Optional[ApplyStackFrame]:
+        if not self.frames_stack:
+            # raise RuleInternalError(owner=self, msg=f"current_frame not available, stack frame is empty")
+            return None
         return self.frames_stack[0]
 
     # ------------------------------------------------------------

@@ -820,6 +820,7 @@ class BoundModelBase(ComponentBase, ABC):
 class SetupStackFrame:
     container: IContainerBase = field(repr=False)
     component: ComponentBase
+    local_setup_session: Optional[ISetupSession] = field(repr=False, default=None)
 
     # bound_model      : Optional[BoundModelBase] = field(repr=False, init=False, default=None)
     # bound_model_root : Optional[BoundModelBase] = field(repr=False, init=False, default=None)
@@ -833,6 +834,8 @@ class SetupStackFrame:
     def __post_init__(self):
         assert isinstance(self.container, IContainerBase)
         assert isinstance(self.component, ComponentBase)
+        if self.local_setup_session:
+            assert isinstance(self.local_setup_session, ISetupSession)
 
         # self.bound_model_root = (self.on_component_only 
         #                          if self.on_component_only.is_extension()

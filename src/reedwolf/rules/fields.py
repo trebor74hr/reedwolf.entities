@@ -51,6 +51,7 @@ from .base import (
         IFieldBase,
         IApplySession,
         ValidationFailure,
+        SetupStackFrame,
         )
 from .expressions   import (
         ValueExpression,
@@ -214,8 +215,8 @@ class FieldBase(Component, IFieldBase, ABC):
             # self.attr_node = setup_session.get_attr_node(FieldsNS, self.name, strict=True)
             self.attr_node = setup_session[FieldsNS].get(self.name)
 
-            # self.setup_session.Fields[self.name]
             assert self.attr_node
+
             if not self.bound_attr_node:
                 # warn(f"TODO: {self}.bind = {self.bind} -> bound_attr_node can not be found.")
                 raise RuleSetupValueError(owner=self, msg=f"bind={self.bind}: bound_attr_node can not be found.")
@@ -488,10 +489,16 @@ class ChoiceField(FieldBase):
                 assert not is_list
                 model_class = choices
 
-            local_setup_session = setup_session.create_local_setup_session(this_ns_model_class=model_class)
-
-            self.choice_value_attr_node = self._create_attr_node(local_setup_session, setup_session, "choice_value", vexp=self.choice_value, model_class=model_class)
-            self.choice_label_attr_node = self._create_attr_node(local_setup_session, setup_session, "choice_label", vexp=self.choice_label, model_class=model_class)
+            with setup_session.use_stack_frame(
+                    SetupStackFrame(
+                        container = self.get_container_owner(consider_self=True), 
+                        component = self, 
+                        local_setup_session = setup_session.create_local_setup_session(
+                                                    this_ns_model_class=model_class)
+                    )) as frame:
+                # model_class=model_class
+                self.choice_value_attr_node = self._create_attr_node(setup_session, "choice_value", vexp=self.choice_value)
+                self.choice_label_attr_node = self._create_attr_node(setup_session, "choice_label", vexp=self.choice_label)
 
             if self.choice_label_attr_node.type_info.type_!=str:
                 raise RuleSetupValueError(owner=self, msg=f"Attribute choice_label needs to be bound to string attribute, got: {self.choice_label_attr_mode.type_info.type_}")
@@ -527,18 +534,20 @@ class ChoiceField(FieldBase):
     # ------------------------------------------------------------
 
     def _create_attr_node(self, 
-            local_setup_session: SetupSession,
+            # local_setup_session: SetupSession,
             setup_session: SetupSession, 
             aname: str, 
             vexp: ValueExpression, 
-            model_class: ModelType):
+            # model_class: ModelType
+            ):
         """
         Create choice AttrVexpNode() within local ThisRegistry
         """
         if not (vexp and isinstance(vexp, ValueExpression) and vexp.GetNamespace()==ThisNS):
             raise RuleSetupValueError(owner=self, msg=f"Argument '{aname}' is not set or has wrong type - should be ValueExpression in This. namespace. Got: {vexp} / {type(vexp)}")
 
-        attr_node = vexp.Setup(setup_session=setup_session, owner=self, local_setup_session=local_setup_session)
+        #, local_setup_session2=local_setup_session
+        attr_node = vexp.Setup(setup_session=setup_session, owner=self)
         if vexp._status != VExpStatusEnum.BUILT:
             raise RuleInternalError(owner=self, msg=f"Setup failed for Vexp: {vexp} -> {vexp._status}")
 

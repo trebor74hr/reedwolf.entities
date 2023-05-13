@@ -574,8 +574,8 @@ class ValueExpression(DynamicAttrsBase):
     def Setup(self, 
             setup_session:ISetupSession,  # noqa: F821
             owner:"ComponentBase",  # noqa: F821
-            local_setup_session: Optional[ISetupSession] = None,  # noqa: F821
-            strict:bool = False,
+            # local_setup_session: Optional[ISetupSession] = None,  # noqa: F821
+            # strict:bool = False,
             ) -> Optional['IValueExpressionNode']:
         """
         Owner used just for reference count.
@@ -586,6 +586,9 @@ class ValueExpression(DynamicAttrsBase):
         self._EnsureFinished()
 
         registry = None
+
+        local_setup_session = setup_session.current_frame.local_setup_session if setup_session.current_frame else None
+
         if local_setup_session:
             # try to find in local repo
             registry = local_setup_session.get_registry(self._namespace, strict=False)
@@ -693,11 +696,12 @@ class ValueExpression(DynamicAttrsBase):
                 #     setup_session.add(current_vexp_node, alt_vexp_node_name=copy_to_setup_session.vexp_node_name)
 
             except NotImplementedError as ex:
-                if strict:
-                    raise
-                self._status = VExpStatusEnum.ERR_TO_IMPLEMENT
-                vexp_evaluator.failed(str(ex))
-                break
+                raise 
+                # if strict:
+                #     raise
+                # self._status = VExpStatusEnum.ERR_TO_IMPLEMENT
+                # vexp_evaluator.failed(str(ex))
+                # break
 
             last_vexp_node = current_vexp_node
 

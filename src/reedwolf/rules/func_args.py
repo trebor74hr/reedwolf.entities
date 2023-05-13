@@ -20,6 +20,9 @@ from .utils import (
         be_conjugate,
         plural_suffix,
         )
+from .base import (
+        SetupStackFrame,
+        )
 from .namespaces import ( 
         ThisNS,
         Namespace,
@@ -225,11 +228,14 @@ class FunctionArguments:
             if not setup_session:
                 raise RuleInternalError(owner=self, msg=f"{owner_name}: SetupSession is required for ValueExpression() function argument case") 
 
-            vexp_node = vexp.Setup(
-                                setup_session=setup_session, 
-                                # TODO: is this good?
-                                owner=self, 
-                                local_setup_session=local_setup_session)
+            with setup_session.use_stack_frame(
+                    SetupStackFrame(
+                        container = setup_session.current_frame.container, 
+                        component = setup_session.current_frame.component, 
+                        local_setup_session = local_setup_session,
+                    )) as frame:
+                vexp_node = vexp.Setup(setup_session=setup_session, owner=self)
+
 
             # NOTE: pass callable since type_info for some Vexp-s are not avaialble (e.g. FieldsNS, F.name)
             type_info_or_callable = vexp_node.get_type_info()
