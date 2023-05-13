@@ -45,7 +45,7 @@ from .expressions import (
         IValueExpressionNode,
         IFunctionVexpNode,
         IRegistry,
-        IRegistries,
+        ISetupSession,
         IAttributeAccessorBase,
         )
 from .meta import (
@@ -89,7 +89,7 @@ from .setup import (
         RegistryBase,
         RegistryUseDenied,
         ComponentAttributeAccessor,
-        RegistriesBase,
+        SetupSessionBase,
         )
 
 # ------------------------------------------------------------
@@ -420,21 +420,21 @@ class ThisRegistry(RegistryBase):
 # ------------------------------------------------------------
 
 
-class Registries(RegistriesBase):
+class SetupSession(SetupSessionBase):
 
-    def create_local_registries(self, this_ns_model_class: ModelType) -> Registries:
+    def create_local_setup_session(self, this_ns_model_class: ModelType) -> SetupSession:
         " func_args needs this "
         # TODO: this is the only reference to specific repository - used in func_args.py
         this_registry = ThisRegistry(
                 model_class=this_ns_model_class,
                 )
-        local_registries = RegistriesBase(
+        local_setup_session = SetupSessionBase(
                                 owner=self.owner,
-                                owner_registries=None,
+                                owner_setup_session=None,
                                 functions_factory_registry=self.functions_factory_registry,
                                 )
-        local_registries.add_registry(this_registry)
-        return local_registries
+        local_setup_session.add_registry(this_registry)
+        return local_setup_session
 
 # ------------------------------------------------------------
 # OBSOLETE
@@ -466,7 +466,7 @@ class Registries(RegistriesBase):
 #         #     # TODO: consider storing CustomFactoryFunction instead of CustomFunction instances
 #         #     #       to allow extra arguments when referenced
 #         #     vexp_node = data_var.function.create_function(
-#         #                     registries=self.registries,
+#         #                     setup_session=self.setup_session,
 #         #                     caller=None,
 #         #                     func_args=EmptyFunctionArguments, 
 #         #                     name=data_var.name) 

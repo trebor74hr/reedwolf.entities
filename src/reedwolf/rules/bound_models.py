@@ -36,7 +36,7 @@ from .base        import (
         )
 from .expressions import (
         ValueExpression,
-        IRegistries,
+        ISetupSession,
         )
 from .attr_nodes import (
         AttrVexpNode,
@@ -59,7 +59,7 @@ class ModelWithHandlers:
 
 class NestedBoundModelMixin:
 
-    def _register_nested_models(self, registries:IRegistries):
+    def _register_nested_models(self, setup_session:ISetupSession):
         # ALT: self.get_children()
         if not self.contains:
             return False
@@ -75,11 +75,11 @@ class NestedBoundModelMixin:
         # TODO: cache this, it is used multiple times ... 
         model_fields = get_model_fields(self.model)
 
-        models_registry = registries.get_registry(ModelsNS)
+        models_registry = setup_session.get_registry(ModelsNS)
 
         # TODO: currently validatiojn of function argument types is done only in StackFrame() in apply(), 
         #       but should be here used for check attrs in setup() phase ... Define here: 
-        #           self.local_registries = registries.create_local_registries(this_ns_model_class=self.model)
+        #           self.local_setup_session = setup_session.create_local_setup_session(this_ns_model_class=self.model)
         #       later reuse it and use it here to check func args types.
         for child_bound_model in self.contains:
 
@@ -120,10 +120,17 @@ class NestedBoundModelMixin:
 
             # 2. Create function object and register that read handlers (with
             #    type_info) in local registry - will be called in apply phase
-            # print("here-1", repr(child_bound_model.read_handler))
+
+            # TODO: if "get_department" in repr(child_bound_model.read_handler):
+            # TODO:     print("here-1", repr(child_bound_model.read_handler))
+            # TODO:     import pdb;pdb.set_trace() 
+            # TODO:     self.model
+
+            # TODO: pass self.model ...
+
             read_handler_vexp = child_bound_model.read_handler.create_function(
                                     func_args  = EmptyFunctionArguments,
-                                    registries = registries,
+                                    setup_session = setup_session,
                                     name       = f"{child_bound_model.name}__{child_bound_model.read_handler.name}")
             read_handler_vexp.finish()
 
@@ -185,12 +192,12 @@ class BoundModel(NestedBoundModelMixin, BoundModelBase):
                                     py_type_hint=self.model,
                                     )
 
-    def setup(self, registries:IRegistries):
-        super().setup(registries=registries)
+    def setup(self, setup_session:ISetupSession):
+        super().setup(setup_session=setup_session)
         if not self.type_info:
             self._set_type_info()
 
-        self._register_nested_models(registries)
+        self._register_nested_models(setup_session)
 
         self._finished = True
 
@@ -251,10 +258,10 @@ class BoundModelWithHandlers(NestedBoundModelMixin, BoundModelBase):
         #           raise RuleSetupValueError(owner=self, msg=f"read_handler={self.read_handler} has arguments '{read_params_found}' and expected '{read_params_expected}'. Check function declaration or inject_params.")
 
 
-    def setup(self, registries:IRegistries):
-        super().setup(registries=registries)
+    def setup(self, setup_session:ISetupSession):
+        super().setup(setup_session=setup_session)
 
-        self._register_nested_models(registries)
+        self._register_nested_models(setup_session)
 
         self._finished = True
 

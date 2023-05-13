@@ -59,7 +59,7 @@ from .expressions import (
         ExecResult,
         IValueExpressionNode,
         IFunctionVexpNode,
-        IRegistries,
+        ISetupSession,
         )
 from .contexts import (
         IContext,
@@ -352,7 +352,7 @@ class ComponentBase(SetOwnerMixin, ABC):
     # ------------------------------------------------------------
 
     # @abstractmethod
-    # def setup(self, registries: IRegistries):
+    # def setup(self, setup_session: ISetupSession):
     #     ...
 
     def post_setup(self):
@@ -364,13 +364,13 @@ class ComponentBase(SetOwnerMixin, ABC):
     def _invoke_component_setup(self, 
                     subcomponent_name: str, 
                     subcomponent: Union[ComponentBase, ValueExpression], 
-                    registries: IRegistries):  # noqa: F821
+                    setup_session: ISetupSession):  # noqa: F821
         called = False
 
         # print(f"_invoke_component_setup({subcomponent})")
 
         if isinstance(subcomponent, (ValueExpression, )): # Operation
-            # copy_to_registries=copy_to_registries,
+            # copy_to_setup_session=copy_to_setup_session,
             vexp: ValueExpression = subcomponent
             namespace = vexp.GetNamespace()
             if namespace._manual_setup:
@@ -383,12 +383,12 @@ class ComponentBase(SetOwnerMixin, ABC):
                 # Setup() was called in container.setup() before
                 called = False
             else:
-                vexp.Setup(registries=registries, owner=self)
+                vexp.Setup(setup_session=setup_session, owner=self)
                 called = True
         elif isinstance(subcomponent, ComponentBase):
             assert "Rules(" not in repr(subcomponent)
             # assert not isinstance(subcomponent, Rules), subcomponent
-            subcomponent.setup(registries=registries)  # , owner=self)
+            subcomponent.setup(setup_session=setup_session)  # , owner=self)
             subcomponent.post_setup()
             called = True
         elif isinstance(subcomponent, (dict, list, tuple)):
@@ -400,10 +400,10 @@ class ComponentBase(SetOwnerMixin, ABC):
 
     # ------------------------------------------------------------
 
-    def setup(self, registries: IRegistries):  # noqa: F821
+    def setup(self, setup_session: ISetupSession):  # noqa: F821
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(self)
 
-        ret = self._setup(registries=registries)
+        ret = self._setup(setup_session=setup_session)
 
         return ret
 
@@ -498,9 +498,9 @@ class ComponentBase(SetOwnerMixin, ABC):
             # -------------------------------------------------------------
             # "autocomplete", "evaluate",
             # TODO: not the smartest way how to do this ...
-            if (subcomponent_name in ("owner", "owner_name", "owner_container", "owner_registries",
+            if (subcomponent_name in ("owner", "owner_name", "owner_container", "owner_setup_session",
                                       "name", "label", "datatype", "components", "type", "autocomputed",
-                                      "registries", "meta",
+                                      "setup_session", "meta",
                                       # NOTE: maybe in the future will have value expressions too
                                       "error", "description", "hint", 
                                       # now is evaluated from bound_model, bound_model is processed
@@ -559,7 +559,7 @@ class ComponentBase(SetOwnerMixin, ABC):
             elif isinstance(subcomponent, (dict,)):
                 for ss_name, sub_subcomponent in subcomponent.items():
                     # NOTE: bind_to_models case - key value will be used as
-                    #       attr_node name - should be registries unique
+                    #       attr_node name - should be setup_session unique
                     subcomponent_list.append(
                             SubcomponentWrapper(
                                 name=ss_name, 
@@ -582,7 +582,7 @@ class ComponentBase(SetOwnerMixin, ABC):
     # ------------------------------------------------------------
 
 
-    def _setup(self, registries: IRegistries):  # noqa: F821
+    def _setup(self, setup_session: ISetupSession):  # noqa: F821
         if self.owner is UNDEFINED:
             raise RuleInternalError(owner=self, msg="Owner not set")
 
@@ -593,7 +593,7 @@ class ComponentBase(SetOwnerMixin, ABC):
             self._invoke_component_setup(
                     subcomponent_wrapper.name, 
                     subcomponent=subcomponent_wrapper.subcomponent, 
-                    registries=registries)
+                    setup_session=setup_session)
 
         # if not self.is_finished():
         self.finish()
@@ -719,11 +719,11 @@ class IFieldBase(ABC):
     ...
 
     # @abstractmethod
-    # def get_attr_node(self, registries: IRegistries) -> "AttrVexpNode":  # noqa: F821
+    # def get_attr_node(self, setup_session: ISetupSession) -> "AttrVexpNode":  # noqa: F821
     #     ...
 
     # @abstractmethod
-    # def get_bound_attr_node(self, registries: IRegistries) -> "AttrVexpNode":  # noqa: F821
+    # def get_bound_attr_node(self, setup_session: ISetupSession) -> "AttrVexpNode":  # noqa: F821
     #     ...
 
 # ------------------------------------------------------------
@@ -803,8 +803,8 @@ class BoundModelBase(ComponentBase, ABC):
         return models
 
     # Not used:
-    # def get_attr_node(self, registries: IRegistries) -> Union["AttrVexpNode", UndefinedType]:  # noqa: F821
-    #     return registries.models_registry.get_attr_node_by_bound_model(bound_model=self)
+    # def get_attr_node(self, setup_session: ISetupSession) -> Union["AttrVexpNode", UndefinedType]:  # noqa: F821
+    #     return setup_session.models_registry.get_attr_node_by_bound_model(bound_model=self)
 
 # ------------------------------------------------------------
 
@@ -896,7 +896,7 @@ class StackFrame:
     index0: Optional[int] = None
 
     # for ThisNS / This. namespace 
-    local_registries: Optional[Registries] = field(repr=False, default=None)
+    local_setup_session: Optional[ISetupSession] = field(repr=False, default=None)
 
     # -- autocomputed
     # internal - filled in __post_init__
@@ -963,7 +963,7 @@ class StructEnum(str, Enum):
 @dataclass
 class IApplySession:
     # TODO: možda bi ovo trebalo izbaciti ... - link na IRegistry u vexp node-ovima 
-    registries: IRegistries = field(repr=False)
+    setup_session: ISetupSession = field(repr=False)
     rules: IContainerBase = field(repr=False) 
     instance: Any = field(repr=False)
     # TODO: consider: instance_new: Union[ModelType, UndefinedType] = UNDEFINED,
@@ -1245,7 +1245,7 @@ def extract_type_info(
             th_field, fields = extract_field_meta(inspect_object=model_class, attr_node_name=attr_node_name)
 
             # === parent type hint
-            parent_py_type_hints = extract_py_type_hints(model_class, f"registries->{attr_node_name}:DC/PYD")
+            parent_py_type_hints = extract_py_type_hints(model_class, f"setup_session->{attr_node_name}:DC/PYD")
 
             py_type_hint = parent_py_type_hints.get(attr_node_name, None)
             if py_type_hint:

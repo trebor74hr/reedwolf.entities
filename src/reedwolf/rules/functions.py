@@ -57,6 +57,7 @@ from .expressions import (
         IFunctionVexpNode,
         ExecResult,
         execute_vexp_or_node,
+        ISetupSession,
         )
 from .func_args import (
         FunctionArguments,
@@ -107,9 +108,9 @@ class IFunction(IFunctionVexpNode):
     #   e.g. in chain .my_custom_function(a=1, b=2) # in this case: {"a": 1, "b": 2}
     func_args           : FunctionArgumentsType
 
-    # 3. Registries are required for validation and type *data* of function
+    # 3. SetupSession are required for validation and type *data* of function
     #     arguments, e.g. creating ThisNS, getting vars from ContextNS, etc.
-    registries         : "Registries" = field(repr=False)  # noqa: F821
+    setup_session         : ISetupSession = field(repr=False)  # noqa: F821
 
     # 4. in usage when in chain (value)
     #   e.g. some_struct_str_attr.lower() #  in this case: some_struct_str_attr
@@ -144,9 +145,9 @@ class IFunction(IFunctionVexpNode):
     #       * raise RuleSetupError based error
     arg_validators      : Optional[ValueArgValidatorPyFuncDictType] = field(repr=False, default=None)
 
-    # 11. Registries are required for validation and type *data* of function
+    # 11. SetupSession are required for validation and type *data* of function
     #     arguments, e.g. creating ThisNS, getting vars from ContextNS etc.
-    # registries         : Optional["Registries"] = field(repr=False, default=None)  # noqa: F821
+    # setup_session         : Optional[ISetupSession] = field(repr=False, default=None)  # noqa: F821
 
     # misc data, used in EnumMembers
     data: Optional[Any] = field(default=None, repr=False)
@@ -192,7 +193,7 @@ class IFunction(IFunctionVexpNode):
         # put this in self.parsed_arguments
         # try:
         self.prepared_args = self.function_arguments.parse_func_args(
-                registries=self.registries,
+                setup_session=self.setup_session,
                 caller=self.caller,
                 owner_name=f"{self.as_str()}",
                 func_args=self.func_args,
@@ -210,7 +211,7 @@ class IFunction(IFunctionVexpNode):
         if self.arg_validators:
             self._call_arg_validators()
 
-        # self.registries.register_vexp_node(self)
+        # self.setup_session.register_vexp_node(self)
 
 
     def get_type_info(self) -> TypeInfo:
@@ -419,7 +420,7 @@ class IFunctionFactory(ABC):
 
     def create_function(self, 
                 func_args:FunctionArgumentsType, 
-                registries         : "IRegistries", # noqa: F821
+                setup_session         : ISetupSession, # noqa: F821
                 value_arg_type_info: Optional[TypeInfo] = None,
                 name               : Optional[str] = None,
                 caller             : Optional[IValueExpressionNode] = None,
@@ -432,7 +433,7 @@ class IFunctionFactory(ABC):
                 value_arg_name      = self.value_arg_name,  # noqa: E251
                 name                = name if name else self.name, # noqa: E251
                 caller              = caller,               # noqa: E251
-                registries          = registries,           # noqa: E251
+                setup_session          = setup_session,           # noqa: E251
                 arg_validators      = self.arg_validators,  # noqa: E251
                 data                = self.data,
                 )
@@ -468,7 +469,7 @@ def Function(py_function : Callable[..., Any],
         add_function = Fn.Add(b=This.value, c=3)
 
         # call / execute referenced function wrapper
-        print (add_function.execute(ctx=this_ctx, registries)) 
+        print (add_function.execute(ctx=this_ctx, setup_session)) 
     """
     # value_arg_type_info = None # TODO: TypeInfo
     return CustomFunctionFactory(
@@ -622,7 +623,7 @@ class FunctionsFactoryRegistry:
 # ------------------------------------------------------------
 
 def try_create_function(
-        registries: "Registries",  # noqa: F821
+        setup_session: ISetupSession,  # noqa: F821
         caller: IValueExpressionNode,
         # functions_factory_registry: IFunctionFactory, 
         attr_node_name:str, 
@@ -633,23 +634,23 @@ def try_create_function(
     if value_arg_type_info and not isinstance(value_arg_type_info, TypeInfo):
         raise RuleInternalError(f"{value_arg_type_info} should be TypeInfo, got '{type(value_arg_type_info)}'")
 
-    functions_factory_registry: IFunctionFactory = registries.functions_factory_registry
+    functions_factory_registry: IFunctionFactory = setup_session.functions_factory_registry
     if not functions_factory_registry:
-        raise RuleSetupNameNotFoundError(item=registries, msg=f"Functions not available, '{attr_node_name}' function could not be found.")
+        raise RuleSetupNameNotFoundError(item=setup_session, msg=f"Functions not available, '{attr_node_name}' function could not be found.")
 
     function_factory = None
-    registries_current = registries
+    setup_session_current = setup_session
 
     names_avail_all = []
     registry_ids = set()
 
     while True:
-        if id(registries_current) in registry_ids:
+        if id(setup_session_current) in registry_ids:
             # prevent infinitive loop
             raise RuleInternalError("Registry already processed")
-        registry_ids.add(id(registries_current))
+        registry_ids.add(id(setup_session_current))
 
-        function_factory = registries_current.functions_factory_registry.get(attr_node_name)
+        function_factory = setup_session_current.functions_factory_registry.get(attr_node_name)
         if function_factory:
             break
 
@@ -660,15 +661,15 @@ def try_create_function(
                                 first_custom=first_custom))
         names_avail_all.append(names_avail)
 
-        if not registries.owner.owner:
+        if not setup_session.owner.owner:
             break
-        registries_current = registries.owner.owner.registries
+        setup_session_current = setup_session.owner.owner.setup_session
 
     func_node = None
     if function_factory:
         # ===== Create IFunction instance ===== 
         func_node = function_factory.create_function(
-                        registries=registries,
+                        setup_session=setup_session,
                         caller=caller,
                         func_args=func_args,
                         value_arg_type_info=value_arg_type_info)

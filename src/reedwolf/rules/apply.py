@@ -227,7 +227,7 @@ class ApplyResult(IApplySession):
             children_bound_models = getattr(component.bound_model, "contains", None)
 
             if children_bound_models:
-                local_registries = self.registries.create_local_registries(
+                local_setup_session = self.setup_session.create_local_setup_session(
                                                     this_ns_model_class=self.bound_model.model)
 
                 with self.use_stack_frame(
@@ -236,7 +236,7 @@ class ApplyResult(IApplySession):
                             component = self.bound_model, 
                             instance = self.instance,
                             instance_new = self.instance_new,
-                            local_registries=local_registries,
+                            local_setup_session=local_setup_session,
                             )):
 
                     for model_with_handler in self.bound_model.models_with_handlers_dict.values():

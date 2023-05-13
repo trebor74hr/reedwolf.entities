@@ -232,11 +232,11 @@ class AttrVexpNode(IValueExpressionNode):
                     raise RuleInternalError(owner=self, msg=f"Initial evaluation step for non-extension failed, expected single name member (e.g. M), got: {self.name}\n  == Compoonent: {frame.container}")
 
             registry = None
-            if apply_session.current_frame.local_registries:
-                registry = apply_session.current_frame.local_registries.get_registry(self.namespace, strict=False)
+            if apply_session.current_frame.local_setup_session:
+                registry = apply_session.current_frame.local_setup_session.get_registry(self.namespace, strict=False)
 
             if not registry:
-                registry = apply_session.registries.get_registry(self.namespace)
+                registry = apply_session.setup_session.get_registry(self.namespace)
 
             value_previous = registry.get_root_value(apply_session=apply_session, attr_name=attr_name)
 
@@ -325,7 +325,7 @@ class AttrVexpNode(IValueExpressionNode):
     def pp(self):
         # pretty print
         denied = "DENIED" if self.denied else ""
-        # bound= ("BOUND[{}]".format(", ".join([f"{registries_name}->{ns._name}.{attr_node_name}" for registries_name, ns, attr_node_name in self.bound_list]))) if self.bound_list else ""
+        # bound= ("BOUND[{}]".format(", ".join([f"{setup_session_name}->{ns._name}.{attr_node_name}" for setup_session_name, ns, attr_node_name in self.bound_list]))) if self.bound_list else ""
         # used = f"USED={self.refcount}" if self.refcount else ""
         altname = f"{self.data_supplier_name}" if self.data_supplier_name != self.name else ""
         # function = f"Function({self.function.name}{', custom' if self.function.is_custom else ''})" if self.function else ""
@@ -337,7 +337,7 @@ class AttrVexpNode(IValueExpressionNode):
     def __str__(self):
         denied = ", DENIED" if self.denied else ""
         return f"AttrVexpNode({self.full_name} : {self.data_supplier_name}{denied})"
-        # bound= (", BOUND={}".format(", ".join([f"{registries_name}->{ns._name}.{attr_node_name}" for registries_name, ns, attr_node_name in self.bound_list]))) if self.bound_list else ""
+        # bound= (", BOUND={}".format(", ".join([f"{setup_session_name}->{ns._name}.{attr_node_name}" for setup_session_name, ns, attr_node_name in self.bound_list]))) if self.bound_list else ""
         # {bound}, {self.refcount}
 
     def __repr__(self):

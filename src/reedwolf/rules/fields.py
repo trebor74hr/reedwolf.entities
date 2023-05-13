@@ -64,7 +64,7 @@ from .functions import (
         CustomFunctionFactory,
         )
 from .registries import (
-        Registries,
+        SetupSession,
         )
 from .validations   import (
         MaxLength,
@@ -180,9 +180,9 @@ class FieldBase(Component, IFieldBase, ABC):
         self.init_clean_base()
 
 
-    def setup(self, registries:Registries):
+    def setup(self, setup_session:SetupSession):
 
-        super().setup(registries=registries)
+        super().setup(setup_session=setup_session)
 
         if self.bind:
             # within all parents catch first with namespace_only attribute
@@ -202,27 +202,27 @@ class FieldBase(Component, IFieldBase, ABC):
                 # warn(f"{self.bind}: 'bind' needs to be 1-4 deep ValueExpression (e.g. M.status, M.city.country.name ).")
                 raise RuleSetupValueError(owner=self, msg=f"'bind' needs to be 1-4 deep ValueExpression (e.g. M.status, M.city.country.name ), got: {self.bind}")
 
-            self.bound_attr_node = registries.get_vexp_node_by_vexp(self.bind)
+            self.bound_attr_node = setup_session.get_vexp_node_by_vexp(self.bind)
             if not self.bound_attr_node:
                 # TODO: not nice :(
                 owner_container = self.get_container_owner(consider_self=True)
-                owner_registries = getattr(owner_container, "owner_registries", owner_container.registries)
-                if owner_registries!=registries:
+                owner_setup_session = getattr(owner_container, "owner_setup_session", owner_container.setup_session)
+                if owner_setup_session!=setup_session:
                     # TODO: does not goes deeper - should be done with while loop until the top
-                    self.bound_attr_node = owner_registries.get_vexp_node_by_vexp(self.bind)
+                    self.bound_attr_node = owner_setup_session.get_vexp_node_by_vexp(self.bind)
 
-            # self.attr_node = registries.get_attr_node(FieldsNS, self.name, strict=True)
-            self.attr_node = registries[FieldsNS].get(self.name)
+            # self.attr_node = setup_session.get_attr_node(FieldsNS, self.name, strict=True)
+            self.attr_node = setup_session[FieldsNS].get(self.name)
 
-            # self.registries.Fields[self.name]
+            # self.setup_session.Fields[self.name]
             assert self.attr_node
             if not self.bound_attr_node:
                 # warn(f"TODO: {self}.bind = {self.bind} -> bound_attr_node can not be found.")
                 raise RuleSetupValueError(owner=self, msg=f"bind={self.bind}: bound_attr_node can not be found.")
             # else:
-            #     # ALT: self.bound_attr_node.add_bound_attr_node(BoundVar(registries.name, self.attr_node.namespace, self.attr_node.name))
+            #     # ALT: self.bound_attr_node.add_bound_attr_node(BoundVar(setup_session.name, self.attr_node.namespace, self.attr_node.name))
             #     # self.attr_node.add_bound_attr_node(
-            #     #         BoundVar(registries.name,
+            #     #         BoundVar(setup_session.name,
             #     #                  self.bound_attr_node.namespace,
             #     #                  self.bound_attr_node.name))
             #     # if not isinstance(self.bound_attr_node.data, TypeInfo):
@@ -405,9 +405,9 @@ class ChoiceField(FieldBase):
 
     # ------------------------------------------------------------
 
-    def setup(self, registries: Registries):
+    def setup(self, setup_session: SetupSession):
 
-        super().setup(registries=registries)
+        super().setup(setup_session=setup_session)
 
         choices = self.choices
         choices_checked = False
@@ -424,15 +424,15 @@ class ChoiceField(FieldBase):
                 # reported before - warn(f"TODO: There is an error with value expression {self.choices} - skip it for now.")
                 choices = None
             else:
-                vexp_node = registries.get_vexp_node_by_vexp(vexp=choices)
+                vexp_node = setup_session.get_vexp_node_by_vexp(vexp=choices)
                 if not vexp_node:
-                    vexp_node = choices.Setup(registries=registries, owner=self)
+                    vexp_node = choices.Setup(setup_session=setup_session, owner=self)
 
         elif isinstance(choices, CustomFunctionFactory):
             custom_function_factory : CustomFunctionFactory = choices
             vexp_node = custom_function_factory.create_function(
                             # NOTE: was None before
-                            registries=registries,
+                            setup_session=setup_session,
                             caller=None,
                             func_args=EmptyFunctionArguments,
                             )
@@ -488,10 +488,10 @@ class ChoiceField(FieldBase):
                 assert not is_list
                 model_class = choices
 
-            local_registries = registries.create_local_registries(this_ns_model_class=model_class)
+            local_setup_session = setup_session.create_local_setup_session(this_ns_model_class=model_class)
 
-            self.choice_value_attr_node = self._create_attr_node(local_registries, registries, "choice_value", vexp=self.choice_value, model_class=model_class)
-            self.choice_label_attr_node = self._create_attr_node(local_registries, registries, "choice_label", vexp=self.choice_label, model_class=model_class)
+            self.choice_value_attr_node = self._create_attr_node(local_setup_session, setup_session, "choice_value", vexp=self.choice_value, model_class=model_class)
+            self.choice_label_attr_node = self._create_attr_node(local_setup_session, setup_session, "choice_label", vexp=self.choice_label, model_class=model_class)
 
             if self.choice_label_attr_node.type_info.type_!=str:
                 raise RuleSetupValueError(owner=self, msg=f"Attribute choice_label needs to be bound to string attribute, got: {self.choice_label_attr_mode.type_info.type_}")
@@ -527,8 +527,8 @@ class ChoiceField(FieldBase):
     # ------------------------------------------------------------
 
     def _create_attr_node(self, 
-            local_registries: Registries,
-            registries: Registries, 
+            local_setup_session: SetupSession,
+            setup_session: SetupSession, 
             aname: str, 
             vexp: ValueExpression, 
             model_class: ModelType):
@@ -538,7 +538,7 @@ class ChoiceField(FieldBase):
         if not (vexp and isinstance(vexp, ValueExpression) and vexp.GetNamespace()==ThisNS):
             raise RuleSetupValueError(owner=self, msg=f"Argument '{aname}' is not set or has wrong type - should be ValueExpression in This. namespace. Got: {vexp} / {type(vexp)}")
 
-        attr_node = vexp.Setup(registries=registries, owner=self, local_registries=local_registries)
+        attr_node = vexp.Setup(setup_session=setup_session, owner=self, local_setup_session=local_setup_session)
         if vexp._status != VExpStatusEnum.BUILT:
             raise RuleInternalError(owner=self, msg=f"Setup failed for Vexp: {vexp} -> {vexp._status}")
 
@@ -557,19 +557,19 @@ class EnumField(FieldBase):
     # def __post_init__(self):
     #     self.init_clean()
 
-    def setup(self, registries:Registries):
+    def setup(self, setup_session:SetupSession):
 
-        super().setup(registries=registries)
+        super().setup(setup_session=setup_session)
 
         # TODO: revert to: strict=True - and process exception properly
-        attr_node = registries.get_vexp_node_by_vexp(vexp=self.bind, strict=False)
+        attr_node = setup_session.get_vexp_node_by_vexp(vexp=self.bind, strict=False)
         if attr_node:
 
             if isinstance(self.enum, ValueExpression):
                 # EnumField(... enum=S.CompanyTypes)
-                enum_attr_node = registries.get_vexp_node_by_vexp(vexp=self.enum)
+                enum_attr_node = setup_session.get_vexp_node_by_vexp(vexp=self.enum)
                 if not enum_attr_node:
-                    enum_attr_node = self.enum.Setup(registries=registries, owner=self)
+                    enum_attr_node = self.enum.Setup(setup_session=setup_session, owner=self)
 
                 # self.enum = enum_attr_node.data.value
                 self.enum = enum_attr_node.data

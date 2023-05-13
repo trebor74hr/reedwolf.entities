@@ -65,7 +65,7 @@ class IRegistry:
 
 # ------------------------------------------------------------
 
-class IRegistries(ABC):
+class ISetupSession(ABC):
 
     @abstractmethod
     def get_registry(self, namespace: Namespace, strict:bool= True) -> IRegistry:
@@ -383,10 +383,10 @@ class OperationVexpNode(IValueExpressionNode):
     def create_vexp_node(
                    vexp_or_other: Union[ValueExpression, Any], 
                    label: str,
-                   registries: "Registries", # noqa: F821
+                   setup_session: ISetupSession, # noqa: F821
                    owner: Any) -> IValueExpressionNode:
         if isinstance(vexp_or_other, ValueExpression):
-            vexp_node = vexp_or_other.Setup(registries, owner=owner)
+            vexp_node = vexp_or_other.Setup(setup_session, owner=owner)
         elif isinstance(vexp_or_other, IValueExpressionNode):
             raise NotImplementedError(f"{label}.type unhandled: '{type(vexp_or_other)}' => '{vexp_or_other}'")
             # vexp_node = vexp_or_other
@@ -399,19 +399,19 @@ class OperationVexpNode(IValueExpressionNode):
         return vexp_node
 
 
-    def Setup(self, registries: "Registries", owner: Any) -> ValueExpressionEvaluator:  # noqa: F821
+    def Setup(self, setup_session: ISetupSession, owner: Any) -> ValueExpressionEvaluator:  # noqa: F821
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(self)
 
         if not self._status==VExpStatusEnum.INITIALIZED:
-            raise RuleSetupError(owner=registries, item=self, msg=f"AttrVexpNode not in INIT state, got {self._status}")
+            raise RuleSetupError(owner=setup_session, item=self, msg=f"AttrVexpNode not in INIT state, got {self._status}")
 
         # just to check if all ok
-        self._first_vexp_node = self.create_vexp_node(self.first, label="First", registries=registries, owner=owner)
-        registries.register_vexp_node(self._first_vexp_node)
+        self._first_vexp_node = self.create_vexp_node(self.first, label="First", setup_session=setup_session, owner=owner)
+        setup_session.register_vexp_node(self._first_vexp_node)
 
         if self.second is not UNDEFINED:
-            self._second_vexp_node = self.create_vexp_node(self.second, label="second", registries=registries, owner=owner)
-            registries.register_vexp_node(self._second_vexp_node)
+            self._second_vexp_node = self.create_vexp_node(self.second, label="second", setup_session=setup_session, owner=owner)
+            setup_session.register_vexp_node(self._second_vexp_node)
 
         self._status=VExpStatusEnum.BUILT
 
@@ -572,9 +572,9 @@ class ValueExpression(DynamicAttrsBase):
 
 
     def Setup(self, 
-            registries:IRegistries,  # noqa: F821
+            setup_session:ISetupSession,  # noqa: F821
             owner:"ComponentBase",  # noqa: F821
-            local_registries: Optional[IRegistries] = None,  # noqa: F821
+            local_setup_session: Optional[ISetupSession] = None,  # noqa: F821
             strict:bool = False,
             ) -> Optional['IValueExpressionNode']:
         """
@@ -586,15 +586,15 @@ class ValueExpression(DynamicAttrsBase):
         self._EnsureFinished()
 
         registry = None
-        if local_registries:
+        if local_setup_session:
             # try to find in local repo
-            registry = local_registries.get_registry(self._namespace, strict=False)
+            registry = local_setup_session.get_registry(self._namespace, strict=False)
             if registry and not registry.NAMESPACE._manual_setup:
                 raise RuleInternalError(owner=self, msg=f"Registry should be passed only for namespace._manual_setup cases, got: {registry}")
 
         if not registry:
             # if local repo not available or ns not found in it, find in container repo
-            registry = registries.get_registry(self._namespace)
+            registry = setup_session.get_registry(self._namespace)
             if registry.NAMESPACE._manual_setup:
                 raise RuleInternalError(owner=self, msg=f"Registry should be passed for namespace._manual_setup cases (usually manually created ThisRegistry()), got: {registry}")
 
@@ -607,7 +607,7 @@ class ValueExpression(DynamicAttrsBase):
         # else:
         #     if self._namespace._manual_setup:
         #         raise RuleInternalError(owner=self, msg=f"Registry should be passed for namespace._manual_setup cases (usually manually created ThisRegistry()).")
-        #     registry = registries.get_registry(self._namespace)
+        #     registry = setup_session.get_registry(self._namespace)
 
         if self._namespace != registry.NAMESPACE:
             raise RuleInternalError(owner=self, msg=f"Registry has diff namespace from variable: {self._namespace} != {registry.NAMESPACE}")
@@ -636,7 +636,7 @@ class ValueExpression(DynamicAttrsBase):
                     # one level deeper
                     # parent not required, but in this case should be 
                     assert bnr == 1
-                    current_vexp_node = op_node.Setup(registries=registries, owner=owner)
+                    current_vexp_node = op_node.Setup(setup_session=setup_session, owner=owner)
                     vexp_node_name = bit._node
                     # _read_functions.append(op_node.apply)
 
@@ -658,7 +658,7 @@ class ValueExpression(DynamicAttrsBase):
 
                     # : IFunctionVexpNode
                     current_vexp_node = registry.create_func_node(
-                            registries=registries,
+                            setup_session=setup_session,
                             caller=last_vexp_node,
                             attr_node_name=vexp_node_name,
                             func_args=func_args,
@@ -671,11 +671,11 @@ class ValueExpression(DynamicAttrsBase):
                     # ----------------------------------------
                     # Check if Path goes to correct attr_node
                     # ----------------------------------------
-                    # when copy_to_registries defined:
-                    #   read from copy_to_registries.registries_bind_from and store in both registriess in the
+                    # when copy_to_setup_session defined:
+                    #   read from copy_to_setup_session.setup_session_bind_from and store in both setup_sessions in the
                     #   same namespace (usually ModelsNS)
-                    # registries_read_from = copy_to_registries.registries_bind_from if copy_to_registries else registries
-                    # registries_read_from = registries
+                    # setup_session_read_from = copy_to_setup_session.setup_session_bind_from if copy_to_setup_session else setup_session
+                    # setup_session_read_from = setup_session
 
                     vexp_node_name = bit._node
                     current_vexp_node = registry.create_node(
@@ -688,9 +688,9 @@ class ValueExpression(DynamicAttrsBase):
                 # add node to evaluator
                 vexp_evaluator.add(current_vexp_node)
 
-                # if is_last and copy_to_registries:
-                #     current_vexp_node.add_bound_vexp_node(BoundVar(registries.name, copy_to_registries.vexp_node_name))
-                #     registries.add(current_vexp_node, alt_vexp_node_name=copy_to_registries.vexp_node_name)
+                # if is_last and copy_to_setup_session:
+                #     current_vexp_node.add_bound_vexp_node(BoundVar(setup_session.name, copy_to_setup_session.vexp_node_name))
+                #     setup_session.add(current_vexp_node, alt_vexp_node_name=copy_to_setup_session.vexp_node_name)
 
             except NotImplementedError as ex:
                 if strict:
@@ -714,7 +714,7 @@ class ValueExpression(DynamicAttrsBase):
             self._all_ok = True
             self._evaluator = vexp_evaluator
             self._vexp_node = vexp_evaluator.last_node()
-            registries.register_vexp_node(self._vexp_node)
+            setup_session.register_vexp_node(self._vexp_node)
         else:
             # TODO: raise RuleSetupError()
             self._all_ok = False

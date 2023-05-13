@@ -39,6 +39,7 @@ from .meta import (
 from .expressions import (
         ValueExpression,
         IValueExpressionNode,
+        ISetupSession,
         )
 
 
@@ -186,7 +187,7 @@ class FunctionArguments:
     def _create_prep_arg(self, 
                         caller: Union[Namespace, IValueExpressionNode],
                         owner_name: str,
-                        registries: Optional["Registries"],  # noqa: F821
+                        setup_session: Optional[ISetupSession],  # noqa: F821
                         arg_name: str, 
                         value_object: Any
                         ) -> PrepArg:
@@ -203,7 +204,7 @@ class FunctionArguments:
             if not caller: 
                 # NOTE: Namespace top level like: Fn.Length(This.name) 
                 #       This could be ambigous, but in this case container_owner is used.
-                container = registries.owner.get_container_owner(consider_self=True)
+                container = setup_session.owner.get_container_owner(consider_self=True)
                 # container.bound_model.type_info
                 # caller = container.bound_model
                 model_class = container.bound_model.type_info.type_
@@ -214,21 +215,21 @@ class FunctionArguments:
 
             if is_model_class(model_class):
                 # pydantic / dataclasses
-                assert registries
-                local_registries = registries.create_local_registries(this_ns_model_class=model_class)
+                assert setup_session
+                local_setup_session = setup_session.create_local_setup_session(this_ns_model_class=model_class)
             elif model_class in STANDARD_TYPE_LIST:
-                local_registries = None 
+                local_setup_session = None 
             else:
                 raise RuleSetupValueError(owner=self, msg=f"{owner_name}: Unsupported type: {caller} / {model_class}")
 
-            if not registries:
-                raise RuleInternalError(owner=self, msg=f"{owner_name}: Registries is required for ValueExpression() function argument case") 
+            if not setup_session:
+                raise RuleInternalError(owner=self, msg=f"{owner_name}: SetupSession is required for ValueExpression() function argument case") 
 
             vexp_node = vexp.Setup(
-                                registries=registries, 
+                                setup_session=setup_session, 
                                 # TODO: is this good?
                                 owner=self, 
-                                local_registries=local_registries)
+                                local_setup_session=local_setup_session)
 
             # NOTE: pass callable since type_info for some Vexp-s are not avaialble (e.g. FieldsNS, F.name)
             type_info_or_callable = vexp_node.get_type_info()
@@ -261,7 +262,7 @@ class FunctionArguments:
     def _try_fill_given_args(self, 
                         caller: Union[Namespace, IValueExpressionNode],
                         owner_name: str,
-                        registries: Optional["Registries"],  # noqa: F821
+                        setup_session: Optional[ISetupSession],  # noqa: F821
                         args_title: str, 
                         expected_args: OrderedDict, 
                         given_args:List, 
@@ -282,7 +283,7 @@ class FunctionArguments:
             # expected_args[arg_name] = value_object
             expected_args[arg_name] = self._create_prep_arg(
                                                 owner_name=owner_name,
-                                                registries=registries, 
+                                                setup_session=setup_session, 
                                                 caller=caller,
                                                 arg_name=arg_name, 
                                                 value_object=value_object)
@@ -306,7 +307,7 @@ class FunctionArguments:
             expected_args[arg_name] = self._create_prep_arg(
                                                 caller=caller,
                                                 owner_name=owner_name,
-                                                registries=registries, 
+                                                setup_session=setup_session, 
                                                 arg_name=arg_name, 
                                                 value_object=value_object)
 
@@ -318,7 +319,7 @@ class FunctionArguments:
                  caller              : Union[Namespace, IValueExpressionNode],
                  owner_name          : str,
                  func_args           : FunctionArgumentsType,
-                 registries          : "Registries" = field(repr=False),  # noqa: F821
+                 setup_session          : ISetupSession = field(repr=False),  # noqa: F821
                  fixed_args          : Optional[FunctionArgumentsType] = field(default=None),
                  value_arg_type_info : Optional[TypeInfo] = field(default=None),
                  value_arg_name      : Optional[str] = field(default=None),
@@ -332,8 +333,8 @@ class FunctionArguments:
         #       so plain Dict could be used.
         expected_args: Dict[str, Optional[PrepArg]] = OrderedDict([(arg.name, None) for arg in self.func_arg_list])
 
-        if not registries:
-            raise RuleInternalError(owner=self, msg=f"{owner_name}: registries is empty") 
+        if not setup_session:
+            raise RuleInternalError(owner=self, msg=f"{owner_name}: setup_session is empty") 
 
         # ==== 1/3 : FIX_ARGS - by registration e.g. Function(my_py_function, args=(1,), kwargs={"b":2})
 
@@ -341,7 +342,7 @@ class FunctionArguments:
         self._try_fill_given_args(
                 caller=caller,
                 owner_name=owner_name,
-                registries=registries,
+                setup_session=setup_session,
                 args_title="fixed arguments", 
                 expected_args=expected_args, 
                 given_args=args, 
@@ -403,7 +404,7 @@ class FunctionArguments:
                 args, kwargs = self._process_func_args_raw((FunctionArgumentsType(value_args, value_kwargs)))
                 # vexp_node : IValueExpressionNode = caller
                 self._try_fill_given_args(
-                        registries=registries,
+                        setup_session=setup_session,
                         caller=caller,
                         owner_name=owner_name,
                         args_title="dot-chain argument", 
@@ -417,7 +418,7 @@ class FunctionArguments:
         self._try_fill_given_args(
                 caller=caller,
                 owner_name=owner_name,
-                registries=registries,
+                setup_session=setup_session,
                 args_title="invoke arguments", 
                 expected_args=expected_args, 
                 given_args=args, 
@@ -451,7 +452,7 @@ class FunctionArguments:
         if not prepared_args.any_prep_arg_lack_type_info():
             check_prepared_arguments(**kwargs)
         else:
-            registries.add_hook_on_finished_all(
+            setup_session.add_hook_on_finished_all(
                 partial(check_prepared_arguments, **kwargs)
                 )
 

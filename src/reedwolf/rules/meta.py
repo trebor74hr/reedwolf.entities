@@ -380,7 +380,7 @@ def extract_function_py_type_hint_dict(function: Callable[..., Any]) -> Dict[str
         name = function.__class__.__name__
 
     if not hasattr(function, "__annotations__"):
-        raise RuleSetupNameError(item=function, msg=f"Registries: AttrVexpNode FUNCTION '{name}' is not valid, it has no __annotations__ / type hints metainfo.")
+        raise RuleSetupNameError(item=function, msg=f"SetupSession: AttrVexpNode FUNCTION '{name}' is not valid, it has no __annotations__ / type hints metainfo.")
 
     # e.g. Optional[List[SomeCustomClass]] or SomeCustomClass or ...
     py_type_hint_dict = extract_py_type_hints(function, f"Function {name}")
@@ -618,7 +618,7 @@ class TypeInfo:
         if not py_type_hint:
             raise RuleSetupNameError(item=py_function, msg=f"AttrVexpNode FUNCTION '{name}' is not valid, it has no return type hint (annotations).")
         if not allow_nonetype and py_type_hint == NoneType:
-            raise RuleSetupNameError(item=py_function, msg=f"Registries: AttrVexpNode FUNCTION '{name}' is not valid, returns None (from annotation).")
+            raise RuleSetupNameError(item=py_function, msg=f"SetupSession: AttrVexpNode FUNCTION '{name}' is not valid, returns None (from annotation).")
         output = TypeInfo.get_or_create_by_type(
                         py_type_hint=py_type_hint,
                         )
@@ -642,7 +642,7 @@ class TypeInfo:
             if not py_type_hint:
                 raise RuleSetupNameError(item=py_function, msg=f"AttrVexpNode FUNCTION '{name}.{arg_name}' is not valid, argument {arg_name} has no type hint (annotations).")
             if py_type_hint in (NoneType,):
-                raise RuleSetupNameError(item=py_function, msg=f"Registries: AttrVexpNode FUNCTION '{name}.{arg_name}' is not valid, argument {arg_name} has type hint (annotation) None.")
+                raise RuleSetupNameError(item=py_function, msg=f"SetupSession: AttrVexpNode FUNCTION '{name}.{arg_name}' is not valid, argument {arg_name} has type hint (annotation) None.")
 
             output[arg_name] = TypeInfo.get_or_create_by_type(
                                     py_type_hint=py_type_hint

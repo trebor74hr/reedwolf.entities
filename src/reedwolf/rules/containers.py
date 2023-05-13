@@ -65,7 +65,7 @@ from .bound_models import (
 from .attr_nodes import AttrVexpNode
 from .functions import CustomFunctionFactory
 from .registries import (
-        Registries,
+        SetupSession,
         ModelsRegistry,
         FieldsRegistry,
         FunctionsRegistry,
@@ -92,25 +92,25 @@ from .config import (
 
 # ------------------------------------------------------------
 
-def create_registries(
+def create_setup_session(
         owner: ContainerBase,
         config: Config,
         functions: Optional[List[CustomFunctionFactory]] = None, 
         context_class: Optional[IContext] = None,
-        ) -> Registries:
-    registries = Registries(
+        ) -> SetupSession:
+    setup_session = SetupSession(
                     owner=owner, 
                     functions=functions,
-                    owner_registries=owner.registries if owner.owner else None,
+                    owner_setup_session=owner.setup_session if owner.owner else None,
                     include_builtin_functions=owner.is_top_owner())
-    registries.add_registry(ModelsRegistry())
-    registries.add_registry(FieldsRegistry())
-    registries.add_registry(FunctionsRegistry())
-    registries.add_registry(OperationsRegistry())
-    registries.add_registry(ContextRegistry(context_class=context_class))
-    registries.add_registry(ConfigRegistry(config=config))
+    setup_session.add_registry(ModelsRegistry())
+    setup_session.add_registry(FieldsRegistry())
+    setup_session.add_registry(FunctionsRegistry())
+    setup_session.add_registry(OperationsRegistry())
+    setup_session.add_registry(ContextRegistry(context_class=context_class))
+    setup_session.add_registry(ConfigRegistry(config=config))
 
-    return registries
+    return setup_session
 
 # ------------------------------------------------------------
 # Rules
@@ -121,7 +121,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
     def _get_function(self, name: str, strict:bool=True):
         if not self.functions:
             raise KeyError(f"{self.name}: Function '{name}' not found, no functions available.")
-        return self.registries.functions_factory_registry.get(name, strict=strict)
+        return self.setup_session.functions_factory_registry.get(name, strict=strict)
 
     def add_fieldgroup(self, fieldgroup:FieldGroup):
         if self.is_finished():
@@ -172,7 +172,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
     # ------------------------------------------------------------
 
     def _register_bound_model(self, bound_model:BoundModelBase):
-        # ex. type_info.metadata.get("bind_to_owner_registries")
+        # ex. type_info.metadata.get("bind_to_owner_setup_session")
         is_main_model = (bound_model==self.bound_model)
         is_extension_main_model = (self.is_extension() and is_main_model)
 
@@ -198,19 +198,19 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
                 raise RuleSetupError(owner=self, msg=f"{bound_model.name}: ValueExpression should be in ModelsNS namespace, got: {model.GetNamespace()}")
 
             if is_extension_main_model:
-                # TODO: DRY this - the only difference is registries - extract common logic outside / 
+                # TODO: DRY this - the only difference is setup_session - extract common logic outside / 
                 # bound attr_node
-                assert hasattr(self, "owner_registries")
-                registries_from = self.owner_registries
+                assert hasattr(self, "owner_setup_session")
+                setup_session_from = self.owner_setup_session
             else:
                 # Rules - top owner container / normal case
-                registries_from = self.registries
+                setup_session_from = self.setup_session
 
-            attr_node = registries_from.get_vexp_node_by_vexp(vexp=model)
+            attr_node = setup_session_from.get_vexp_node_by_vexp(vexp=model)
             if attr_node:
-                raise RuleInternalError(owner=self, msg=f"AttrVexpNode data already in registries: {model} -> {attr_node}")
+                raise RuleInternalError(owner=self, msg=f"AttrVexpNode data already in setup_session: {model} -> {attr_node}")
 
-            attr_node = model.Setup(registries=registries_from, owner=bound_model)
+            attr_node = model.Setup(setup_session=setup_session_from, owner=bound_model)
             if not attr_node:
                 raise RuleInternalError(owner=self, msg=f"AttrVexpNode not recognized: {model}")
 
@@ -225,17 +225,17 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
 
         # == M.name version
-        self.registries[ModelsNS].register_all_nodes(root_attr_node=attr_node, bound_model=bound_model, model=model)
+        self.setup_session[ModelsNS].register_all_nodes(root_attr_node=attr_node, bound_model=bound_model, model=model)
 
         # if not isinstance(model, ValueExpression) and isinstance(bound_model, BoundModel):
-        #     bound_model._register_nested_models(self.registries)
+        #     bound_model._register_nested_models(self.setup_session)
 
 
         # == M.company.name version
         # if not attr_node:
-        #     attr_node = self.registries[ModelsNS].create_root_attr_node(bound_model=bound_model) -> _create_root_attr_node()
-        # # self.registries.register(attr_node, alt_attr_node_name=bound_model.name if attr_node.name!=bound_model.name else None)
-        # self.registries[ModelsNS].register_attr_node(
+        #     attr_node = self.setup_session[ModelsNS].create_root_attr_node(bound_model=bound_model) -> _create_root_attr_node()
+        # # self.setup_session.register(attr_node, alt_attr_node_name=bound_model.name if attr_node.name!=bound_model.name else None)
+        # self.setup_session[ModelsNS].register_attr_node(
         #                             attr_node, 
         #                             alt_attr_node_name=(
         #                                 bound_model.name 
@@ -252,7 +252,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
     #     # A.2. DATAPROVIDERS - Collect all attr_nodes from dataproviders fieldgroup
     #     # ------------------------------------------------------------
     #     for data_var in self.data:
-    #         self.registries[DataNS].register(data_var)
+    #         self.setup_session[DataNS].register(data_var)
 
     # ------------------------------------------------------------
 
@@ -265,7 +265,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
         # A.3. COMPONENTS - collect attr_nodes - previously flattened (recursive function fill_components)
         for component_name, component in self.components.items():
-            self.registries[FieldsNS].register(component)
+            self.setup_session[FieldsNS].register(component)
 
     # ------------------------------------------------------------
 
@@ -280,10 +280,10 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         if self.is_finished():
             raise RuleSetupError(owner=self, msg="setup() should be called only once")
 
-        if self.registries is not None:
-            raise RuleSetupError(owner=self, msg="Registries.setup() should be called only once")
+        if self.setup_session is not None:
+            raise RuleSetupError(owner=self, msg="SetupSession.setup() should be called only once")
 
-        self.registries = create_registries(
+        self.setup_session = create_setup_session(
                                 owner=self,
                                 functions = self.functions,
                                 config = self.config,
@@ -315,10 +315,10 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         #   if component attribute is ValueExpression -> will call vexp.Setup()
         #   if component is another container i.e. is_extension() - it will
         #       process only that component and will not go deeper. later
-        #       extension.setup() will do this within own tree dep (own .components / .registries)
+        #       extension.setup() will do this within own tree dep (own .components / .setup_session)
 
         # iterate all subcomponents and call _setup() for each
-        self._setup(registries=self.registries)
+        self._setup(setup_session=self.setup_session)
 
         # check all ok?
         for component_name, component in self.components.items():
@@ -326,21 +326,21 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             if not component.is_finished():
                 raise RuleInternalError(owner=self, msg=f"{component} not finished. Is in overriden setup()/Setup() parent method super().setup()/Setup() been called (which sets parent and marks finished)?")
 
-        self.registries.finish()
+        self.setup_session.finish()
 
         if self.keys:
             # Inner BoundModel can have self.bound_model.model = ValueExpression
             self.keys.validate(self.bound_model.get_type_info().type_)
 
         if self.is_top_owner():
-            self.registries.call_hooks_on_finished_all()
+            self.setup_session.call_hooks_on_finished_all()
 
         return self
 
     # ------------------------------------------------------------
 
     def get_bound_model_attr_node(self) -> AttrVexpNode:
-        return self.registries[ModelsNS].get_attr_node_by_bound_model(bound_model=self.bound_model)
+        return self.setup_session[ModelsNS].get_attr_node_by_bound_model(bound_model=self.bound_model)
 
     # ------------------------------------------------------------
 
@@ -529,7 +529,7 @@ class Rules(ContainerBase):
     cleaners        : Optional[List[Union[ValidationBase, EvaluationBase]]] = field(repr=False, default_factory=list)
 
     # --- Evaluated later
-    registries      : Optional[Registries]    = field(init=False, repr=False, default=None)
+    setup_session      : Optional[SetupSession]    = field(init=False, repr=False, default=None)
     components      : Optional[Dict[str, Component]]  = field(repr=False, default=None)
     models          : Dict[str, Union[type, ValueExpression]] = field(repr=False, init=False, default_factory=dict)
     # in Rules (top object) this case allway None - since it is top object
@@ -565,7 +565,7 @@ class Rules(ContainerBase):
 
     # def setup(self):
     #     ret = super().setup()
-    #     self.registries.call_hooks_on_finished_all()
+    #     self.setup_session.call_hooks_on_finished_all()
     #     return ret
 
     def bind_to(self, 
@@ -652,7 +652,7 @@ class Rules(ContainerBase):
         container = self.get_container_owner(consider_self=True)
 
         apply_result = \
-                ApplyResult(registries=container.registries, 
+                ApplyResult(setup_session=container.setup_session, 
                       rules=self, 
                       component_name_only=component_name_only,
                       context=context, 
@@ -678,7 +678,7 @@ class Extension(ContainerBase):
     # be unique in self.components (Extension and BoundModel will share the same name)
     name            : str
     bound_model     : Union[BoundModel, BoundModelWithHandlers] = field(repr=False)
-    # metadata={"bind_to_owner_registries" : True})
+    # metadata={"bind_to_owner_setup_session" : True})
 
     cardinality     : ICardinalityValidation
     contains        : List[Component] = field(repr=False)
@@ -691,7 +691,7 @@ class Extension(ContainerBase):
     cleaners        : Optional[List[Union[ValidationBase, EvaluationBase]]] = field(repr=False, default_factory=list)
 
     # --- Evaluated later
-    registries      : Optional[Registries] = field(init=False, repr=False, default=None)
+    setup_session      : Optional[SetupSession] = field(init=False, repr=False, default=None)
     components      : Optional[Dict[str, Component]]  = field(repr=False, default=None)
     models          : Dict[str, Union[type, ValueExpression]] = field(repr=False, init=False, default_factory=dict)
     owner           : Union[ComponentBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
@@ -702,8 +702,8 @@ class Extension(ContainerBase):
     # in owners' chain (including self) -> first container
     owner_container : Union[ContainerBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
 
-    # in owners' chain (not including self) -> first container's registries
-    owner_registries: Optional[Registries] = field(init=False, repr=False, default=None)
+    # in owners' chain (not including self) -> first container's setup_session
+    owner_setup_session: Optional[SetupSession] = field(init=False, repr=False, default=None)
 
     # copy from first non-self container owner
     context_class   : Optional[Type[IContext]] = field(repr=False, init=False, default=None)
@@ -732,10 +732,10 @@ class Extension(ContainerBase):
         if not self.config:
             raise RuleInternalError(owner=self, msg=f"Config not set from owner: {self.owner_container}") 
 
-    def setup(self, registries:Registries):
-        # NOTE: registries is not used, can be reached with owner.registries(). left param
+    def setup(self, setup_session:SetupSession):
+        # NOTE: setup_session is not used, can be reached with owner.setup_session(). left param
         #       for same function signature as for components.
-        self.owner_registries = registries
+        self.owner_setup_session = setup_session
         super().setup()
         self.cardinality.validate_setup()
         return self

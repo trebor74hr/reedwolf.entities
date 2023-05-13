@@ -45,7 +45,7 @@ from .expressions import (
         IValueExpressionNode,
         IFunctionVexpNode,
         IRegistry,
-        IRegistries,
+        ISetupSession,
         IAttributeAccessorBase,
         )
 from .meta import (
@@ -127,7 +127,7 @@ class RegistryBase(IRegistry):
     """
     Namespaces are DynamicAttrsBase with flexible attributes, so it is not
     convenient to have some advanced logic within. Thus Registry logic 
-    is put in specialized classes - Registries.
+    is put in specialized classes - SetupSession.
     """
     # TODO: with 3.11 - Protocol
     NAMESPACE : ClassVar[Namespace] = None
@@ -136,19 +136,19 @@ class RegistryBase(IRegistry):
 
     def __init__(self):
         self.store : Dict[str, AttrVexpNode] = {}
-        self.registries = UNDEFINED
+        self.setup_session = UNDEFINED
         self.finished: bool = False
 
-    def set_registries(self, registries: IRegistries):
-        if self.registries:
-            raise RuleInternalError(owner=self, msg=f"registries already set: {self.registries}") 
-        self.registries = registries
+    def set_setup_session(self, setup_session: ISetupSession):
+        if self.setup_session:
+            raise RuleInternalError(owner=self, msg=f"setup_session already set: {self.setup_session}") 
+        self.setup_session = setup_session
 
     def finish(self):
         if self.finished:
             raise RuleInternalError(owner=self, msg="already finished") 
-        if not self.registries:
-            raise RuleInternalError(owner=self, msg="registries not set, function set_registries() not called") 
+        if not self.setup_session:
+            raise RuleInternalError(owner=self, msg="setup_session not set, function set_setup_session() not called") 
         self.finished = True
 
     def count(self) -> int:
@@ -247,7 +247,7 @@ class RegistryBase(IRegistry):
     # create_func_node - only Functions i.e. IFunctionVexpNode
     # ------------------------------------------------------------
     def create_func_node(self, 
-            registries: IRegistries,
+            setup_session: ISetupSession,
             caller: IValueExpressionNode,
             attr_node_name:str,
             func_args:FunctionArgumentsType,
@@ -256,7 +256,7 @@ class RegistryBase(IRegistry):
 
         func_node : IFunctionVexpNode = \
                 try_create_function(
-                    registries=registries,
+                    setup_session=setup_session,
                     caller=caller,
                     # functions_factory_registry=self.functions_factory_registry,
                     attr_node_name=attr_node_name,
@@ -445,12 +445,12 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
 # ------------------------------------------------------------
 
 
-class RegistriesBase(IRegistries):
+class SetupSessionBase(ISetupSession):
 
     def __init__(self, 
             # usually 'ContainerBase'
             owner:  Optional[Any],  # noqa: F821
-            owner_registries: Optional[IRegistries], 
+            owner_setup_session: Optional[ISetupSession], 
             functions: Optional[List[CustomFunctionFactory]] = None, 
             functions_factory_registry: Optional[FunctionsFactoryRegistry] = None,
             include_builtin_functions: bool = True,
@@ -461,18 +461,18 @@ class RegistriesBase(IRegistries):
         """
         # owner is usually: 'ContainerBase'
         self.owner: Optional[Any] = owner  # noqa: F821
-        self.owner_registries: Optional[IRegistries] = owner_registries
+        self.owner_setup_session: Optional[ISetupSession] = owner_setup_session
 
-        self.is_top_registries: bool = (self.owner_registries is None)
+        self.is_top_setup_session: bool = (self.owner_setup_session is None)
 
-        if self.is_top_registries:
-            self.top_owner_registries = self
+        if self.is_top_setup_session:
+            self.top_owner_setup_session = self
         else:
-            self.top_owner_registries = self.owner_registries
-            while self.top_owner_registries.owner_registries:
-                self.top_owner_registries = self.top_owner_registries.owner_registries
+            self.top_owner_setup_session = self.owner_setup_session
+            while self.top_owner_setup_session.owner_setup_session:
+                self.top_owner_setup_session = self.top_owner_setup_session.owner_setup_session
 
-        assert self.top_owner_registries
+        assert self.top_owner_setup_session
 
         # compputed
         self._registry_dict : Dict[str, IRegistry] = {}
@@ -490,7 +490,7 @@ class RegistriesBase(IRegistries):
                                             include_builtin=include_builtin_functions)
 
         self.hook_on_finished_all_list: Optional[List[HookOnFinishedAllCallable]] =  \
-            [] if self.is_top_registries else None
+            [] if self.is_top_setup_session else None
 
 
     # ------------------------------------------------------------
@@ -499,7 +499,7 @@ class RegistriesBase(IRegistries):
         counts = ", ".join([f"{k}={v.count()}" for k, v in self._registry_dict.items() if v])
         # name={self.name},
         # cnt={self.entries_count}, 
-        return f"Registries(owner={self.owner}, {counts})"
+        return f"SetupSession(owner={self.owner}, {counts})"
 
     def __repr__(self):
         return str(self)
@@ -513,7 +513,7 @@ class RegistriesBase(IRegistries):
         if ns_name in self._registry_dict:
             raise RuleInternalError(owner=self, msg=f"Registry {registry} already in registry")
         self._registry_dict[ns_name] = registry
-        registry.set_registries(self)
+        registry.set_setup_session(self)
 
 
     # ------------------------------------------------------------
@@ -532,11 +532,11 @@ class RegistriesBase(IRegistries):
     # ------------------------------------------------------------
 
     def add_hook_on_finished_all(self, hook_function: HookOnFinishedAllCallable):
-        self.top_owner_registries.hook_on_finished_all_list.append(hook_function)
+        self.top_owner_setup_session.hook_on_finished_all_list.append(hook_function)
 
     def call_hooks_on_finished_all(self):
-        if not self.is_top_registries:
-            raise RuleInternalError(owner=self, msg="call_hooks_on_finished_all() can be called on top registries") 
+        if not self.is_top_setup_session:
+            raise RuleInternalError(owner=self, msg="call_hooks_on_finished_all() can be called on top setup_session") 
         for hook_function in self.hook_on_finished_all_list:
             hook_function()
 
@@ -545,7 +545,7 @@ class RegistriesBase(IRegistries):
     def dump_all(self, with_functions:bool = False) -> None:
         # recursive: bool = False, depth: int = 0, 
         # has {self.entries_count} attr_node(s), 
-        print(f"{self.owner}: Registries '{self.name}', finished={self.finished}. List:")
+        print(f"{self.owner}: SetupSession '{self.name}', finished={self.finished}. List:")
         for ns_name, store in self._registry_dict.items():
             store.pp()
 
@@ -562,7 +562,7 @@ class RegistriesBase(IRegistries):
         assert not self.finished
         ns_name = attr_node.namespace._name
         if ns_name not in self._registry_dict:
-            raise RuleInternalError(f"{ns_name} not in .registries, available: {self._registry_dict.keys()}")
+            raise RuleInternalError(f"{ns_name} not in .setup_session, available: {self._registry_dict.keys()}")
         self._registry_dict[ns_name].register_attr_node(attr_node, alt_attr_node_name=alt_attr_node_name)
 
     # ------------------------------------------------------------
@@ -619,9 +619,9 @@ class RegistriesBase(IRegistries):
 # OBSOLETE
 # ------------------------------------------------------------
 # if vname!=vexp_node.name:
-#     found = [vexp_node_name for registries_name, ns, vexp_node_name in vexp_node.bound_list if vname==vexp_node_name]
+#     found = [vexp_node_name for setup_session_name, ns, vexp_node_name in vexp_node.bound_list if vname==vexp_node_name]
 #     if not found:
-#         raise RuleInternalError(owner=self, msg=f"Attribute name not the same as stored in registries {vexp_node.name}!={vname} or bound list: {vexp_node.bound_list}")
+#         raise RuleInternalError(owner=self, msg=f"Attribute name not the same as stored in setup_session {vexp_node.name}!={vname} or bound list: {vexp_node.bound_list}")
 
 
 
@@ -651,7 +651,7 @@ class RegistriesBase(IRegistries):
 #         #     # TODO: consider storing CustomFactoryFunction instead of CustomFunction instances
 #         #     #       to allow extra arguments when referenced
 #         #     vexp_node = data_var.function.create_function(
-#         #                     registries=self.registries,
+#         #                     setup_session=self.setup_session,
 #         #                     caller=None,
 #         #                     func_args=EmptyFunctionArguments, 
 #         #                     name=data_var.name) 
