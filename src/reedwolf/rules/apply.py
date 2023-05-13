@@ -63,7 +63,7 @@ MAX_RECURSIONS = 30
 
 
 class UseApplyStackFrame(AbstractContextManager):
-    " with() ... custom context manager "
+    " with() ... custom context manager. Very similar to UseSetupStackFrame "
     # ALT: from contextlib import contextmanager
     def __init__(self, apply_session: IApplySession, frame: ApplyStackFrame):
         self.apply_session = apply_session
@@ -76,7 +76,7 @@ class UseApplyStackFrame(AbstractContextManager):
     def __exit__(self, exc_type, exc_value, exc_tb):
         frame_popped = self.apply_session.pop_frame_from_stack()
         if not exc_type and frame_popped != self.frame:
-            raise RuleInternalError(f"Something wrong with frame stack, got {frame_popped}, expected {self.frame}")
+            raise RuleInternalError(owner=self, msg=f"Something wrong with frame stack, got {frame_popped}, expected {self.frame}")
 
 
 

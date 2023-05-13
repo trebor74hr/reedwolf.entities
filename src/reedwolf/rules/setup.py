@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import inspect
 from abc import abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from contextlib import AbstractContextManager
 
 from typing import (
         Any,
@@ -441,28 +442,63 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
         return out
 
 
-
 # ------------------------------------------------------------
 
 
+class UseSetupStackFrame(AbstractContextManager):
+    " with() ... custom context manager. Very similar to UseApplyStackFrame "
+    
+    # ALT: from contextlib import contextmanager
+    def __init__(self, setup_session: ISetupSession, frame: SetupStackFrame):
+        self.setup_session = setup_session
+        self.frame = frame
+
+    def __enter__(self):
+        self.setup_session.push_frame_to_stack(self.frame)
+        return self.frame
+
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        frame_popped = self.setup_session.pop_frame_from_stack()
+        if not exc_type and frame_popped != self.frame:
+            raise RuleInternalError(owner=self, msg=f"Something wrong with frame stack, got {frame_popped}, expected {self.frame}")
+
+
+# ------------------------------------------------------------
+
+@dataclass
 class SetupSessionBase(ISetupSession):
 
-    def __init__(self, 
-            # usually 'ContainerBase'
-            owner:  Optional[Any],  # noqa: F821
-            owner_setup_session: Optional[ISetupSession], 
-            functions: Optional[List[CustomFunctionFactory]] = None, 
-            functions_factory_registry: Optional[FunctionsFactoryRegistry] = None,
-            include_builtin_functions: bool = True,
-            ):
-        """
-        input param functions are custom_function_factories
-        store 
-        """
-        # owner is usually: 'ContainerBase'
-        self.owner: Optional[Any] = owner  # noqa: F821
-        self.owner_setup_session: Optional[ISetupSession] = owner_setup_session
+    owner                       : Optional[Any]
+    owner_setup_session         : Optional[ISetupSession]
 
+    # custom_function_factories store 
+    functions                   : Optional[List[CustomFunctionFactory]] = field(repr=False, default=None)
+    functions_factory_registry  : Optional[FunctionsFactoryRegistry] = field(repr=False, default=None)
+    include_builtin_functions   : bool = field(repr=False, default=True)
+
+    # autocomputed
+    is_top_setup_session        : bool = field(init=False, repr=False)
+    top_owner_setup_session     : ISetupSession = field(init=False, repr=False)
+
+    _registry_dict              : Dict[str, IRegistry] = field(init=False, repr=False, default_factory=dict)
+    name                        : str = field(init=False, repr=False)
+    vexp_node_dict              : Dict[str, IValueExpressionNode] = field(init=False, repr=False, default_factory=dict)
+    finished                    : bool = field(init=False, repr=False, default=False)
+    hook_on_finished_all_list   : Optional[List[HookOnFinishedAllCallable]] = field(init=False, repr=False)
+
+    # def __init__(self, 
+    #         # usually 'ContainerBase'
+    #         owner:  Optional[Any],  # noqa: F821
+    #         owner_setup_session: Optional[ISetupSession], 
+    #         functions: Optional[List[CustomFunctionFactory]] = None, 
+    #         functions_factory_registry: Optional[FunctionsFactoryRegistry] = None,
+    #         include_builtin_functions: bool = True,
+    #         ):
+    #     # owner is usually: 'ContainerBase'
+    #     self.owner: Optional[Any] = owner  # noqa: F821
+    #     self.owner_setup_session: Optional[ISetupSession] = owner_setup_session
+
+    def __post_init__(self):
         self.is_top_setup_session: bool = (self.owner_setup_session is None)
 
         if self.is_top_setup_session:
@@ -475,19 +511,19 @@ class SetupSessionBase(ISetupSession):
         assert self.top_owner_setup_session
 
         # compputed
-        self._registry_dict : Dict[str, IRegistry] = {}
-        self.name: str = owner.name if owner else "no-owner"
-        self.vexp_node_dict: Dict[str, IValueExpressionNode] = {}
-        self.finished: bool = False
+        # self._registry_dict : Dict[str, IRegistry] = {}
+        # self.vexp_node_dict: Dict[str, IValueExpressionNode] = {}
+        # self.finished: bool = False
 
-        if functions_factory_registry:
-            # reuse
-            assert not functions
-            self.functions_factory_registry = functions_factory_registry
+        self.name: str = self.owner.name if self.owner else "no-owner"
+
+        if self.functions_factory_registry:
+            assert not self.functions
+            # self.functions_factory_registry = functions_factory_registry
         else:
             self.functions_factory_registry: FunctionsFactoryRegistry = \
-                    FunctionsFactoryRegistry(functions=functions, 
-                                            include_builtin=include_builtin_functions)
+                    FunctionsFactoryRegistry(functions=self.functions, 
+                                            include_builtin=self.include_builtin_functions)
 
         self.hook_on_finished_all_list: Optional[List[HookOnFinishedAllCallable]] =  \
             [] if self.is_top_setup_session else None
@@ -504,6 +540,7 @@ class SetupSessionBase(ISetupSession):
     def __repr__(self):
         return str(self)
 
+
     # ------------------------------------------------------------
 
     def add_registry(self, registry: IRegistry):
@@ -515,6 +552,11 @@ class SetupSessionBase(ISetupSession):
         self._registry_dict[ns_name] = registry
         registry.set_setup_session(self)
 
+
+    # ------------------------------------------------------------
+
+    def use_stack_frame(self, frame: SetupStackFrame) -> UseSetupStackFrame:
+        return UseSetupStackFrame(setup_session=self, frame=frame)
 
     # ------------------------------------------------------------
 

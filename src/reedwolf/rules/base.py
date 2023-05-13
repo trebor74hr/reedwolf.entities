@@ -710,7 +710,6 @@ class ComponentBase(SetOwnerMixin, ABC):
         return instance_attr_value.value
 
 
-
 # ------------------------------------------------------------
 # IFieldBase
 # ------------------------------------------------------------
@@ -805,6 +804,35 @@ class BoundModelBase(ComponentBase, ABC):
     # Not used:
     # def get_attr_node(self, setup_session: ISetupSession) -> Union["AttrVexpNode", UndefinedType]:  # noqa: F821
     #     return setup_session.models_registry.get_attr_node_by_bound_model(bound_model=self)
+
+
+# ============================================================
+
+
+@dataclass
+class SetupStackFrame:
+    container: IContainerBase = field(repr=False)
+    component: ComponentBase
+
+    # bound_model      : Optional[BoundModelBase] = field(repr=False, init=False, default=None)
+    # bound_model_root : Optional[BoundModelBase] = field(repr=False, init=False, default=None)
+
+    # current container data instance which will be procesed: changed/validated/evaluated
+    # type_info: TypeInfo
+
+    # -- autocomputed
+    # used to check root value in models registry 
+
+    def __post_init__(self):
+        assert isinstance(self.container, IContainerBase)
+        assert isinstance(self.component, ComponentBase)
+
+        # self.bound_model_root = (self.on_component_only 
+        #                          if self.on_component_only.is_extension()
+        #                          else self.on_component_only.get_container_owner(consider_self=True)
+        #                         ).bound_model
+        # self.bound_model_root = self.container.bound_model
+        # assert self.bound_model_root
 
 # ------------------------------------------------------------
 
