@@ -163,6 +163,8 @@ class FieldGroup(Component):
         return True
 
 # ------------------------------------------------------------
+# OBSOLETE
+# ------------------------------------------------------------
 #
 # NOTE: obsolete - it was used for enums only - replaced with special functiohn factory function: functions=[EnumMembers()]
 # 

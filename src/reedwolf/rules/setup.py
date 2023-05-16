@@ -140,6 +140,7 @@ class RegistryBase(IRegistry):
     def _create_instance_attr_node(cls, model_class: ModelType) -> AttrVexpNode:
         " used for This.Instance to return instance itself "
         th_field = None
+        # TODO: check that model_class is not dataclass field or pydatnic field
         type_info = TypeInfo.get_or_create_by_type(
                         py_type_hint=model_class,
                         caller=None,

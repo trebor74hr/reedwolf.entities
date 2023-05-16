@@ -314,18 +314,22 @@ def get_methods(owner: Any) -> Dict[str, Callable[..., Any]]:
 
 def get_model_fields(inspect_object: ModelType, strict: bool = True) -> Dict[str, ModelField]:
     if is_dataclass(inspect_object):
-        fields = inspect_object.__dataclass_fields__
+        # ALT: 
+        #   from dataclasses import fields
+        #   field_dict = OrderedDict([f.name: f for f in fields(inspect_object)])
+        field_dict = inspect_object.__dataclass_fields__
     elif is_pydantic(inspect_object):
-        fields = inspect_object.__fields__
+        field_dict = inspect_object.__fields__
     else:
         if strict:
             raise RuleSetupError(item=inspect_object, msg=f"Class should be Dataclass or Pydantic ({inspect_object})")
-        fields = {}
-    return fields
+        # TODO: field_dist = inspect_model.__annotations__
+        field_dict = {}
+    return field_dict
 
 # ------------------------------------------------------------
 
-def extract_field_meta(inspect_object: Any, attr_node_name: str) -> Tuple[Optional[ModelField], List[ModelField]]:
+def extract_model_field_meta(inspect_object: Any, attr_node_name: str) -> Tuple[Optional[ModelField], List[ModelField]]:
     """
     returns th_field, fields
     """
@@ -340,11 +344,11 @@ def extract_field_meta(inspect_object: Any, attr_node_name: str) -> Tuple[Option
 # ------------------------------------------------------------
 
 def extract_py_type_hints(inspect_object: Any, caller_name: str, strict: bool = True) -> Dict[str, Union[PyTypeHint, Exception]]:
-
-    # TODO: add proper typing
+    """
+        - type_hint = function.__annotations__ - will not evaluate types
+        - .get("return", None) - will get return function type hint
+    """
     # TODO: check if module attr_node, class, class attribute, function or method.
-    # NOTE: type_hint = function.__annotations__ - will not evaluate types
-    # NOTE: .get("return", None) - will get return function type hint
     try:
         # ALT: to get __annotations__ -> inspect.get_annotations
         #      https://docs.python.org/3/library/inspect.html#inspect.get_annotations
@@ -360,15 +364,6 @@ def extract_py_type_hints(inspect_object: Any, caller_name: str, strict: bool = 
                                  + " Please verify that object is properly type hinted class attribute, function or method,"
                                  + " and type hint should not include not standard type Type alias (see rules/types.py comment).")
         return {"__exception__": ex}
-
-def extract_py_type_hints_for_attr(inspect_object: Any, attr_name: str, caller_name: str) -> PyTypeHint:
-    py_type_hint_dict = extract_py_type_hints(inspect_object=inspect_object, caller_name=caller_name, strict=True)
-    if attr_name not in py_type_hint_dict:
-        raise RuleSetupValueError(item=inspect_object, msg=f"{caller_name}: Object type hint for '{attr_name}' not available. Available are {','.join(py_type_hint_dict.keys())}.")
-    hint_type = py_type_hint_dict[attr_name]
-    if not hint_type: # check if type
-        raise RuleSetupValueError(item=inspect_object, msg=f"{caller_name}: Object type hint for '{attr_name}' is not valid '{hint_type}'. Expected some type.")
-    return hint_type
 
 
 def extract_function_py_type_hint_dict(function: Callable[..., Any]) -> Dict[str, PyTypeHint]:
@@ -388,7 +383,7 @@ def extract_function_py_type_hint_dict(function: Callable[..., Any]) -> Dict[str
         raise RuleSetupNameError(item=function, msg=f"SetupSession: AttrVexpNode FUNCTION '{name}' is not valid, it has no __annotations__ / type hints metainfo.")
 
     # e.g. Optional[List[SomeCustomClass]] or SomeCustomClass or ...
-    py_type_hint_dict = extract_py_type_hints(function, f"Function {name}")
+    py_type_hint_dict = extract_py_type_hints(function, caller_name=f"Function {name}")
     return py_type_hint_dict
 
 
@@ -435,15 +430,12 @@ class TypeInfo:
 
     TYPE_INFO_REGISTRY: ClassVar[Dict[type, TypeInfo]] = {}
 
-    MSG_ANNOTATION_NOT_RESOLVED : ClassVar[str] = \
-            "Python type hint is a string, probably not resolved properly: {}. "\
-            "HINT: if you have `from __future__ import annotations`, remove it, try to import that module, stabilize it and then try this again."
 
     def __post_init__(self):
         # if self.th_field and self.th_field.name=='company_type': ...
 
         if isinstance(self.py_type_hint, str):
-            raise RuleSetupValueError(owner=self, msg=self.MSG_ANNOTATION_NOT_RESOLVED.format(repr(self.py_type_hint)))
+            raise RuleInternalError(owner=self, msg=f"py_type_hint={self.py_type_hint} is still string, it should have been resolved before")
 
         self._extract_type_hint_details()
 
@@ -616,11 +608,32 @@ class TypeInfo:
 
     @classmethod
     def get_or_create_by_type(cls, py_type_hint: PyTypeHint, caller: Optional[Any] = None) -> TypeInfo:
+        """
+        When 'from future import annotations + __annotations__' is used then python hints are strings. 
+        Use 'typing.get_type_hints()' to resolve hints properly.
 
-        msg_prefix = f"{to_repr(caller)}::" if caller else ""
+        Several ways to extract python type hints:
+
+            1) 'extract_py_type_hints() + get_or_create_by_type()' - low level preffered
+
+            2) 'rules.base. extract_type_info()' - high level PREFFERED - internally uses
+               'extract_py_type_hints()->get_type_hints()', but requires parent object.
+
+            2)  When you have classes/types then 'get_or_create_by_type()'
+
+            NOTE: Do not use 'rules.meta. get_model_fields() .type' or '__annotations__'
+                  since python type hints may not be resolved.
+        """
+        msg_prefix = f"{to_repr(caller)}:: " if caller else ""
 
         if isinstance(py_type_hint, str):
-            raise RuleSetupValueError(owner=cls, msg= msg_prefix + cls.MSG_ANNOTATION_NOT_RESOLVED.format(repr(py_type_hint)))
+            raise RuleSetupValueError(owner=cls, msg=  +
+                        "{msg_prefix}Python type hint is a string, probably not resolved properly: {repr(py_type_hint)}."
+                        "\nHINTS:"
+                        "\n  1) if you have `from __future__ import annotations`, remove it, try to import that module, stabilize it and then try this again." 
+                        "\n  2) 'get_model_fields() + .type' used instead 'extract_py_type_hints()' -> get_or_create_by_type() (internal issue, use 'extract_model_field_meta' maybe?)"
+                        "Explanation: When 'from future import annotations + __annotations__' is used then python hints are strings. Use 'typing.get_type_hints()' to resolve hints properly." 
+                        )
 
         if py_type_hint not in cls.TYPE_INFO_REGISTRY:
             cls.TYPE_INFO_REGISTRY[py_type_hint] = TypeInfo(py_type_hint=py_type_hint)
@@ -642,14 +655,12 @@ class TypeInfo:
         msg_prefix = f"Function {py_function}::"
         if not py_type_hint:
             raise RuleSetupNameError(item=py_function, msg =  msg_prefix + f"AttrVexpNode FUNCTION '{name}' is not valid, it has no return type hint (annotations).")
-        if isinstance(py_type_hint, str):
-            raise RuleSetupValueError(owner=cls, msg =  msg_prefix + cls.MSG_ANNOTATION_NOT_RESOLVED.format(repr(py_type_hint)))
         if not allow_nonetype and py_type_hint == NoneType:
             raise RuleSetupNameError(item=py_function, msg = msg_prefix + f"SetupSession: AttrVexpNode FUNCTION '{name}' is not valid, returns None (from annotation).")
 
         output = TypeInfo.get_or_create_by_type(
                         py_type_hint=py_type_hint,
-                        caller=py_function,
+                        caller=msg_prefix,
                         )
         return output
 
@@ -674,15 +685,29 @@ class TypeInfo:
                 continue
             if not py_type_hint:
                 raise RuleSetupNameError(item=py_function, msg=msg_prefix + f"AttrVexpNode FUNCTION '{name}.{arg_name}' is not valid, argument {arg_name} has no type hint (annotations).")
-            if isinstance(py_type_hint, str):
-                raise RuleSetupValueError(owner=cls, msg=msg_prefix + cls.MSG_ANNOTATION_NOT_RESOLVED.format(repr(py_type_hint)))
             if py_type_hint in (NoneType,):
                 raise RuleSetupNameError(item=py_function, msg=msg_prefix + f"SetupSession: AttrVexpNode FUNCTION '{name}.{arg_name}' is not valid, argument {arg_name} has type hint (annotation) None.")
 
             output[arg_name] = TypeInfo.get_or_create_by_type(
                                     py_type_hint=py_type_hint,
-                                    caller=py_function,
+                                    caller=msg_prefix,
                                     )
         return output
 
+
+
+# ------------------------------------------------------------
+# OBSOLETE
+# ------------------------------------------------------------
+
+# Use higher level function: extract_type_info() instead
+# 
+# def extract_py_type_hints_for_attr(inspect_object: Any, attr_name: str, caller_name: str) -> PyTypeHint:
+#     py_type_hint_dict = extract_py_type_hints(inspect_object=inspect_object, caller_name=caller_name, strict=True)
+#     if attr_name not in py_type_hint_dict:
+#         raise RuleSetupValueError(item=inspect_object, msg=f"{caller_name}: Object type hint for '{attr_name}' not available. Available are {','.join(py_type_hint_dict.keys())}.")
+#     hint_type = py_type_hint_dict[attr_name]
+#     if not hint_type: # check if type
+#         raise RuleSetupValueError(item=inspect_object, msg=f"{caller_name}: Object type hint for '{attr_name}' is not valid '{hint_type}'. Expected some type.")
+#     return hint_type
 

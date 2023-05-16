@@ -49,7 +49,7 @@ from .meta import (
         is_model_class,
         ModelType,
         DataclassType,
-        extract_field_meta,
+        extract_model_field_meta,
         extract_py_type_hints,
         STANDARD_TYPE_LIST,
         TransMessageType,
@@ -446,8 +446,6 @@ class ComponentBase(SetOwnerMixin, ABC):
 
         # returns name, subcomponent
         fields = get_model_fields(self.__class__)
-
-
 
         # ==== Order to have bound_model first, then components, then value
         #      expressions. In the same group order by name
@@ -1266,11 +1264,16 @@ def extract_type_info(
                 Optional[IFunctionVexpNode]  # noqa: F821
                 ]:
     """
-    TODO: move to meta.py?
+    Main logic for extraction from parent object (dataclass, py class, vexp
+    instances) member by name 'attr_node_name' -> data (struct, plain value),
+    or IFunctionVexpNode instances 
 
-    main logic for extraction from parent object (dataclass, py class, vexp instances) 
-    member by name 'attr_node_name' -> data (struct, plain value), or IFunctionVexpNode instances . E.g.
+    This function uses specific base interfaces/classes (BoundModelBase,
+    IValueExpressionNode), so it can not be put in meta.py
 
+    See 'meta. def get_or_create_by_type()' for further explanation when to use
+    this function (preffered) and when directly some other lower level meta.py
+    functions.
     """
     if isinstance(inspect_object, BoundModelBase):
         inspect_object = inspect_object.model
@@ -1325,10 +1328,6 @@ def extract_type_info(
 
             model_class: ModelType = parent_object
 
-            # === Dataclass / pydantic field metadata
-            # TODO: can it be a List[]?
-            th_field, fields = extract_field_meta(inspect_object=model_class, attr_node_name=attr_node_name)
-
             # === parent type hint
             parent_py_type_hints = extract_py_type_hints(model_class, f"setup_session->{attr_node_name}:DC/PYD")
 
@@ -1338,8 +1337,11 @@ def extract_type_info(
                                 py_type_hint=py_type_hint,
                                 caller=parent_object,
                                 )
+
+            # === Dataclass / pydantic field metadata - only for information
+            th_field, fields = extract_model_field_meta(inspect_object=model_class, attr_node_name=attr_node_name)
+
     if not type_info:
-        # fallback -> will match fields and is_vexp mode
         if not fields:
             fields = get_model_fields(parent_object, strict=False)
         field_names = list(fields.keys())

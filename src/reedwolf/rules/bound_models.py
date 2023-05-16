@@ -29,7 +29,8 @@ from .meta import (
         TypeInfo,
         is_model_class,
         ModelType,
-        get_model_fields,
+        # get_model_fields,
+        extract_py_type_hints,
         EmptyFunctionArguments,
         )
 from .expressions import (
@@ -77,8 +78,8 @@ class NestedBoundModelMixin:
         if self.models_with_handlers_dict:
             raise RuleInternalError(owner=self, msg=f"models_with_handlers_dict should be empty, got: {to_repr(self.models_with_handlers_dict)}. Have you called setup for 2nd time?") 
 
-        # TODO: cache this, it is used multiple times ... 
-        model_fields = get_model_fields(self.model)
+        # model_fields = get_model_fields(self.model)
+        parent_py_type_hints = extract_py_type_hints(self.model, f"{self}")
 
         models_registry = setup_session.get_registry(ModelsNS)
 
@@ -95,17 +96,18 @@ class NestedBoundModelMixin:
             if model_name in self.models_with_handlers_dict:
                 raise RuleSetupValueError(owner=self, msg=f"Child bound model should be unique, got duplicate name: {model_name}")
 
-            field = model_fields.get(model_name, None)
+            # field = model_fields.get(model_name, None)
+            field_py_type_hint = parent_py_type_hints.get(model_name, None)
             read_handler_type_info = child_bound_model.read_handler.get_type_info()
 
-            if not field:
+            if not field_py_type_hint:
                 if child_bound_model.in_model:
                     raise RuleSetupValueError(owner=self, msg=f"Child bound model `{model_name}` not found in model. Choose existing model attribute name or use `in_model=False` property.")
             else:
                 if not child_bound_model.in_model:
                     raise RuleSetupValueError(owner=self, msg=f"Child bound model `{model_name}` is marked with `in_model=True`, but field already exists. Unset property or use another model name.")
 
-                field_type_info = TypeInfo.get_or_create_by_type(field.type, caller=self)
+                field_type_info = TypeInfo.get_or_create_by_type(field_py_type_hint, caller=f"{self} ==> {model_name}")
 
                 type_err_msg = field_type_info.check_compatible(read_handler_type_info)
                 if type_err_msg:
@@ -248,7 +250,7 @@ class BoundModel(NestedBoundModelMixin, BoundModelBase):
 
     # Filled from from model
     type_info : Optional[TypeInfo] = field(init=False, default=None, repr=False)
-    models_with_handlers_dict : Dict[str, ModelWithHandlers] = field(init=False, default_factory=dict)
+    models_with_handlers_dict : Dict[str, ModelWithHandlers] = field(init=False, repr=False, default_factory=dict)
 
 
     def get_type_info(self):
@@ -306,7 +308,7 @@ class BoundModelWithHandlers(NestedBoundModelMixin, BoundModelBase):
     owner_name   : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
     type_info    : Union[TypeInfo, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    models_with_handlers_dict : Dict[str, ModelWithHandlers] = field(init=False, default_factory=dict)
+    models_with_handlers_dict : Dict[str, ModelWithHandlers] = field(init=False, repr=False, default_factory=dict)
 
     def __post_init__(self):
 
