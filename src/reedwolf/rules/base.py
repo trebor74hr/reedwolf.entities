@@ -1336,6 +1336,7 @@ def extract_type_info(
             if py_type_hint:
                 type_info = TypeInfo.get_or_create_by_type(
                                 py_type_hint=py_type_hint,
+                                caller=parent_object,
                                 )
     if not type_info:
         # fallback -> will match fields and is_vexp mode

@@ -142,6 +142,7 @@ class RegistryBase(IRegistry):
         th_field = None
         type_info = TypeInfo.get_or_create_by_type(
                         py_type_hint=model_class,
+                        caller=None,
                         )
         attr_node = AttrVexpNode(
                         name=ReservedAttributeNames.INSTANCE_ATTR_NAME,

@@ -266,7 +266,7 @@ class LiteralVexpNode(IValueExpressionNode):
     def __post_init__(self):
         self.vexp_result = ExecResult()
         self.vexp_result.set_value(self.value, attr_name="", changer_name="")
-        self.type_info = TypeInfo.get_or_create_by_type(type(self.value))
+        self.type_info = TypeInfo.get_or_create_by_type(type(self.value), caller=self)
 
     def get_type_info(self) -> TypeInfo:
         return self.type_info

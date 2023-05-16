@@ -11,6 +11,7 @@ from functools import partial
 from collections.abc import Sized
 from typing import (
         Any,
+        ClassVar,
         Callable,
         Dict,
         List,
@@ -30,6 +31,10 @@ from dataclasses import (
         dataclass,
         Field as DcField,
         field
+        )
+
+from .utils import (
+        to_repr,
         )
 
 try:
@@ -426,12 +431,19 @@ class TypeInfo:
     # first one - get rid of this one or leave?
     type_:          Union[type, List[type]] = field(init=False, repr=False, default=UNDEFINED)
 
+    # ------------------------------------------------------------
+
+    TYPE_INFO_REGISTRY: ClassVar[Dict[type, TypeInfo]] = {}
+
+    MSG_ANNOTATION_NOT_RESOLVED : ClassVar[str] = \
+            "Python type hint is a string, probably not resolved properly: {}. "\
+            "HINT: if you have `from __future__ import annotations`, remove it, try to import that module, stabilize it and then try this again."
 
     def __post_init__(self):
         # if self.th_field and self.th_field.name=='company_type': ...
 
         if isinstance(self.py_type_hint, str):
-            raise RuleSetupValueError(owner=self, msg=f"Python type hint is string, probably not resolved properly: {self.py_type_hint}. Hint: if you have `from __future__ import annotations` remove, stabilize and try again.")
+            raise RuleSetupValueError(owner=self, msg=self.MSG_ANNOTATION_NOT_RESOLVED.format(repr(self.py_type_hint)))
 
         self._extract_type_hint_details()
 
@@ -599,40 +611,61 @@ class TypeInfo:
         return self.py_type_hint.__name__ if type(self.py_type_hint)==type else str(self.py_type_hint)
 
     # ------------------------------------------------------------
+    # Classmethods
+    # ------------------------------------------------------------
 
-    @staticmethod
-    def get_or_create_by_type(py_type_hint: PyTypeHint) -> TypeInfo:
-        if py_type_hint not in _TYPE_INFO_REGISTRY:
-            _TYPE_INFO_REGISTRY[py_type_hint] = TypeInfo(py_type_hint=py_type_hint)
-        return _TYPE_INFO_REGISTRY[py_type_hint]
+    @classmethod
+    def get_or_create_by_type(cls, py_type_hint: PyTypeHint, caller: Optional[Any] = None) -> TypeInfo:
+
+        msg_prefix = f"{to_repr(caller)}::" if caller else ""
+
+        if isinstance(py_type_hint, str):
+            raise RuleSetupValueError(owner=cls, msg= msg_prefix + cls.MSG_ANNOTATION_NOT_RESOLVED.format(repr(py_type_hint)))
+
+        if py_type_hint not in cls.TYPE_INFO_REGISTRY:
+            cls.TYPE_INFO_REGISTRY[py_type_hint] = TypeInfo(py_type_hint=py_type_hint)
+
+        return cls.TYPE_INFO_REGISTRY[py_type_hint]
 
     # ------------------------------------------------------------
 
-    @staticmethod
+    @classmethod
     def extract_function_return_type_info(
+            cls,
             py_function: Callable[..., Any], 
             allow_nonetype:bool=False) -> TypeInfo:
+
         py_type_hint_dict = extract_function_py_type_hint_dict(function=py_function)
         py_type_hint = py_type_hint_dict.get("return", None)
         name = getattr(py_function, "__name__", "?")
+
+        msg_prefix = f"Function {py_function}::"
         if not py_type_hint:
-            raise RuleSetupNameError(item=py_function, msg=f"AttrVexpNode FUNCTION '{name}' is not valid, it has no return type hint (annotations).")
+            raise RuleSetupNameError(item=py_function, msg =  msg_prefix + f"AttrVexpNode FUNCTION '{name}' is not valid, it has no return type hint (annotations).")
+        if isinstance(py_type_hint, str):
+            raise RuleSetupValueError(owner=cls, msg =  msg_prefix + cls.MSG_ANNOTATION_NOT_RESOLVED.format(repr(py_type_hint)))
         if not allow_nonetype and py_type_hint == NoneType:
-            raise RuleSetupNameError(item=py_function, msg=f"SetupSession: AttrVexpNode FUNCTION '{name}' is not valid, returns None (from annotation).")
+            raise RuleSetupNameError(item=py_function, msg = msg_prefix + f"SetupSession: AttrVexpNode FUNCTION '{name}' is not valid, returns None (from annotation).")
+
         output = TypeInfo.get_or_create_by_type(
                         py_type_hint=py_type_hint,
+                        caller=py_function,
                         )
         return output
 
     # ------------------------------------------------------------
 
-    @staticmethod
-    def extract_function_arguments_type_info_dict(py_function: Callable[..., Any]) -> Dict[str, TypeInfo]:
+    @classmethod
+    def extract_function_arguments_type_info_dict(
+            cls,
+            py_function: Callable[..., Any]) -> Dict[str, TypeInfo]:
         """
         From annotations, but argument defaults could be fetched from
         inspect.getfullargspec(), see: extract_function_arguments_default_dict
         """
         py_type_hint_dict = extract_function_py_type_hint_dict(function=py_function)
+
+        msg_prefix = f"Function {py_function}::"
 
         output = {}
         name = getattr(py_function, "__name__", "?")
@@ -640,16 +673,16 @@ class TypeInfo:
             if arg_name == "return":
                 continue
             if not py_type_hint:
-                raise RuleSetupNameError(item=py_function, msg=f"AttrVexpNode FUNCTION '{name}.{arg_name}' is not valid, argument {arg_name} has no type hint (annotations).")
+                raise RuleSetupNameError(item=py_function, msg=msg_prefix + f"AttrVexpNode FUNCTION '{name}.{arg_name}' is not valid, argument {arg_name} has no type hint (annotations).")
+            if isinstance(py_type_hint, str):
+                raise RuleSetupValueError(owner=cls, msg=msg_prefix + cls.MSG_ANNOTATION_NOT_RESOLVED.format(repr(py_type_hint)))
             if py_type_hint in (NoneType,):
-                raise RuleSetupNameError(item=py_function, msg=f"SetupSession: AttrVexpNode FUNCTION '{name}.{arg_name}' is not valid, argument {arg_name} has type hint (annotation) None.")
+                raise RuleSetupNameError(item=py_function, msg=msg_prefix + f"SetupSession: AttrVexpNode FUNCTION '{name}.{arg_name}' is not valid, argument {arg_name} has type hint (annotation) None.")
 
             output[arg_name] = TypeInfo.get_or_create_by_type(
-                                    py_type_hint=py_type_hint
+                                    py_type_hint=py_type_hint,
+                                    caller=py_function,
                                     )
         return output
 
-
-# TODO: could not manage to make it class attr_node
-_TYPE_INFO_REGISTRY: Dict[type, TypeInfo] = {}
 

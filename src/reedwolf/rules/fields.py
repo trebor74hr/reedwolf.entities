@@ -269,6 +269,7 @@ class FieldBase(Component, IFieldBase, ABC):
 
         self.type_info = TypeInfo.get_or_create_by_type(
                                 py_type_hint=self.python_type, 
+                                caller=self,
                                 )
 
         expected_type_info = None

@@ -242,12 +242,12 @@ class FunctionArguments:
             value_or_vexp = vexp
 
         elif inspect.isclass(value_object):
-            type_info_or_callable = TypeInfo.get_or_create_by_type(value_object)
+            type_info_or_callable = TypeInfo.get_or_create_by_type(value_object, caller=self)
             value_or_vexp = value_object
 
         else:
             # check that these are standard classes
-            type_info_or_callable = TypeInfo.get_or_create_by_type(type(value_object))
+            type_info_or_callable = TypeInfo.get_or_create_by_type(type(value_object), caller=self)
             # TODO: Literal()
             value_or_vexp = value_object
 

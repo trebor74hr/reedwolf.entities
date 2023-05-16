@@ -104,7 +104,8 @@ class NestedBoundModelMixin:
             else:
                 if not child_bound_model.in_model:
                     raise RuleSetupValueError(owner=self, msg=f"Child bound model `{model_name}` is marked with `in_model=True`, but field already exists. Unset property or use another model name.")
-                field_type_info = TypeInfo.get_or_create_by_type(field.type)
+
+                field_type_info = TypeInfo.get_or_create_by_type(field.type, caller=self)
 
                 type_err_msg = field_type_info.check_compatible(read_handler_type_info)
                 if type_err_msg:
@@ -269,6 +270,7 @@ class BoundModel(NestedBoundModelMixin, BoundModelBase):
         else:
             self.type_info = TypeInfo.get_or_create_by_type(
                                     py_type_hint=self.model,
+                                    caller=self,
                                     )
 
     def setup(self, setup_session:ISetupSession):
