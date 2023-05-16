@@ -24,7 +24,6 @@ from .utils import (
         UndefinedType,
         get_available_names_example,
         ThreadSafeCounter,
-        to_repr,
         )
 from .exceptions import (
         RuleInternalError,
@@ -410,7 +409,7 @@ class ComponentBase(SetOwnerMixin, ABC):
                 SetupStackFrame(
                     container = container, 
                     component = self, 
-                )) as frame:
+                )):
             ret = self._setup(setup_session=setup_session)
 
         return ret
@@ -1132,7 +1131,7 @@ class IApplySession:
         assert component == self.current_frame.component
 
         if new_value is UNDEFINED:
-            raise RuleInternalError(owner=component, msg=f"New value should not be UNDEFINED, fix the caller")
+            raise RuleInternalError(owner=component, msg="New value should not be UNDEFINED, fix the caller")
 
         key_str = component.get_key_string(apply_session=self)
 

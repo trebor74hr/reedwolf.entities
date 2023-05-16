@@ -27,7 +27,6 @@ from .meta import (
         ModelType,
         is_model_class,
         is_model_instance,
-        EmptyFunctionArguments,
         )
 from .base import (
         AttrValue,
@@ -42,9 +41,6 @@ from .base import (
         InstanceChange,
         get_instance_key_string_attrname_pair,
         )
-from .bound_models import (
-        BoundModelWithHandlers,
-        )
 from .fields import (
         FieldBase,
         )
@@ -56,6 +52,7 @@ from .containers import (
         ContainerBase,
         MissingKey,
         Rules,
+        Extension,
         )
 
 
@@ -87,8 +84,8 @@ class UseApplyStackFrame(AbstractContextManager):
         if self.frame.instance is previous_frame.instance:
             self._copy_attr_from_previous_frame(previous_frame, "container", may_be_copied=False)
             self._copy_attr_from_previous_frame(previous_frame, "bound_model_root", may_be_copied=False)
-            self._copy_attr_from_previous_frame(previous_frame, "instance_new") # , may_be_copied=False)
-            self._copy_attr_from_previous_frame(previous_frame, "index0") #, may_be_copied=False)
+            self._copy_attr_from_previous_frame(previous_frame, "instance_new")
+            self._copy_attr_from_previous_frame(previous_frame, "index0")
             # only these can be copied
             self._copy_attr_from_previous_frame(previous_frame, "parent_instance")
             self._copy_attr_from_previous_frame(previous_frame, "parent_instance_new")
@@ -100,7 +97,7 @@ class UseApplyStackFrame(AbstractContextManager):
 
                 # NOTE: not this for now:
                 #   self._copy_attr_from_previous_frame(previous_frame, "local_setup_session")
-            
+
             # check / init again 
             self.frame.clean()
 
@@ -302,42 +299,6 @@ class ApplyResult(IApplySession):
                                         instance=self.instance
                                         )
 
-            # # TODO: put this in BoundModel class
-            # children_bound_models = component.bound_model.get_children()
-
-            # if children_bound_models:
-            #     local_setup_session = self.setup_session.create_local_setup_session(
-            #                                         this_ns_model_class=self.bound_model.model)
-
-            #     with self.use_stack_frame(
-            #             ApplyStackFrame(
-            #                 container = component, 
-            #                 component = self.bound_model, 
-            #                 instance = self.instance,
-            #                 instance_new = self.instance_new,
-            #                 local_setup_session=local_setup_session,
-            #                 )):
-
-            #         for model_with_handler in self.bound_model.models_with_handlers_dict.values():
-            #             model_with_handler: ModelWithHandlers = model_with_handler
-
-            #             current_value = getattr(self.instance, model_with_handler.name, UNDEFINED)
-
-            #             # TODO: warn: 
-            #             #   if current_value is UNDEFINED and model_with_handler.in_model:
-            #             #   elif current_value is not UNDEFINED and not model_with_handler.in_model:
-
-            #             # NOTE: can check 'model_with_handler.type_info'
-
-            #             rh_vexp_result = model_with_handler.read_handler_vexp.execute_node(
-            #                                 apply_session=self, 
-            #                                 vexp_result=ExecResult(),
-            #                                 prev_node_type_info=None,
-            #                                 is_last=True)
-
-            #             setattr(self.instance, model_with_handler.name, rh_vexp_result.value)
-
-
             new_frame = ApplyStackFrame(
                             container = component, 
                             component = component, 
@@ -458,7 +419,7 @@ class ApplyResult(IApplySession):
                                 # new instance - new values (when update mode)
                                 instance_new = item_instance_new, 
                                 parent_instance_new=self.current_frame.instance_new,
-                                )) as frame:
+                                )):
                         # Recursion with prevention to hit this code again
                         self._apply(parent=parent, 
                                     component=component, 

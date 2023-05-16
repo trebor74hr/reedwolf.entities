@@ -40,7 +40,6 @@ from .meta import (
         TypeInfo,
         is_enum,
         is_model_class,
-        ModelType,
         is_function,
         get_enum_member_py_type,
         EmptyFunctionArguments,
@@ -495,7 +494,7 @@ class ChoiceField(FieldBase):
                         component = self, 
                         local_setup_session = setup_session.create_local_setup_session(
                                                     this_ns_model_class=model_class)
-                    )) as frame:
+                    )):
                 # model_class=model_class
                 self.choice_value_attr_node = self._create_attr_node(setup_session, "choice_value", vexp=self.choice_value)
                 self.choice_label_attr_node = self._create_attr_node(setup_session, "choice_label", vexp=self.choice_label)
@@ -538,7 +537,6 @@ class ChoiceField(FieldBase):
             setup_session: SetupSession, 
             aname: str, 
             vexp: ValueExpression, 
-            # model_class: ModelType
             ):
         """
         Create choice AttrVexpNode() within local ThisRegistry
@@ -546,7 +544,6 @@ class ChoiceField(FieldBase):
         if not (vexp and isinstance(vexp, ValueExpression) and vexp.GetNamespace()==ThisNS):
             raise RuleSetupValueError(owner=self, msg=f"Argument '{aname}' is not set or has wrong type - should be ValueExpression in This. namespace. Got: {vexp} / {type(vexp)}")
 
-        #, local_setup_session2=local_setup_session
         attr_node = vexp.Setup(setup_session=setup_session, owner=self)
         if vexp._status != VExpStatusEnum.BUILT:
             raise RuleInternalError(owner=self, msg=f"Setup failed for Vexp: {vexp} -> {vexp._status}")

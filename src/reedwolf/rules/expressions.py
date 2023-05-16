@@ -571,10 +571,12 @@ class ValueExpression(DynamicAttrsBase):
             raise RuleInternalError(owner=self, msg=f"Method Setup() already called, further ValueExpression building/operator-building is not possible (status={self._status}).")
 
 
-    def Setup(self, setup_session:ISetupSession, owner:"ComponentBase") -> Optional['IValueExpressionNode']:
+    def Setup(self, setup_session:ISetupSession, owner:Any) -> Optional['IValueExpressionNode']:
         """
         Owner used just for reference count.
         """
+        # TODO: owner is "ComponentBase" - define some common protocol/interface and use it
+
         # TODO: consider dropping owner parameter and use setup_session.current_frame.component or owner instead?
 
         # TODO: circular dependency - maybe to pass eval class to this method
@@ -623,82 +625,82 @@ class ValueExpression(DynamicAttrsBase):
             assert bit._namespace==self._namespace
             # TODO: if self._func_args:
             # operator.attrgetter("last_name")
-            try:
-                # last_vexp_node = (current_vexp_node
-                #                if current_vexp_node is not None
-                #                else parent)
 
-                # ========================================
-                # Operations 
-                # ========================================
-                if isinstance(bit._node, OperationVexpNode):
-                    op_node = bit._node
-                    # one level deeper
-                    # parent not required, but in this case should be 
-                    assert bnr == 1
-                    current_vexp_node = op_node.Setup(setup_session=setup_session, owner=owner)
-                    vexp_node_name = bit._node
-                    # _read_functions.append(op_node.apply)
+            # last_vexp_node = (current_vexp_node
+            #                if current_vexp_node is not None
+            #                else parent)
 
-                # ========================================
-                # Functions - IFunctionVexpNode
-                # ========================================
-                elif bit._func_args:
-                    if bnr==1:
-                        if self._namespace != FunctionsNS:
-                            raise RuleSetupNameError(owner=self, msg=f"Only FunctionsNS (Fn.) namespace accepts direct function calls. Got '{bit}' on '{bit._namespace}) namespace.")
+            # ========================================
+            # Operations 
+            # ========================================
+            if isinstance(bit._node, OperationVexpNode):
+                op_node = bit._node
+                # one level deeper
+                # parent not required, but in this case should be 
+                assert bnr == 1
+                current_vexp_node = op_node.Setup(setup_session=setup_session, owner=owner)
+                vexp_node_name = bit._node
+                # _read_functions.append(op_node.apply)
 
-                    func_args = FunctionArgumentsType(*bit._func_args)
+            # ========================================
+            # Functions - IFunctionVexpNode
+            # ========================================
+            elif bit._func_args:
+                if bnr==1:
+                    if self._namespace != FunctionsNS:
+                        raise RuleSetupNameError(owner=self, msg=f"Only FunctionsNS (Fn.) namespace accepts direct function calls. Got '{bit}' on '{bit._namespace}) namespace.")
 
-                    vexp_node_name = bit._node
-                    if last_vexp_node:
-                        parent_arg_type_info = last_vexp_node.get_type_info()
-                    else:
-                        parent_arg_type_info = None
+                func_args = FunctionArgumentsType(*bit._func_args)
 
-                    # : IFunctionVexpNode
-                    current_vexp_node = registry.create_func_node(
-                            setup_session=setup_session,
-                            caller=last_vexp_node,
-                            attr_node_name=vexp_node_name,
-                            func_args=func_args,
-                            value_arg_type_info=parent_arg_type_info
-                            )
+                vexp_node_name = bit._node
+                if last_vexp_node:
+                    parent_arg_type_info = last_vexp_node.get_type_info()
                 else:
-                    # ========================================
-                    # Attributes
-                    # ========================================
-                    # ----------------------------------------
-                    # Check if Path goes to correct attr_node
-                    # ----------------------------------------
-                    # when copy_to_setup_session defined:
-                    #   read from copy_to_setup_session.setup_session_bind_from and store in both setup_sessions in the
-                    #   same namespace (usually ModelsNS)
-                    # setup_session_read_from = copy_to_setup_session.setup_session_bind_from if copy_to_setup_session else setup_session
-                    # setup_session_read_from = setup_session
+                    parent_arg_type_info = None
 
-                    vexp_node_name = bit._node
-                    current_vexp_node = registry.create_node(
-                                vexp_node_name=vexp_node_name,
-                                parent_vexp_node=last_vexp_node,
-                                owner=owner,
-                                # func_args=bit._func_args,
-                                )
+                # : IFunctionVexpNode
+                current_vexp_node = registry.create_func_node(
+                        setup_session=setup_session,
+                        caller=last_vexp_node,
+                        attr_node_name=vexp_node_name,
+                        func_args=func_args,
+                        value_arg_type_info=parent_arg_type_info
+                        )
+            else:
+                # ========================================
+                # Attributes
+                # ========================================
+                # ----------------------------------------
+                # Check if Path goes to correct attr_node
+                # ----------------------------------------
+                # when copy_to_setup_session defined:
+                #   read from copy_to_setup_session.setup_session_bind_from and store in both setup_sessions in the
+                #   same namespace (usually ModelsNS)
+                # setup_session_read_from = copy_to_setup_session.setup_session_bind_from if copy_to_setup_session else setup_session
+                # setup_session_read_from = setup_session
 
-                # add node to evaluator
-                vexp_evaluator.add(current_vexp_node)
+                vexp_node_name = bit._node
+                current_vexp_node = registry.create_node(
+                            vexp_node_name=vexp_node_name,
+                            parent_vexp_node=last_vexp_node,
+                            owner=owner,
+                            # func_args=bit._func_args,
+                            )
 
-                # if is_last and copy_to_setup_session:
-                #     current_vexp_node.add_bound_vexp_node(BoundVar(setup_session.name, copy_to_setup_session.vexp_node_name))
-                #     setup_session.add(current_vexp_node, alt_vexp_node_name=copy_to_setup_session.vexp_node_name)
+            # add node to evaluator
+            vexp_evaluator.add(current_vexp_node)
 
-            except NotImplementedError as ex:
-                raise 
-                # if strict:
-                #     raise
-                # self._status = VExpStatusEnum.ERR_TO_IMPLEMENT
-                # vexp_evaluator.failed(str(ex))
-                # break
+            # if is_last and copy_to_setup_session:
+            #     current_vexp_node.add_bound_vexp_node(BoundVar(setup_session.name, copy_to_setup_session.vexp_node_name))
+            #     setup_session.add(current_vexp_node, alt_vexp_node_name=copy_to_setup_session.vexp_node_name)
+
+            # except NotImplementedError:
+            #     raise 
+            #     # if strict:
+            #     #     raise
+            #     # self._status = VExpStatusEnum.ERR_TO_IMPLEMENT
+            #     # vexp_evaluator.failed(str(ex))
+            #     # break
 
             last_vexp_node = current_vexp_node
 

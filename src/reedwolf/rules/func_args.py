@@ -230,7 +230,7 @@ class FunctionArguments:
                         container = setup_session.current_frame.container, 
                         component = setup_session.current_frame.component, 
                         local_setup_session = local_setup_session,
-                    )) as frame:
+                    )):
                 vexp_node = vexp.Setup(setup_session=setup_session, owner=self)
 
 

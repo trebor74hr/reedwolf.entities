@@ -323,7 +323,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
                 SetupStackFrame(
                     container = self, 
                     component = self, 
-                )) as frame:
+                )):
             self._setup(setup_session=self.setup_session)
 
         # check all ok?

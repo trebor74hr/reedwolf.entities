@@ -132,7 +132,7 @@ class NestedBoundModelMixin:
                         container = setup_session.current_frame.container,
                         component = self, 
                         # bound_model_type_info=read_handler_type_info,
-                    )) as frame:
+                    )):
                 read_handler_vexp = child_bound_model.read_handler.create_function(
                                         func_args  = EmptyFunctionArguments,
                                         setup_session = setup_session,
@@ -186,9 +186,8 @@ class NestedBoundModelMixin:
             for model_name, model_with_handler in self.models_with_handlers_dict.items():
                 model_with_handler: ModelWithHandlers = model_with_handler
 
-                current_value = getattr(instance, model_with_handler.name, UNDEFINED)
-
                 # TODO: warn: 
+                #   current_value = getattr(instance, model_with_handler.name, UNDEFINED)
                 #   if current_value is UNDEFINED and model_with_handler.in_model:
                 #   elif current_value is not UNDEFINED and not model_with_handler.in_model:
 
@@ -249,7 +248,7 @@ class BoundModel(NestedBoundModelMixin, BoundModelBase):
     # Filled from from model
     type_info : Optional[TypeInfo] = field(init=False, default=None, repr=False)
     models_with_handlers_dict : Dict[str, ModelWithHandlers] = field(init=False, default_factory=dict)
-    
+
 
     def get_type_info(self):
         if not self.type_info:

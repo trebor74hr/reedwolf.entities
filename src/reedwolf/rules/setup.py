@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 from abc import abstractmethod
 from dataclasses import dataclass, field
 from contextlib import AbstractContextManager
@@ -13,7 +12,6 @@ from typing import (
         ClassVar,
         Tuple,
         Dict,
-        Type,
         )
 from .utils import (
         get_available_names_example,
@@ -26,20 +24,11 @@ from .exceptions import (
         RuleSetupError,
         RuleSetupNameError,
         RuleSetupNameNotFoundError,
-        RuleSetupValueError,
         RuleInternalError,
-        RuleApplyTypeError,
         RuleApplyNameError,
         )
 from .namespaces import (
         Namespace,
-        ModelsNS,
-        FieldsNS,
-        ThisNS,
-        FunctionsNS,
-        ContextNS,
-        ConfigNS,
-        OperationsNS,
         )
 from .expressions import (
         ValueExpression,
@@ -52,16 +41,12 @@ from .expressions import (
 from .meta import (
         FunctionArgumentsType,
         FunctionArgumentsTupleType,
-        is_model_class,
         ModelType,
-        get_model_fields,
         TypeInfo,
         HookOnFinishedAllCallable,
         )
 from .base import (
         ComponentBase,
-        IFieldBase, 
-        IContainerBase,
         extract_type_info,
         IApplySession,
         BoundModelBase,
@@ -75,17 +60,6 @@ from .functions import (
         )
 from .attr_nodes import (
         AttrVexpNode,
-        )
-from .components import (
-        FieldGroup,
-        ValidationBase,
-        EvaluationBase,
-        )
-from .contexts import (
-        IContext,
-        )
-from .config import (
-        Config,
         )
 
 # ------------------------------------------------------------
@@ -447,8 +421,8 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
 
 
 class UseSetupStackFrame(AbstractContextManager):
-    " with() ... custom context manager. Very similar to UseApplyStackFrame "
-    
+    " with() ... custom context manager. Very similar to UseSetupStackFrame "
+
     # ALT: from contextlib import contextmanager
     def __init__(self, setup_session: ISetupSession, frame: SetupStackFrame):
         self.setup_session = setup_session
@@ -489,7 +463,7 @@ class SetupSessionBase(ISetupSession):
 
     # stack of frames - first frame is current. On the end of the process the
     # stack must be empty
-    frames_stack: List[StackyStackFrame] = field(repr=False, init=False, default_factory=list)
+    frames_stack: List[SetupStackFrame] = field(repr=False, init=False, default_factory=list)
 
 
     # def __init__(self, 
@@ -569,15 +543,15 @@ class SetupSessionBase(ISetupSession):
 
     # ------------------------------------------------------------
 
-    def push_frame_to_stack(self, frame: ApplyStackFrame):
+    def push_frame_to_stack(self, frame: SetupStackFrame):
         self.frames_stack.insert(0, frame)
 
-    def pop_frame_from_stack(self) -> ApplyStackFrame:
+    def pop_frame_from_stack(self) -> SetupStackFrame:
         assert self.frames_stack
         return self.frames_stack.pop(0)
 
     @property
-    def current_frame(self) -> Optional[ApplyStackFrame]:
+    def current_frame(self) -> Optional[SetupStackFrame]:
         if not self.frames_stack:
             # raise RuleInternalError(owner=self, msg=f"current_frame not available, stack frame is empty")
             return None
