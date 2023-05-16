@@ -64,10 +64,73 @@ MAX_RECURSIONS = 30
 
 class UseApplyStackFrame(AbstractContextManager):
     " with() ... custom context manager. Very similar to UseSetupStackFrame "
+
     # ALT: from contextlib import contextmanager
     def __init__(self, apply_session: IApplySession, frame: ApplyStackFrame):
         self.apply_session = apply_session
         self.frame = frame
+
+        self.copy_from_previous_frame()
+
+
+    def copy_from_previous_frame(self):
+        """
+        if the instance is the same - consider from last frame 
+        container (copy/check), index0 (copy/check), component ...
+        """
+        if not self.apply_session.frames_stack:
+            return
+
+        previous_frame = self.apply_session.frames_stack[0]
+
+        # do not use ==, compare by instance (ALT: use id(instance) ) 
+        if self.frame.instance is previous_frame.instance:
+            self._copy_attr_from_previous_frame(previous_frame, "container", may_be_copied=False)
+            self._copy_attr_from_previous_frame(previous_frame, "bound_model_root", may_be_copied=False)
+            self._copy_attr_from_previous_frame(previous_frame, "instance_new") # , may_be_copied=False)
+            self._copy_attr_from_previous_frame(previous_frame, "index0") #, may_be_copied=False)
+            # only these can be copied
+            self._copy_attr_from_previous_frame(previous_frame, "parent_instance")
+            self._copy_attr_from_previous_frame(previous_frame, "parent_instance_new")
+
+            # do not use ==, compare by instance (ALT: use id(instance) ) 
+            if self.frame.component is previous_frame.component:
+                self._copy_attr_from_previous_frame(previous_frame, "on_component_only", may_be_copied=False)
+                self._copy_attr_from_previous_frame(previous_frame, "key_string", may_be_copied=False)
+
+                # NOTE: not this for now:
+                #   self._copy_attr_from_previous_frame(previous_frame, "local_setup_session")
+            
+            # check / init again 
+            self.frame.clean()
+
+
+    def _copy_attr_from_previous_frame(self, previous_frame: ApplyStackFrame, attr_name: str, may_be_copied: bool = True):
+
+        if not hasattr(self.frame, attr_name):
+            raise RuleInternalError(owner=self, msg=f"This frame {self.frame}.{attr_name} not found") 
+        if not hasattr(previous_frame, attr_name):
+            raise RuleInternalError(owner=self, msg=f"Previous frame {previous_frame}.{attr_name} not found") 
+
+        this_frame_attr_value = getattr(self.frame, attr_name)
+        prev_frame_attr_value = getattr(previous_frame, attr_name)
+
+        if this_frame_attr_value in (None, UNDEFINED):
+            if prev_frame_attr_value not in (None, UNDEFINED):
+                if not may_be_copied:
+                    raise RuleInternalError(owner=self, 
+                        msg=f"Attribute '{attr_name}' value in previous frame is non-empty and current frame has empty value:\n  {previous_frame}\n    = {prev_frame_attr_value}\n<>\n  {self.frame}\n    = {this_frame_attr_value} ") 
+                # Copy from previous frame
+                # apply_session.config.loggeer.debugf"setattr '{attr_name}' current_frame <= previous_frame := {prev_frame_attr_value} (frame={self.frame})")
+                setattr(self.frame, attr_name, prev_frame_attr_value)
+        else:
+            # in some cases id() / is should be used?
+            if prev_frame_attr_value != this_frame_attr_value:
+                raise RuleInternalError(owner=self, 
+                    msg=f"Attribute '{attr_name}' value in previous frame is different from current:\n  {previous_frame}\n    = {prev_frame_attr_value}\n<>\n  {self.frame}\n    = {this_frame_attr_value} ") 
+
+
+
 
     def __enter__(self):
         self.apply_session.push_frame_to_stack(self.frame)
@@ -82,6 +145,12 @@ class UseApplyStackFrame(AbstractContextManager):
 
 @dataclass
 class ApplyResult(IApplySession):
+    """ 
+    ApplyResult is ApplySession (variable apply_session) - but is renamed to
+    result since it is name exposed to external API.
+
+    Similar is Function -> IFunctionFactory.
+    """
 
     def __post_init__(self):
         if not isinstance(self.rules, Rules):
@@ -222,44 +291,51 @@ class ApplyResult(IApplySession):
 
 
         if depth==0:
-            assert parent is None
-
             # ---- Rules case -----
 
-            # TODO: put this in BoundModel class
-            children_bound_models = getattr(component.bound_model, "contains", None)
+            assert parent is None
 
-            if children_bound_models:
-                local_setup_session = self.setup_session.create_local_setup_session(
-                                                    this_ns_model_class=self.bound_model.model)
+            # NOTE: frame not set so 'self.current_frame.instance' is not available
+            #       thus sending 'instance' param
+            component.bound_model._apply_nested_models(
+                                        apply_session=self, 
+                                        instance=self.instance
+                                        )
 
-                with self.use_stack_frame(
-                        ApplyStackFrame(
-                            container = component, 
-                            component = self.bound_model, 
-                            instance = self.instance,
-                            instance_new = self.instance_new,
-                            local_setup_session=local_setup_session,
-                            )):
+            # # TODO: put this in BoundModel class
+            # children_bound_models = component.bound_model.get_children()
 
-                    for model_with_handler in self.bound_model.models_with_handlers_dict.values():
-                        model_with_handler: ModelWithHandlers = model_with_handler
+            # if children_bound_models:
+            #     local_setup_session = self.setup_session.create_local_setup_session(
+            #                                         this_ns_model_class=self.bound_model.model)
 
-                        current_value = getattr(self.instance, model_with_handler.name, UNDEFINED)
+            #     with self.use_stack_frame(
+            #             ApplyStackFrame(
+            #                 container = component, 
+            #                 component = self.bound_model, 
+            #                 instance = self.instance,
+            #                 instance_new = self.instance_new,
+            #                 local_setup_session=local_setup_session,
+            #                 )):
 
-                        # TODO: warn: 
-                        #   if current_value is UNDEFINED and model_with_handler.in_model:
-                        #   elif current_value is not UNDEFINED and not model_with_handler.in_model:
+            #         for model_with_handler in self.bound_model.models_with_handlers_dict.values():
+            #             model_with_handler: ModelWithHandlers = model_with_handler
 
-                        # NOTE: can check 'model_with_handler.type_info'
+            #             current_value = getattr(self.instance, model_with_handler.name, UNDEFINED)
 
-                        rh_vexp_result = model_with_handler.read_handler_vexp.execute_node(
-                                            apply_session=self, 
-                                            vexp_result=ExecResult(),
-                                            prev_node_type_info=None,
-                                            is_last=True)
+            #             # TODO: warn: 
+            #             #   if current_value is UNDEFINED and model_with_handler.in_model:
+            #             #   elif current_value is not UNDEFINED and not model_with_handler.in_model:
 
-                        setattr(self.instance, model_with_handler.name, rh_vexp_result.value)
+            #             # NOTE: can check 'model_with_handler.type_info'
+
+            #             rh_vexp_result = model_with_handler.read_handler_vexp.execute_node(
+            #                                 apply_session=self, 
+            #                                 vexp_result=ExecResult(),
+            #                                 prev_node_type_info=None,
+            #                                 is_last=True)
+
+            #             setattr(self.instance, model_with_handler.name, rh_vexp_result.value)
 
 
             new_frame = ApplyStackFrame(
@@ -304,7 +380,7 @@ class ApplyResult(IApplySession):
 
                     new_instances_by_key = {}
                     for index0, item_instance_new in enumerate(current_instance_new, 0):
-                        key = component.get_key_pairs_or_index0(item_instance_new, index0)
+                        key = component.get_key_pairs_or_index0(instance=item_instance_new, index0=index0)
                         if key in new_instances_by_key:
                             raise RuleApplyValueError(owner=self, msg=f"{component}: Duplicate key {key}, first item is: {new_instances_by_key[key]}")
                         new_instances_by_key[key] = item_instance_new
@@ -316,7 +392,7 @@ class ApplyResult(IApplySession):
                 instances_by_key = OrderedDict()
 
                 for index0, instance in enumerate(instance_list, 0):
-                    key = component.get_key_pairs_or_index0(instance, index0)
+                    key = component.get_key_pairs_or_index0(instance=instance, index0=index0)
                     if component.keys:
                         missing_keys = [kn for kn, kv in key if isinstance(kv, MissingKey)]
                         if missing_keys:
@@ -368,15 +444,21 @@ class ApplyResult(IApplySession):
                         instances_by_key[key] = (item_instance_new, index0_new, None)
                         index0_new += 1
 
+                # Apply for all items
                 for key, (instance, index0, item_instance_new) in instances_by_key.items():
-                    # Apply for all items
+                    # Go one level deeper 
                     with self.use_stack_frame(
                             ApplyStackFrame(
                                 container = component,
                                 component = component, 
-                                instance = instance, 
                                 index0 = index0,
-                                instance_new = item_instance_new)):
+                                # main instance - original values
+                                instance = instance, 
+                                parent_instance=self.current_frame.instance,
+                                # new instance - new values (when update mode)
+                                instance_new = item_instance_new, 
+                                parent_instance_new=self.current_frame.instance_new,
+                                )) as frame:
                         # Recursion with prevention to hit this code again
                         self._apply(parent=parent, 
                                     component=component, 
@@ -385,15 +467,20 @@ class ApplyResult(IApplySession):
                                     # prevent is_extension_logic again -> infinitive recursion
                                     extension_list_mode=True)
 
-                # finished, processed all children
+                # ========================================
+                # Finished, processed all children
+                # ========================================
                 return
-                # --------------------
+                # ========================================
 
 
 
             # == Extension with single item ==
 
-            if not is_model_instance(instance):
+            if instance is None:
+                # must be type_info.is_optional ...
+                pass
+            elif not is_model_instance(instance):
                 raise RuleApplyValueError(owner=self, msg=f"Expected list/tuple or model instance, got: {instance} : {type(instance)}")
 
 
@@ -409,12 +496,13 @@ class ApplyResult(IApplySession):
         if not new_frame:
             # register non-container frame - only component is new. take instance from previous frame
             new_frame = ApplyStackFrame(
-                            container = self.current_frame.container, 
                             component = component, 
                             # copy
                             instance = self.current_frame.instance,
-                            index0 = self.current_frame.index0,
-                            instance_new = self.current_frame.instance_new,
+                            container = self.current_frame.container, 
+                            # automatically copied
+                            #   instance_new = self.current_frame.instance_new,
+                            #   index0 = self.current_frame.index0,
                             )
 
         process_further = True
@@ -438,6 +526,10 @@ class ApplyResult(IApplySession):
                     if not value: 
                         process_further = False
 
+            # if parent yields None - do not process on children
+            if self.current_frame.instance in (None, UNDEFINED):
+                process_further = False
+
             # ------------------------------------------------------------
             # NOTE: used only for test if all Vexp values could evaluate ...
             #       self.__check_component_all_vexps(component)
@@ -445,6 +537,7 @@ class ApplyResult(IApplySession):
             # ------------------------------------------------------------
             # --- Recursive walk down - for each child call _apply
             # ------------------------------------------------------------
+
             if process_further:
                 for child in component.get_children():
                     self._apply(parent=component, 
@@ -638,8 +731,8 @@ class ApplyResult(IApplySession):
 
             # try to update if instance_new is provided and yields different value
             bind_vexp_result, _ = self._try_update_by_instance(
-                    component=component, 
-                    init_bind_vexp_result=init_bind_vexp_result)
+                                        component=component, 
+                                        init_bind_vexp_result=init_bind_vexp_result)
         else:
             bind_vexp_result = None
 

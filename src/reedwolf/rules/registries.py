@@ -196,21 +196,25 @@ class ModelsRegistry(RegistryBase):
 
         # bound_model = apply_session.current_frame.container.bound_model
         bound_model_root = apply_session.current_frame.bound_model_root
-        assert instance and bound_model_root, f"{instance} / {bound_model_root}"
 
         expected_type = bound_model_root.type_info.type_ \
                         if isinstance(bound_model_root.model, ValueExpression) \
                         else bound_model_root.model
-        if bound_model_root.type_info.is_list and isinstance(instance, (list, tuple)):
-            # raise RuleApplyTypeError(owner=self, msg=f"Wrong type, expected list/tuple, got '{instance}'")
-            # check only first
-            instance_to_test = instance[0] if instance else None
-        else:
-            instance_to_test = instance
 
-        # == M.name case
-        if instance_to_test and not isinstance(instance_to_test, expected_type):
-            raise RuleApplyTypeError(owner=self, msg=f"Wrong type, expected '{expected_type}', got '{instance}'")
+        if instance is None:
+            if not bound_model_root.type_info.is_optional:
+                raise RuleInternalError(owner=bound_model_root, msg="Got None and type is not 'Optional'")
+        else:
+            if bound_model_root.type_info.is_list and isinstance(instance, (list, tuple)):
+                # raise RuleApplyTypeError(owner=self, msg=f"Wrong type, expected list/tuple, got '{instance}'")
+                # check only first
+                instance_to_test = instance[0] if instance else None
+            else:
+                instance_to_test = instance
+
+            # == M.name case
+            if instance_to_test and not isinstance(instance_to_test, expected_type):
+                raise RuleApplyTypeError(owner=self, msg=f"Wrong type, expected '{expected_type}', got '{instance}'")
 
         return instance
 

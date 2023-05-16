@@ -168,7 +168,6 @@ def dump_rule_attr(  # noqa: C901
         elif value_type == "list":
             if type(aval) not in (tuple, list):
                 raise ValueError(f"{attr_name}::{value_type} value {aval} is not list/tuple")
-            # if "prekitting_to_box" in repr(aval): import pdb;pdb.set_trace()
             # list of dicts?
             if aval and isinstance(aval[0], dict):
                 out2 = []

@@ -373,11 +373,28 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
     # ------------------------------------------------------------
 
     def get_key_string_by_instance(self, apply_session:IApplySession, instance: ModelType, index0: Optional[int]) -> str:
-        # NOTE: it is good enough key to have current name only without
-        #       owner_container.get_key_string() attached
+        """
+        Two cases - component has .keys or not:
+
+        a) with keys:
+            For containers which have keys defined, it is assumed that one key is
+            globally unique within Extension components, so no need to prefix key
+            with parent/owner key_string. Example:
+
+                 address_set_ext[id2=1]
+
+        b) without keys - index0 based:
+            In other cases item index in list is used (index0), and then this is
+            only locally within one instance of parent/owner, therefore parent
+            key_string is required. Example:
+
+                 company_rules::address_set_ext[0]
+
+        """
         instance_id = id(instance)
         key_string = apply_session.key_string_container_cache.get(instance_id, None)
         if key_string is None:
+
             if self.keys:
                 key_pairs = self.get_key_pairs(instance)
                 assert key_pairs
@@ -388,8 +405,22 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
                                 ))
             elif index0 is not None:
                 key_string = f"{self.name}[{index0}]"
+
+                if apply_session.current_frame.parent_instance:
+                    parent_instance = apply_session.current_frame.parent_instance
+                    parent_id = id(parent_instance)
+                    if parent_id not in apply_session.key_string_container_cache:
+                        # must_be_in_cache
+                        if not apply_session.component_name_only:
+                            raise RuleInternalError(owner=self, msg=f"Parent instance's key not found in cache, got: {parent_instance}") 
+                        parent_key_string = f"__PARTIAL__{apply_session.component_name_only}"
+                    else:
+                        parent_key_string = apply_session.key_string_container_cache[parent_id]
+                    key_string = GlobalConfig.ID_NAME_SEPARATOR.join([parent_key_string, key_string])
+
             else:
                 key_string = self.name
+
             apply_session.key_string_container_cache[instance_id] = key_string
             apply_session.instance_by_key_string_cache[key_string] = instance
         #     from_cache = "new"
@@ -409,9 +440,17 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
                 index0 = apply_session.current_frame.index0)
 
 
-    def get_key_pairs_or_index0(self, instance: ModelType, index0: int) -> Union[List[(str, Any)], int]:
+    def get_key_pairs_or_index0(self, 
+                                instance: ModelType, 
+                                index0: int, 
+                                ) -> Union[List[(str, Any)], int]:
         " index0 is 0 based index of item in the list"
-        return self.get_key_pairs(instance) if self.keys else index0
+        # TODO: move to ApplyResult:IApplySession?
+        if self.keys:
+            ret = self.get_key_pairs(instance)
+        else:
+            ret = index0
+        return ret
 
 
     def get_key_pairs(self, instance: ModelType) -> List[(str, Any)]:

@@ -24,6 +24,7 @@ from .utils import (
         UndefinedType,
         get_available_names_example,
         ThreadSafeCounter,
+        to_repr,
         )
 from .exceptions import (
         RuleInternalError,
@@ -927,14 +928,27 @@ class InstanceAttrValue:
 
 @dataclass
 class ApplyStackFrame:
+    """
+
+    IMPORTANT NOTE: When adding new fields, consider adding to 
+
+        UseApplyStackFrame .compare_with_previous_frame()
+
+    """
     # current container data instance which will be procesed: changed/validated/evaluated
     instance: DataclassType
-    container: IContainerBase = field(repr=False)
     component: ComponentBase
+    # main container - class of instance - can be copied too but is a bit complicated
+    container: IContainerBase = field(repr=False)
+
+    # ---------------------------------------------------------------------------------
+    # Following if not provideed are copied from parent frame (previous, parent frame) 
+    # check UseApplyStackFrame. copy_from_previous_frame
+    # ---------------------------------------------------------------------------------
 
     # UPDATE by this instance - can be RULES_LIKE or MODELS_LIKE (same dataclass) struct
     # required but is None when not update
-    instance_new: Union[ModelType, NoneType, UndefinedType] = field(repr=False)
+    instance_new: Union[ModelType, NoneType, UndefinedType] = field(repr=False, default=UNDEFINED)
 
     # TODO: this is ugly 
     # set only in single case: partial mode, in_component_only_tree, compoent=component_only, instance_new
@@ -946,10 +960,16 @@ class ApplyStackFrame:
     # filled only when container list member
     index0: Optional[int] = None
 
-    # for ThisNS / This. namespace 
+    # parent instance / parent_instance_new - currenntly used for key_string logic
+    parent_instance: Optional[ModelType] = field(repr=False, default=None)
+    parent_instance_new: Optional[ModelType] = field(repr=False, default=None)
+
+    # Usually used for ThisNS / This. namespace 
     local_setup_session: Optional[ISetupSession] = field(repr=False, default=None)
 
+    # --------------------
     # -- autocomputed
+    # --------------------
     # internal - filled in __post_init__
     key_string: Optional[str] = field(init=False, repr=False, default=None)
 
@@ -957,11 +977,8 @@ class ApplyStackFrame:
     bound_model_root : Optional[BoundModelBase] = field(repr=False, init=False, default=None)
 
     def __post_init__(self):
-        assert isinstance(self.container, IContainerBase)
-        assert isinstance(self.component, ComponentBase)
 
-        if self.index0 is not None:
-            assert self.index0 >= 0
+        self.clean()
 
         if self.on_component_only:
             self.bound_model_root = (self.on_component_only 
@@ -973,13 +990,24 @@ class ApplyStackFrame:
             instance_to_test = self.instance[0] \
                                if isinstance(self.instance, (list, tuple)) \
                                else self.instance
-            assert is_model_class(instance_to_test.__class__), self.instance
         else:
             self.bound_model_root = self.container.bound_model
-            assert is_model_class(self.instance.__class__), self.instance
+            instance_to_test = self.instance
 
+        if instance_to_test is None:
+            pass
+        elif not is_model_class(instance_to_test.__class__):
+            raise RuleInternalError(owner=self, msg=f"Expected model instance or list[instances], got: {self.instance}")
 
         assert self.bound_model_root
+
+
+    def clean(self):
+        assert isinstance(self.component, ComponentBase)
+        assert isinstance(self.container, IContainerBase)
+
+        if self.index0 is not None:
+            assert self.index0 >= 0
 
 
 @dataclass
@@ -1071,7 +1099,7 @@ class IApplySession:
                     ComponentNameType,
                     Dict[ComponentNameType, ComponentBase]
                 ]
-            ]= field(init=False, default_factory=dict)
+            ]= field(init=False, repr=False, default_factory=dict)
 
     @abstractmethod
     def apply(self) -> IApplySession:
@@ -1104,12 +1132,14 @@ class IApplySession:
         assert component == self.current_frame.component
 
         if new_value is UNDEFINED:
-            raise RuleInternalError(owner=self, msg=f"new value should not be UNDEFINED, fix the caller (comp={component})")
+            raise RuleInternalError(owner=component, msg=f"New value should not be UNDEFINED, fix the caller")
 
         key_str = component.get_key_string(apply_session=self)
+
         if key_str not in self.update_history:
             if not is_from_init_bind:
-                raise RuleInternalError(owner=self, msg="key_str not found in update_history and this is not initialization")
+                raise RuleInternalError(owner=component, msg=f"key_str '{key_str}' not found in update_history and this is not initialization")
+
             self.update_history[key_str] = []
 
             # NOTE: initial value from instance is not checked - only
@@ -1117,15 +1147,15 @@ class IApplySession:
             #   self.validate_type(component, new_value)
         else:
             if is_from_init_bind:
-                raise RuleInternalError(owner=self, msg="key_str found in update_history and this is initialization")
+                raise RuleInternalError(owner=component, msg=f"key_str '{key_str}' found in update_history and this is initialization")
 
             if not self.update_history[key_str]:
-                raise RuleInternalError(owner=self, msg="change history is empty")
+                raise RuleInternalError(owner=component, msg=f"change history for key_str='{key_str}' is empty")
 
             # -- check if current value is different from new one
             value_current = self.update_history[key_str][-1].value
             if value_current == new_value:
-                raise RuleApplyError(owner=self, msg=f"register change failed, the value is the same: {value_current}")
+                raise RuleApplyError(owner=component, msg=f"register change failed, the value is the same: {value_current}")
 
             # is this really necessary
             self.validate_type(component, new_value)
@@ -1148,6 +1178,7 @@ class IApplySession:
             attr_name = init_raw_attr_value.attr_name
 
             assert hasattr(parent_instance, attr_name), f"{parent_instance}.{attr_name}"
+
             # ----------------------------------------
             # Finally change instance value
             # ----------------------------------------

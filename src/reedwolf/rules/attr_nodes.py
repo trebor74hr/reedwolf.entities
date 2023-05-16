@@ -255,8 +255,8 @@ class AttrVexpNode(IValueExpressionNode):
             value_previous = vexp_result.value
             do_fetch_by_name = True
 
-        if do_fetch_by_name:
 
+        if do_fetch_by_name:
             # convert previous value to list, process all and convert back to
             # single object when previous_value is not a list
             result_is_list = isinstance(value_previous, (list, tuple))
@@ -285,11 +285,14 @@ class AttrVexpNode(IValueExpressionNode):
                     if idx==0 and attr_name==ReservedAttributeNames.INSTANCE_ATTR_NAME:
                         value_new = val_prev
                     else:
-                        if not hasattr(val_prev, attr_name):
-                            # TODO: list which fields are available
-                            # if all types match - could be internal problem?
-                            raise RuleApplyNameError(owner=self, msg=f"Attribute '{attr_name}' not found in '{to_repr(val_prev)}' : '{type(val_prev)}'")
-                        value_new = getattr(val_prev, attr_name)
+                        if val_prev is None:
+                            value_new = UNDEFINED
+                        else:
+                            if not hasattr(val_prev, attr_name):
+                                # TODO: list which fields are available
+                                # if all types match - could be internal problem?
+                                raise RuleApplyNameError(owner=self, msg=f"Attribute '{attr_name}' not found in '{to_repr(val_prev)}' : '{type(val_prev)}'")
+                            value_new = getattr(val_prev, attr_name)
 
                 value_new_as_list.append(value_new)
 
@@ -305,10 +308,14 @@ class AttrVexpNode(IValueExpressionNode):
         elif isinstance(value_new, (list, tuple)):
             if not self.islist():
                 raise RuleApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should not return list, got: '{to_repr(value_new)}' : '{type(value_new)}'")
-        else:
-            if self.islist():
-                # apply_session.rules.get_component(apply_session.component_name_only)
-                raise RuleApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should return list, got: '{to_repr(value_new)}' : '{type(value_new)}'")
+        elif value_new is None:
+            pass
+            # NOTE: value not checked - can be evaluated to something not-None later
+            # if not self.get_type_info().is_optional:
+            #     raise RuleApplyValueError(owner=self, msg=f"Attribute '{attr_name}' has 'None' value and type is not 'Optional'.")
+        elif self.islist():
+            # apply_session.rules.get_component(apply_session.component_name_only)
+            raise RuleApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should return list, got: '{to_repr(value_new)}' : '{type(value_new)}'")
 
         # TODO: hm, changer_name is equal to attr_name, any problem / check / fix ... 
         vexp_result.set_value(attr_name=attr_name, changer_name=attr_name, value=value_new)

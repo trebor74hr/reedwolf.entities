@@ -122,8 +122,6 @@ def dump_pydantic_models_to_str(
     lines = []
     vars_declarations = []
 
-    # if self.name in ("fiscal_configuration", "vat_number"): import pdb;pdb.set_trace()
-
     children = self.get_children()
 
     if isinstance(self, (FieldGroup, Rules, Extension)):
@@ -162,8 +160,6 @@ def dump_pydantic_models_to_str(
                 py_type = f"{py_type_klass.__name__}"
                 class_dump_store.enums.add(py_type)
             elif isinstance(self, ChoiceField) and self.choice_label_type_info is not None:
-                # if self.name=="country_code": import pdb;pdb.set_trace()
-                # if self.name=="telecom_operator": import pdb;pdb.set_trace()
                 parent_klass_full_name = self.choice_label_type_info.parent_object.__name__
                 parent_klass_name = parent_klass_full_name.split(".")[-1]
                 # value_klass_name = py_type_klass.__name__

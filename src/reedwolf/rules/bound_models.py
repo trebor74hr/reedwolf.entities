@@ -16,6 +16,7 @@ from .utils import (
         UNDEFINED,
         UndefinedType,
         to_repr,
+        get_available_names_example,
         )
 from .exceptions import (
         RuleSetupValueError,
@@ -31,13 +32,10 @@ from .meta import (
         get_model_fields,
         EmptyFunctionArguments,
         )
-from .base        import (
-        BoundModelBase,
-        SetupStackFrame,
-        )
 from .expressions import (
         ValueExpression,
         ISetupSession,
+        ExecResult,
         )
 from .attr_nodes import (
         AttrVexpNode,
@@ -45,6 +43,12 @@ from .attr_nodes import (
 from .functions import (
         CustomFunctionFactory,
         IFunction,
+        )
+from .base import (
+        BoundModelBase,
+        SetupStackFrame,
+        IApplySession,
+        ApplyStackFrame,
         )
 
 
@@ -121,12 +125,6 @@ class NestedBoundModelMixin:
 
             # 2. Create function object and register that read handlers (with
             #    type_info) in local registry - will be called in apply phase
-
-            # TODO: if "get_department" in repr(child_bound_model.read_handler):
-            # TODO:     print("here-1", repr(child_bound_model.read_handler))
-            # TODO:     import pdb;pdb.set_trace() 
-            # TODO:     self.model
-
             assert read_handler_type_info
 
             with setup_session.use_stack_frame(
@@ -151,6 +149,80 @@ class NestedBoundModelMixin:
 
             self.models_with_handlers_dict[model_name] = model_with_handlers
 
+
+    # ------------------------------------------------------------
+
+
+    def _apply_nested_models(self, apply_session: IApplySession, instance: ModelType):
+        children_bound_models = self.get_children()
+        if not children_bound_models:
+            return 
+
+        if not isinstance(apply_session, IApplySession):
+            raise RuleInternalError(owner=self, msg=f"apply_session is not IApplySession, got: {apply_session}")
+
+        if not isinstance(instance, self.model):
+            raise RuleInternalError(owner=self, msg=f"Type of instance is not '{self.model}', got: {to_repr(instance)}")
+
+        children_bound_models_dict = {
+                child_bound_model.name: child_bound_model 
+                for child_bound_model in children_bound_models
+                }
+
+        local_setup_session = apply_session.setup_session.create_local_setup_session(
+                                            this_ns_model_class=self.model)
+
+        container = self.get_container_owner(consider_self=False)
+
+        with apply_session.use_stack_frame(
+                ApplyStackFrame(
+                    container = container, 
+                    component = self, 
+                    instance = instance,
+                    instance_new = None,
+                    local_setup_session=local_setup_session,
+                    )):
+
+            for model_name, model_with_handler in self.models_with_handlers_dict.items():
+                model_with_handler: ModelWithHandlers = model_with_handler
+
+                current_value = getattr(instance, model_with_handler.name, UNDEFINED)
+
+                # TODO: warn: 
+                #   if current_value is UNDEFINED and model_with_handler.in_model:
+                #   elif current_value is not UNDEFINED and not model_with_handler.in_model:
+
+                # NOTE: can check 'model_with_handler.type_info'
+
+                rh_vexp_result = model_with_handler.read_handler_vexp.execute_node(
+                                    apply_session=apply_session, 
+                                    vexp_result=ExecResult(),
+                                    prev_node_type_info=None,
+                                    is_last=True)
+
+                child_instances = rh_vexp_result.value
+
+                # apply_session.config.logger.warn(f"set bound model read_handler to instance: {to_repr(instance)}.{model_with_handler.name} = {to_repr(rh_vexp_result.value)}")
+                setattr(instance, model_with_handler.name, child_instances)
+
+                if child_instances:
+                    # TODO: if expected list and result not list then convert to list and vice versa
+                    child_bound_model = children_bound_models_dict.get(model_name, None)
+
+                    if not child_bound_model:
+                        names_avail = get_available_names_example(model_name, children_bound_models_dict.keys())
+                        raise RuleInternalError(owner=self, msg=f"Child bound model '{model_name}' not found, available: {names_avail}")
+
+                    # ------------------------------------------------------------
+                    # RECURSION
+                    # ------------------------------------------------------------
+                    if not isinstance(child_instances, (list, tuple)):
+                        child_instances = [child_instances]
+
+                    for child_instance in child_instances:
+                        child_bound_model._apply_nested_models(
+                                                apply_session=apply_session, 
+                                                instance=child_instance)
 
 
 # ------------------------------------------------------------
@@ -218,8 +290,6 @@ class BoundModel(NestedBoundModelMixin, BoundModelBase):
 
 @dataclass
 class BoundModelWithHandlers(NestedBoundModelMixin, BoundModelBase):
-    # TODO: razdvoji save/read/.../unique check
-    # TODO: nesting with 'contains: List[BoundModelWithHandlers]' currently not supported.
     name         : str
     label        : str # TransMsg
     # return type is used as model
@@ -268,6 +338,12 @@ class BoundModelWithHandlers(NestedBoundModelMixin, BoundModelBase):
 
     def setup(self, setup_session:ISetupSession):
         super().setup(setup_session=setup_session)
+
+        if self.contains:
+            container =self.get_container_owner(consider_self=False)
+            if not container.is_top_owner():
+                # NOTE: not allowed in Extension-s for now
+                raise RuleSetupValueError(owner=self, msg=f"BoundModel* nesting (attribute 'contains') is not supported for '{type(container)}'")
 
         self._register_nested_models(setup_session)
 

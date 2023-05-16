@@ -26,6 +26,7 @@ class RuleError(Exception, ABC):
         self.full_msg = self._get_full_msg() + (f" (item={repr(self.item)[:50]})" if self.item else "")
 
     def _get_full_msg(self) -> str:
+        # TODO: fix: ApplyResult('ApplyResult()')
         return f"{self.owner.__class__.__name__}('{self.owner.name}') -> {self.msg}" \
                     if self.owner and not isinstance(self.owner, DynamicAttrsBase) and getattr(self.owner, "name", None) \
                     else \
