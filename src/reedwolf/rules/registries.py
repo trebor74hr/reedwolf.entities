@@ -138,6 +138,11 @@ class ModelsRegistry(RegistryBase):
             alt_attr_node_name = None if is_root else f"{name_for_reg}__{attr_name}"
             self.register_attr_node(attr_node, alt_attr_node_name=alt_attr_node_name)
 
+        # M.Instance
+        self.register_instance_attr_node(model_class=model,
+                attr_name_prefix = None if is_root else f"{name_for_reg}__",
+                )
+
 
     # ------------------------------------------------------------
 
@@ -397,8 +402,8 @@ class ThisRegistry(RegistryBase):
             attr_node = self._create_attr_node_for_model_attr(self.model_class, attr_name)
             self.register_attr_node(attr_node)
 
-        instance_attr_node = self._create_instance_attr_node(model_class=model_class)
-        self.register_attr_node(instance_attr_node)
+        # This.Instance
+        self.register_instance_attr_node(model_class=model_class)
 
     def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
         if not isinstance(apply_session.current_frame.instance, self.model_class):

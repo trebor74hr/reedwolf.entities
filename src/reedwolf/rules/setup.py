@@ -136,22 +136,26 @@ class RegistryBase(IRegistry):
     def items(self) -> List[Tuple[str, AttrVexpNode]]:
         return self.store.items()
 
-    @classmethod
-    def _create_instance_attr_node(cls, model_class: ModelType) -> AttrVexpNode:
-        " used for This.Instance to return instance itself "
+    def register_instance_attr_node(self, model_class: ModelType, attr_name_prefix: Optional[str]=None) -> AttrVexpNode:
+        " used for This.Instance / M.Instance to return instance itself "
         th_field = None
         # TODO: check that model_class is not dataclass field or pydatnic field
         type_info = TypeInfo.get_or_create_by_type(
                         py_type_hint=model_class,
                         caller=None,
                         )
+        attr_name = ReservedAttributeNames.INSTANCE_ATTR_NAME.value
+        if attr_name_prefix:
+            attr_name = f"{attr_name_prefix}{attr_name}"
+
         attr_node = AttrVexpNode(
-                        name=ReservedAttributeNames.INSTANCE_ATTR_NAME,
+                        name=attr_name,
                         data=type_info,
-                        namespace=cls.NAMESPACE,
+                        namespace=self.NAMESPACE,
                         type_info=type_info, 
                         th_field=th_field,
                         )
+        self.register_attr_node(attr_node)
         return attr_node
 
     @classmethod
@@ -276,10 +280,11 @@ class RegistryBase(IRegistry):
         # TODO: za Sum(This.name) this is not good. Should be unique, since 
         #       This is ambigous - can evaluate to different contexts. 
         #       should have some context @ID (parent)
-        full_vexp_node_name = get_vexp_node_name(parent_name=parent_vexp_node.name if parent_vexp_node else None, 
-                                          vexp_node_name=vexp_node_name,
-                                          func_args=None # func_args
-                                          )
+        full_vexp_node_name = get_vexp_node_name(
+                                    parent_name=parent_vexp_node.name if parent_vexp_node else None, 
+                                    vexp_node_name=vexp_node_name,
+                                    func_args=None # func_args
+                                    )
 
         if parent_vexp_node is None:
             # --------------------------------------------------
