@@ -295,6 +295,10 @@ class ContextRegistry(RegistryBase):
                     parent_vexp_node: IValueExpressionNode, 
                     owner: ComponentBase,
                     ) -> IValueExpressionNode:
+
+        if not isinstance(owner, ComponentBase):
+            raise RuleInternalError(owner=self, msg=f"Owner needs to be Component, got: {type(owner)} / {owner}")  
+
         if not owner.get_container_owner(consider_self=True).context_class:
             raise RuleSetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}' (referenced by '{self.NAMESPACE}.{vexp_node_name}') should not be used since 'Rules.context_class' is not set. Define 'context_class' to 'Rules()' constructor and try again.")
 
@@ -313,6 +317,7 @@ class ContextRegistry(RegistryBase):
             attr_node = self._create_attr_node_for_model_attr(self.context_class, attr_name)
             self.register_attr_node(attr_node)
 
+        # map User, Session, Now and similar Attribute -> function calls
         for attr_name, py_function in self.context_class.get_vexp_attrname_dict().items():
             type_info = TypeInfo.extract_function_return_type_info(
                             py_function,
@@ -324,7 +329,7 @@ class ContextRegistry(RegistryBase):
                             data=type_info,
                             namespace=self.NAMESPACE,
                             type_info=type_info, 
-                            # TOO: the type or name of th_field is not ok
+                            # TODO: the type or name of th_field is not ok
                             th_field=py_function, 
                             )
             self.register_attr_node(attr_node, attr_name)
@@ -335,6 +340,7 @@ class ContextRegistry(RegistryBase):
         if context in (UNDEFINED, None):
             component = apply_session.current_frame.component
             raise RuleApplyNameError(owner=self, msg=f"ContextNS attribute '{component.name}' can not be fetched since context is not set ({type(context)}).")
+        # if attr_name in self.context_class.get_vexp_attrname_dict():
         return context
 
 

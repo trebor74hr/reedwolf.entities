@@ -406,6 +406,10 @@ class IFunctionFactory(ABC):
     # autocomputed
     _output_type_info: TypeInfo = field(init=False, repr=False)
 
+    # TODO: 'instantiate' class mode - get result as instance and cache result -
+    #       py_function is Class, result is instance
+
+
     def __post_init__(self):
         if not is_function(self.py_function):
             raise RuleSetupValueError(owner=self, msg=f"py_function is not a function, got: {type(self.py_function)} / {self.py_function}")

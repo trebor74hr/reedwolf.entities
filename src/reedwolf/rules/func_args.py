@@ -231,8 +231,7 @@ class FunctionArguments:
                         component = setup_session.current_frame.component, 
                         local_setup_session = local_setup_session,
                     )):
-                vexp_node = vexp.Setup(setup_session=setup_session, owner=self)
-
+                vexp_node = vexp.Setup(setup_session=setup_session, owner=setup_session.current_frame.component)
 
             # NOTE: pass callable since type_info for some Vexp-s are not avaialble (e.g. FieldsNS, F.name)
             type_info_or_callable = vexp_node.get_type_info()
@@ -502,6 +501,26 @@ def create_function_arguments(
 
     args_default = set(arguments_default_dict.keys())
     args_types   = set(type_info_dict.keys())
+
+    if "self" in (args_default - args_types):
+        # To support late binding of method by providing class instance to
+        # 'self' parameter explicitly, e.g.
+        #     CatalogManager.my_method(self=CatalogManager())
+        # I will fill it the best I can - provide type of the owner (class)
+        #
+        # TODO: hacking around - found no better way
+        self_klass = Any
+        bits = py_function.__qualname__.split(".")
+        if len(bits) == 2:
+            # e.g. CatalogManager.get_my_country_method
+            klass_name = bits[0]
+            if klass_name in py_function.__globals__:
+                self_klass = py_function.__globals__[klass_name]
+
+        type_info_dict["self"] = TypeInfo.get_or_create_by_type(self_klass)
+        args_types = set(type_info_dict.keys())
+
+
     if not args_default==args_types:
         # TODO: when unbound method is attached, then first set has "self" and other does not
         #       in this case report ValueError - unbound method not supported
@@ -509,7 +528,7 @@ def create_function_arguments(
         diff_right = args_types - args_default
         if "self" in diff_left:
             raise RuleInternalError(owner=py_function, 
-                    msg=f"Function's default arguments '{args_default}' not same as all arguments:  {args_types}. Found 'self' in diference. Did you forget to instatiate object or mark method as class/static?")
+                    msg=f"Function's default arguments '{args_default}' not same as all arguments:  {args_types}. Found 'self' in diference. Did you forget to instatiate object, to mark method as class/static or to provide instance to 'self' directly?")
 
         diff_left = ", ".join(list(diff_left))
         diff_right = ", ".join(list(diff_right))
