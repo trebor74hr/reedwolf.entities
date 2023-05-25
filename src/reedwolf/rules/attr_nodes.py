@@ -215,9 +215,12 @@ class AttrVexpNode(IValueExpressionNode):
         # TODO: not nicest way - string split
         #       for extension: [p._name for p in frame.container.bound_model.model.Path]
         names = self.name.split(".")
+
         attr_name = names[-1]
 
-        if vexp_result is UNDEFINED:
+        assert vexp_result not in (None,)
+
+        if vexp_result in (UNDEFINED, None):
             # initial / first value - get from registry / namespace, e.g. M
             vexp_result = ExecResult()
             frame = apply_session.current_frame
@@ -251,7 +254,8 @@ class AttrVexpNode(IValueExpressionNode):
             # do_fetch_by_name = registry.ROOT_VALUE_NEEDS_FETCH_BY_NAME
         else:
             # 2+ value - based on previous result and evolved one step further
-            assert len(names)>1
+            if not len(names)>1:
+                raise RuleInternalError(owner=self, msg=f"Names need to be list of at least 2 members: {names}") 
             value_previous = vexp_result.value
             do_fetch_by_name = True
 

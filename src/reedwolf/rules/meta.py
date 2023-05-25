@@ -244,7 +244,9 @@ def is_function(maybe_function: Any) -> bool:
            and not type(maybe_function) in (type, _GenericAlias) \
            and not is_enum(maybe_function) \
            and not is_pydantic(maybe_function) \
-           and not is_dataclass(maybe_function)
+           and not is_dataclass(maybe_function) \
+           and not inspect.isclass(maybe_function) \
+           and not repr(maybe_function).startswith("typing.")
 
 
 # def is_method(obj: Any) -> bool:
@@ -437,12 +439,19 @@ class TypeInfo:
         if isinstance(self.py_type_hint, str):
             raise RuleInternalError(owner=self, msg=f"py_type_hint={self.py_type_hint} is still string, it should have been resolved before")
 
+        if is_function(self.py_type_hint):
+            raise RuleInternalError(owner=self, msg=f"py_type_hint={self.py_type_hint} is a function/method")
+
         self._extract_type_hint_details()
+
+        # TODO: raise error: if self.is_none_type():
 
         # if not self.is_list and not self.is_optional:
         #     if self.py_type_hint != self.type_:
         #         raise RuleSetupValueError(item=self, msg=f"Unsupported type hint, got: {self.py_type_hint}. {ERR_MSG_SUPPORTED}")
 
+    def is_none_type(self):
+        return self.types == [NoneType]
 
     def _extract_type_hint_details(self):
         py_type_hint = self.py_type_hint

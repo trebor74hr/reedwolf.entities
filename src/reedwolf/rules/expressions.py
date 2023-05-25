@@ -655,6 +655,9 @@ class ValueExpression(DynamicAttrsBase):
                 vexp_node_name = bit._node
                 if last_vexp_node:
                     parent_arg_type_info = last_vexp_node.get_type_info()
+                    if parent_arg_type_info is None:
+                        # Postponed ... e.g. F. / FieldsNS  - will be added to hooks later
+                        parent_arg_type_info = last_vexp_node.get_type_info
                 else:
                     parent_arg_type_info = None
 

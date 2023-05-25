@@ -298,13 +298,11 @@ class RegistryBase(IRegistry):
 
             attr_node_template = self.store.get(full_vexp_node_name)
 
-            # clone it - each attr_node must be unique - cached are used only as templates
-            vexp_node = attr_node_template.clone()
-            assert id(vexp_node) != attr_node_template
-
-            # TODO: needed?
-            #       if isinstance(parent_vexp_node.data, IFunctionVexpNode):
-            #           inspect_object = parent_vexp_node.data.get_type_info()
+            # NOTE: RL 230525 do not clone, .finish() is not called for cloned,
+            #       they were not registered anywhere. OLD:
+            #           vexp_node = attr_node_template.clone()
+            #           assert id(vexp_node) != attr_node_template
+            vexp_node = attr_node_template
         else:
             # --------------------------------------------------------------
             # IN-DEPTH LEVEL 2+, e.g. M.company.<this-node-and-next>
@@ -401,6 +399,9 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
     component: ComponentBase
     instance: ModelType
 
+    def __post_init__(self):
+        ...
+
     def get_attribute(self, apply_session:IApplySession, attr_name: str, is_last:bool) -> ComponentAttributeAccessor:
         children_dict = apply_session.get_upward_components_dict(self.component)
         if attr_name not in children_dict:
@@ -411,16 +412,20 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
 
         component = children_dict[attr_name]
 
-        if is_last:
-            if not hasattr(component, "bind"):
-                raise RuleApplyNameError(
-                        owner=self.component,
-                        msg=f"Attribute '{attr_name}' is '{type(component)}' type which has no binding, therefore can not extract value. Use standard *Field components instead.")
-            # TODO: needs some class wrapper and caching ...
-            vexp_result = component.bind._evaluator.execute_vexp(apply_session)
-            out = vexp_result.value
-        else:
-            out = ComponentAttributeAccessor(component)
+        # OLD: 
+        #   if is_last:
+
+        if not hasattr(component, "bind"):
+            raise RuleApplyNameError(
+                    owner=self.component,
+                    msg=f"Attribute '{attr_name}' is '{type(component)}' type which has no binding, therefore can not extract value. Use standard *Field components instead.")
+        # TODO: needs some class wrapper and caching ...
+        vexp_result = component.bind._evaluator.execute_vexp(apply_session)
+        out = vexp_result.value
+
+        # OLD: 
+        #   else:
+        #       out = ComponentAttributeAccessor(component, instance=self.instance, _depth=self._depth+1)
         return out
 
 

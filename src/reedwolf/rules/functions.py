@@ -64,6 +64,9 @@ from .func_args import (
         create_function_arguments,
         PreparedArguments,
         )
+from .base import (
+        ReservedArgumentNames,
+        )
 
 
 ValueArgValidatorPyFuncType = Callable[..., NoneType]
@@ -191,7 +194,6 @@ class IFunction(IFunctionVexpNode):
         # else: Can be cloned object (.clone()) - reuse same object or not?
 
         # put this in self.parsed_arguments
-        # try:
         self.prepared_args = self.function_arguments.parse_func_args(
                 setup_session=self.setup_session,
                 caller=self.caller,
@@ -200,10 +202,6 @@ class IFunction(IFunctionVexpNode):
                 fixed_args=self.fixed_args,
                 value_arg_type_info=self.value_arg_type_info,
                 value_arg_name=self.value_arg_name)
-        # except RuleSetupTypeError as ex:
-        #     ex.set_msg(f"{self.as_str()}: {ex.msg}")
-        #     # raise ex.__class__(f"{self.as_str()}: {ex.msg}")
-        #     raise
 
         # first validate value type matches
         # if self.prepared_args.value_arg_implicit==True:
@@ -284,12 +282,13 @@ class IFunction(IFunctionVexpNode):
             vexp_result = execute_vexp_or_node(
                             arg_value,
                             arg_value,
-                            vexp_result = None,
+                            vexp_result = UNDEFINED,
                             prev_node_type_info=prev_node_type_info,
                             apply_session=apply_session)
             arg_value = vexp_result.value
 
         return arg_value
+
 
     # TODO: IApplySession is in base.py which imports .functions just for one case ...
     def execute_node(self, 
@@ -327,6 +326,12 @@ class IFunction(IFunctionVexpNode):
                     kwargs[self.value_arg_name] = input_value
                 else:
                     args.insert(0, input_value)
+
+            prep_arg = self.prepared_args.get(ReservedArgumentNames.INJECT_COMPONENT_ARG_NAME)
+            if prep_arg:
+                if not isinstance(prep_arg.caller, IValueExpressionNode):
+                    raise RuleInternalError(owner=self, msg=f"Expected IValueExpressionNode, got: {type(prep_arg.caller)} / {prep_arg.caller}") 
+                kwargs[ReservedArgumentNames.INJECT_COMPONENT_ARG_NAME] = prep_arg.caller
 
         if self.func_args:
             # TODO: copy all arguments or not?
@@ -635,8 +640,10 @@ def try_create_function(
         value_arg_type_info: TypeInfo,
         ) -> IFunction:
 
-    if value_arg_type_info and not isinstance(value_arg_type_info, TypeInfo):
-        raise RuleInternalError(f"{value_arg_type_info} should be TypeInfo, got '{type(value_arg_type_info)}'")
+    if value_arg_type_info \
+            and not isinstance(value_arg_type_info, TypeInfo) \
+            and not is_function(value_arg_type_info):
+        raise RuleInternalError(f"{value_arg_type_info} should be TypeInfo or function, got '{type(value_arg_type_info)}'")
 
     functions_factory_registry: IFunctionFactory = setup_session.functions_factory_registry
     if not functions_factory_registry:

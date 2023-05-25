@@ -34,7 +34,9 @@ from .meta import (
 from .utils import (
         UNDEFINED,
         )
-
+from .base import (
+        ComponentBase
+        )
 
 def get_builtin_function_factories_dict() -> Dict[str, BuiltinFunctionFactory]:
     out : Dict[str, BuiltinFunctionFactory] = {}
@@ -82,6 +84,14 @@ def EnumMembers(
 
 T = TypeVar("T", bound=Any)
 
+def children(value: Any, inject_component: ComponentBase) -> List[ComponentBase]:
+    """ Component's list of children """
+    return inject_component.get_children()
+
+Children = create_builtin_function_factory( # noqa: E305
+            children, name="Children", 
+            # arg_validators={"component": ensure_is_component},
+            )
 
 def count(value_list: List[ItemType]) -> int:
     """ for objects from datastores - e.g. rows, iterables """

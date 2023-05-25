@@ -111,6 +111,10 @@ def list_to_strlist(args, before, after):
 class ReservedAttributeNames(str, Enum):
     INSTANCE_ATTR_NAME = "Instance" 
 
+# ------------------------------------------------------------
+
+class ReservedArgumentNames(str, Enum):
+    INJECT_COMPONENT_ARG_NAME = "inject_component" 
 
 # ------------------------------------------------------------
 

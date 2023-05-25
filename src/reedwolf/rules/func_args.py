@@ -22,6 +22,7 @@ from .utils import (
         )
 from .namespaces import ( 
         ThisNS,
+        FieldsNS,
         Namespace,
         )
 from .exceptions import (
@@ -35,14 +36,20 @@ from .meta import (
         extract_function_arguments_default_dict,
         is_model_class,
         STANDARD_TYPE_LIST,
+        is_function,
         )
 from .expressions import (
         ValueExpression,
         IValueExpressionNode,
         ISetupSession,
         )
+from .attr_nodes import (
+        AttrVexpNode,
+        )
 from .base import (
         SetupStackFrame,
+        ReservedArgumentNames,
+        ComponentBase,
         )
 
 TypeInfoCallable = Callable[[], TypeInfo]
@@ -62,9 +69,19 @@ class PrepArg:
     # TODO: Union[NoneType, StdPyTypes (Literal[]), IValueExpressionNode
     value_or_vexp: Any = field(repr=True)
 
+    # Used in ReservedArgumentNames.INJECT_COMPONENT_ARG_NAME case / in apply() phase only
+    caller: Union[Namespace, IValueExpressionNode] = field(repr=False)
+
     def __post_init__(self):
         if self.type_info_or_callable is None:
-            raise RuleInternalError(owner=self, msg="type_info / 'xallable() -> type_info' not supplied")
+            raise RuleInternalError(owner=self, msg="type_info / 'callable() -> type_info' not supplied")
+
+        # TODO:
+        # if self.is_none_type():
+        #     raise RuleInternalError(owner=self, msg="type_info / 'callable() -> type_info' is NoneType")
+
+    def is_none_type(self):
+        return self.type_info.is_none_type()
 
     @property
     def type_info(self) -> Optional[TypeInfo]:
@@ -97,7 +114,6 @@ class PreparedArguments:
     # autocomputed
     prep_arg_dict: Dict[str, PrepArg] = field(init=False, repr=False)
 
-    # any_prep_arg_lack_type_info: bool = field(init=False, repr=False)
 
     def __post_init__(self):
         names_unfilled = [prep_arg.name for prep_arg in self.prep_arg_list if not prep_arg]
@@ -108,11 +124,10 @@ class PreparedArguments:
                 prep_arg.name: prep_arg 
                 for prep_arg in self.prep_arg_list
                 }
-        self.any_prep_arg_lack_type_info()
 
     def any_prep_arg_lack_type_info(self):
         return any((
-                not bool(pa.type_info) 
+                not bool(pa.type_info) or pa.is_none_type()
                 for pa in self.prep_arg_dict.values() 
                 ))
 
@@ -243,19 +258,23 @@ class FunctionArguments:
         elif inspect.isclass(value_object):
             type_info_or_callable = TypeInfo.get_or_create_by_type(value_object, caller=self)
             value_or_vexp = value_object
-
+        elif is_function(value_object):
+            # get_type_info method - for delayed cases - hooks
+            type_info_or_callable = value_object
+            assert isinstance(caller, IValueExpressionNode)
+            value_or_vexp = caller
         else:
             # check that these are standard classes
             type_info_or_callable = TypeInfo.get_or_create_by_type(type(value_object), caller=self)
             # TODO: Literal()
             value_or_vexp = value_object
 
-
         prep_arg = PrepArg(
                         name=arg_name, 
                         type_info_or_callable=type_info_or_callable, 
                         value_or_vexp=value_or_vexp,
-                        owner_name=owner_name)
+                        owner_name=owner_name,
+                        caller=caller)
 
         return prep_arg
 
@@ -316,15 +335,96 @@ class FunctionArguments:
 
     # ------------------------------------------------------------
 
+    def _fill_value_arg(self, 
+            setup_session : ISetupSession,
+            caller: IValueExpressionNode, 
+            owner_name: str,
+            value_arg_name: str,
+            value_arg_type_info : Optional[TypeInfo],
+            expected_args: Dict[str, Optional[PrepArg]],
+            ) -> bool:
+
+        # value from chain / stream - previous dot-node. e.g. 
+        #   M.name.Lower() # value is passed from .name
+        if not isinstance(caller, IValueExpressionNode):
+            raise RuleInternalError(f"{owner_name}: Caller is not IValueExpressionNode, got: {type(caller)} / {caller}")
+
+        value_arg_implicit = UNDEFINED
+
+        if not self.func_arg_list:
+            # no arguments could be accepted at all, nor fixed nor value_arg nor func_args
+            # will raise error later - wrong nr. of arguments
+            raise RuleSetupTypeError(owner=self, msg=f"{owner_name}: Filling dot-chain argument value from '{caller.full_name}' failed, function accepts no arguments.")
+        elif value_arg_name:
+            # value to kwarg 'value_arg_name' value argument
+            # value_object = expected_args.get(value_arg_name, UNDEFINED)
+            prep_arg = expected_args.get(value_arg_name, UNDEFINED)
+            if prep_arg:
+                value_or_vexp = prep_arg.value_or_vexp
+                if not (isinstance(value_or_vexp, ValueExpression) 
+                        and value_or_vexp._namespace == ThisNS):
+                    raise RuleSetupTypeError(owner=self, msg=f"{owner_name}: Function can not fill argument '{value_arg_name}' from '{caller.full_name}', argument is already filled with value '{value_or_vexp}'. Change arguments' setup or use 'This.' value expression.")
+                value_arg_implicit = False
+        else:
+            # value to first unfilled positional argument
+            any_expected_args_unfilled = any([arg_name for arg_name, type_info in expected_args.items() if type_info is None])
+            # when everything is filled - allow only when there is any ValueExpression with reference to ThisNS
+            if not any_expected_args_unfilled:
+                prep_args_within_thisns = [prep_arg for prep_arg in expected_args.values() 
+                                               if prep_arg 
+                                               and isinstance(prep_arg.value_or_vexp, ValueExpression) 
+                                               and prep_arg.value_or_vexp._namespace == ThisNS]
+                if not prep_args_within_thisns:
+                    raise RuleSetupTypeError(owner=self, msg=f"{owner_name}: Function can not take additional argument from '{caller.full_name}'. Remove at least one predefined argument or use value expression argument within 'This.' namespace.")
+                value_arg_implicit = False
+
+
+        if value_arg_implicit is UNDEFINED:
+            # otherwise - fill value to first positional or kwarg (case when value_arg_name is predefined)
+            value_args = []
+            value_kwargs = {}
+
+            # TODO: inject component - it is not perfect :( 
+            if ReservedArgumentNames.INJECT_COMPONENT_ARG_NAME in expected_args:
+                if not (isinstance(caller, AttrVexpNode)
+                        and caller.namespace == FieldsNS):
+                    raise RuleInternalError(owner=self, msg=f"Expected F.<fieldname>, got: {caller}") 
+                component_type_info = TypeInfo.get_or_create_by_type(py_type_hint=ComponentBase, caller=caller)
+                # NOTE: caller is here lost, hopefully won't be needed
+                value_kwargs[ReservedArgumentNames.INJECT_COMPONENT_ARG_NAME] = component_type_info
+
+            if value_arg_name:
+                value_kwargs[value_arg_name] = value_arg_type_info
+            else:
+                value_args.append(value_arg_type_info)
+
+            # TODO: validates vexp_node.get_type_info() matches value_arg_type_info
+
+            args, kwargs = self._process_func_args_raw((FunctionArgumentsType(value_args, value_kwargs)))
+            # vexp_node : IValueExpressionNode = caller
+            self._try_fill_given_args(
+                    setup_session=setup_session,
+                    caller=caller,
+                    owner_name=owner_name,
+                    args_title="dot-chain argument", 
+                    expected_args=expected_args, 
+                    given_args=args, 
+                    given_kwargs=kwargs)
+            value_arg_implicit = True
+
+        return value_arg_implicit
+
+
+    # ------------------------------------------------------------
 
     def parse_func_args(self, 
                  caller              : Union[Namespace, IValueExpressionNode],
                  owner_name          : str,
                  func_args           : FunctionArgumentsType,
-                 setup_session          : ISetupSession = field(repr=False),  # noqa: F821
-                 fixed_args          : Optional[FunctionArgumentsType] = field(default=None),
-                 value_arg_type_info : Optional[TypeInfo] = field(default=None),
-                 value_arg_name      : Optional[str] = field(default=None),
+                 setup_session       : ISetupSession,
+                 fixed_args          : Optional[FunctionArgumentsType] = None,
+                 value_arg_type_info : Optional[TypeInfo]= None,
+                 value_arg_name      : Optional[str] = None,
                  ) -> PreparedArguments:
         """
         Although default argument values are processed, they are not filled.
@@ -358,62 +458,14 @@ class FunctionArguments:
             # direct from namespace, e.g. Fn.get_my_country()
             value_arg_implicit = None
         else:
-            # value from chain / stream - previous dot-node. e.g. 
-            #   M.name.Lower() # value is passed from .name
-            if not isinstance(caller, IValueExpressionNode):
-                raise RuleInternalError(f"{owner_name}: Caller is not IValueExpressionNode, got: {type(caller)} / {caller}")
+            value_arg_implicit = self._fill_value_arg(
+                                    setup_session=setup_session,
+                                    caller=caller,
+                                    owner_name=owner_name,
+                                    value_arg_name=value_arg_name,
+                                    value_arg_type_info=value_arg_type_info,
+                                    expected_args=expected_args)
 
-            value_arg_implicit = UNDEFINED
-
-            if not self.func_arg_list:
-                # no arguments could be accepted at all, nor fixed nor value_arg nor func_args
-                # will raise error later - wrong nr. of arguments
-                raise RuleSetupTypeError(owner=self, msg=f"{owner_name}: Filling dot-chain argument value from '{caller.full_name}' failed, function accepts no arguments.")
-            elif value_arg_name:
-                # value to kwarg 'value_arg_name' value argument
-                # value_object = expected_args.get(value_arg_name, UNDEFINED)
-                prep_arg = expected_args.get(value_arg_name, UNDEFINED)
-                if prep_arg:
-                    value_or_vexp = prep_arg.value_or_vexp
-                    if not (isinstance(value_or_vexp, ValueExpression) 
-                            and value_or_vexp._namespace == ThisNS):
-                        raise RuleSetupTypeError(owner=self, msg=f"{owner_name}: Function can not fill argument '{value_arg_name}' from '{caller.full_name}', argument is already filled with value '{value_or_vexp}'. Change arguments' setup or use 'This.' value expression.")
-                    value_arg_implicit = False
-            else:
-                # value to first unfilled positional argument
-                any_expected_args_unfilled = any([arg_name for arg_name, type_info in expected_args.items() if type_info is None])
-                # when everything is filled - allow only when there is any ValueExpression with reference to ThisNS
-                if not any_expected_args_unfilled:
-                    prep_args_within_thisns = [prep_arg for prep_arg in expected_args.values() 
-                                                   if prep_arg 
-                                                   and isinstance(prep_arg.value_or_vexp, ValueExpression) 
-                                                   and prep_arg.value_or_vexp._namespace == ThisNS]
-                    if not prep_args_within_thisns:
-                        raise RuleSetupTypeError(owner=self, msg=f"{owner_name}: Function can not take additional argument from '{caller.full_name}'. Remove at least one predefined argument or use value expression argument within 'This.' namespace.")
-                    value_arg_implicit = False
-
-            if value_arg_implicit is UNDEFINED:
-                # otherwise - fill value to first positional or kwarg (case when value_arg_name is predefined)
-                if value_arg_name:
-                    value_args = []
-                    value_kwargs = {value_arg_name: value_arg_type_info}
-                else:
-                    value_args = [value_arg_type_info]
-                    value_kwargs = {}
-
-                # TODO: validates vexp_node.get_type_info() matches value_arg_type_info
-
-                args, kwargs = self._process_func_args_raw((FunctionArgumentsType(value_args, value_kwargs)))
-                # vexp_node : IValueExpressionNode = caller
-                self._try_fill_given_args(
-                        setup_session=setup_session,
-                        caller=caller,
-                        owner_name=owner_name,
-                        args_title="dot-chain argument", 
-                        expected_args=expected_args, 
-                        given_args=args, 
-                        given_kwargs=kwargs)
-                value_arg_implicit = True
 
         # ==== 3 / 3. FUNC_ARGS - by invocation e.g. M.function(1, b=2)
         args, kwargs = self._process_func_args_raw(func_args)
@@ -451,6 +503,7 @@ class FunctionArguments:
 
         kwargs = dict(func_arg_dict=self.func_arg_dict, prepared_args=prepared_args)
 
+
         if not prepared_args.any_prep_arg_lack_type_info():
             check_prepared_arguments(**kwargs)
         else:
@@ -479,6 +532,8 @@ def check_prepared_arguments(
 
         err_msg = exp_arg.type_info.check_compatible(prep_arg.type_info)
         if err_msg:
+            exp_arg.type_info.check_compatible(prep_arg.type_info)
+            # prepared_args.any_prep_arg_lack_type_info() / setup_session.add_hook_on_finished_all()
             msg = f"[{prep_arg.name}]: {err_msg}"
             err_messages.append(msg)
 
