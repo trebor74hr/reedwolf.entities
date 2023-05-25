@@ -40,25 +40,11 @@ from .base import (
         IApplySession,
         ExecResult,
         ReservedAttributeNames,
+        AttrVexpNodeTypeEnum,
         )
 
 # ------------------------------------------------------------
 
-
-class AttrVexpNodeTypeEnum(str, Enum):
-    CONTAINER = "CONTAINER"
-    FIELD     = "FIELD"
-    COMPONENT = "COMPONENT"
-    DATA      = "DATA"
-    FUNCTION  = "FUNCTION"
-
-    VEXP      = "VEXP"
-    VEXP_FUNC = "VEXP_FUNC"
-    # VALIDATOR = "VALIDATOR"
-    # EVALUATOR = "EVALUATOR"
-    MODEL_CLASS = "MODEL_CLASS"
-    TH_FUNC   = "TH_FUNC"
-    TH_FIELD  = "TH_FIELD"
 
 
 @dataclass

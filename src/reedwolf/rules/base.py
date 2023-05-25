@@ -104,12 +104,29 @@ def list_to_strlist(args, before, after):
         out.append(after)
     return out
 
+# ------------------------------------------------------------
+
+class AttrVexpNodeTypeEnum(str, Enum):
+    CONTAINER = "CONTAINER"
+    FIELD     = "FIELD"
+    COMPONENT = "COMPONENT"
+    DATA      = "DATA"
+    FUNCTION  = "FUNCTION"
+
+    VEXP      = "VEXP"
+    VEXP_FUNC = "VEXP_FUNC"
+    # VALIDATOR = "VALIDATOR"
+    # EVALUATOR = "EVALUATOR"
+    MODEL_CLASS = "MODEL_CLASS"
+    TH_FUNC   = "TH_FUNC"
+    TH_FIELD  = "TH_FIELD"
 
 # ------------------------------------------------------------
 
 
 class ReservedAttributeNames(str, Enum):
     INSTANCE_ATTR_NAME = "Instance" 
+    # CHILDREN_KEY = "__children__" 
 
 # ------------------------------------------------------------
 
@@ -255,39 +272,6 @@ class ComponentBase(SetOwnerMixin, ABC):
 
     # ------------------------------------------------------------
 
-    def get_children_dict(self, down_traverse: bool = False, _depth:int=0) -> Dict[ComponentNameType, ComponentBase]:
-        """
-        CACHED
-        down_traverse = True - will go recursively through every children and
-                fetch their "children" which are NOT EXTENSIONS 
-                - i.e. same level fields
-        """
-        if down_traverse:
-            if not hasattr(self, "_children_dict_traversed"):
-                assert _depth<=30
-                _children_dict_traversed = {}
-                for comp in self.get_children():
-                    if not comp.is_extension():
-                        # recursion
-                        comp_chidren_dict = comp.get_children_dict(
-                                                down_traverse=True, 
-                                                _depth=_depth+1)
-                        _children_dict_traversed.update(comp_chidren_dict)
-
-                    # closer children are overriding further ones
-                    # (although this will not happen - names should be unique)
-                    _children_dict_traversed[comp.name] = comp
-                self._children_dict_traversed = _children_dict_traversed
-
-            out = self._children_dict_traversed
-        else:
-            if not hasattr(self, "_children_dict"):
-                self._children_dict = {comp.name : comp for comp in self.get_children()}
-            out = self._children_dict
-        return out
-
-    # ------------------------------------------------------------
-
     def get_children(self) -> List[ComponentBase]:
         """
         CACHED
@@ -304,6 +288,89 @@ class ComponentBase(SetOwnerMixin, ABC):
                 assert not hasattr(self, "enables"), self
             self._children = children if children else []
         return self._children
+
+
+    # ------------------------------------------------------------
+
+    def get_children_dict(self, ) -> Dict[ComponentNameType, ComponentBase]:
+        """
+        only direct children in flat dict
+        """
+        if not hasattr(self, "_children_dict"):
+            self._children_dict = {comp.name : comp for comp in self.get_children()}
+        return self._children_dict
+
+
+    # ------------------------------------------------------------
+
+    def get_children_tree_w_values_dict(self, apply_session: IApplySession, _depth:int=0) -> Dict[ComponentNameType, ComponentBase]:
+        """
+        will go recursively through every children and
+        fetch their "children" and collect to output structure.
+        selects all nodes, put in tree, includes self
+        for every node bind (M.<field>) is evaluated
+        """
+        return self._get_children_tree_dict_impl(key="_children_tree_w_values_dict", apply_session=apply_session)
+
+    # ------------------------------------------------------------
+
+    def get_children_tree_dict(self) -> Dict[ComponentNameType, ComponentBase]:
+        """
+        will go recursively through every children and
+        fetch their "children" and collect to output structure.
+        selects all nodes, put in tree, includes self
+        """
+        return self._get_children_tree_dict_impl(key="_children_tree_dict", apply_session=None)
+
+    # ------------------------------------------------------------
+
+    def _get_children_tree_dict_impl(self, key: str, apply_session: Optional[IApplySession], _depth:int=0) -> Dict[ComponentNameType, ComponentBase]:
+        if not hasattr(self, key):
+            assert _depth<=30
+            children_dict_traversed = {}
+            children_dict_traversed["name"] = self.name
+            children_dict_traversed["component"] = self
+            children_dict_traversed["children"] = []
+            if apply_session:
+                # TODO: evaluated bind
+                children_dict_traversed["value"] = UNDEFINED
+
+            for comp in self.get_children():
+                # recursion
+                comp_chidren_dict = comp._get_children_tree_dict_impl(key=key, apply_session=apply_session, _depth=_depth+1)
+                children_dict_traversed["children"].append(comp_chidren_dict)
+
+            setattr(self, key, children_dict_traversed)
+
+        return getattr(self, key)
+
+    # ------------------------------------------------------------
+
+    def get_children_tree_flatten_dict(self, _depth:int=0) -> Dict[ComponentNameType, ComponentBase]:
+        """
+        will go recursively through every children and
+        fetch their "children" and collect to output structure:
+        selects not-extensions, put in flat dict (i.e. children with
+        model same level fields), excludes self 
+        """
+        key = "_children_tree_flatten_dict"
+        if not hasattr(self, key):
+            assert _depth<=30
+            children_dict_traversed = {}
+
+            for comp in self.get_children():
+                if not comp.is_extension():
+                    # recursion
+                    comp_chidren_dict = comp.get_children_tree_flatten_dict(_depth=_depth+1)
+                    children_dict_traversed.update(comp_chidren_dict)
+
+                # closer children are overriding further ones
+                # (although this will not happen - names should be unique)
+                children_dict_traversed[comp.name] = comp
+
+            setattr(self, key, children_dict_traversed)
+
+        return getattr(self, key)
 
     # ------------------------------------------------------------
 
@@ -1262,24 +1329,23 @@ class IApplySession:
             -> Dict[ComponentNameType, ComponentBase]:
         # CACHE
         if component.name not in self._component_children_upward_dict:
-            components_hierarchy = []
+            components_tree = []
             curr_comp = component
             while curr_comp is not None:
-                if curr_comp in components_hierarchy:
+                if curr_comp in components_tree:
                     raise RuleInternalError(
                             owner=component, 
                             msg=f"Issue with hierarchy tree - duplicate node: {curr_comp.name}")
-                components_hierarchy.append(curr_comp)
+                components_tree.append(curr_comp)
                 curr_comp = curr_comp.owner
 
             children_dict = {}
             # Although no name clash could happen, reverse to have local scopes
             # overwrite parent's scopes. 
-            for curr_comp in reversed(components_hierarchy):
-                d = curr_comp.get_children_dict(down_traverse=True)
-                children_dict.update(
-                    d
-                    )
+            for curr_comp in reversed(components_tree):
+                comp_children_dict = curr_comp.get_children_tree_flatten_dict()
+                children_dict.update(comp_children_dict)
+
             self._component_children_upward_dict[component.name] = children_dict
 
         return self._component_children_upward_dict[component.name]

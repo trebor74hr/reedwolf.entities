@@ -44,6 +44,9 @@ from .exceptions import (
         RuleSetupError,
         RuleApplyError,
         )
+from .namespaces import (
+        FieldsNS,
+        )
 from .meta import (
         FunctionArgumentsType,
         TypeInfo,
@@ -65,12 +68,16 @@ from .func_args import (
         PreparedArguments,
         )
 from .base import (
+        AttrVexpNodeTypeEnum,
         ReservedArgumentNames,
+        IFieldBase,
         )
 
 
 ValueArgValidatorPyFuncType = Callable[..., NoneType]
 ValueArgValidatorPyFuncDictType = Dict[str, Union[ValueArgValidatorPyFuncType, List[ValueArgValidatorPyFuncType]]] 
+
+ValueOrVexp = Union[ValueExpression, IValueExpressionNode, Any]
 
 # 4 types
 class DatatypeBasicEnum(Enum):
@@ -274,7 +281,7 @@ class IFunction(IFunctionVexpNode):
     @staticmethod
     def execute_arg(
             apply_session: "IApplySession", # noqa: F821
-            arg_value: Any,
+            arg_value: ValueOrVexp,
             prev_node_type_info:TypeInfo, 
             ) -> Any:
         if isinstance(arg_value, (ValueExpression, IValueExpressionNode)):
@@ -327,11 +334,8 @@ class IFunction(IFunctionVexpNode):
                 else:
                     args.insert(0, input_value)
 
-            prep_arg = self.prepared_args.get(ReservedArgumentNames.INJECT_COMPONENT_ARG_NAME)
-            if prep_arg:
-                if not isinstance(prep_arg.caller, IValueExpressionNode):
-                    raise RuleInternalError(owner=self, msg=f"Expected IValueExpressionNode, got: {type(prep_arg.caller)} / {prep_arg.caller}") 
-                kwargs[ReservedArgumentNames.INJECT_COMPONENT_ARG_NAME] = prep_arg.caller
+            self._process_inject_pargs(kwargs=kwargs)
+
 
         if self.func_args:
             # TODO: copy all arguments or not?
@@ -361,6 +365,42 @@ class IFunction(IFunctionVexpNode):
 
         return vexp_result
 
+    # ------------------------------------------------------------
+
+    def _process_inject_pargs(self, kwargs: Dict[str, ValueOrVexp]):
+
+        prep_arg = self.prepared_args.get(ReservedArgumentNames.INJECT_COMPONENT_ARG_NAME)
+        if not prep_arg:
+            return 
+
+        if not isinstance(prep_arg.caller, IValueExpressionNode):
+            raise RuleInternalError(owner=self, msg=f"Expected IValueExpressionNode, got: {type(prep_arg.caller)} / {prep_arg.caller}") 
+
+        component: ComponentBase = prep_arg.caller
+
+        if not (component.attr_node_type == AttrVexpNodeTypeEnum.FIELD
+            and component.namespace == FieldsNS
+            and isinstance(component.data, IFieldBase)):
+
+            raise RuleInternalError(owner=self, msg=f"INJECT_COMPONENT_ARG_NAME :: PrepArg '{prep_arg.name}' expected VExp(F.<field> -> Field()),  got: '{component}' ") 
+
+        output = {}
+
+        # vexp_result = execute_vexp_or_node(
+        #                 arg_value,
+        #                 arg_value,
+        #                 vexp_result = UNDEFINED,
+        #                 prev_node_type_info=prev_node_type_info,
+        #                 apply_session=apply_session)
+        # arg_value = vexp_result.value
+
+        assert ReservedArgumentNames.INJECT_COMPONENT_ARG_NAME not in kwargs
+        kwargs[ReservedArgumentNames.INJECT_COMPONENT_ARG_NAME] = prep_arg.caller
+
+        # prep_arg.caller.namespace / field_name = prep_arg.caller.name / prep_arg.caller.get_type_info()
+        #   TypeInfo(py_type_hint=<class 'bool'>, types=[<class 'bool'>])
+        # prep_arg.caller.data
+        #   BooleanField(owner_name='company_rules', bind=VExpr(Models.can_be_accessed), name='can_be_accessed')
 
 # ------------------------------------------------------------
 # CustomFunctions - need 2 steps and 3 layers:
