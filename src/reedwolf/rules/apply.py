@@ -212,7 +212,12 @@ class ApplyResult(IApplySession):
     def execute_evaluation(self, component: ComponentBase, evaluation:EvaluationBase) -> ExecResult:
         """ Execute evaluation and if new value is different from existing
             value, update current instance """
-        assert component == self.current_frame.component
+        assert isinstance(evaluation, EvaluationBase)
+        assert component == evaluation.owner
+
+        if not component == self.current_frame.component:
+            raise RuleInternalError(owner=self.current_frame.component, 
+                    msg=f"Component in frame {self.current_frame.component} must match component: {component}") 
 
         # evaluation_vexp = evaluation.value
         # assert isinstance(evaluation_vexp, ValueExpression)
@@ -246,7 +251,12 @@ class ApplyResult(IApplySession):
         """ Execute validaion - if returns False value then register error and
             mark component and children invalid to prevent further rules execution
         """
-        assert component == self.current_frame.component
+        assert isinstance(validation, ValidationBase)
+        assert component == validation.owner
+
+        if not component == self.current_frame.component:
+            raise RuleInternalError(owner=self.current_frame.component, 
+                    msg=f"Component in frame {self.current_frame.component} must match component: {component}") 
 
         # value=value, 
         validation_failure = validation.validate(apply_session=self)
@@ -704,6 +714,15 @@ class ApplyResult(IApplySession):
         all_ok = True
         if component.cleaners:
             for cleaner in component.cleaners:
+                # TODO: if something is wrong - cleaner is not known. maybe
+                #       something like this:
+                #   with self.use_stack_frame(
+                #           ApplyStackFrame(
+                #               container = self.current_frame.container,
+                #               instance = self.current_frame.instance,
+                #               component = self.current_frame.component,
+                #               cleaner = cleaner, 
+                #               )):
                 if isinstance(cleaner, ValidationBase):
                     # returns validation_failure
                     if self.execute_validation(component=component, validation=cleaner):

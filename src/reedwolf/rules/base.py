@@ -251,15 +251,42 @@ class ComponentBase(SetOwnerMixin, ABC):
 
     # ------------------------------------------------------------
 
-    def get_children_dict(self) -> Dict[ComponentNameType, ComponentBase]:
-        if not hasattr(self, "_children_dict"):
-            self._children_dict = {comp.name : comp for comp in self.get_children()}
-        return self._children_dict
+    def get_children_dict(self, down_traverse: bool = False, _depth:int=0) -> Dict[ComponentNameType, ComponentBase]:
+        """
+        CACHED
+        down_traverse = True - will go recursively through every children and
+                fetch their "children" which are NOT EXTENSIONS 
+                - i.e. same level fields
+        """
+        if down_traverse:
+            if not hasattr(self, "_children_dict_traversed"):
+                assert _depth<=30
+                _children_dict_traversed = {}
+                for comp in self.get_children():
+                    if not comp.is_extension():
+                        # recursion
+                        comp_chidren_dict = comp.get_children_dict(
+                                                down_traverse=True, 
+                                                _depth=_depth+1)
+                        _children_dict_traversed.update(comp_chidren_dict)
+
+                    # closer children are overriding further ones
+                    # (although this will not happen - names should be unique)
+                    _children_dict_traversed[comp.name] = comp
+                self._children_dict_traversed = _children_dict_traversed
+
+            out = self._children_dict_traversed
+        else:
+            if not hasattr(self, "_children_dict"):
+                self._children_dict = {comp.name : comp for comp in self.get_children()}
+            out = self._children_dict
+        return out
 
     # ------------------------------------------------------------
 
     def get_children(self) -> List[ComponentBase]:
         """
+        CACHED
         Get only children components. Used in apply() (+unit tests).
         to get all - components, cleaners and all other complex objects 
         - use _get_subcomponents_list()
@@ -1242,11 +1269,12 @@ class IApplySession:
                 curr_comp = curr_comp.owner
 
             children_dict = {}
-            # Reverse to have local scopes first
-            # (although no name clash could happen)
+            # Although no name clash could happen, reverse to have local scopes
+            # overwrite parent's scopes. 
             for curr_comp in reversed(components_hierarchy):
+                d = curr_comp.get_children_dict(down_traverse=True)
                 children_dict.update(
-                    curr_comp.get_children_dict()
+                    d
                     )
             self._component_children_upward_dict[component.name] = children_dict
 
