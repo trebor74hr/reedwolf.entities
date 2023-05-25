@@ -49,7 +49,7 @@ from .attr_nodes import (
 from .base import (
         SetupStackFrame,
         ReservedArgumentNames,
-        ComponentBase,
+        ComponentTreeWValuesDictType,
         )
 
 TypeInfoCallable = Callable[[], TypeInfo]
@@ -69,7 +69,7 @@ class PrepArg:
     # TODO: Union[NoneType, StdPyTypes (Literal[]), IValueExpressionNode
     value_or_vexp: Any = field(repr=True)
 
-    # Used in ReservedArgumentNames.INJECT_COMPONENT_ARG_NAME case / in apply() phase only
+    # Used in ReservedArgumentNames.INJECT_COMPONENT_TREE case / in apply() phase only
     caller: Union[Namespace, IValueExpressionNode] = field(repr=False)
 
     def __post_init__(self):
@@ -385,13 +385,13 @@ class FunctionArguments:
             value_kwargs = {}
 
             # TODO: inject component - it is not perfect :( 
-            if ReservedArgumentNames.INJECT_COMPONENT_ARG_NAME in expected_args:
+            if ReservedArgumentNames.INJECT_COMPONENT_TREE in expected_args:
                 if not (isinstance(caller, AttrVexpNode)
                         and caller.namespace == FieldsNS):
                     raise RuleInternalError(owner=self, msg=f"Expected F.<fieldname>, got: {caller}") 
-                component_type_info = TypeInfo.get_or_create_by_type(py_type_hint=ComponentBase, caller=caller)
+                component_tree_type_info = TypeInfo.get_or_create_by_type(py_type_hint=ComponentTreeWValuesDictType, caller=caller)
                 # NOTE: caller is here lost, hopefully won't be needed
-                value_kwargs[ReservedArgumentNames.INJECT_COMPONENT_ARG_NAME] = component_type_info
+                value_kwargs[ReservedArgumentNames.INJECT_COMPONENT_TREE] = component_tree_type_info
 
             if value_arg_name:
                 value_kwargs[value_arg_name] = value_arg_type_info

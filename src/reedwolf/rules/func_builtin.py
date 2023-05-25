@@ -35,7 +35,7 @@ from .utils import (
         UNDEFINED,
         )
 from .base import (
-        ComponentBase
+        ComponentTreeWValuesDictType,
         )
 
 def get_builtin_function_factories_dict() -> Dict[str, BuiltinFunctionFactory]:
@@ -84,9 +84,9 @@ def EnumMembers(
 
 T = TypeVar("T", bound=Any)
 
-def children(value: Any, inject_component: ComponentBase) -> List[ComponentBase]:
+def children(value: Any, inject_component_tree: ComponentTreeWValuesDictType) -> List[ItemType]:
     """ Component's list of children """
-    return inject_component.get_children()
+    return inject_component_tree["children"]
 
 Children = create_builtin_function_factory( # noqa: E305
             children, name="Children", 

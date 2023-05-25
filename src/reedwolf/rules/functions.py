@@ -334,7 +334,7 @@ class IFunction(IFunctionVexpNode):
                 else:
                     args.insert(0, input_value)
 
-            self._process_inject_pargs(kwargs=kwargs)
+            self._process_inject_pargs(apply_session=apply_session, kwargs=kwargs)
 
 
         if self.func_args:
@@ -367,35 +367,30 @@ class IFunction(IFunctionVexpNode):
 
     # ------------------------------------------------------------
 
-    def _process_inject_pargs(self, kwargs: Dict[str, ValueOrVexp]):
+    def _process_inject_pargs(self, apply_session: IApplySession, kwargs: Dict[str, ValueOrVexp]):
 
-        prep_arg = self.prepared_args.get(ReservedArgumentNames.INJECT_COMPONENT_ARG_NAME)
+        prep_arg = self.prepared_args.get(ReservedArgumentNames.INJECT_COMPONENT_TREE)
         if not prep_arg:
             return 
 
         if not isinstance(prep_arg.caller, IValueExpressionNode):
             raise RuleInternalError(owner=self, msg=f"Expected IValueExpressionNode, got: {type(prep_arg.caller)} / {prep_arg.caller}") 
 
-        component: ComponentBase = prep_arg.caller
+        vexp_node: IValueExpressionNode = prep_arg.caller
 
-        if not (component.attr_node_type == AttrVexpNodeTypeEnum.FIELD
-            and component.namespace == FieldsNS
-            and isinstance(component.data, IFieldBase)):
+        if not (vexp_node.attr_node_type == AttrVexpNodeTypeEnum.FIELD
+            and vexp_node.namespace == FieldsNS
+            and isinstance(vexp_node.data, IFieldBase)):
 
-            raise RuleInternalError(owner=self, msg=f"INJECT_COMPONENT_ARG_NAME :: PrepArg '{prep_arg.name}' expected VExp(F.<field> -> Field()),  got: '{component}' ") 
+            raise RuleInternalError(owner=self, msg=f"INJECT_COMPONENT_TREE :: PrepArg '{prep_arg.name}' expected VExp(F.<field>) -> Field(),  got: '{vexp_node}' -> '{vexp_node.data}' ") 
 
-        output = {}
+        component: ComponentBase = vexp_node.data
 
-        # vexp_result = execute_vexp_or_node(
-        #                 arg_value,
-        #                 arg_value,
-        #                 vexp_result = UNDEFINED,
-        #                 prev_node_type_info=prev_node_type_info,
-        #                 apply_session=apply_session)
-        # arg_value = vexp_result.value
+        output = component.get_components_tree_w_values_dict(apply_session=apply_session)
+        # from pprint import pprint; print("----here:"); pprint(output)
 
-        assert ReservedArgumentNames.INJECT_COMPONENT_ARG_NAME not in kwargs
-        kwargs[ReservedArgumentNames.INJECT_COMPONENT_ARG_NAME] = prep_arg.caller
+        assert ReservedArgumentNames.INJECT_COMPONENT_TREE not in kwargs
+        kwargs[ReservedArgumentNames.INJECT_COMPONENT_TREE] = output
 
         # prep_arg.caller.namespace / field_name = prep_arg.caller.name / prep_arg.caller.get_type_info()
         #   TypeInfo(py_type_hint=<class 'bool'>, types=[<class 'bool'>])

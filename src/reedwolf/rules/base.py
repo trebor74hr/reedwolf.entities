@@ -60,12 +60,25 @@ from .expressions import (
         IValueExpressionNode,
         IFunctionVexpNode,
         ISetupSession,
+        execute_vexp_or_node,
         )
 from .contexts import (
         IContext,
         )
 
 # ------------------------------------------------------------
+
+# TODO: hard to define, it is recursive:
+#   key         value
+#   ----------- ----------------
+#   name:       str
+#   component:  ComponentBase
+#   value:      LiteralValue
+#   children:   List[Self]
+#   
+ComponentTreeDictType = Dict[str, Any]
+ComponentTreeWValuesDictType = Dict[str, Any]
+
 
 YAML_INDENT = "  "
 PY_INDENT = "    "
@@ -131,7 +144,7 @@ class ReservedAttributeNames(str, Enum):
 # ------------------------------------------------------------
 
 class ReservedArgumentNames(str, Enum):
-    INJECT_COMPONENT_ARG_NAME = "inject_component" 
+    INJECT_COMPONENT_TREE = "inject_component_tree" 
 
 # ------------------------------------------------------------
 
@@ -300,50 +313,6 @@ class ComponentBase(SetOwnerMixin, ABC):
             self._children_dict = {comp.name : comp for comp in self.get_children()}
         return self._children_dict
 
-
-    # ------------------------------------------------------------
-
-    def get_children_tree_w_values_dict(self, apply_session: IApplySession, _depth:int=0) -> Dict[ComponentNameType, ComponentBase]:
-        """
-        will go recursively through every children and
-        fetch their "children" and collect to output structure.
-        selects all nodes, put in tree, includes self
-        for every node bind (M.<field>) is evaluated
-        """
-        return self._get_children_tree_dict_impl(key="_children_tree_w_values_dict", apply_session=apply_session)
-
-    # ------------------------------------------------------------
-
-    def get_children_tree_dict(self) -> Dict[ComponentNameType, ComponentBase]:
-        """
-        will go recursively through every children and
-        fetch their "children" and collect to output structure.
-        selects all nodes, put in tree, includes self
-        """
-        return self._get_children_tree_dict_impl(key="_children_tree_dict", apply_session=None)
-
-    # ------------------------------------------------------------
-
-    def _get_children_tree_dict_impl(self, key: str, apply_session: Optional[IApplySession], _depth:int=0) -> Dict[ComponentNameType, ComponentBase]:
-        if not hasattr(self, key):
-            assert _depth<=30
-            children_dict_traversed = {}
-            children_dict_traversed["name"] = self.name
-            children_dict_traversed["component"] = self
-            children_dict_traversed["children"] = []
-            if apply_session:
-                # TODO: evaluated bind
-                children_dict_traversed["value"] = UNDEFINED
-
-            for comp in self.get_children():
-                # recursion
-                comp_chidren_dict = comp._get_children_tree_dict_impl(key=key, apply_session=apply_session, _depth=_depth+1)
-                children_dict_traversed["children"].append(comp_chidren_dict)
-
-            setattr(self, key, children_dict_traversed)
-
-        return getattr(self, key)
-
     # ------------------------------------------------------------
 
     def get_children_tree_flatten_dict(self, _depth:int=0) -> Dict[ComponentNameType, ComponentBase]:
@@ -371,6 +340,58 @@ class ComponentBase(SetOwnerMixin, ABC):
             setattr(self, key, children_dict_traversed)
 
         return getattr(self, key)
+
+    # ------------------------------------------------------------
+
+    def get_components_tree_dict(self) -> ComponentTreeDictType:
+        """
+        will go recursively through every children and
+        fetch their "children" and collect to output structure.
+        selects all nodes, put in tree, includes self
+        """
+        return self._get_components_tree_dict_impl(key="_children_tree_dict", apply_session=None)
+
+    # ------------------------------------------------------------
+
+    def get_components_tree_w_values_dict(self, apply_session: IApplySession, _depth:int=0) -> ComponentTreeWValuesDictType:
+        """
+        will go recursively through every children and
+        fetch their "children" and collect to output structure.
+        selects all nodes, put in tree, includes self
+        for every node bind (M.<field>) is evaluated
+        """
+        return self._get_components_tree_dict_impl(key="_children_tree_w_values_dict", apply_session=apply_session)
+
+    # ------------------------------------------------------------
+
+    def _get_components_tree_dict_impl(self, key: str, apply_session: Optional[IApplySession], _depth:int=0) -> Dict[ComponentNameType, ComponentBase]:
+        if not hasattr(self, key):
+            assert _depth<=30
+            children_dict_traversed = {}
+            children_dict_traversed["name"] = self.name
+            children_dict_traversed["component"] = self
+            children_dict_traversed["children"] = []
+            if apply_session:
+                if getattr(self, "bind", None):
+                    vexp = self.bind
+                    vexp_result = execute_vexp_or_node(
+                                    vexp,
+                                    vexp,
+                                    vexp_result = UNDEFINED,
+                                    prev_node_type_info=None, # prev_node_type_info,
+                                    apply_session=apply_session)
+                    value = vexp_result.value
+                    children_dict_traversed["value"] = value
+
+            for comp in self.get_children():
+                # recursion
+                comp_chidren_dict = comp._get_components_tree_dict_impl(key=key, apply_session=apply_session, _depth=_depth+1)
+                children_dict_traversed["children"].append(comp_chidren_dict)
+
+            setattr(self, key, children_dict_traversed)
+
+        return getattr(self, key)
+
 
     # ------------------------------------------------------------
 
