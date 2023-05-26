@@ -93,6 +93,18 @@ Children = create_builtin_function_factory( # noqa: E305
             # arg_validators={"component": ensure_is_component},
             )
 
+
+def single_bool_selected(children_list: List[ItemType]) -> int:
+    """ for objects from datastores - e.g. rows, iterables """
+    return len([child for child in children_list if child["value"]==True])==1
+
+SingleBoolSelected = create_builtin_function_factory( # noqa: E305
+            single_bool_selected, name="SingleBoolSelected", 
+            )
+
+
+
+
 def count(value_list: List[ItemType]) -> int:
     """ for objects from datastores - e.g. rows, iterables """
     return len(value_list)
