@@ -659,7 +659,7 @@ class ApplyResult(IApplySession):
             if isinstance(attr_value, DotExpression):
                 # dexp_result: ExecResult = 
                 attr_value._evaluator.execute_dexp(apply_session=self)
-                # TODO: apply_session.config.logger.debug(f"{parent.name if parent else ''}.{component.name}.{attr_name} = VExp[{attr_value}] -> {dexp_result}")
+                # TODO: apply_session.config.logger.debug(f"{parent.name if parent else ''}.{component.name}.{attr_name} = DExp[{attr_value}] -> {dexp_result}")
 
     # ------------------------------------------------------------
 
@@ -1016,6 +1016,18 @@ class ApplyResult(IApplySession):
 
         return key_string
 
+
+    # ------------------------------------------------------------
+
+    def get_current_value_instance(self, component: ComponentBase) -> InstanceAttrCurrentValue:
+        """ if not found will return UNDEFINED
+            Probaly a bit faster, only dict queries.
+        """
+        key_str = self.get_key_string(component)
+        if not key_str in self.current_values:
+            return UNDEFINED
+        instance_attr_current_value = self.current_values[key_str]
+        return instance_attr_current_value
 
     # ------------------------------------------------------------
 

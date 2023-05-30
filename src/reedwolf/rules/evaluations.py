@@ -52,7 +52,7 @@ class Evaluation(PresaveEvaluationBase):
     """
     TODO: put usage - new custom evaluations could be done like this:
     """
-    # TODO: check in Setup phase if type of evaluated VExpression has correct
+    # TODO: check in Setup phase if type of evaluated DotExpression has correct
     #       type - e.g.  for EnumField evaluated value must be within enum values.
     name:           str
     value:          DotExpression

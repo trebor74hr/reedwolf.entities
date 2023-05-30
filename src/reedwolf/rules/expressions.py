@@ -282,7 +282,7 @@ class LiteralDexpNode(IDotExpressionNode):
 
 # ------------------------------------------------------------
 
-class VExpStatusEnum(str, Enum):
+class DExpStatusEnum(str, Enum):
     INITIALIZED      = "INIT"
     ERR_NOT_FOUND    = "ERR_NOT_FOUND"
     ERR_TO_IMPLEMENT = "ERR_TO_IMPLEMENT"
@@ -348,7 +348,7 @@ class OperationDexpNode(IDotExpressionNode):
 
     # later evaluated
     op_function: Callable[[...], Any] = field(repr=False, init=False)
-    _status : VExpStatusEnum = field(repr=False, init=False, default=VExpStatusEnum.INITIALIZED)
+    _status : DExpStatusEnum = field(repr=False, init=False, default=DExpStatusEnum.INITIALIZED)
     _all_ok : Optional[bool] = field(repr=False, init=False, default=None)
 
     _first_dexp_node : Optional[IDotExpressionNode] = field(repr=False, init=False, default=None)
@@ -358,7 +358,7 @@ class OperationDexpNode(IDotExpressionNode):
 
     def __post_init__(self):
         self.op_function = self._get_op_function(self.op)
-        self._status : VExpStatusEnum = VExpStatusEnum.INITIALIZED
+        self._status : DExpStatusEnum = DExpStatusEnum.INITIALIZED
         self._all_ok : Optional[bool] = None
         self._output_type_info: Union[TypeInfo, UNDEFINED] = UNDEFINED 
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
@@ -402,7 +402,7 @@ class OperationDexpNode(IDotExpressionNode):
     def Setup(self, setup_session: ISetupSession, owner: Any) -> DotExpressionEvaluator:  # noqa: F821
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(self)
 
-        if not self._status==VExpStatusEnum.INITIALIZED:
+        if not self._status==DExpStatusEnum.INITIALIZED:
             raise RuleSetupError(owner=setup_session, item=self, msg=f"AttrDexpNode not in INIT state, got {self._status}")
 
         # just to check if all ok
@@ -413,7 +413,7 @@ class OperationDexpNode(IDotExpressionNode):
             self._second_dexp_node = self.create_dexp_node(self.second, label="second", setup_session=setup_session, owner=owner)
             setup_session.register_dexp_node(self._second_dexp_node)
 
-        self._status=VExpStatusEnum.BUILT
+        self._status=DExpStatusEnum.BUILT
 
         return self
 
@@ -522,7 +522,7 @@ class DotExpression(DynamicAttrsBase):
         Path: Optional[List[DotExpression]] = None,
     ):
         # SAFE OPERATIONS
-        self._status : VExpStatusEnum = VExpStatusEnum.INITIALIZED
+        self._status : DExpStatusEnum = DExpStatusEnum.INITIALIZED
         self._namespace = namespace
         self._node = node
         self._is_top = Path is None
@@ -563,10 +563,10 @@ class DotExpression(DynamicAttrsBase):
         return self._namespace
 
     def IsFinished(self):
-        return self._status!=VExpStatusEnum.INITIALIZED
+        return self._status!=DExpStatusEnum.INITIALIZED
 
     def _EnsureFinished(self):
-        if self._status!=VExpStatusEnum.INITIALIZED:
+        if self._status!=DExpStatusEnum.INITIALIZED:
             # TODO: this should be RuleSetupValueError instead
             raise RuleInternalError(owner=self, msg=f"Method Setup() already called, further DotExpression building/operator-building is not possible (status={self._status}).")
 
@@ -701,7 +701,7 @@ class DotExpression(DynamicAttrsBase):
             #     raise 
             #     # if strict:
             #     #     raise
-            #     # self._status = VExpStatusEnum.ERR_TO_IMPLEMENT
+            #     # self._status = DExpStatusEnum.ERR_TO_IMPLEMENT
             #     # dexp_evaluator.failed(str(ex))
             #     # break
 
@@ -716,7 +716,7 @@ class DotExpression(DynamicAttrsBase):
 
 
         if dexp_evaluator.is_all_ok():
-            self._status = VExpStatusEnum.BUILT
+            self._status = DExpStatusEnum.BUILT
             self._all_ok = True
             self._evaluator = dexp_evaluator
             self._dexp_node = dexp_evaluator.last_node()
@@ -766,7 +766,7 @@ class DotExpression(DynamicAttrsBase):
         return ".".join([ve.as_str() for ve in self.Path]) if self.Path else f"{self.__class__.__name__}(... {self._node})"
 
     def __repr__(self):
-        return f"VExpr({self})"
+        return f"DExpr({self})"
 
     # --------------------------------
     # ------- Reserved methods -------

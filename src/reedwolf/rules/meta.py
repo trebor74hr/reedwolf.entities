@@ -166,12 +166,12 @@ EmptyFunctionArguments  = FunctionArgumentsType([], {})
 # NOTE: when custom type with DotExpression alias are defined, then
 #       get_type_hints falls into problems producing NameError-s
 #         Object <class 'type'> / '<class 'reedwolf.rules.components.BooleanField'>'
-#         type hint is not possible/available: name 'OptionalBoolOrVExp' is not defined.
+#         type hint is not possible/available: name 'OptionalBoolOrDExp' is not defined.
 #
 #   from .expressions import DotExpression
-#   BoolOrVExpType          = Union[bool, DotExpression]
-#   OptionalBoolOrVExpType  = Optional[BoolOrVExpType]
-#   StandardTypeOrVExpType  = Union[StandardType, DotExpression]
+#   BoolOrDExpType          = Union[bool, DotExpression]
+#   OptionalBoolOrDExpType  = Optional[BoolOrDExpType]
+#   StandardTypeOrDExpType  = Union[StandardType, DotExpression]
 
 
 # ------------------------------------------------------------
@@ -361,7 +361,7 @@ def extract_py_type_hints(inspect_object: Any, caller_name: str, strict: bool = 
             #       when custom type with DotExpression alias are defined, then
             #       get_type_hints falls into problems producing NameError-s
             #         Object <class 'type'> / '<class 'reedwolf.rules.components.BooleanField'>'
-            #         type hint is not possible/available: name 'OptionalBoolOrVExp' is not defined.
+            #         type hint is not possible/available: name 'OptionalBoolOrDExp' is not defined.
             raise RuleSetupValueError(item=inspect_object, msg=f"{caller_name}: Object type hint is not possible/available: {ex}."
                                  + " Please verify that object is properly type hinted class attribute, function or method,"
                                  + " and type hint should not include not standard type Type alias (see rules/types.py comment).")

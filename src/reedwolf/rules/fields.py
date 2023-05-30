@@ -54,7 +54,7 @@ from .base import (
         )
 from .expressions   import (
         DotExpression,
-        VExpStatusEnum,
+        DExpStatusEnum,
         IFunctionDexpNode,
         )
 from .attr_nodes import (
@@ -421,7 +421,7 @@ class ChoiceField(FieldBase):
             raise RuleInternalError(owner=self, msg=f"Direct functions are not allowed, wrap with Function() instead. Got: {choices}")
         elif isinstance(choices, DotExpression):
             # TODO: restrict to dexp only - no operation
-            if choices._status!=VExpStatusEnum.BUILT:
+            if choices._status!=DExpStatusEnum.BUILT:
                 # reported before - warn(f"TODO: There is an error with value expression {self.choices} - skip it for now.")
                 choices = None
             else:
@@ -546,7 +546,7 @@ class ChoiceField(FieldBase):
             raise RuleSetupValueError(owner=self, msg=f"Argument '{aname}' is not set or has wrong type - should be DotExpression in This. namespace. Got: {dexp} / {type(dexp)}")
 
         attr_node = dexp.Setup(setup_session=setup_session, owner=self)
-        if dexp._status != VExpStatusEnum.BUILT:
+        if dexp._status != DExpStatusEnum.BUILT:
             raise RuleInternalError(owner=self, msg=f"Setup failed for Dexp: {dexp} -> {dexp._status}")
 
         return attr_node

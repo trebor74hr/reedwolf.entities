@@ -382,7 +382,7 @@ class IFunction(IFunctionDexpNode):
             and dexp_node.namespace == FieldsNS
             and isinstance(dexp_node.data, IFieldBase)):
 
-            raise RuleInternalError(owner=self, msg=f"INJECT_COMPONENT_TREE :: PrepArg '{prep_arg.name}' expected VExp(F.<field>) -> Field(),  got: '{dexp_node}' -> '{dexp_node.data}' ") 
+            raise RuleInternalError(owner=self, msg=f"INJECT_COMPONENT_TREE :: PrepArg '{prep_arg.name}' expected DExp(F.<field>) -> Field(),  got: '{dexp_node}' -> '{dexp_node.data}' ") 
 
         component: ComponentBase = dexp_node.data
 
@@ -395,7 +395,7 @@ class IFunction(IFunctionDexpNode):
         # prep_arg.caller.namespace / field_name = prep_arg.caller.name / prep_arg.caller.get_type_info()
         #   TypeInfo(py_type_hint=<class 'bool'>, types=[<class 'bool'>])
         # prep_arg.caller.data
-        #   BooleanField(owner_name='company_rules', bind=VExpr(Models.can_be_accessed), name='can_be_accessed')
+        #   BooleanField(owner_name='company_rules', bind=DExpr(Models.can_be_accessed), name='can_be_accessed')
 
 # ------------------------------------------------------------
 # CustomFunctions - need 2 steps and 3 layers:

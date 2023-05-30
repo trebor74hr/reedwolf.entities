@@ -61,7 +61,7 @@ from .expressions import (
         IDotExpressionNode,
         IFunctionDexpNode,
         ISetupSession,
-        execute_dexp_or_node,
+        # execute_dexp_or_node,
         )
 from .contexts import (
         IContext,
@@ -373,17 +373,26 @@ class ComponentBase(SetOwnerMixin, ABC):
             children_dict_traversed["component"] = self
             children_dict_traversed["children"] = []
             if apply_session:
+                # instance_attr_current_value = apply_session.get_current_value_instance(component=self)
+                # print("here1", self.name, instance_attr_current_value)
+                # if instance_attr_current_value is not UNDEFINED:
+                #     children_dict_traversed["value"] = instance_attr_current_value.value
+
                 # TODO: not good - 
                 if getattr(self, "bind", None):
-                    dexp = self.bind
-                    dexp_result = execute_dexp_or_node(
-                                    dexp_or_value=dexp,
-                                    dexp_node=dexp,
-                                    dexp_result = UNDEFINED,
-                                    prev_node_type_info=None, # prev_node_type_info,
-                                    apply_session=apply_session)
-                    value = dexp_result.value
+                    bind_dexp_result = self.get_dexp_result_from_instance(apply_session=apply_session)
+                    value = bind_dexp_result.value
                     children_dict_traversed["value"] = value
+
+                    # dexp = self.bind
+                    # dexp_result = execute_dexp_or_node(
+                    #                 dexp_or_value=dexp,
+                    #                 dexp_node=dexp,
+                    #                 dexp_result = UNDEFINED,
+                    #                 prev_node_type_info=None, # prev_node_type_info,
+                    #                 apply_session=apply_session)
+                    # value = dexp_result.value
+                    # children_dict_traversed["value"] = value
 
             for comp in self.get_children():
                 # recursion
@@ -498,7 +507,7 @@ class ComponentBase(SetOwnerMixin, ABC):
                 # needs manual Setup() later call with extra context - now is too
                 # early (e.g. ThisNS)
                 called = False
-            # and dexp._status != VExpStatusEnum.INITIALIZED:
+            # and dexp._status != DExpStatusEnum.INITIALIZED:
             elif namespace == ModelsNS \
                and dexp.IsFinished():
                 # Setup() was called in container.setup() before
