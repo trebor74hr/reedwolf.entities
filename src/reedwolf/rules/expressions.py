@@ -210,7 +210,7 @@ class IDotExpressionNode(ABC):
 
 def execute_vexp_or_node(
         vexp_or_value: Union[DotExpression, Any],
-        # Union[OperationVexpNode, IFunctionVexpNode, LiteralVexpNode]
+        # Union[OperationDexpNode, IFunctionDexpNode, LiteralDexpNode]
         vexp_node: Union[IDotExpressionNode, Any], 
         prev_node_type_info: TypeInfo,
         vexp_result: ExecResult,
@@ -223,7 +223,7 @@ def execute_vexp_or_node(
         vexp_result = vexp_or_value._evaluator.execute_vexp(
                             apply_session=apply_session,
                             )
-    # AttrVexpNode, OperationVexpNode, IFunctionVexpNode, LiteralVexpNode,
+    # AttrDexpNode, OperationDexpNode, IFunctionDexpNode, LiteralDexpNode,
     elif isinstance(vexp_node, (
             IDotExpressionNode,
             )):
@@ -235,18 +235,18 @@ def execute_vexp_or_node(
                             )
     else:
         raise RuleInternalError(
-                f"Expected Vexp, OpVexp or FuncVexp, got: {type(vexp_or_value)} -> {vexp_or_value} / {type(vexp_node)} -> {vexp_node}")
+                f"Expected Dexp, OpDexp or FuncDexp, got: {type(vexp_or_value)} -> {vexp_or_value} / {type(vexp_node)} -> {vexp_node}")
 
     return vexp_result
 
 
 
 # ------------------------------------------------------------
-# IFunctionVexpNode - name used in-between just to emphasize that this is Vexp
+# IFunctionDexpNode - name used in-between just to emphasize that this is Dexp
 #                     Node
 # ------------------------------------------------------------
 
-class IFunctionVexpNode(IDotExpressionNode):
+class IFunctionDexpNode(IDotExpressionNode):
     """
     a bit an overhead -> just to have better naming for base class
     """
@@ -254,7 +254,7 @@ class IFunctionVexpNode(IDotExpressionNode):
 
 
 @dataclass
-class LiteralVexpNode(IDotExpressionNode):
+class LiteralDexpNode(IDotExpressionNode):
 
     value : Any
     vexp_result: ExecResult = field(repr=False, init=False)
@@ -334,7 +334,7 @@ OPCODE_TO_FUNCTION = {
 
 
 @dataclass
-class OperationVexpNode(IDotExpressionNode):
+class OperationDexpNode(IDotExpressionNode):
     """
     Binary or Unary operators that handles
     basically will do following:
@@ -394,7 +394,7 @@ class OperationVexpNode(IDotExpressionNode):
             # TODO: check other types - maybe some unappliable
             if not isinstance(vexp_or_other, STANDARD_TYPE_W_NONE_LIST):
                 raise NotImplementedError(f"{label}.type unhandled: '{type(vexp_or_other)}' => '{vexp_or_other}'")
-            vexp_node = LiteralVexpNode(value=vexp_or_other)
+            vexp_node = LiteralDexpNode(value=vexp_or_other)
 
         return vexp_node
 
@@ -403,7 +403,7 @@ class OperationVexpNode(IDotExpressionNode):
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(self)
 
         if not self._status==VExpStatusEnum.INITIALIZED:
-            raise RuleSetupError(owner=setup_session, item=self, msg=f"AttrVexpNode not in INIT state, got {self._status}")
+            raise RuleSetupError(owner=setup_session, item=self, msg=f"AttrDexpNode not in INIT state, got {self._status}")
 
         # just to check if all ok
         self._first_vexp_node = self.create_vexp_node(self.first, label="First", setup_session=setup_session, owner=owner)
@@ -504,7 +504,7 @@ class DotExpression(DynamicAttrsBase):
     # NOTE: not a @dataclass for now, reason: overriding too many __dunder__ methods so ...
 
     # NOTE: each item in this list should be implemented as attribute or method in this class
-    # "GetAttrVexpNode",
+    # "GetAttrDexpNode",
     # "Read", 
     RESERVED_ATTR_NAMES = {"Path", "Setup", "GetNamespace",
                            "_evaluator",  # allwyays filled, contains all nodes
@@ -517,7 +517,7 @@ class DotExpression(DynamicAttrsBase):
 
     def __init__(
         self,
-        node: Union[str, OperationVexpNode],
+        node: Union[str, OperationDexpNode],
         namespace: Namespace,
         Path: Optional[List[DotExpression]] = None,
     ):
@@ -540,8 +540,8 @@ class DotExpression(DynamicAttrsBase):
             if self._node in self.RESERVED_ATTR_NAMES:
                 raise RuleSetupValueError(owner=self, msg=f"Value expression's attribute '{self._node}' is a reserved name, choose another.")
         else:
-            if not isinstance(self._node, OperationVexpNode):
-                raise RuleSetupValueError(owner=self, msg=f"Value expression's attribute '{self._node}' needs to be string or OperationVexpNode, got: {type(self._node)}")
+            if not isinstance(self._node, OperationDexpNode):
+                raise RuleSetupValueError(owner=self, msg=f"Value expression's attribute '{self._node}' needs to be string or OperationDexpNode, got: {type(self._node)}")
 
         # -- COMPUTED VALUES
         # copy list of parent/previous
@@ -633,7 +633,7 @@ class DotExpression(DynamicAttrsBase):
             # ========================================
             # Operations 
             # ========================================
-            if isinstance(bit._node, OperationVexpNode):
+            if isinstance(bit._node, OperationDexpNode):
                 op_node = bit._node
                 # one level deeper
                 # parent not required, but in this case should be 
@@ -643,7 +643,7 @@ class DotExpression(DynamicAttrsBase):
                 # _read_functions.append(op_node.apply)
 
             # ========================================
-            # Functions - IFunctionVexpNode
+            # Functions - IFunctionDexpNode
             # ========================================
             elif bit._func_args:
                 if bnr==1:
@@ -661,7 +661,7 @@ class DotExpression(DynamicAttrsBase):
                 else:
                     parent_arg_type_info = None
 
-                # : IFunctionVexpNode
+                # : IFunctionDexpNode
                 current_vexp_node = registry.create_func_node(
                         setup_session=setup_session,
                         caller=last_vexp_node,
@@ -710,7 +710,7 @@ class DotExpression(DynamicAttrsBase):
             # can be Component or can be managed Model dataclass Field - when .denied is not appliable
             if hasattr(current_vexp_node, "denied") and current_vexp_node.denied:
                 # '{vexp_node_name}' 
-                raise RuleSetupValueError(owner=self, msg=f"VexpNode (owner={owner.name}) references '{current_vexp_node.name}' what is not allowed due: {current_vexp_node.deny_reason}.")
+                raise RuleSetupValueError(owner=self, msg=f"DexpNode (owner={owner.name}) references '{current_vexp_node.name}' what is not allowed due: {current_vexp_node.deny_reason}.")
 
         vexp_evaluator.finish()
 
@@ -780,29 +780,29 @@ class DotExpression(DynamicAttrsBase):
 
     # NOTE: Operations are put in internal OperationsNS
 
-    def __eq__(self, other):        self._EnsureFinished(); return DotExpression(OperationVexpNode("==", self, other), namespace=OperationsNS)  # noqa: E702
-    def __ne__(self, other):        self._EnsureFinished(); return DotExpression(OperationVexpNode("!=", self, other), namespace=OperationsNS)  # noqa: E702
-    def __gt__(self, other):        self._EnsureFinished(); return DotExpression(OperationVexpNode(">" , self, other), namespace=OperationsNS)  # noqa: E702
-    def __ge__(self, other):        self._EnsureFinished(); return DotExpression(OperationVexpNode(">=", self, other), namespace=OperationsNS)  # noqa: E702
-    def __lt__(self, other):        self._EnsureFinished(); return DotExpression(OperationVexpNode("<" , self, other), namespace=OperationsNS)  # noqa: E702
-    def __le__(self, other):        self._EnsureFinished(); return DotExpression(OperationVexpNode("<=", self, other), namespace=OperationsNS)  # noqa: E702
+    def __eq__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode("==", self, other), namespace=OperationsNS)  # noqa: E702
+    def __ne__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode("!=", self, other), namespace=OperationsNS)  # noqa: E702
+    def __gt__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode(">" , self, other), namespace=OperationsNS)  # noqa: E702
+    def __ge__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode(">=", self, other), namespace=OperationsNS)  # noqa: E702
+    def __lt__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode("<" , self, other), namespace=OperationsNS)  # noqa: E702
+    def __le__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode("<=", self, other), namespace=OperationsNS)  # noqa: E702
 
     # +, -, *, /
-    def __add__(self, other):       self._EnsureFinished(); return DotExpression(OperationVexpNode("+" , self, other), namespace=OperationsNS)  # noqa: E702
-    def __sub__(self, other):       self._EnsureFinished(); return DotExpression(OperationVexpNode("-" , self, other), namespace=OperationsNS)  # noqa: E702
-    def __mul__(self, other):       self._EnsureFinished(); return DotExpression(OperationVexpNode("*" , self, other), namespace=OperationsNS)  # noqa: E702
-    def __truediv__(self, other):   self._EnsureFinished(); return DotExpression(OperationVexpNode("/" , self, other), namespace=OperationsNS)  # noqa: E702
+    def __add__(self, other):       self._EnsureFinished(); return DotExpression(OperationDexpNode("+" , self, other), namespace=OperationsNS)  # noqa: E702
+    def __sub__(self, other):       self._EnsureFinished(); return DotExpression(OperationDexpNode("-" , self, other), namespace=OperationsNS)  # noqa: E702
+    def __mul__(self, other):       self._EnsureFinished(); return DotExpression(OperationDexpNode("*" , self, other), namespace=OperationsNS)  # noqa: E702
+    def __truediv__(self, other):   self._EnsureFinished(); return DotExpression(OperationDexpNode("/" , self, other), namespace=OperationsNS)  # noqa: E702
 
     # what is this??
-    def __floordiv__(self, other):  self._EnsureFinished(); return DotExpression(OperationVexpNode("//", self, other), namespace=OperationsNS)  # noqa: E702
+    def __floordiv__(self, other):  self._EnsureFinished(); return DotExpression(OperationDexpNode("//", self, other), namespace=OperationsNS)  # noqa: E702
 
     # in
-    def __contains__(self, other):  self._EnsureFinished(); return DotExpression(OperationVexpNode("in", self, other), namespace=OperationsNS)  # noqa: E702
+    def __contains__(self, other):  self._EnsureFinished(); return DotExpression(OperationDexpNode("in", self, other), namespace=OperationsNS)  # noqa: E702
 
     # Bool operators, NOT, AND, OR
-    def __invert__(self):           self._EnsureFinished(); return DotExpression(OperationVexpNode("not", self), namespace=OperationsNS)  # ~  # noqa: E702
-    def __and__(self, other):       self._EnsureFinished(); return DotExpression(OperationVexpNode("and", self, other), namespace=OperationsNS)  # &  # noqa: E702
-    def __or__(self, other):        self._EnsureFinished(); return DotExpression(OperationVexpNode("or" , self, other), namespace=OperationsNS)  # |  # noqa: E702
+    def __invert__(self):           self._EnsureFinished(); return DotExpression(OperationDexpNode("not", self), namespace=OperationsNS)  # ~  # noqa: E702
+    def __and__(self, other):       self._EnsureFinished(); return DotExpression(OperationDexpNode("and", self, other), namespace=OperationsNS)  # &  # noqa: E702
+    def __or__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode("or" , self, other), namespace=OperationsNS)  # |  # noqa: E702
 
     # ------------------------------------------------------------
 

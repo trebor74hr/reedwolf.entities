@@ -55,10 +55,10 @@ from .base import (
 from .expressions   import (
         DotExpression,
         VExpStatusEnum,
-        IFunctionVexpNode,
+        IFunctionDexpNode,
         )
 from .attr_nodes import (
-        AttrVexpNode
+        AttrDexpNode
         )
 from .functions import (
         CustomFunctionFactory,
@@ -152,8 +152,8 @@ class FieldBase(Component, IFieldBase, ABC):
 
     # if not supplied name will be extracted from binded model attr_node
     name:            Optional[str] = None
-    attr_node:       Union[AttrVexpNode, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
-    bound_attr_node: Union[AttrVexpNode, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
+    attr_node:       Union[AttrDexpNode, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
+    bound_attr_node: Union[AttrDexpNode, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
     python_type:     Union[type, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
     type_info:       Optional[TypeInfo] = field(init=False, repr=False, default=UNDEFINED)
 
@@ -362,7 +362,7 @@ class BooleanField(FieldBase):
 class ChoiceOption:
     value:      DotExpression # -> some Standard or Complex type
     label:      TransMessageType
-    available:  Optional[Union[DotExpression,bool]] = True # Vexp returns bool
+    available:  Optional[Union[DotExpression,bool]] = True # Dexp returns bool
 
 @dataclass
 class ChoiceField(FieldBase):
@@ -374,7 +374,7 @@ class ChoiceField(FieldBase):
     # Note that with Python 3.10, it is now possible to do it natively with dataclasses.
 
     # List[Dict[str, TransMessageType]
-    choices: Optional[Union[IFunctionVexpNode, 
+    choices: Optional[Union[IFunctionDexpNode, 
                             CustomFunctionFactory, 
                             DotExpression, 
                             Union[List[ChoiceOption], 
@@ -384,8 +384,8 @@ class ChoiceField(FieldBase):
     # choice_available: Optional[DotExpression]=True # returns bool
 
     # computed later
-    choice_value_attr_node: AttrVexpNode = field(init=False, default=None, repr=False)
-    choice_label_attr_node: AttrVexpNode = field(init=False, default=None, repr=False)
+    choice_value_attr_node: AttrDexpNode = field(init=False, default=None, repr=False)
+    choice_label_attr_node: AttrDexpNode = field(init=False, default=None, repr=False)
 
     def __post_init__(self):
         self.init_clean()
@@ -395,7 +395,7 @@ class ChoiceField(FieldBase):
         if is_enum(self.choices):
             raise RuleSetupValueError(owner=self, msg="argument 'choices' is Enum, use EnumChoices instead.")
 
-        if isinstance(self.choices, (IFunctionVexpNode, CustomFunctionFactory, DotExpression)):
+        if isinstance(self.choices, (IFunctionDexpNode, CustomFunctionFactory, DotExpression)):
             if not (self.choice_value and self.choice_label):
                 raise RuleSetupValueError(owner=self, msg="expected 'choice_label' and 'choice_value' passed.")
         elif is_function(self.choices):
@@ -440,14 +440,14 @@ class ChoiceField(FieldBase):
 
         # -- DotExpression node
         if vexp_node:
-            if isinstance(vexp_node, IFunctionVexpNode):
-                func_node: IFunctionVexpNode = vexp_node  # better name
+            if isinstance(vexp_node, IFunctionDexpNode):
+                func_node: IFunctionDexpNode = vexp_node  # better name
                 choices = func_node.get_type_info().type_
                 is_list = func_node.get_type_info().is_list
                 choice_from_function = True
 
-            elif isinstance(vexp_node, AttrVexpNode):
-                attr_node: AttrVexpNode = vexp_node  # better name
+            elif isinstance(vexp_node, AttrDexpNode):
+                attr_node: AttrDexpNode = vexp_node  # better name
                 if is_enum(attr_node.data.value):
                     raise RuleSetupValueError(owner=self, msg=f"Using enum {attr_node.data.value}. Use EnumField instead.")
 
@@ -540,14 +540,14 @@ class ChoiceField(FieldBase):
             vexp: DotExpression, 
             ):
         """
-        Create choice AttrVexpNode() within local ThisRegistry
+        Create choice AttrDexpNode() within local ThisRegistry
         """
         if not (vexp and isinstance(vexp, DotExpression) and vexp.GetNamespace()==ThisNS):
             raise RuleSetupValueError(owner=self, msg=f"Argument '{aname}' is not set or has wrong type - should be DotExpression in This. namespace. Got: {vexp} / {type(vexp)}")
 
         attr_node = vexp.Setup(setup_session=setup_session, owner=self)
         if vexp._status != VExpStatusEnum.BUILT:
-            raise RuleInternalError(owner=self, msg=f"Setup failed for Vexp: {vexp} -> {vexp._status}")
+            raise RuleInternalError(owner=self, msg=f"Setup failed for Dexp: {vexp} -> {vexp._status}")
 
         return attr_node
 
@@ -607,7 +607,7 @@ class EnumField(FieldBase):
             else:
                 # EnumField(... enum=CompanyTypeEnum)
                 if self.enum and self.enum!=py_hint_type:
-                    raise RuleSetupValueError(owner=self, msg=f"AttrVexpNode {attr_node} has predefined enum {self.enum} what is different from type_hint: {py_hint_type}")
+                    raise RuleSetupValueError(owner=self, msg=f"AttrDexpNode {attr_node} has predefined enum {self.enum} what is different from type_hint: {py_hint_type}")
                 self.enum = py_hint_type
                 enum_member_py_type = get_enum_member_py_type(self.enum)
 

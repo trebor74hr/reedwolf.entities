@@ -63,7 +63,7 @@ from .bound_models import (
         BoundModel,
         BoundModelWithHandlers,
         )
-from .attr_nodes import AttrVexpNode
+from .attr_nodes import AttrDexpNode
 from .functions import CustomFunctionFactory
 from .registries import (
         SetupSession,
@@ -209,14 +209,14 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
             attr_node = setup_session_from.get_vexp_node_by_vexp(vexp=model)
             if attr_node:
-                raise RuleInternalError(owner=self, msg=f"AttrVexpNode data already in setup_session: {model} -> {attr_node}")
+                raise RuleInternalError(owner=self, msg=f"AttrDexpNode data already in setup_session: {model} -> {attr_node}")
 
             attr_node = model.Setup(setup_session=setup_session_from, owner=bound_model)
             if not attr_node:
-                raise RuleInternalError(owner=self, msg=f"AttrVexpNode not recognized: {model}")
+                raise RuleInternalError(owner=self, msg=f"AttrDexpNode not recognized: {model}")
 
             if not isinstance(attr_node.data, TypeInfo):
-                raise RuleInternalError(owner=self, msg=f"AttrVexpNode data is not TypeInfo, got: {type(attr_node.data)} / {attr_node.data}")
+                raise RuleInternalError(owner=self, msg=f"AttrDexpNode data is not TypeInfo, got: {type(attr_node.data)} / {attr_node.data}")
 
             model   = attr_node.data.type_
             is_list = attr_node.data.is_list
@@ -345,7 +345,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
     # ------------------------------------------------------------
 
-    def get_bound_model_attr_node(self) -> AttrVexpNode:
+    def get_bound_model_attr_node(self) -> AttrDexpNode:
         return self.setup_session[ModelsNS].get_attr_node_by_bound_model(bound_model=self.bound_model)
 
     # ------------------------------------------------------------
@@ -754,7 +754,7 @@ class Extension(ContainerBase):
     context_class   : Optional[Type[IContext]] = field(repr=False, init=False, default=None)
     config          : Optional[Type[Config]] = field(repr=False, init=False, default=None)
 
-    # bound_attr_node  : Union[AttrVexpNode, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
+    # bound_attr_node  : Union[AttrDexpNode, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
 
     # Class attributes
     # namespace_only  : ClassVar[Namespace] = ThisNS

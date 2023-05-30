@@ -50,7 +50,7 @@ from .base import (
         BoundModelBase,
         )
 from .attr_nodes import (
-        AttrVexpNode,
+        AttrDexpNode,
         )
 from .components import (
         FieldGroup,
@@ -97,18 +97,18 @@ class ModelsRegistry(RegistryBase):
 
     def __init__(self):
         super().__init__()
-        self.root_attr_nodes : Optional[Dict[str, AttrVexpNode]] = {}
+        self.root_attr_nodes : Optional[Dict[str, AttrDexpNode]] = {}
 
     # NOTE: no register() method due complex logic - see
     #       ContainerBase._register_bound_model()
 
-    def _create_root_attr_node(self, bound_model:BoundModelBase) -> AttrVexpNode:
+    def _create_root_attr_node(self, bound_model:BoundModelBase) -> AttrDexpNode:
         " models specific method "
         # standard DTO class attr_node
         # if not bound_model.type_info:
         #     bound_model.set_type_info()
         # assert bound_model.type_info.type_==model
-        attr_node = AttrVexpNode(
+        attr_node = AttrDexpNode(
                         name=bound_model.name,
                         data=bound_model,
                         namespace=self.NAMESPACE,
@@ -118,7 +118,7 @@ class ModelsRegistry(RegistryBase):
 
     # ------------------------------------------------------------
 
-    def register_all_nodes(self, root_attr_node: Optional[AttrVexpNode],  bound_model: BoundModelBase, model: ModelType):
+    def register_all_nodes(self, root_attr_node: Optional[AttrDexpNode],  bound_model: BoundModelBase, model: ModelType):
         " models specific method "
         if not root_attr_node:
             root_attr_node = self._create_root_attr_node(bound_model=bound_model)
@@ -150,7 +150,7 @@ class ModelsRegistry(RegistryBase):
                                bound_model:BoundModelBase,
                                # default:[None, UndefinedType]=UNDEFINED,
                                # strict:bool=False
-                               ) -> Union[AttrVexpNode, None, UndefinedType]:
+                               ) -> Union[AttrDexpNode, None, UndefinedType]:
         " models specific method "
         # attr_node_name = bound_model.name
         # == M.name mode
@@ -255,7 +255,7 @@ class FieldsRegistry(RegistryBase):
             valid_types = ', '.join([t.__name__ for t in self.ALLOWED_BASE_TYPES])
             raise RuleSetupError(owner=self, msg=f"RuleSetup does not support type {type(component)}: {repr(component)[:100]}. Valid type of objects or objects inherited from: {valid_types}")
 
-        attr_node = AttrVexpNode(
+        attr_node = AttrDexpNode(
                         name=component_name,
                         data=component,
                         namespace=FieldsNS,
@@ -329,7 +329,7 @@ class ContextRegistry(RegistryBase):
                             allow_nonetype=True)
             if attr_name in self.store:
                 raise RuleSetupNameError(f"Attribute name '{attr_name}' is reserved. Rename class attribute in '{self.context_class}'")
-            attr_node = AttrVexpNode(
+            attr_node = AttrDexpNode(
                             name=attr_name,
                             data=type_info,
                             namespace=self.NAMESPACE,
@@ -450,7 +450,7 @@ class SetupSession(SetupSessionBase):
 #         if False:
 #             ...
 #         # elif isinstance(data_var, StaticData):
-#         #     vexp_node = AttrVexpNode(
+#         #     vexp_node = AttrDexpNode(
 #         #                             name=data_var.name,
 #         #                             data=data_var,
 #         #                             namespace=DataNS,
@@ -474,7 +474,7 @@ class SetupSession(SetupSessionBase):
 # 
 #     def register(self, data_var:IData):
 #         vexp_node = self.create_vexp_node(data_var)
-#         # can be AttrVexpNode or FunctionVexpNode
+#         # can be AttrDexpNode or FunctionDexpNode
 #         # alt_vexp_node_name=data_var.name
 #         self.register_vexp_node(vexp_node)
 #         return vexp_node

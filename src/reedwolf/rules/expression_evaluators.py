@@ -5,16 +5,16 @@ Process:
         vexp = M.value.expressions.and.Functions().results 
 
     vexp.Setup converts to
-        .value -> AttrVexpNode()
-        .expressions -> AttrVexpNode()
-        .Functions() -> FunctionVexpNode()
-        .results -> AttrVexpNode()
+        .value -> AttrDexpNode()
+        .expressions -> AttrDexpNode()
+        .Functions() -> FunctionDexpNode()
+        .results -> AttrDexpNode()
 
-        # there is OperationVexpNode() e.g. M.x + M.y
+        # there is OperationDexpNode() e.g. M.x + M.y
 
     what is saved inside of (last) value expression (and owner):
         vexp_evaluator = DotExpressionEvaluator()
-            [AttrVexpNode(), AttrVexpNode(), Function(), AttrVexpNode()]
+            [AttrDexpNode(), AttrDexpNode(), Function(), AttrDexpNode()]
 
     and later could be evaluated/executed with concrete data objects/structure:
         vexp_evaluator.execute(struct) 

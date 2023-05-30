@@ -58,7 +58,7 @@ from .expressions import (
         DotExpression,
         ExecResult,
         IDotExpressionNode,
-        IFunctionVexpNode,
+        IFunctionDexpNode,
         ISetupSession,
         execute_vexp_or_node,
         )
@@ -119,7 +119,7 @@ def list_to_strlist(args, before, after):
 
 # ------------------------------------------------------------
 
-class AttrVexpNodeTypeEnum(str, Enum):
+class AttrDexpNodeTypeEnum(str, Enum):
     CONTAINER = "CONTAINER"
     FIELD     = "FIELD"
     COMPONENT = "COMPONENT"
@@ -741,10 +741,10 @@ class ComponentBase(SetOwnerMixin, ABC):
     def get_name_from_bind(cls, bind: DotExpression):
         # rename function to _get_name_from_bind
         if len(bind.Path) <= 2:
-            # Vexpr(Person.name) -> name
+            # Dexpr(Person.name) -> name
             name = bind._name
         else:
-            # Vexpr(Person.address.street) -> address.street
+            # Dexpr(Person.address.street) -> address.street
             # TODO: this is messy :( - should be one simple logic ...
             name = "__".join([bit._name for bit in bind.Path][1:])
         assert name
@@ -842,11 +842,11 @@ class IFieldBase(ABC):
     ...
 
     # @abstractmethod
-    # def get_attr_node(self, setup_session: ISetupSession) -> "AttrVexpNode":  # noqa: F821
+    # def get_attr_node(self, setup_session: ISetupSession) -> "AttrDexpNode":  # noqa: F821
     #     ...
 
     # @abstractmethod
-    # def get_bound_attr_node(self, setup_session: ISetupSession) -> "AttrVexpNode":  # noqa: F821
+    # def get_bound_attr_node(self, setup_session: ISetupSession) -> "AttrDexpNode":  # noqa: F821
     #     ...
 
 # ------------------------------------------------------------
@@ -872,7 +872,7 @@ class IContainerBase(ABC):
         ...
 
     @abstractmethod
-    def get_bound_model_attr_node(self) -> "AttrVexpNode":  # noqa: F821
+    def get_bound_model_attr_node(self) -> "AttrDexpNode":  # noqa: F821
         ...
 
     @abstractmethod
@@ -926,7 +926,7 @@ class BoundModelBase(ComponentBase, ABC):
         return models
 
     # Not used:
-    # def get_attr_node(self, setup_session: ISetupSession) -> Union["AttrVexpNode", UndefinedType]:  # noqa: F821
+    # def get_attr_node(self, setup_session: ISetupSession) -> Union["AttrDexpNode", UndefinedType]:  # noqa: F821
     #     return setup_session.models_registry.get_attr_node_by_bound_model(bound_model=self)
 
 
@@ -1380,12 +1380,12 @@ def extract_type_info(
         ) -> Tuple[
                 TypeInfo, 
                 Optional[ModelField], 
-                Optional[IFunctionVexpNode]  # noqa: F821
+                Optional[IFunctionDexpNode]  # noqa: F821
                 ]:
     """
     Main logic for extraction from parent object (dataclass, py class, vexp
     instances) member by name 'attr_node_name' -> data (struct, plain value),
-    or IFunctionVexpNode instances 
+    or IFunctionDexpNode instances 
 
     This function uses specific base interfaces/classes (BoundModelBase,
     IDotExpressionNode), so it can not be put in meta.py

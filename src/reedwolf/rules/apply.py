@@ -502,7 +502,7 @@ class ApplyResult(IApplySession):
                 process_further = False
 
             # ------------------------------------------------------------
-            # NOTE: used only for test if all Vexp values could evaluate ...
+            # NOTE: used only for test if all Dexp values could evaluate ...
             #       self.__check_component_all_vexps(component)
 
             # ------------------------------------------------------------

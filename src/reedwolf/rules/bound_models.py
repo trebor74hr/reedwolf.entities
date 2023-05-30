@@ -39,7 +39,7 @@ from .expressions import (
         ExecResult,
         )
 from .attr_nodes import (
-        AttrVexpNode,
+        AttrDexpNode,
         )
 from .functions import (
         CustomFunctionFactory,
@@ -116,7 +116,7 @@ class NestedBoundModelMixin:
             # 1. if it is non-model -> Register new attribute node within M. /
             #    ModelsNS registry
             if not child_bound_model.in_model:
-                model_attr_vexp_node = AttrVexpNode(
+                model_attr_vexp_node = AttrDexpNode(
                                             name=child_bound_model.name,
                                             data=read_handler_type_info,
                                             namespace=models_registry.NAMESPACE,

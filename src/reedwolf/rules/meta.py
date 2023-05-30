@@ -233,7 +233,7 @@ def is_function(maybe_function: Any) -> bool:
     if isinstance(maybe_function, DynamicAttrsBase):
         return False
 
-    # NOTE: Does not recognize FunctionFactory / IFunctionVexpNode / IFunction instances 
+    # NOTE: Does not recognize FunctionFactory / IFunctionDexpNode / IFunction instances 
     # if isinstance(maybe_function, "_is_custom_function_factory", None):
     #     return False
 
@@ -382,7 +382,7 @@ def extract_function_py_type_hint_dict(function: Callable[..., Any]) -> Dict[str
         name = function.__class__.__name__
 
     if not hasattr(function, "__annotations__"):
-        raise RuleSetupNameError(item=function, msg=f"SetupSession: AttrVexpNode FUNCTION '{name}' is not valid, it has no __annotations__ / type hints metainfo.")
+        raise RuleSetupNameError(item=function, msg=f"SetupSession: AttrDexpNode FUNCTION '{name}' is not valid, it has no __annotations__ / type hints metainfo.")
 
     # e.g. Optional[List[SomeCustomClass]] or SomeCustomClass or ...
     py_type_hint_dict = extract_py_type_hints(function, caller_name=f"Function {name}")
@@ -486,7 +486,7 @@ class TypeInfo:
             # List[some_type]
             is_list = True
             if len(py_type_hint.__args__) != 1:
-                raise RuleSetupNameError(item=py_type_hint, msg=f"AttrVexpNode's annotation should have single List argument, got: {py_type_hint.__args__}.")
+                raise RuleSetupNameError(item=py_type_hint, msg=f"AttrDexpNode's annotation should have single List argument, got: {py_type_hint.__args__}.")
             inner_type = py_type_hint.__args__[0]
 
         elif origin_type is not None:
@@ -663,9 +663,9 @@ class TypeInfo:
 
         msg_prefix = f"Function {py_function}::"
         if not py_type_hint:
-            raise RuleSetupNameError(item=py_function, msg =  msg_prefix + f"AttrVexpNode FUNCTION '{name}' is not valid, it has no return type hint (annotations).")
+            raise RuleSetupNameError(item=py_function, msg =  msg_prefix + f"AttrDexpNode FUNCTION '{name}' is not valid, it has no return type hint (annotations).")
         if not allow_nonetype and py_type_hint == NoneType:
-            raise RuleSetupNameError(item=py_function, msg = msg_prefix + f"SetupSession: AttrVexpNode FUNCTION '{name}' is not valid, returns None (from annotation).")
+            raise RuleSetupNameError(item=py_function, msg = msg_prefix + f"SetupSession: AttrDexpNode FUNCTION '{name}' is not valid, returns None (from annotation).")
 
         output = TypeInfo.get_or_create_by_type(
                         py_type_hint=py_type_hint,
@@ -693,9 +693,9 @@ class TypeInfo:
             if arg_name == "return":
                 continue
             if not py_type_hint:
-                raise RuleSetupNameError(item=py_function, msg=msg_prefix + f"AttrVexpNode FUNCTION '{name}.{arg_name}' is not valid, argument {arg_name} has no type hint (annotations).")
+                raise RuleSetupNameError(item=py_function, msg=msg_prefix + f"AttrDexpNode FUNCTION '{name}.{arg_name}' is not valid, argument {arg_name} has no type hint (annotations).")
             if py_type_hint in (NoneType,):
-                raise RuleSetupNameError(item=py_function, msg=msg_prefix + f"SetupSession: AttrVexpNode FUNCTION '{name}.{arg_name}' is not valid, argument {arg_name} has type hint (annotation) None.")
+                raise RuleSetupNameError(item=py_function, msg=msg_prefix + f"SetupSession: AttrDexpNode FUNCTION '{name}.{arg_name}' is not valid, argument {arg_name} has type hint (annotation) None.")
 
             output[arg_name] = TypeInfo.get_or_create_by_type(
                                     py_type_hint=py_type_hint,

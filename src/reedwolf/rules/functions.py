@@ -57,7 +57,7 @@ from .meta import (
 from .expressions import (
         DotExpression,
         IDotExpressionNode,
-        IFunctionVexpNode,
+        IFunctionDexpNode,
         ExecResult,
         execute_vexp_or_node,
         ISetupSession,
@@ -68,7 +68,7 @@ from .func_args import (
         PreparedArguments,
         )
 from .base import (
-        AttrVexpNodeTypeEnum,
+        AttrDexpNodeTypeEnum,
         ReservedArgumentNames,
         IFieldBase,
         )
@@ -77,7 +77,7 @@ from .base import (
 ValueArgValidatorPyFuncType = Callable[..., NoneType]
 ValueArgValidatorPyFuncDictType = Dict[str, Union[ValueArgValidatorPyFuncType, List[ValueArgValidatorPyFuncType]]] 
 
-ValueOrVexp = Union[DotExpression, IDotExpressionNode, Any]
+ValueOrDexp = Union[DotExpression, IDotExpressionNode, Any]
 
 # 4 types
 class DatatypeBasicEnum(Enum):
@@ -104,7 +104,7 @@ DEFAULT_ENGINE = PythonFunctionEngine()
 # ------------------------------------------------------------
 
 @dataclass
-class IFunction(IFunctionVexpNode):
+class IFunction(IFunctionDexpNode):
     """
     single left parameter (value from parent - previous dot chain, parent ) ,
     i.e. function wrapped should not have 2+ required params left
@@ -281,7 +281,7 @@ class IFunction(IFunctionVexpNode):
     @staticmethod
     def execute_arg(
             apply_session: "IApplySession", # noqa: F821
-            arg_value: ValueOrVexp,
+            arg_value: ValueOrDexp,
             prev_node_type_info:TypeInfo, 
             ) -> Any:
         if isinstance(arg_value, (DotExpression, IDotExpressionNode)):
@@ -367,7 +367,7 @@ class IFunction(IFunctionVexpNode):
 
     # ------------------------------------------------------------
 
-    def _process_inject_pargs(self, apply_session: IApplySession, kwargs: Dict[str, ValueOrVexp]):
+    def _process_inject_pargs(self, apply_session: IApplySession, kwargs: Dict[str, ValueOrDexp]):
 
         prep_arg = self.prepared_args.get(ReservedArgumentNames.INJECT_COMPONENT_TREE)
         if not prep_arg:
@@ -378,7 +378,7 @@ class IFunction(IFunctionVexpNode):
 
         vexp_node: IDotExpressionNode = prep_arg.caller
 
-        if not (vexp_node.attr_node_type == AttrVexpNodeTypeEnum.FIELD
+        if not (vexp_node.attr_node_type == AttrDexpNodeTypeEnum.FIELD
             and vexp_node.namespace == FieldsNS
             and isinstance(vexp_node.data, IFieldBase)):
 
@@ -428,7 +428,7 @@ class IFunctionFactory(ABC):
     # rather copy and return modified copy
     py_function : Callable[..., Any]
 
-    # fixed arguments - when declared - see IFunctionVexpNode.fixed_args
+    # fixed arguments - when declared - see IFunctionDexpNode.fixed_args
     fixed_args     : FunctionArgumentsType = field(default=EmptyFunctionArguments)
 
     # can be evaluated later
@@ -492,7 +492,7 @@ class IFunctionFactory(ABC):
 def Function(py_function : Callable[..., Any], 
              name: Optional[str] = None,
              value_arg_name:Optional[str]=None,
-             # TODO: not only Vexp, can be literal too, e.g. 1, 2.3, "a"
+             # TODO: not only Dexp, can be literal too, e.g. 1, 2.3, "a"
              args   : Optional[List[DotExpression]] = UNDEFINED,
              kwargs : Optional[Dict[str, DotExpression]] = UNDEFINED,
              arg_validators : Optional[ValueArgValidatorPyFuncDictType] = None,

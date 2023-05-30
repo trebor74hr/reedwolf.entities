@@ -35,7 +35,7 @@ from .expressions import (
         ExecResult,
         )
 from .attr_nodes import (
-        AttrVexpNode,
+        AttrDexpNode,
         )
 
 # ------------------------------------------------------------
@@ -70,7 +70,7 @@ class Component(ComponentBase, ABC):
     owner_name: Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
     # set in setup()
-    dot_node:   Union[AttrVexpNode, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    dot_node:   Union[AttrDexpNode, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
 
     def init_clean_base(self):
         # when not set then will be later defined - see set_owner()

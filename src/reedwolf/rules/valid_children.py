@@ -73,7 +73,7 @@ class ICardinalityValidation(IChildrenValidator, ABC): # count
         """
         raise NotImplementedError("abstract method")
 
-    def _validate_setup_common(self, allow_none:Optional[bool]=None) -> 'AttrVexpNode':  # noqa: F821
+    def _validate_setup_common(self, allow_none:Optional[bool]=None) -> 'AttrDexpNode':  # noqa: F821
         model_attr_node = self.owner.get_bound_model_attr_node()
         if allow_none is not None:
             if allow_none and not model_attr_node.isoptional():

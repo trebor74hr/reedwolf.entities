@@ -33,7 +33,7 @@ from .namespaces import (
 from .expressions import (
         DotExpression,
         IDotExpressionNode,
-        IFunctionVexpNode,
+        IFunctionDexpNode,
         IRegistry,
         ISetupSession,
         IAttributeAccessorBase,
@@ -59,7 +59,7 @@ from .functions import (
         try_create_function,
         )
 from .attr_nodes import (
-        AttrVexpNode,
+        AttrDexpNode,
         )
 
 # ------------------------------------------------------------
@@ -111,7 +111,7 @@ class RegistryBase(IRegistry):
 
 
     def __init__(self):
-        self.store : Dict[str, AttrVexpNode] = {}
+        self.store : Dict[str, AttrDexpNode] = {}
         self.setup_session = UNDEFINED
         self.finished: bool = False
 
@@ -130,13 +130,13 @@ class RegistryBase(IRegistry):
     def count(self) -> int:
         return len(self.store)
 
-    def get(self, key:str, default:Any=None) -> Optional[AttrVexpNode]:
+    def get(self, key:str, default:Any=None) -> Optional[AttrDexpNode]:
         return self.store.get(key, default)
 
-    def items(self) -> List[Tuple[str, AttrVexpNode]]:
+    def items(self) -> List[Tuple[str, AttrDexpNode]]:
         return self.store.items()
 
-    def register_instance_attr_node(self, model_class: ModelType, attr_name_prefix: Optional[str]=None) -> AttrVexpNode:
+    def register_instance_attr_node(self, model_class: ModelType, attr_name_prefix: Optional[str]=None) -> AttrDexpNode:
         " used for This.Instance / M.Instance to return instance itself "
         th_field = None
         # TODO: check that model_class is not dataclass field or pydatnic field
@@ -148,7 +148,7 @@ class RegistryBase(IRegistry):
         if attr_name_prefix:
             attr_name = f"{attr_name_prefix}{attr_name}"
 
-        attr_node = AttrVexpNode(
+        attr_node = AttrDexpNode(
                         name=attr_name,
                         data=type_info,
                         namespace=self.NAMESPACE,
@@ -159,7 +159,7 @@ class RegistryBase(IRegistry):
         return attr_node
 
     @classmethod
-    def _create_attr_node_for_model_attr(cls, model_class: ModelType, attr_name:str) -> AttrVexpNode:
+    def _create_attr_node_for_model_attr(cls, model_class: ModelType, attr_name:str) -> AttrDexpNode:
         # NOTE: will go again and again into get_model_fields()
         #       but shortcut like this didn't worked: 
         #           type_info: TypeInfo = TypeInfo.get_or_create_by_type(th_field)
@@ -174,7 +174,7 @@ class RegistryBase(IRegistry):
                     attr_node_name=attr_name,
                     inspect_object=model_class)
 
-        attr_node = AttrVexpNode(
+        attr_node = AttrDexpNode(
                         name=attr_name,
                         data=type_info,
                         namespace=cls.NAMESPACE,
@@ -186,7 +186,7 @@ class RegistryBase(IRegistry):
 
     def register_vexp_node(self, vexp_node:IDotExpressionNode, alt_vexp_node_name=None):
         """
-        Data can register IFunctionVexpNode-s instances since the
+        Data can register IFunctionDexpNode-s instances since the
         output will be used directly as data and not as a function call.
             function=[Function(name="Countries", label="Countries", 
                               py_function=CatalogManager.get_countries)],
@@ -204,12 +204,12 @@ class RegistryBase(IRegistry):
             raise RuleInternalError(owner=self, msg=f"Node {vexp_node_name} should not contain . - only first level vars allowed")
 
         if vexp_node_name in self.store:
-            raise RuleSetupNameError(owner=self, msg=f"AttrVexpNode {vexp_node} does not have unique name within this registry, found: {self.store[vexp_node_name]}")
+            raise RuleSetupNameError(owner=self, msg=f"AttrDexpNode {vexp_node} does not have unique name within this registry, found: {self.store[vexp_node_name]}")
         self.store[vexp_node_name] = vexp_node
 
 
-    def register_attr_node(self, attr_node:AttrVexpNode, alt_attr_node_name=None):
-        if not isinstance(attr_node, AttrVexpNode):
+    def register_attr_node(self, attr_node:AttrDexpNode, alt_attr_node_name=None):
+        if not isinstance(attr_node, AttrDexpNode):
             raise RuleInternalError(f"{type(attr_node)}->{attr_node}")
         if not self.NAMESPACE == attr_node.namespace:
             raise RuleInternalError(owner=self, msg=f"Method register({attr_node}) - namespace mismatch: {self.NAMESPACE} != {attr_node.namespace}")
@@ -226,7 +226,7 @@ class RegistryBase(IRegistry):
     __repr__ = __str__
 
     # ------------------------------------------------------------
-    # create_func_node - only Functions i.e. IFunctionVexpNode
+    # create_func_node - only Functions i.e. IFunctionDexpNode
     # ------------------------------------------------------------
     def create_func_node(self, 
             setup_session: ISetupSession,
@@ -234,9 +234,9 @@ class RegistryBase(IRegistry):
             attr_node_name:str,
             func_args:FunctionArgumentsType,
             value_arg_type_info:TypeInfo,
-            ) -> IFunctionVexpNode:
+            ) -> IFunctionDexpNode:
 
-        func_node : IFunctionVexpNode = \
+        func_node : IFunctionDexpNode = \
                 try_create_function(
                     setup_session=setup_session,
                     caller=caller,
@@ -248,7 +248,7 @@ class RegistryBase(IRegistry):
         return func_node
 
     # ------------------------------------------------------------
-    # create_node -> AttrVexpNode, Operation or IFunctionVexpNode
+    # create_node -> AttrDexpNode, Operation or IFunctionDexpNode
     # ------------------------------------------------------------
     def create_node(self, 
                     vexp_node_name: str, 
@@ -268,7 +268,7 @@ class RegistryBase(IRegistry):
         assert isinstance(vexp_node_name, str), vexp_node_name
 
         if vexp_node_name.startswith("_"):
-            raise RuleSetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': AttrVexpNode '{vexp_node_name}' is invalid, should not start with _")
+            raise RuleSetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': AttrDexpNode '{vexp_node_name}' is invalid, should not start with _")
 
         type_info = None
 
@@ -308,10 +308,10 @@ class RegistryBase(IRegistry):
             # IN-DEPTH LEVEL 2+, e.g. M.company.<this-node-and-next>
             # ---------------------------------------------------------------
 
-            if isinstance(parent_vexp_node, IFunctionVexpNode):
+            if isinstance(parent_vexp_node, IFunctionDexpNode):
                 inspect_object = parent_vexp_node.get_type_info()
             else:
-                assert isinstance(parent_vexp_node, AttrVexpNode)
+                assert isinstance(parent_vexp_node, AttrDexpNode)
 
                 if False:
                     ...
@@ -343,7 +343,7 @@ class RegistryBase(IRegistry):
 
             # if func_node:
             #     assert func_args
-            #     assert isinstance(func_node, IFunctionVexpNode)
+            #     assert isinstance(func_node, IFunctionDexpNode)
             #     vexp_node = func_node
             # else:
 
@@ -353,7 +353,7 @@ class RegistryBase(IRegistry):
             # Create()
             # --------------------------------------------------
             # attributes / functions / operations
-            vexp_node = AttrVexpNode(
+            vexp_node = AttrDexpNode(
                             name=full_vexp_node_name,
                             data=type_info,
                             namespace=self.NAMESPACE,
@@ -608,7 +608,7 @@ class SetupSessionBase(ISetupSession):
 
     # ------------------------------------------------------------
 
-    def _register_attr_node(self, attr_node:AttrVexpNode, alt_attr_node_name=None):
+    def _register_attr_node(self, attr_node:AttrDexpNode, alt_attr_node_name=None):
         """
         !!!!! NOTE helper method - USED ONLY IN UNIT TESTING !!!!!
         TODO: replace with register_vexp_node
@@ -627,7 +627,7 @@ class SetupSessionBase(ISetupSession):
                         strict:bool=False
                         ) -> Union[IDotExpressionNode, None, UndefinedType]:
         if not isinstance(vexp,  DotExpression):
-            raise RuleInternalError(owner=self, msg=f"Vexp not DotExpression, got {vexp} / {type(vexp)}")
+            raise RuleInternalError(owner=self, msg=f"Dexp not DotExpression, got {vexp} / {type(vexp)}")
         return vexp._vexp_node
 
     # ------------------------------------------------------------
@@ -665,7 +665,7 @@ class SetupSessionBase(ISetupSession):
             if not vexp_node.is_finished:
                 vexp_node.finish()
             if not vexp_node.is_finished:
-                raise RuleInternalError(owner=self, msg=f"VexpNode {vexp_node} still not finished, finish() moethod did not set is_finished")  
+                raise RuleInternalError(owner=self, msg=f"DexpNode {vexp_node} still not finished, finish() moethod did not set is_finished")  
 
         self.finished = True
 
@@ -698,7 +698,7 @@ class SetupSessionBase(ISetupSession):
 #         if False:
 #             ...
 #         # elif isinstance(data_var, StaticData):
-#         #     vexp_node = AttrVexpNode(
+#         #     vexp_node = AttrDexpNode(
 #         #                             name=data_var.name,
 #         #                             data=data_var,
 #         #                             namespace=DataNS,
@@ -722,7 +722,7 @@ class SetupSessionBase(ISetupSession):
 # 
 #     def register(self, data_var:IData):
 #         vexp_node = self.create_vexp_node(data_var)
-#         # can be AttrVexpNode or FunctionVexpNode
+#         # can be AttrDexpNode or FunctionDexpNode
 #         # alt_vexp_node_name=data_var.name
 #         self.register_vexp_node(vexp_node)
 #         return vexp_node

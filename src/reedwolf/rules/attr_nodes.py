@@ -40,7 +40,7 @@ from .base import (
         IApplySession,
         ExecResult,
         ReservedAttributeNames,
-        AttrVexpNodeTypeEnum,
+        AttrDexpNodeTypeEnum,
         )
 
 # ------------------------------------------------------------
@@ -48,16 +48,16 @@ from .base import (
 
 
 @dataclass
-class AttrVexpNode(IDotExpressionNode):
+class AttrDexpNode(IDotExpressionNode):
     """
     Name comes from dot-chaining nodes - e.g.
         M.name
-          company and name are AttrVexpNodes
+          company and name are AttrDexpNodes
     """
     name: str
     # TODO: data can be also - check each:
     #   - some dataproviding function
-    # TODO: Union[TypeInfo, IFunctionVexpNode, DotExpression, 'Component', type]  #
+    # TODO: Union[TypeInfo, IFunctionDexpNode, DotExpression, 'Component', type]  #
     #       noqa: F821
     data: Any 
     namespace: Namespace
@@ -65,7 +65,7 @@ class AttrVexpNode(IDotExpressionNode):
     th_field: Optional[ModelField] = field(repr=False, default=UNDEFINED)
     type_info: Optional[TypeInfo] = field(default=None)
     # TODO: rename to: func_node or function_node
-    # function: Optional[Union[IFunctionVexpNode]] = field(repr=False, default=None)
+    # function: Optional[Union[IFunctionDexpNode]] = field(repr=False, default=None)
 
     # TODO: explain!
     denied: bool = False
@@ -73,14 +73,14 @@ class AttrVexpNode(IDotExpressionNode):
 
     # ----- Later evaluated ------
     # could live without this attribute but ...
-    attr_node_type: Union[AttrVexpNodeTypeEnum] = field(init=False)
+    attr_node_type: Union[AttrDexpNodeTypeEnum] = field(init=False)
     is_finished: bool = field(init=False, repr=False, default=False)
 
     def __post_init__(self):
         self.full_name = f"{self.namespace._name}.{self.name}"
 
         if not isinstance(self.name, str) or self.name in (None, UNDEFINED):
-            raise RuleInternalError(owner=self, msg=f"AttrVexpNode should have string name, got: {self.name}")
+            raise RuleInternalError(owner=self, msg=f"AttrDexpNode should have string name, got: {self.name}")
 
         # ---------------------------------------------
         # CASES: COMPONENTS
@@ -89,22 +89,22 @@ class AttrVexpNode(IDotExpressionNode):
             raise RuleInternalError(owner=self, msg=f"Data is not set for {self}")
 
         if isinstance(self.data, IContainerBase):
-            self.attr_node_type = AttrVexpNodeTypeEnum.CONTAINER
+            self.attr_node_type = AttrDexpNodeTypeEnum.CONTAINER
             self.data_supplier_name = f"{self.data.name}"
         elif isinstance(self.data, IFieldBase):
-            self.attr_node_type = AttrVexpNodeTypeEnum.FIELD
+            self.attr_node_type = AttrDexpNodeTypeEnum.FIELD
             self.data_supplier_name = f"{self.data.name}"
         # elif isinstance(self.data, ValidatorBase):
-        #     self.attr_node_type = AttrVexpNodeTypeEnum.VALIDATOR
+        #     self.attr_node_type = AttrDexpNodeTypeEnum.VALIDATOR
         #     self.data_supplier_name = f"{self.data.name}"
         # elif isinstance(self.data, EvaluatorBase):
-        #     # self.attr_node_type = AttrVexpNodeTypeEnum.EVALUATOR
+        #     # self.attr_node_type = AttrDexpNodeTypeEnum.EVALUATOR
         #     self.data_supplier_name = f"{self.data.name}"
         # elif isinstance(self.data, IData):
-        #     self.attr_node_type = AttrVexpNodeTypeEnum.DATA
+        #     self.attr_node_type = AttrDexpNodeTypeEnum.DATA
         #     self.data_supplier_name = f"{self.data.name}"
         elif isinstance(self.data, ComponentBase):
-            self.attr_node_type = AttrVexpNodeTypeEnum.COMPONENT
+            self.attr_node_type = AttrDexpNodeTypeEnum.COMPONENT
             self.data_supplier_name = f"{self.data.name}"
 
         # ---------------------------------------------
@@ -112,9 +112,9 @@ class AttrVexpNode(IDotExpressionNode):
         # ---------------------------------------------
         elif isinstance(self.data, DotExpression):
             if self.data._func_args:
-                self.attr_node_type = AttrVexpNodeTypeEnum.VEXP_FUNC
+                self.attr_node_type = AttrDexpNodeTypeEnum.VEXP_FUNC
             else:
-                self.attr_node_type = AttrVexpNodeTypeEnum.VEXP
+                self.attr_node_type = AttrDexpNodeTypeEnum.VEXP
             self.data_supplier_name = f"{self.data!r}"
 
 
@@ -125,7 +125,7 @@ class AttrVexpNode(IDotExpressionNode):
             # ModelType
             assert type(self.data) == type, self.data
             # ALT: inspect.isclass()
-            self.attr_node_type = AttrVexpNodeTypeEnum.MODEL_CLASS
+            self.attr_node_type = AttrDexpNodeTypeEnum.MODEL_CLASS
             self.data_supplier_name = f"{self.data.__name__}"
 
         # ---------------------------------------------
@@ -136,15 +136,15 @@ class AttrVexpNode(IDotExpressionNode):
             if self.th_field is UNDEFINED:
                 raise RuleInternalError(owner=self, msg="TypeInfo case - expected th_field (ModelField or py_function).")
 
-            self.attr_node_type = AttrVexpNodeTypeEnum.TH_FIELD
+            self.attr_node_type = AttrDexpNodeTypeEnum.TH_FIELD
             # self.data_supplier_name = f"TH[{type_info.var_type.name}: {type_info.type_.__name__}]"
             self.data_supplier_name = f"TH[{self.data.type_.__name__}]"
         else:
             if is_function(self.data):
-                # self.attr_node_type = AttrVexpNodeTypeEnum.FUNCTION
+                # self.attr_node_type = AttrDexpNodeTypeEnum.FUNCTION
                 # self.data_supplier_name = f"{self.data.__name__}"
                 raise RuleSetupValueError(owner=self, msg=f"Node '.{self.name}' is a function. Maybe you forgot to wrap it with 'reedwolf.rules.Function()'?")
-            raise RuleSetupValueError(owner=self, msg=f"AttrVexpNode {self.name} should be based on PYD/DC class, got: {self.data}")
+            raise RuleSetupValueError(owner=self, msg=f"AttrDexpNode {self.name} should be based on PYD/DC class, got: {self.data}")
 
 
         # NOTE: .type_info could be calculated later in finish() method
@@ -157,24 +157,24 @@ class AttrVexpNode(IDotExpressionNode):
 
         if self.type_info is None:
 
-            if self.attr_node_type == AttrVexpNodeTypeEnum.FIELD:
+            if self.attr_node_type == AttrDexpNodeTypeEnum.FIELD:
 
                 type_info = self.data
                 if not type_info.bound_attr_node:
-                    raise RuleInternalError(owner=self, msg=f"AttrVexpNode {self.data} .bound_attr_node not set.")
+                    raise RuleInternalError(owner=self, msg=f"AttrDexpNode {self.data} .bound_attr_node not set.")
 
                 bound_type_info = type_info.bound_attr_node.get_type_info()
                 if not bound_type_info:
-                    raise RuleInternalError(owner=self, msg=f"AttrVexpNode data.bound_attr_node={self.data} -> {self.data.bound_attr_node} .type_info not set.")
+                    raise RuleInternalError(owner=self, msg=f"AttrDexpNode data.bound_attr_node={self.data} -> {self.data.bound_attr_node} .type_info not set.")
 
                 # transfer type_info from type_info.bound attr_node
                 self.type_info = bound_type_info
 
-            elif self.attr_node_type == AttrVexpNodeTypeEnum.DATA:
+            elif self.attr_node_type == AttrDexpNodeTypeEnum.DATA:
                 self.type_info = self.data.type_info
             elif self.attr_node_type not in (
-                    AttrVexpNodeTypeEnum.CONTAINER,
-                    AttrVexpNodeTypeEnum.COMPONENT,
+                    AttrDexpNodeTypeEnum.CONTAINER,
+                    AttrDexpNodeTypeEnum.COMPONENT,
                     ):
                 # all other require type_info
                 raise RuleInternalError(owner=self, msg=f"For attr_node {self.attr_node_type} .type_info not set (type={type(self.data)}).")
@@ -333,7 +333,7 @@ class AttrVexpNode(IDotExpressionNode):
 
     def __str__(self):
         denied = ", DENIED" if self.denied else ""
-        return f"AttrVexpNode({self.full_name} : {self.data_supplier_name}{denied})"
+        return f"AttrDexpNode({self.full_name} : {self.data_supplier_name}{denied})"
         # bound= (", BOUND={}".format(", ".join([f"{setup_session_name}->{ns._name}.{attr_node_name}" for setup_session_name, ns, attr_node_name in self.bound_list]))) if self.bound_list else ""
         # {bound}, {self.refcount}
 

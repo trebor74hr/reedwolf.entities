@@ -44,7 +44,7 @@ from .expressions import (
         ISetupSession,
         )
 from .attr_nodes import (
-        AttrVexpNode,
+        AttrDexpNode,
         )
 from .base import (
         SetupStackFrame,
@@ -248,7 +248,7 @@ class FunctionArguments:
                     )):
                 vexp_node = vexp.Setup(setup_session=setup_session, owner=setup_session.current_frame.component)
 
-            # NOTE: pass callable since type_info for some Vexp-s are not avaialble (e.g. FieldsNS, F.name)
+            # NOTE: pass callable since type_info for some Dexp-s are not avaialble (e.g. FieldsNS, F.name)
             type_info_or_callable = vexp_node.get_type_info()
             if not type_info_or_callable:
                 # if type_info is not provided then set callable which will start to return values after finish is completed
@@ -386,7 +386,7 @@ class FunctionArguments:
 
             # TODO: inject component - it is not perfect :( 
             if ReservedArgumentNames.INJECT_COMPONENT_TREE in expected_args:
-                if not (isinstance(caller, AttrVexpNode)
+                if not (isinstance(caller, AttrDexpNode)
                         and caller.namespace == FieldsNS):
                     raise RuleInternalError(owner=self, msg=f"Expected F.<fieldname>, got: {caller}") 
                 component_tree_type_info = TypeInfo.get_or_create_by_type(py_type_hint=ComponentTreeWValuesDictType, caller=caller)
