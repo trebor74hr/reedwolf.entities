@@ -472,8 +472,8 @@ class ApplyResult(IApplySession):
                     if current_instance_new not in (None, UNDEFINED):
                         item_instance_new = new_instances_by_key.get(key, UNDEFINED)
                         if item_instance_new is UNDEFINED:
-                            key_string = component.get_key_string_by_instance(
-                                    apply_session = self, 
+                            key_string = self.get_key_string_by_instance(
+                                    component = component, 
                                     instance = instance, 
                                     index0 = index0)
 
@@ -500,10 +500,10 @@ class ApplyResult(IApplySession):
                     for key in new_keys:
                         item_instance_new = new_instances_by_key[key]
 
-                        key_string = component.get_key_string_by_instance(
-                                apply_session = self, 
-                                instance = item_instance_new, 
-                                index0 = index0_new)
+                        key_string = self.get_key_string_by_instance(
+                                        component = component,
+                                        instance = item_instance_new, 
+                                        index0 = index0_new)
 
                         self.changes.append(
                                 InstanceChange(
@@ -679,7 +679,7 @@ class ApplyResult(IApplySession):
     # ------------------------------------------------------------
 
     def get_instance_by_key_string(self, key_string: str) -> ModelType:
-        " must exist in cache - see previous method which sets Container.get_key_string_by_instance "
+        " must exist in cache - see previous method which sets self.get_key_string_by_instance(container) "
         return self.instance_by_key_string_cache[key_string]
 
     # ------------------------------------------------------------
@@ -936,10 +936,10 @@ class ApplyResult(IApplySession):
         if component.is_container():
             # raise RuleInternalError(owner=component, msg=f"Expecting non-container, got: {component}") 
             " uses cache, when not found then gets intances and index0 from current frame "
-            key_string = component.get_key_string_by_instance(
-                    apply_session = self,
-                    instance = self.current_frame.instance, 
-                    index0 = self.current_frame.index0)
+            key_string = self.get_key_string_by_instance(
+                            component=component,
+                            instance = self.current_frame.instance, 
+                            index0 = self.current_frame.index0)
         else:
             container = component.get_container_owner(consider_self=True)
             # container_key_string = container.get_key_string(apply_session)
@@ -950,6 +950,72 @@ class ApplyResult(IApplySession):
                     [container_key_string, component.name] 
                     )
         return key_string
+
+    # ------------------------------------------------------------
+
+    def get_key_string_by_instance(self, component: ComponentBase, instance: ModelType, index0: Optional[int]) -> str:
+        # apply_session:IApplySession,  -> self
+        """
+        Two cases - component has .keys or not:
+
+        a) with keys:
+            For containers which have keys defined, it is assumed that one key is
+            globally unique within Extension components, so no need to prefix key
+            with parent/owner key_string. Example:
+
+                 address_set_ext[id2=1]
+
+        b) without keys - index0 based:
+            In other cases item index in list is used (index0), and then this is
+            only locally within one instance of parent/owner, therefore parent
+            key_string is required. Example:
+
+                 company_rules::address_set_ext[0]
+
+        """
+        if not component.is_container():
+            raise RuleInternalError(owner=component, msg=f"Expecting container, got: {component}") 
+
+        instance_id = id(instance)
+        key_string = self.key_string_container_cache.get(instance_id, None)
+        if key_string is None:
+
+            if component.keys:
+                key_pairs = component.get_key_pairs(instance)
+                assert key_pairs
+                key_string = "{}[{}]".format(
+                                component.name, 
+                                GlobalConfig.ID_NAME_SEPARATOR.join(
+                                    [f"{name}={value}" for name, value in key_pairs]
+                                ))
+            elif index0 is not None:
+                key_string = f"{component.name}[{index0}]"
+
+                if self.current_frame.parent_instance:
+                    parent_instance = self.current_frame.parent_instance
+                    parent_id = id(parent_instance)
+                    if parent_id not in self.key_string_container_cache:
+                        # must_be_in_cache
+                        if not self.component_name_only:
+                            raise RuleInternalError(owner=component, msg=f"Parent instance's key not found in cache, got: {parent_instance}") 
+                        parent_key_string = f"__PARTIAL__{self.component_name_only}"
+                    else:
+                        parent_key_string = self.key_string_container_cache[parent_id]
+                    key_string = GlobalConfig.ID_NAME_SEPARATOR.join([parent_key_string, key_string])
+
+            else:
+                key_string = component.name
+
+            self.key_string_container_cache[instance_id] = key_string
+            self.instance_by_key_string_cache[key_string] = instance
+        #     from_cache = "new"
+        # else:
+        #     from_cache = "cache"
+
+        # TODO: self.config.logger.debug("cont:", component.name, key_string, f"[{from_cache}]")
+
+        return key_string
+
 
     # ------------------------------------------------------------
 

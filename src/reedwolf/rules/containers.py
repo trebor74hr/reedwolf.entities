@@ -372,66 +372,68 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
     # Apply phase
     # ------------------------------------------------------------
 
-    def get_key_string_by_instance(self, apply_session:IApplySession, instance: ModelType, index0: Optional[int]) -> str:
-        """
-        Two cases - component has .keys or not:
+    # NOTE: moved to apply_session / ApplyResult
+    # def get_key_string_by_instance(self, apply_session:IApplySession, instance: ModelType, index0: Optional[int]) -> str:
+    #     """
+    #     Two cases - component has .keys or not:
 
-        a) with keys:
-            For containers which have keys defined, it is assumed that one key is
-            globally unique within Extension components, so no need to prefix key
-            with parent/owner key_string. Example:
+    #     a) with keys:
+    #         For containers which have keys defined, it is assumed that one key is
+    #         globally unique within Extension components, so no need to prefix key
+    #         with parent/owner key_string. Example:
 
-                 address_set_ext[id2=1]
+    #              address_set_ext[id2=1]
 
-        b) without keys - index0 based:
-            In other cases item index in list is used (index0), and then this is
-            only locally within one instance of parent/owner, therefore parent
-            key_string is required. Example:
+    #     b) without keys - index0 based:
+    #         In other cases item index in list is used (index0), and then this is
+    #         only locally within one instance of parent/owner, therefore parent
+    #         key_string is required. Example:
 
-                 company_rules::address_set_ext[0]
+    #              company_rules::address_set_ext[0]
 
-        """
-        instance_id = id(instance)
-        key_string = apply_session.key_string_container_cache.get(instance_id, None)
-        if key_string is None:
+    #     """
+    #     instance_id = id(instance)
+    #     key_string = apply_session.key_string_container_cache.get(instance_id, None)
+    #     if key_string is None:
 
-            if self.keys:
-                key_pairs = self.get_key_pairs(instance)
-                assert key_pairs
-                key_string = "{}[{}]".format(
-                                self.name, 
-                                GlobalConfig.ID_NAME_SEPARATOR.join(
-                                    [f"{name}={value}" for name, value in key_pairs]
-                                ))
-            elif index0 is not None:
-                key_string = f"{self.name}[{index0}]"
+    #         if self.keys:
+    #             key_pairs = self.get_key_pairs(instance)
+    #             assert key_pairs
+    #             key_string = "{}[{}]".format(
+    #                             self.name, 
+    #                             GlobalConfig.ID_NAME_SEPARATOR.join(
+    #                                 [f"{name}={value}" for name, value in key_pairs]
+    #                             ))
+    #         elif index0 is not None:
+    #             key_string = f"{self.name}[{index0}]"
 
-                if apply_session.current_frame.parent_instance:
-                    parent_instance = apply_session.current_frame.parent_instance
-                    parent_id = id(parent_instance)
-                    if parent_id not in apply_session.key_string_container_cache:
-                        # must_be_in_cache
-                        if not apply_session.component_name_only:
-                            raise RuleInternalError(owner=self, msg=f"Parent instance's key not found in cache, got: {parent_instance}") 
-                        parent_key_string = f"__PARTIAL__{apply_session.component_name_only}"
-                    else:
-                        parent_key_string = apply_session.key_string_container_cache[parent_id]
-                    key_string = GlobalConfig.ID_NAME_SEPARATOR.join([parent_key_string, key_string])
+    #             if apply_session.current_frame.parent_instance:
+    #                 parent_instance = apply_session.current_frame.parent_instance
+    #                 parent_id = id(parent_instance)
+    #                 if parent_id not in apply_session.key_string_container_cache:
+    #                     # must_be_in_cache
+    #                     if not apply_session.component_name_only:
+    #                         raise RuleInternalError(owner=self, msg=f"Parent instance's key not found in cache, got: {parent_instance}") 
+    #                     parent_key_string = f"__PARTIAL__{apply_session.component_name_only}"
+    #                 else:
+    #                     parent_key_string = apply_session.key_string_container_cache[parent_id]
+    #                 key_string = GlobalConfig.ID_NAME_SEPARATOR.join([parent_key_string, key_string])
 
-            else:
-                key_string = self.name
+    #         else:
+    #             key_string = self.name
 
-            apply_session.key_string_container_cache[instance_id] = key_string
-            apply_session.instance_by_key_string_cache[key_string] = instance
-        #     from_cache = "new"
-        # else:
-        #     from_cache = "cache"
+    #         apply_session.key_string_container_cache[instance_id] = key_string
+    #         apply_session.instance_by_key_string_cache[key_string] = instance
+    #     #     from_cache = "new"
+    #     # else:
+    #     #     from_cache = "cache"
 
-        # TODO: apply_session.config.logger.debug("cont:", self.name, key_string, f"[{from_cache}]")
+    #     # TODO: apply_session.config.logger.debug("cont:", self.name, key_string, f"[{from_cache}]")
 
-        return key_string
+    #     return key_string
 
 
+    # NOTE: moved to apply_session / ApplyResult
     # def get_key_string(self, apply_session:IApplySession) -> str:
     #     " uses cache, when not found then gets intances and index0 from current frame "
     #     return self.get_key_string_by_instance(
