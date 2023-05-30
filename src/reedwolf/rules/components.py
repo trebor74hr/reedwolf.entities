@@ -84,7 +84,9 @@ class Component(ComponentBase, ABC):
 
     def get_key_string(self, apply_session: IApplySession):
         # TODO: is caching possible? 
-        assert not self.is_container()
+        # TODO: consider moving to ApplySession/ApplyResult?
+        if self.is_container():
+            raise RuleInternalError(owner=self, msg=f"Expecting non-container, got: {self}") 
         container = self.get_container_owner(consider_self=True)
         container_key_string = container.get_key_string(apply_session)
         key_string = GlobalConfig.ID_NAME_SEPARATOR.join(

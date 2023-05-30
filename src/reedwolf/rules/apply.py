@@ -235,7 +235,7 @@ class ApplyResult(IApplySession):
             eval_value = component.try_adapt_value(eval_value)
 
         # ALT: bind_dexp_result = component.get_dexp_result_from_instance(apply_session)
-        orig_value = component.get_current_value(apply_session=self)
+        orig_value = self.get_current_value(component)
 
         if (orig_value != eval_value):
             self.register_instance_attr_change(
@@ -927,6 +927,25 @@ class ApplyResult(IApplySession):
 
     # ------------------------------------------------------------
 
+    # apply_session:IApplySession
+    def get_current_value(self, component: ComponentBase) -> LiteralType:
+        """ Could work on non-stored fields.
+            Probaly a bit faster, only dict queries.
+        """
+        # ALT: from update_history: 
+        #       instance_attr_value = apply_session.update_history[key_str][-1]
+        #       return instance_attr_value.value
+        # ALT: fetch from:
+        #       bind_dexp: DotExpression = getattr(component, "bind", None)
+        #       bind_dexp._evaluator.execute()
+        key_str = component.get_key_string(apply_session=self)
+        if not key_str in self.current_values:
+            raise RuleInternalError(owner=component, msg=f"{key_str} not found in current values") 
+        instance_attr_current_value = self.current_values[key_str]
+        return instance_attr_current_value.value
+
+    # ------------------------------------------------------------
+
     def get_attr_value_by_comp_name(self, component:ComponentBase, instance: ModelType) -> ExecResult:
         attr_name = component.name
         if not hasattr(instance, attr_name):
@@ -942,3 +961,20 @@ class ApplyResult(IApplySession):
         exec_result.set_value(value, attr_name, changer_name=f"{component.name}.ATTR")
         return exec_result
 
+
+# ------------------------------------------------------------
+# OBSOLETE
+# ------------------------------------------------------------
+
+    # def get_current_value(self, apply_session:iapplysession) -> any:
+    #     """ Fetch ExecResult from component.bind from APPLY_SESSION.UPDATE_HISTORY
+    #         last record.
+    #         !!! ExecResult.value could be unadapted :( !!!
+    #         Could work on non-stored fields.
+    #         Probaly a bit faster, only dict queries.
+    #     """
+    #     key_str = self.get_key_string(apply_session=apply_session)
+    #     if not key_str in apply_session.update_history:
+    #         raise RuleInternalError(owner=self, msg=f"{key_str} not found in current values") 
+    #     instance_attr_value = apply_session.update_history[key_str][-1]
+    #     return instance_attr_value.value

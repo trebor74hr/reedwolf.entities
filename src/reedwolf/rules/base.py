@@ -801,34 +801,8 @@ class ComponentBase(SetOwnerMixin, ABC):
 
     # ------------------------------------------------------------
 
-    def get_current_value(self, apply_session:iapplysession) -> any:
-        """ Could work on non-stored fields.
-            Probaly a bit faster, only dict queries.
-        """
-        # ALT: from update_history: 
-        #       instance_attr_value = apply_session.update_history[key_str][-1]
-        #       return instance_attr_value.value
-        # ALT: fetch from:
-        #       bind_dexp: DotExpression = getattr(component, "bind", None)
-        #       bind_dexp._evaluator.execute()
-        key_str = self.get_key_string(apply_session=apply_session)
-        if not key_str in apply_session.current_values:
-            raise RuleInternalError(owner=self, msg=f"{key_str} not found in current values") 
-        instance_attr_current_value = apply_session.current_values[key_str]
-        return instance_attr_current_value.value
-
+    # Moved to apply.py::ApplyResult
     # def get_current_value(self, apply_session:iapplysession) -> any:
-    #     """ Fetch ExecResult from component.bind from APPLY_SESSION.UPDATE_HISTORY
-    #         last record.
-    #         !!! ExecResult.value could be unadapted :( !!!
-    #         Could work on non-stored fields.
-    #         Probaly a bit faster, only dict queries.
-    #     """
-    #     key_str = self.get_key_string(apply_session=apply_session)
-    #     if not key_str in apply_session.update_history:
-    #         raise RuleInternalError(owner=self, msg=f"{key_str} not found in current values") 
-    #     instance_attr_value = apply_session.update_history[key_str][-1]
-    #     return instance_attr_value.value
 
 
 # ------------------------------------------------------------
