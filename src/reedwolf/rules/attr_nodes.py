@@ -190,13 +190,13 @@ class AttrDexpNode(IDotExpressionNode):
     def execute_node(self, 
                  apply_session: IApplySession, 
                  # previous - can be undefined too
-                 vexp_result: Union[ExecResult, UndefinedType],
+                 dexp_result: Union[ExecResult, UndefinedType],
                  prev_node_type_info: TypeInfo,
                  is_last: bool,
                  ) -> ExecResult:
 
         if is_last and not self.is_finished:
-            raise RuleInternalError(owner=self, msg="Last vexp node is not finished.") 
+            raise RuleInternalError(owner=self, msg="Last dexp node is not finished.") 
 
         # TODO: not nicest way - string split
         #       for extension: [p._name for p in frame.container.bound_model.model.Path]
@@ -204,11 +204,11 @@ class AttrDexpNode(IDotExpressionNode):
 
         attr_name = names[-1]
 
-        assert vexp_result not in (None,)
+        assert dexp_result not in (None,)
 
-        if vexp_result in (UNDEFINED, None):
+        if dexp_result in (UNDEFINED, None):
             # initial / first value - get from registry / namespace, e.g. M
-            vexp_result = ExecResult()
+            dexp_result = ExecResult()
             frame = apply_session.current_frame
 
             if frame.container.is_extension() or frame.on_component_only:
@@ -242,7 +242,7 @@ class AttrDexpNode(IDotExpressionNode):
             # 2+ value - based on previous result and evolved one step further
             if not len(names)>1:
                 raise RuleInternalError(owner=self, msg=f"Names need to be list of at least 2 members: {names}") 
-            value_previous = vexp_result.value
+            value_previous = dexp_result.value
             do_fetch_by_name = True
 
 
@@ -308,9 +308,9 @@ class AttrDexpNode(IDotExpressionNode):
             raise RuleApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should return list, got: '{to_repr(value_new)}' : '{type(value_new)}'")
 
         # TODO: hm, changer_name is equal to attr_name, any problem / check / fix ... 
-        vexp_result.set_value(attr_name=attr_name, changer_name=attr_name, value=value_new)
+        dexp_result.set_value(attr_name=attr_name, changer_name=attr_name, value=value_new)
 
-        return vexp_result
+        return dexp_result
 
 
     def isoptional(self):

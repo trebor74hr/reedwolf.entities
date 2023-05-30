@@ -296,7 +296,7 @@ class ContextRegistry(RegistryBase):
 
 
     def create_node(self, 
-                    vexp_node_name: str, 
+                    dexp_node_name: str, 
                     parent_dexp_node: IDotExpressionNode, 
                     owner: ComponentBase,
                     ) -> IDotExpressionNode:
@@ -305,10 +305,10 @@ class ContextRegistry(RegistryBase):
             raise RuleInternalError(owner=self, msg=f"Owner needs to be Component, got: {type(owner)} / {owner}")  
 
         if not owner.get_container_owner(consider_self=True).context_class:
-            raise RuleSetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}' (referenced by '{self.NAMESPACE}.{vexp_node_name}') should not be used since 'Rules.context_class' is not set. Define 'context_class' to 'Rules()' constructor and try again.")
+            raise RuleSetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}' (referenced by '{self.NAMESPACE}.{dexp_node_name}') should not be used since 'Rules.context_class' is not set. Define 'context_class' to 'Rules()' constructor and try again.")
 
         return super().create_node(
-                vexp_node_name=vexp_node_name,
+                dexp_node_name=dexp_node_name,
                 parent_dexp_node=parent_dexp_node,
                 owner=owner,
                 )
@@ -417,7 +417,7 @@ class ThisRegistry(RegistryBase):
 class SetupSession(SetupSessionBase):
 
     def create_local_setup_session(self, this_ns_model_class: ModelType) -> SetupSession:
-        " Currently creates only local ThisNS registry, which is used for some local context, e.g. Component This. vexps "
+        " Currently creates only local ThisNS registry, which is used for some local context, e.g. Component This. dexps "
 
         this_registry = ThisRegistry(
                 model_class=this_ns_model_class,
@@ -445,12 +445,12 @@ class SetupSession(SetupSessionBase):
 # 
 #     def create_dexp_node(self, data_var:IData) -> IDotExpressionNode:
 #         # ------------------------------------------------------------
-#         # A.2. DATAPROVIDERS - Collect all vexp_nodes from dataproviders fieldgroup
+#         # A.2. DATAPROVIDERS - Collect all dexp_nodes from dataproviders fieldgroup
 #         # ------------------------------------------------------------
 #         if False:
 #             ...
 #         # elif isinstance(data_var, StaticData):
-#         #     vexp_node = AttrDexpNode(
+#         #     dexp_node = AttrDexpNode(
 #         #                             name=data_var.name,
 #         #                             data=data_var,
 #         #                             namespace=DataNS,
@@ -460,7 +460,7 @@ class SetupSession(SetupSessionBase):
 #         #     assert isinstance(data_var.function, CustomFunctionFactory)
 #         #     # TODO: consider storing CustomFactoryFunction instead of CustomFunction instances
 #         #     #       to allow extra arguments when referenced
-#         #     vexp_node = data_var.function.create_function(
+#         #     dexp_node = data_var.function.create_function(
 #         #                     setup_session=self.setup_session,
 #         #                     caller=None,
 #         #                     func_args=EmptyFunctionArguments, 
@@ -470,14 +470,14 @@ class SetupSession(SetupSessionBase):
 #             # if not isinstance(data_var, IData:
 #             raise RuleSetupError(owner=self, msg=f"Register expexted IData, got {data_var} / {type(data_var)}.")
 # 
-#         return vexp_node
+#         return dexp_node
 # 
 #     def register(self, data_var:IData):
-#         vexp_node = self.create_dexp_node(data_var)
+#         dexp_node = self.create_dexp_node(data_var)
 #         # can be AttrDexpNode or FunctionDexpNode
 #         # alt_dexp_node_name=data_var.name
-#         self.register_dexp_node(vexp_node)
-#         return vexp_node
+#         self.register_dexp_node(dexp_node)
+#         return dexp_node
 # 
 #     def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
 #         raise NotImplementedError()

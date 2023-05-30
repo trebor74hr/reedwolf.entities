@@ -213,10 +213,10 @@ class FunctionArguments:
             # TODO: should be DotExpression or IDotExpressionNode
             value_or_dexp = UNDEFINED 
         elif isinstance(value_object, DotExpression):
-            vexp: DotExpression = value_object
+            dexp: DotExpression = value_object
 
-            if vexp.IsFinished():
-                raise RuleInternalError(owner=self, msg=f"{owner_name}: DotExpression is already setup {vexp}")
+            if dexp.IsFinished():
+                raise RuleInternalError(owner=self, msg=f"{owner_name}: DotExpression is already setup {dexp}")
 
             if not caller: 
                 # NOTE: Namespace top level like: Fn.Length(This.name) 
@@ -246,14 +246,14 @@ class FunctionArguments:
                         component = setup_session.current_frame.component, 
                         local_setup_session = local_setup_session,
                     )):
-                vexp_node = vexp.Setup(setup_session=setup_session, owner=setup_session.current_frame.component)
+                dexp_node = dexp.Setup(setup_session=setup_session, owner=setup_session.current_frame.component)
 
             # NOTE: pass callable since type_info for some Dexp-s are not avaialble (e.g. FieldsNS, F.name)
-            type_info_or_callable = vexp_node.get_type_info()
+            type_info_or_callable = dexp_node.get_type_info()
             if not type_info_or_callable:
                 # if type_info is not provided then set callable which will start to return values after finish is completed
-                type_info_or_callable = vexp_node.get_type_info
-            value_or_dexp = vexp
+                type_info_or_callable = dexp_node.get_type_info
+            value_or_dexp = dexp
 
         elif inspect.isclass(value_object):
             type_info_or_callable = TypeInfo.get_or_create_by_type(value_object, caller=self)
@@ -398,10 +398,10 @@ class FunctionArguments:
             else:
                 value_args.append(value_arg_type_info)
 
-            # TODO: validates vexp_node.get_type_info() matches value_arg_type_info
+            # TODO: validates dexp_node.get_type_info() matches value_arg_type_info
 
             args, kwargs = self._process_func_args_raw((FunctionArgumentsType(value_args, value_kwargs)))
-            # vexp_node : IDotExpressionNode = caller
+            # dexp_node : IDotExpressionNode = caller
             self._try_fill_given_args(
                     setup_session=setup_session,
                     caller=caller,

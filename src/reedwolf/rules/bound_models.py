@@ -198,7 +198,7 @@ class NestedBoundModelMixin:
 
                 rh_dexp_result = model_with_handler.read_handler_dexp.execute_node(
                                     apply_session=apply_session, 
-                                    vexp_result=ExecResult(),
+                                    dexp_result=ExecResult(),
                                     prev_node_type_info=None,
                                     is_last=True)
 
@@ -261,7 +261,7 @@ class BoundModel(NestedBoundModelMixin, BoundModelBase):
 
     def _set_type_info(self):
         # NOTE: model: DotExpression - would be hard to fill automatically
-        #           when DotExpression, vexp is evaluated setup() what is a bit late in
+        #           when DotExpression, dexp is evaluated setup() what is a bit late in
         #           container.setup().
         assert not self.type_info
         if not (is_model_class(self.model) or isinstance(self.model, DotExpression)):
@@ -384,5 +384,5 @@ class BoundModelWithHandlers(NestedBoundModelMixin, BoundModelBase):
 #     raise RuleSetupValueError(owner=self, msg=f"save_handler={self.save_handler} argument '{self.name}' has type '{save_type_info.py_type_hint}' and expected is same as read handler return type '{self.type_info.py_type_hint}'. Check save or read function declaration.")
 
 # TODO: read() and save() method types matches - problem is
-#       read_handler M is vexpr that is not available in this
+#       read_handler M is dexpr that is not available in this
 #       moment - should be checked in setup() method ...

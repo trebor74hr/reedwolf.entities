@@ -80,15 +80,15 @@ class Validation(ValidationBase):
             return None
 
         component = apply_session.current_frame.component
-        vexp_result: ExecResult = self.ensure._evaluator.execute_dexp(apply_session)
-        if not bool(vexp_result.value):
+        dexp_result: ExecResult = self.ensure._evaluator.execute_dexp(apply_session)
+        if not bool(dexp_result.value):
             error = self.error if self.error else "Validation failed"
             return ValidationFailure(
                             component_key_string = component.get_key_string(apply_session),
                             error=error, 
                             validation_name=self.name,
                             validation_label=self.label,
-                            details=f"The validation returned '{vexp_result.value}'"
+                            details=f"The validation returned '{dexp_result.value}'"
                             )
         return None
 
@@ -145,8 +145,8 @@ class Readonly(SimpleValidationBase):
         component = apply_session.current_frame.component
 
         if isinstance(self.value, DotExpression):
-            vexp_result = self.value._evaluator.execute_dexp(apply_session)
-            is_readonly = vexp_result.value
+            dexp_result = self.value._evaluator.execute_dexp(apply_session)
+            is_readonly = dexp_result.value
         else:
             is_readonly = self.value
 

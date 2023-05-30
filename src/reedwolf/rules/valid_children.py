@@ -199,7 +199,7 @@ class Unique: # namespace holder
     class Global(IUniqueValidator):
         " globally - e.g. within table "
         name            : str
-        fields          : List[str] # TODO: better field specification or vexpr?
+        fields          : List[str] # TODO: better field specification or dexpr?
         ignore_none     : bool = True
 
         owner           : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
@@ -212,7 +212,7 @@ class Unique: # namespace holder
     class Children(IUniqueValidator):
         " within extension records "
         name            : str
-        fields          : List[str] # TODO: better field specification or vexpr?
+        fields          : List[str] # TODO: better field specification or dexpr?
         ignore_none     : bool = True
 
         owner           : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821

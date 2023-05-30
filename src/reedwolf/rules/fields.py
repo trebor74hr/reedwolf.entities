@@ -414,24 +414,24 @@ class ChoiceField(FieldBase):
         choices_checked = False
         is_list = UNDEFINED
         choice_from_function = False
-        vexp_node = None
+        dexp_node = None
 
         # -- Factory cases
         if is_function(choices):
             raise RuleInternalError(owner=self, msg=f"Direct functions are not allowed, wrap with Function() instead. Got: {choices}")
         elif isinstance(choices, DotExpression):
-            # TODO: restrict to vexp only - no operation
+            # TODO: restrict to dexp only - no operation
             if choices._status!=VExpStatusEnum.BUILT:
                 # reported before - warn(f"TODO: There is an error with value expression {self.choices} - skip it for now.")
                 choices = None
             else:
-                vexp_node = setup_session.get_dexp_node_by_dexp(vexp=choices)
-                if not vexp_node:
-                    vexp_node = choices.Setup(setup_session=setup_session, owner=self)
+                dexp_node = setup_session.get_dexp_node_by_dexp(dexp=choices)
+                if not dexp_node:
+                    dexp_node = choices.Setup(setup_session=setup_session, owner=self)
 
         elif isinstance(choices, CustomFunctionFactory):
             custom_function_factory : CustomFunctionFactory = choices
-            vexp_node = custom_function_factory.create_function(
+            dexp_node = custom_function_factory.create_function(
                             # NOTE: was None before
                             setup_session=setup_session,
                             caller=None,
@@ -439,15 +439,15 @@ class ChoiceField(FieldBase):
                             )
 
         # -- DotExpression node
-        if vexp_node:
-            if isinstance(vexp_node, IFunctionDexpNode):
-                func_node: IFunctionDexpNode = vexp_node  # better name
+        if dexp_node:
+            if isinstance(dexp_node, IFunctionDexpNode):
+                func_node: IFunctionDexpNode = dexp_node  # better name
                 choices = func_node.get_type_info().type_
                 is_list = func_node.get_type_info().is_list
                 choice_from_function = True
 
-            elif isinstance(vexp_node, AttrDexpNode):
-                attr_node: AttrDexpNode = vexp_node  # better name
+            elif isinstance(dexp_node, AttrDexpNode):
+                attr_node: AttrDexpNode = dexp_node  # better name
                 if is_enum(attr_node.data.value):
                     raise RuleSetupValueError(owner=self, msg=f"Using enum {attr_node.data.value}. Use EnumField instead.")
 
@@ -497,8 +497,8 @@ class ChoiceField(FieldBase):
                                                     this_ns_model_class=model_class)
                     )):
                 # model_class=model_class
-                self.choice_value_attr_node = self._create_attr_node(setup_session, "choice_value", vexp=self.choice_value)
-                self.choice_label_attr_node = self._create_attr_node(setup_session, "choice_label", vexp=self.choice_label)
+                self.choice_value_attr_node = self._create_attr_node(setup_session, "choice_value", dexp=self.choice_value)
+                self.choice_label_attr_node = self._create_attr_node(setup_session, "choice_label", dexp=self.choice_label)
 
             if self.choice_label_attr_node.type_info.type_!=str:
                 raise RuleSetupValueError(owner=self, msg=f"Attribute choice_label needs to be bound to string attribute, got: {self.choice_label_attr_mode.type_info.type_}")
@@ -537,17 +537,17 @@ class ChoiceField(FieldBase):
             # local_setup_session: SetupSession,
             setup_session: SetupSession, 
             aname: str, 
-            vexp: DotExpression, 
+            dexp: DotExpression, 
             ):
         """
         Create choice AttrDexpNode() within local ThisRegistry
         """
-        if not (vexp and isinstance(vexp, DotExpression) and vexp.GetNamespace()==ThisNS):
-            raise RuleSetupValueError(owner=self, msg=f"Argument '{aname}' is not set or has wrong type - should be DotExpression in This. namespace. Got: {vexp} / {type(vexp)}")
+        if not (dexp and isinstance(dexp, DotExpression) and dexp.GetNamespace()==ThisNS):
+            raise RuleSetupValueError(owner=self, msg=f"Argument '{aname}' is not set or has wrong type - should be DotExpression in This. namespace. Got: {dexp} / {type(dexp)}")
 
-        attr_node = vexp.Setup(setup_session=setup_session, owner=self)
-        if vexp._status != VExpStatusEnum.BUILT:
-            raise RuleInternalError(owner=self, msg=f"Setup failed for Dexp: {vexp} -> {vexp._status}")
+        attr_node = dexp.Setup(setup_session=setup_session, owner=self)
+        if dexp._status != VExpStatusEnum.BUILT:
+            raise RuleInternalError(owner=self, msg=f"Setup failed for Dexp: {dexp} -> {dexp._status}")
 
         return attr_node
 
@@ -569,12 +569,12 @@ class EnumField(FieldBase):
         super().setup(setup_session=setup_session)
 
         # TODO: revert to: strict=True - and process exception properly
-        attr_node = setup_session.get_dexp_node_by_dexp(vexp=self.bind, strict=False)
+        attr_node = setup_session.get_dexp_node_by_dexp(dexp=self.bind, strict=False)
         if attr_node:
 
             if isinstance(self.enum, DotExpression):
                 # EnumField(... enum=S.CompanyTypes)
-                enum_attr_node = setup_session.get_dexp_node_by_dexp(vexp=self.enum)
+                enum_attr_node = setup_session.get_dexp_node_by_dexp(dexp=self.enum)
                 if not enum_attr_node:
                     enum_attr_node = self.enum.Setup(setup_session=setup_session, owner=self)
 
@@ -631,7 +631,7 @@ class IntegerField(FieldBase):
     # TODO: autoincrement = allways, never, if-not-set
     #       AutoField
     #       BigAutoField
-    # TODO: size = vexp | IntegerSizeEnum(normal=0, big=1, small=2)
+    # TODO: size = dexp | IntegerSizeEnum(normal=0, big=1, small=2)
     #       BigIntegerField
     #       SmallAutoField
     #       SmallIntegerField

@@ -207,7 +207,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
                 # Rules - top owner container / normal case
                 setup_session_from = self.setup_session
 
-            attr_node = setup_session_from.get_dexp_node_by_dexp(vexp=model)
+            attr_node = setup_session_from.get_dexp_node_by_dexp(dexp=model)
             if attr_node:
                 raise RuleInternalError(owner=self, msg=f"AttrDexpNode data already in setup_session: {model} -> {attr_node}")
 
@@ -313,7 +313,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         # components recursively:
         #   it will validate every component attribute
         #   if attribute is another component - it will call recursively component.setup()
-        #   if component attribute is DotExpression -> will call vexp.Setup()
+        #   if component attribute is DotExpression -> will call dexp.Setup()
         #   if component is another container i.e. is_extension() - it will
         #       process only that component and will not go deeper. later
         #       extension.setup() will do this within own tree dep (own .components / .setup_session)

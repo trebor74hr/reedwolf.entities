@@ -238,7 +238,7 @@ class ApplyResult(IApplySession):
         if (orig_value != eval_value):
             self.register_instance_attr_change(
                     component=component, 
-                    vexp_result=eval_dexp_result,
+                    dexp_result=eval_dexp_result,
                     new_value=eval_value
                     )
 
@@ -328,9 +328,9 @@ class ApplyResult(IApplySession):
                 raise RuleInternalError(owner=self, msg=f"For Extension complex `bound_model` is currently not supported (e.g. `contains`), use simple BoundModel, got: {component.bound_model}") 
 
             # original instance
-            vexp_result: ExecResult = component.bound_model.model \
+            dexp_result: ExecResult = component.bound_model.model \
                                         ._evaluator.execute_dexp(apply_session=self)
-            instance = vexp_result.value
+            instance = dexp_result.value
 
             # new instance if any
             current_instance_new = self._get_current_instance_new(component=component,
@@ -547,7 +547,7 @@ class ApplyResult(IApplySession):
                             updated_values = updated_values,
                         ))
 
-        # TODO: logger: apply_session.config.logger.debug(f"depth={depth}, comp={component.name}, bind={bind} => {vexp_result}")
+        # TODO: logger: apply_session.config.logger.debug(f"depth={depth}, comp={component.name}, bind={bind} => {dexp_result}")
 
         return
 
@@ -557,9 +557,9 @@ class ApplyResult(IApplySession):
         # used only for testing
         for attr_name, attr_value in vars(component).items():
             if isinstance(attr_value, DotExpression):
-                # vexp_result: ExecResult = 
+                # dexp_result: ExecResult = 
                 attr_value._evaluator.execute_dexp(apply_session=self)
-                # TODO: apply_session.config.logger.debug(f"{parent.name if parent else ''}.{component.name}.{attr_name} = VExp[{attr_value}] -> {vexp_result}")
+                # TODO: apply_session.config.logger.debug(f"{parent.name if parent else ''}.{component.name}.{attr_name} = VExp[{attr_value}] -> {dexp_result}")
 
     # ------------------------------------------------------------
 
@@ -629,7 +629,7 @@ class ApplyResult(IApplySession):
 
             if self.current_frame.instance_new not in (None, UNDEFINED):
 
-                # if partial - then vexp must know - this value is set only in this case
+                # if partial - then dexp must know - this value is set only in this case
                 if in_component_only_tree and component == self.component_only:
                     # Extension or FieldGroup is root
                     on_component_only = component
@@ -647,7 +647,7 @@ class ApplyResult(IApplySession):
                             instance_new = UNDEFINED, 
                             on_component_only=on_component_only,
                         )) as frame:
-                    vexp_result: ExecResult = \
+                    dexp_result: ExecResult = \
                                         component \
                                         .bound_model \
                                         .model \
@@ -655,7 +655,7 @@ class ApplyResult(IApplySession):
                                                 apply_session=self, 
                                                 )
                 # set new value
-                current_instance_new = vexp_result.value
+                current_instance_new = dexp_result.value
                 if frame.bound_model_root.type_info.is_list and not isinstance(current_instance_new, (list, tuple)):
                     # TODO: 
                     current_instance_new = [current_instance_new]
@@ -709,7 +709,7 @@ class ApplyResult(IApplySession):
 
 
         # TODO: provide last value to all evaluations and validations 
-        #       but be careful with vexp_result.value - it coluld be unadapted
+        #       but be careful with dexp_result.value - it coluld be unadapted
         #       see: field.try_adapt_value(eval_value)
         all_ok = True
         if component.cleaners:
@@ -746,7 +746,7 @@ class ApplyResult(IApplySession):
     # ------------------------------------------------------------
 
     def _init_by_bind_dexp(self, component: ComponentBase) -> ExecResult:
-        " get initial vexp value, if instance_new try to updated/overwrite with it"
+        " get initial dexp value, if instance_new try to updated/overwrite with it"
 
         if not isinstance(component, FieldBase):
             raise RuleInternalError(owner=self, msg=f"Expected FieldBase field, got: {component}")
@@ -756,7 +756,7 @@ class ApplyResult(IApplySession):
 
         self.register_instance_attr_change(
                 component = component, 
-                vexp_result = bind_dexp_result, 
+                dexp_result = bind_dexp_result, 
                 new_value = init_value,
                 is_from_init_bind = True)
 
@@ -808,7 +808,7 @@ class ApplyResult(IApplySession):
                 if new_value != last_value:
                     self.register_instance_attr_change(
                             component = component, 
-                            vexp_result = instance_new_bind_dexp_result, 
+                            dexp_result = instance_new_bind_dexp_result, 
                             new_value = new_value,
                             )
                     last_value = new_value 
@@ -821,7 +821,7 @@ class ApplyResult(IApplySession):
             self.register_instance_attr_change(
                     component=component, 
                     # TODO: how to mark init -> adaptation change?
-                    vexp_result=None,
+                    dexp_result=None,
                     new_value=last_value
                     )
 

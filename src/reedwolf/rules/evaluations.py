@@ -101,8 +101,8 @@ class Default(PresaveEvaluationBase):
 
     def execute(self, apply_session: IApplySession) -> Optional[ExecResult]:
         if isinstance(self.value, DotExpression):
-            vexp_result = self.value._evaluator.execute_dexp(apply_session=apply_session)
-            value = vexp_result.value
+            dexp_result = self.value._evaluator.execute_dexp(apply_session=apply_session)
+            value = dexp_result.value
         else:
             value = self.value
         return ExecResult.create(value)

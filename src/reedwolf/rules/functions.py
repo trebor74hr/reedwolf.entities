@@ -212,7 +212,7 @@ class IFunction(IFunctionDexpNode):
 
         # first validate value type matches
         # if self.prepared_args.value_arg_implicit==True:
-        # self._validate_value_arg_type(vexp_node=self.caller)
+        # self._validate_value_arg_type(dexp_node=self.caller)
         if self.arg_validators:
             self._call_arg_validators()
 
@@ -286,13 +286,13 @@ class IFunction(IFunctionDexpNode):
             ) -> Any:
         if isinstance(arg_value, (DotExpression, IDotExpressionNode)):
             # arg_value._evaluator.execute(apply_session=apply_session)
-            vexp_result = execute_dexp_or_node(
+            dexp_result = execute_dexp_or_node(
                             arg_value,
                             arg_value,
-                            vexp_result = UNDEFINED,
+                            dexp_result = UNDEFINED,
                             prev_node_type_info=prev_node_type_info,
                             apply_session=apply_session)
-            arg_value = vexp_result.value
+            arg_value = dexp_result.value
 
         return arg_value
 
@@ -300,7 +300,7 @@ class IFunction(IFunctionDexpNode):
     # TODO: IApplySession is in base.py which imports .functions just for one case ...
     def execute_node(self, 
             apply_session: "IApplySession", # noqa: F821
-            vexp_result: ExecResult, 
+            dexp_result: ExecResult, 
             is_last:bool,
             prev_node_type_info: TypeInfo,
             ) -> Any:
@@ -309,26 +309,26 @@ class IFunction(IFunctionDexpNode):
         is/are function argument(s).
 
         # TODO: check all input arguments and output type match:
-        #       check first / vexp_result argument that matches self.value_arg_type_info
+        #       check first / dexp_result argument that matches self.value_arg_type_info
         #       check output type that matches output_type_info
         """
         if is_last and not self.is_finished:
-            raise RuleInternalError(owner=self, msg="Last vexp-node is not finished")  # , {id(self)} / {type(self)}
+            raise RuleInternalError(owner=self, msg="Last dexp-node is not finished")  # , {id(self)} / {type(self)}
 
         args = []
         kwargs = {}
 
-        if vexp_result is UNDEFINED:
+        if dexp_result is UNDEFINED:
             # top_level_call = True
             # namespace toplevel call, e.g. Fn.Length()
-            vexp_result = ExecResult()
+            dexp_result = ExecResult()
         else:
             # top_level_call = False
-            if not isinstance(vexp_result, ExecResult):
-                raise RuleInternalError(owner=self, msg=f"vexp_result is not ExecResult, got: {vexp_result}") 
+            if not isinstance(dexp_result, ExecResult):
+                raise RuleInternalError(owner=self, msg=f"dexp_result is not ExecResult, got: {dexp_result}") 
 
-            if vexp_result.value is not UNDEFINED:
-                input_value = vexp_result.value
+            if dexp_result.value is not UNDEFINED:
+                input_value = dexp_result.value
                 if self.value_arg_name:
                     kwargs[self.value_arg_name] = input_value
                 else:
@@ -361,9 +361,9 @@ class IFunction(IFunctionDexpNode):
         except Exception as ex:
             raise RuleApplyError(owner=self, msg=f"failed in calling '{self.name}({args}, {kwargs})' => {ex}")
 
-        vexp_result.set_value(ouptut_value, attr_name="", changer_name=f"{self.name}")
+        dexp_result.set_value(ouptut_value, attr_name="", changer_name=f"{self.name}")
 
-        return vexp_result
+        return dexp_result
 
     # ------------------------------------------------------------
 
@@ -376,15 +376,15 @@ class IFunction(IFunctionDexpNode):
         if not isinstance(prep_arg.caller, IDotExpressionNode):
             raise RuleInternalError(owner=self, msg=f"Expected IDotExpressionNode, got: {type(prep_arg.caller)} / {prep_arg.caller}") 
 
-        vexp_node: IDotExpressionNode = prep_arg.caller
+        dexp_node: IDotExpressionNode = prep_arg.caller
 
-        if not (vexp_node.attr_node_type == AttrDexpNodeTypeEnum.FIELD
-            and vexp_node.namespace == FieldsNS
-            and isinstance(vexp_node.data, IFieldBase)):
+        if not (dexp_node.attr_node_type == AttrDexpNodeTypeEnum.FIELD
+            and dexp_node.namespace == FieldsNS
+            and isinstance(dexp_node.data, IFieldBase)):
 
-            raise RuleInternalError(owner=self, msg=f"INJECT_COMPONENT_TREE :: PrepArg '{prep_arg.name}' expected VExp(F.<field>) -> Field(),  got: '{vexp_node}' -> '{vexp_node.data}' ") 
+            raise RuleInternalError(owner=self, msg=f"INJECT_COMPONENT_TREE :: PrepArg '{prep_arg.name}' expected VExp(F.<field>) -> Field(),  got: '{dexp_node}' -> '{dexp_node.data}' ") 
 
-        component: ComponentBase = vexp_node.data
+        component: ComponentBase = dexp_node.data
 
         output = component.get_components_tree_w_values_dict(apply_session=apply_session)
         # from pprint import pprint; print("----here:"); pprint(output)

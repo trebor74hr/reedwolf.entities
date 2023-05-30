@@ -2,9 +2,9 @@
 Process:
 
     DotExpression object:
-        vexp = M.value.expressions.and.Functions().results 
+        dexp = M.value.expressions.and.Functions().results 
 
-    vexp.Setup converts to
+    dexp.Setup converts to
         .value -> AttrDexpNode()
         .expressions -> AttrDexpNode()
         .Functions() -> FunctionDexpNode()
@@ -13,11 +13,11 @@ Process:
         # there is OperationDexpNode() e.g. M.x + M.y
 
     what is saved inside of (last) value expression (and owner):
-        vexp_evaluator = DotExpressionEvaluator()
+        dexp_evaluator = DotExpressionEvaluator()
             [AttrDexpNode(), AttrDexpNode(), Function(), AttrDexpNode()]
 
     and later could be evaluated/executed with concrete data objects/structure:
-        vexp_evaluator.execute(struct) 
+        dexp_evaluator.execute(struct) 
         -> ExecResult()
 """
 from __future__ import annotations
@@ -91,27 +91,27 @@ class DotExpressionEvaluator:
         if self.failed_reasons:
             raise RuleApplyError(owner=self, msg=f"Failed in creation: {'; '.join(self.failed_reasons)}.")
 
-        vexp_result = UNDEFINED
+        dexp_result = UNDEFINED
         if apply_session.current_frame.on_component_only:
             # M.address_set -> process only address_set 
             node = self.attr_node_list[-1]
-            vexp_result = node.execute_node(
+            dexp_result = node.execute_node(
                                 apply_session, 
-                                vexp_result, 
+                                dexp_result, 
                                 is_last=True, 
                                 prev_node_type_info=None)
         else:
             idx_last = len(self.attr_node_list)
             prev_node_type_info = None
             for idx, node in enumerate(self.attr_node_list, 1):
-                vexp_result = node.execute_node(
+                dexp_result = node.execute_node(
                                     apply_session, 
-                                    vexp_result, 
+                                    dexp_result, 
                                     is_last=(idx_last==idx),
                                     prev_node_type_info=prev_node_type_info,
                                     )
                 prev_node_type_info = node.get_type_info()
 
 
-        return vexp_result
+        return dexp_result
 

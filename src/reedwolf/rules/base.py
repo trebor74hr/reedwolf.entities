@@ -201,7 +201,7 @@ class SetOwnerMixin:
 @dataclass
 class SubcomponentWrapper:
     # TODO: strange class - check if really required or explain if yes
-    name        : str # orig: vexp_node_name
+    name        : str # orig: dexp_node_name
     path        : str # orig: var_path
     # TODO: can be some other types too
     subcomponent: Union[ComponentBase, DotExpression]
@@ -373,14 +373,14 @@ class ComponentBase(SetOwnerMixin, ABC):
             children_dict_traversed["children"] = []
             if apply_session:
                 if getattr(self, "bind", None):
-                    vexp = self.bind
-                    vexp_result = execute_dexp_or_node(
-                                    vexp,
-                                    vexp,
-                                    vexp_result = UNDEFINED,
+                    dexp = self.bind
+                    dexp_result = execute_dexp_or_node(
+                                    dexp,
+                                    dexp,
+                                    dexp_result = UNDEFINED,
                                     prev_node_type_info=None, # prev_node_type_info,
                                     apply_session=apply_session)
-                    value = vexp_result.value
+                    value = dexp_result.value
                     children_dict_traversed["value"] = value
 
             for comp in self.get_children():
@@ -490,19 +490,19 @@ class ComponentBase(SetOwnerMixin, ABC):
 
         if isinstance(subcomponent, (DotExpression, )): # Operation
             # copy_to_setup_session=copy_to_setup_session,
-            vexp: DotExpression = subcomponent
-            namespace = vexp.GetNamespace()
+            dexp: DotExpression = subcomponent
+            namespace = dexp.GetNamespace()
             if namespace._manual_setup:
                 # needs manual Setup() later call with extra context - now is too
                 # early (e.g. ThisNS)
                 called = False
-            # and vexp._status != VExpStatusEnum.INITIALIZED:
+            # and dexp._status != VExpStatusEnum.INITIALIZED:
             elif namespace == ModelsNS \
-               and vexp.IsFinished():
+               and dexp.IsFinished():
                 # Setup() was called in container.setup() before
                 called = False
             else:
-                vexp.Setup(setup_session=setup_session, owner=self)
+                dexp.Setup(setup_session=setup_session, owner=self)
                 called = True
         elif isinstance(subcomponent, ComponentBase):
             assert "Rules(" not in repr(subcomponent)
@@ -798,8 +798,8 @@ class ComponentBase(SetOwnerMixin, ABC):
 
     # ------------------------------------------------------------
 
-    # # TODO: this is rejected since vexp_result could be from non-bind vexp
-    # #       and only bind vexp could provide parent_instance used for setting 
+    # # TODO: this is rejected since dexp_result could be from non-bind dexp
+    # #       and only bind dexp could provide parent_instance used for setting 
     # #       new instance attribute (see register_instance_attr_change() ).
     # def get_dexp_result_from_history(self, apply_session:IApplySession) -> ExecResult:
     #     """ Fetch ExecResult from component.bind from APPLY_SESSION.UPDATE_HISTORY
@@ -814,7 +814,7 @@ class ComponentBase(SetOwnerMixin, ABC):
     #     key_str = self.get_key_string(apply_session=apply_session)
     #     assert key_str in apply_session.update_history
     #     instance_attr_value = apply_session.update_history[key_str][-1]
-    #     return instance_attr_value.vexp_result
+    #     return instance_attr_value.dexp_result
 
     # ------------------------------------------------------------
 
@@ -1024,14 +1024,14 @@ class InstanceChange:
 
 @dataclass
 class InstanceAttrValue:
-    # NOTE: value could be adapted version of vexp_result.value (can be different)
+    # NOTE: value could be adapted version of dexp_result.value (can be different)
     value: Any
 
     # * first / initial record in owner list is from bind, first
     #   this .value could be unadapted value version (field.try_adapt_value())
     #   therefore value is in a special field.
     # * second+ - are from evaluation results
-    vexp_result: ExecResult = field(repr=False, compare=False)
+    dexp_result: ExecResult = field(repr=False, compare=False)
 
     # TODO: this is not filled good - allways component.name
     # just to have track who read/set this value
@@ -1157,7 +1157,7 @@ class StructEnum(str, Enum):
 
 @dataclass
 class IApplySession:
-    # TODO: možda bi ovo trebalo izbaciti ... - link na IRegistry u vexp node-ovima 
+    # TODO: možda bi ovo trebalo izbaciti ... - link na IRegistry u dexp node-ovima 
     setup_session: ISetupSession = field(repr=False)
     rules: IContainerBase = field(repr=False) 
     instance: Any = field(repr=False)
@@ -1238,11 +1238,11 @@ class IApplySession:
 
     def register_instance_attr_change(self, 
             component: ComponentBase, 
-            vexp_result: ExecResult,
+            dexp_result: ExecResult,
             new_value: Any,
             is_from_init_bind:bool=False) -> InstanceAttrValue:
 
-        # NOTE: new_value is required - since vexp_result.value
+        # NOTE: new_value is required - since dexp_result.value
         #       could be unadapted (see field.try_adapt_value()
 
         assert component == self.current_frame.component
@@ -1277,7 +1277,7 @@ class IApplySession:
             self.validate_type(component, new_value)
 
             # -- parent instance
-            # parent_raw_attr_value = vexp_result.value_history[-2]
+            # parent_raw_attr_value = dexp_result.value_history[-2]
             # parent_instance = parent_raw_attr_value.value
 
             parent_instance = self.current_frame.instance
@@ -1285,10 +1285,10 @@ class IApplySession:
             assert isinstance(parent_instance, 
                         self.current_frame.container.bound_model.get_type_info().type_)
 
-            # -- attr_name - fetch from initial bind vexp (very first)
+            # -- attr_name - fetch from initial bind dexp (very first)
             init_instance_attr_value = self.update_history[key_str][0]
             assert init_instance_attr_value.is_from_bind
-            init_bind_dexp_result = init_instance_attr_value.vexp_result
+            init_bind_dexp_result = init_instance_attr_value.dexp_result
             # attribute name is in the last item
             init_raw_attr_value = init_bind_dexp_result.value_history[-1]
             attr_name = init_raw_attr_value.attr_name
@@ -1308,7 +1308,7 @@ class IApplySession:
         instance_attr_value = InstanceAttrValue(
                                 value_owner_name=component.name, 
                                 value=new_value,
-                                vexp_result=vexp_result,
+                                dexp_result=dexp_result,
                                 is_from_bind = is_from_init_bind,
                                 # TODO: source of change ...
                                 )
@@ -1383,7 +1383,7 @@ def extract_type_info(
                 Optional[IFunctionDexpNode]  # noqa: F821
                 ]:
     """
-    Main logic for extraction from parent object (dataclass, py class, vexp
+    Main logic for extraction from parent object (dataclass, py class, dexp
     instances) member by name 'attr_node_name' -> data (struct, plain value),
     or IFunctionDexpNode instances 
 
