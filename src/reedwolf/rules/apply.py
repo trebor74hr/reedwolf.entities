@@ -38,7 +38,9 @@ from .base import (
         ValidationFailure,
         StructEnum,
         ChangeOpEnum,
+        InstanceAttrValue,
         InstanceChange,
+        InstanceAttrCurrentValue,
         get_instance_key_string_attrname_pair,
         )
 from .fields import (
@@ -233,7 +235,7 @@ class ApplyResult(IApplySession):
             eval_value = component.try_adapt_value(eval_value)
 
         # ALT: bind_dexp_result = component.get_dexp_result_from_instance(apply_session)
-        orig_value = component.get_current_value_from_history(apply_session=self)
+        orig_value = component.get_current_value(apply_session=self)
 
         if (orig_value != eval_value):
             self.register_instance_attr_change(
@@ -264,6 +266,102 @@ class ApplyResult(IApplySession):
             self.register_instance_validation_failed(component, validation_failure)
 
         return validation_failure
+
+    # ------------------------------------------------------------
+
+    def register_instance_attr_change(self, 
+            component: ComponentBase, 
+            dexp_result: ExecResult,
+            new_value: Any,
+            is_from_init_bind:bool=False) -> InstanceAttrValue:
+
+        # NOTE: new_value is required - since dexp_result.value
+        #       could be unadapted (see field.try_adapt_value()
+
+        assert component == self.current_frame.component
+
+        if new_value is UNDEFINED:
+            raise RuleInternalError(owner=component, msg="New value should not be UNDEFINED, fix the caller")
+
+        key_str = component.get_key_string(apply_session=self)
+
+        if key_str not in self.update_history:
+            if not is_from_init_bind:
+                raise RuleInternalError(owner=component, msg=f"key_str '{key_str}' not found in update_history and this is not initialization")
+
+            self.update_history[key_str] = []
+
+            assert key_str not in self.current_values
+            self.current_values[key_str] = InstanceAttrCurrentValue(
+                                                key_string=key_str, 
+                                                component=component)
+
+            # NOTE: initial value from instance is not checked - only
+            #       intermediate and the last value
+            #   self.validate_type(component, new_value)
+        else:
+            assert key_str in self.current_values
+
+            if is_from_init_bind:
+                raise RuleInternalError(owner=component, msg=f"key_str '{key_str}' found in update_history and this is initialization")
+
+            if not self.update_history[key_str]:
+                raise RuleInternalError(owner=component, msg=f"change history for key_str='{key_str}' is empty")
+
+            # -- check if current value is different from new one
+            value_current = self.update_history[key_str][-1].value
+            if value_current == new_value:
+                raise RuleApplyError(owner=component, msg=f"register change failed, the value is the same: {value_current}")
+
+            # is this really necessary
+            self.validate_type(component, new_value)
+
+            # -- parent instance
+            # parent_raw_attr_value = dexp_result.value_history[-2]
+            # parent_instance = parent_raw_attr_value.value
+
+            parent_instance = self.current_frame.instance
+            # TODO: not sure if this validation is ok
+            if not isinstance(parent_instance, 
+                    self.current_frame.container.bound_model.get_type_info().type_):
+                raise RuleInternalError(owner=self, msg=f"Parent instance {parent_instance} has wrong type")
+
+
+            # -- attr_name - fetch from initial bind dexp (very first)
+            init_instance_attr_value = self.update_history[key_str][0]
+            if not init_instance_attr_value.is_from_bind:
+                raise RuleInternalError(owner=self, msg=f"{init_instance_attr_value} is not from bind")
+            init_bind_dexp_result = init_instance_attr_value.dexp_result
+            # attribute name is in the last item
+            init_raw_attr_value = init_bind_dexp_result.value_history[-1]
+            attr_name = init_raw_attr_value.attr_name
+
+            if not hasattr(parent_instance, attr_name):
+                raise RuleInternalError(owner=self, msg=f"Missing {parent_instance}.{attr_name}")
+
+            # ----------------------------------------
+            # Finally change instance value
+            # ----------------------------------------
+            setattr(parent_instance, attr_name, new_value)
+
+            # NOTE: bind_dexp_result last value is not changed
+            #       maybe should be changed but ... 
+
+        # TODO: pass input arg value_owner_name - component.name does not have
+        #       any purpose
+        instance_attr_value = InstanceAttrValue(
+                                value_owner_name=component.name, 
+                                value=new_value,
+                                dexp_result=dexp_result,
+                                is_from_bind = is_from_init_bind,
+                                # TODO: source of change ...
+                                )
+
+        self.update_history[key_str].append(instance_attr_value)
+        self.current_values[key_str].set_value(new_value)
+
+        return instance_attr_value
+
 
     # ------------------------------------------------------------
 

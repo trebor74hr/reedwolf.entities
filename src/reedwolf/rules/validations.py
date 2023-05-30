@@ -111,7 +111,7 @@ class Required(SimpleValidationBase):
 
     def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
         component = apply_session.current_frame.component
-        value = component.get_current_value_from_history(apply_session)
+        value = component.get_current_value(apply_session)
         if value is None:
             return ValidationFailure(
                             component_key_string = component.get_key_string(apply_session),
@@ -192,7 +192,7 @@ class MaxLength(ValidationBase):
 
     def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
         component = apply_session.current_frame.component
-        value = component.get_current_value_from_history(apply_session)
+        value = component.get_current_value(apply_session)
         if value and hasattr(value, "__len__") and len(value) > self.value:
             return ValidationFailure(
                             component_key_string = component.get_key_string(apply_session),
@@ -224,7 +224,7 @@ class MinLength(ValidationBase):
 
     def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
         component = apply_session.current_frame.component
-        value = component.get_current_value_from_history(apply_session)
+        value = component.get_current_value(apply_session)
         if value and hasattr(value, "__len__") and len(value) < self.value:
             return ValidationFailure(
                             component_key_string = component.get_key_string(apply_session),
@@ -270,7 +270,7 @@ class RangeLength(ValidationBase):
     # value: Any, component: "ComponentBase", 
     def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
         component = apply_session.current_frame.component
-        value = component.get_current_value_from_history(apply_session)
+        value = component.get_current_value(apply_session)
         if hasattr(value, "__len__"):
             if self.min and value and len(value) < self.min:
                 return ValidationFailure(

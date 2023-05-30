@@ -298,7 +298,7 @@ class FieldBase(Component, IFieldBase, ABC):
     def validate_type(self, apply_session: IApplySession, value: Any = UNDEFINED) -> Optional[ValidationFailure]:
         component = apply_session.current_frame.component
         if value is UNDEFINED:
-            value = component.get_current_value_from_history(apply_session)
+            value = component.get_current_value(apply_session)
 
         if self.PYTHON_TYPE not in (UNDEFINED, None) \
                 and value is not None \

@@ -43,6 +43,7 @@ from .meta import (
         NoneType,
         ModelField,
         TypeInfo,
+        LiteralType,
         get_model_fields,
         is_function,
         is_method_by_name,
@@ -73,7 +74,7 @@ from .contexts import (
 #   ----------- ----------------
 #   name:       str
 #   component:  ComponentBase
-#   value:      LiteralValue
+#   value:      LiteralType
 #   children:   List[Self]
 #   
 ComponentTreeDictType = Dict[str, Any]
@@ -209,7 +210,7 @@ class SubcomponentWrapper:
 
 
     def __post_init__(self):
-        # subcomponent can have literal value
+        # subcomponent can have LiteralType
         if not (self.name and self.path and self.th_field):
             raise RuleInternalError(owner=self, msg=f"name={self.name}, path={self.path}, subcomp={self.subcomponent}, th_field={self.th_field}")
 
@@ -372,11 +373,12 @@ class ComponentBase(SetOwnerMixin, ABC):
             children_dict_traversed["component"] = self
             children_dict_traversed["children"] = []
             if apply_session:
+                # TODO: not good - 
                 if getattr(self, "bind", None):
                     dexp = self.bind
                     dexp_result = execute_dexp_or_node(
-                                    dexp,
-                                    dexp,
+                                    dexp_or_value=dexp,
+                                    dexp_node=dexp,
                                     dexp_result = UNDEFINED,
                                     prev_node_type_info=None, # prev_node_type_info,
                                     apply_session=apply_session)
@@ -796,42 +798,37 @@ class ComponentBase(SetOwnerMixin, ABC):
         bind_dexp_result = bind_dexp._evaluator.execute_dexp(apply_session=apply_session)
         return bind_dexp_result
 
+
     # ------------------------------------------------------------
 
-    # # TODO: this is rejected since dexp_result could be from non-bind dexp
-    # #       and only bind dexp could provide parent_instance used for setting 
-    # #       new instance attribute (see register_instance_attr_change() ).
-    # def get_dexp_result_from_history(self, apply_session:IApplySession) -> ExecResult:
+    def get_current_value(self, apply_session:iapplysession) -> any:
+        """ Could work on non-stored fields.
+            Probaly a bit faster, only dict queries.
+        """
+        # ALT: from update_history: 
+        #       instance_attr_value = apply_session.update_history[key_str][-1]
+        #       return instance_attr_value.value
+        # ALT: fetch from:
+        #       bind_dexp: DotExpression = getattr(component, "bind", None)
+        #       bind_dexp._evaluator.execute()
+        key_str = self.get_key_string(apply_session=apply_session)
+        if not key_str in apply_session.current_values:
+            raise RuleInternalError(owner=self, msg=f"{key_str} not found in current values") 
+        instance_attr_current_value = apply_session.current_values[key_str]
+        return instance_attr_current_value.value
+
+    # def get_current_value(self, apply_session:iapplysession) -> any:
     #     """ Fetch ExecResult from component.bind from APPLY_SESSION.UPDATE_HISTORY
     #         last record.
     #         !!! ExecResult.value could be unadapted :( !!!
     #         Could work on non-stored fields.
     #         Probaly a bit faster, only dict queries.
     #     """
-    #     # ALT: fetch from:
-    #     #       bind_dexp: DotExpression = getattr(component, "bind", None)
-    #     #       bind_dexp._evaluator.execute()
     #     key_str = self.get_key_string(apply_session=apply_session)
-    #     assert key_str in apply_session.update_history
+    #     if not key_str in apply_session.update_history:
+    #         raise RuleInternalError(owner=self, msg=f"{key_str} not found in current values") 
     #     instance_attr_value = apply_session.update_history[key_str][-1]
-    #     return instance_attr_value.dexp_result
-
-    # ------------------------------------------------------------
-
-    def get_current_value_from_history(self, apply_session:IApplySession) -> Any:
-        """ Fetch ExecResult from component.bind from APPLY_SESSION.UPDATE_HISTORY
-            last record.
-            !!! ExecResult.value could be unadapted :( !!!
-            Could work on non-stored fields.
-            Probaly a bit faster, only dict queries.
-        """
-        # ALT: fetch from:
-        #       bind_dexp: DotExpression = getattr(component, "bind", None)
-        #       bind_dexp._evaluator.execute()
-        key_str = self.get_key_string(apply_session=apply_session)
-        assert key_str in apply_session.update_history
-        instance_attr_value = apply_session.update_history[key_str][-1]
-        return instance_attr_value.value
+    #     return instance_attr_value.value
 
 
 # ------------------------------------------------------------
@@ -1025,7 +1022,7 @@ class InstanceChange:
 @dataclass
 class InstanceAttrValue:
     # NOTE: value could be adapted version of dexp_result.value (can be different)
-    value: Any
+    value: LiteralType
 
     # * first / initial record in owner list is from bind, first
     #   this .value could be unadapted value version (field.try_adapt_value())
@@ -1039,6 +1036,15 @@ class InstanceAttrValue:
 
     # is from bind
     is_from_bind: bool = field(repr=False, compare=False, default=False)
+
+@dataclass
+class InstanceAttrCurrentValue:
+    key_string: KeyString = field()
+    component: ComponentBase = field(repr=False)
+    value: Union[LiteralType, UndefinedType] = field(init=False, default=UNDEFINED)
+
+    def set_value(self, value: LiteralType):
+        self.value = value
 
 # ------------------------------------------------------------
 
@@ -1182,17 +1188,36 @@ class IApplySession:
     # I do not prefer attaching key_string to instance i.e. setattr(instance, key_string)
     # but having instance not expanded, but to store in a special structure
     key_string_container_cache : Dict[InstanceId, KeyString] = \
-            field(repr=False, init=False, default_factory=dict)
+                            field(repr=False, init=False, default_factory=dict)
 
     # used when when collecting list of instances/attributes which are updated
     instance_by_key_string_cache : Dict[KeyString, ModelType] = \
-            field(repr=False, init=False, default_factory=dict)
+                            field(repr=False, init=False, default_factory=dict)
 
-    # list of attribute values - from initial to final
+    # Central registry of attribute values. Contains initial, intermediate and
+    # final values of each instance field/attribute. 
+    # If initial is different from final, it is registered as UPDATE
+    # InstanceChange() in `changes`.
+    # Last value for key_string euqals to current_values value for the same
+    # key_string.
+    # Done in .register_instance_attr_change()
     update_history: Dict[KeyString, List[InstanceAttrValue]] = \
-            field(repr=False, init=False, default_factory=dict)
+                            field(repr=False, init=False, default_factory=dict)
 
-    # final list of channged instances / sub-instances (operation + orig values)
+    # Current value of the instance's attribute.
+    # The value equals to last value in .update_history for the same key_string
+    # On value change for an attr, object InstanceAttrCurrentValue() is not
+    # replaced, but updated, leaving allways the same instance holding the
+    # value.
+    # Done in .register_instance_attr_change()
+    current_values: Dict[KeyString, InstanceAttrCurrentValue] = \
+                            field(repr=False, init=False, default_factory=dict)
+
+    # final list of created/deleted/changed instances and sub-instances 
+    # (operation + orig values). If instance is not changed, no record will be registered.
+    # For updated checks the first and the last value of `update_history` to
+    # detect if instance attribute has changed.
+    # Done in ._apply(), 
     changes: List[InstanceChange] = field(repr=False, init=False, default_factory=list)
 
     # When first argument is <type> and second is <type> then call function Callable
@@ -1236,87 +1261,13 @@ class IApplySession:
         return validation_failure
 
 
+    @abstractmethod
     def register_instance_attr_change(self, 
             component: ComponentBase, 
             dexp_result: ExecResult,
             new_value: Any,
             is_from_init_bind:bool=False) -> InstanceAttrValue:
-
-        # NOTE: new_value is required - since dexp_result.value
-        #       could be unadapted (see field.try_adapt_value()
-
-        assert component == self.current_frame.component
-
-        if new_value is UNDEFINED:
-            raise RuleInternalError(owner=component, msg="New value should not be UNDEFINED, fix the caller")
-
-        key_str = component.get_key_string(apply_session=self)
-
-        if key_str not in self.update_history:
-            if not is_from_init_bind:
-                raise RuleInternalError(owner=component, msg=f"key_str '{key_str}' not found in update_history and this is not initialization")
-
-            self.update_history[key_str] = []
-
-            # NOTE: initial value from instance is not checked - only
-            #       intermediate and the last value
-            #   self.validate_type(component, new_value)
-        else:
-            if is_from_init_bind:
-                raise RuleInternalError(owner=component, msg=f"key_str '{key_str}' found in update_history and this is initialization")
-
-            if not self.update_history[key_str]:
-                raise RuleInternalError(owner=component, msg=f"change history for key_str='{key_str}' is empty")
-
-            # -- check if current value is different from new one
-            value_current = self.update_history[key_str][-1].value
-            if value_current == new_value:
-                raise RuleApplyError(owner=component, msg=f"register change failed, the value is the same: {value_current}")
-
-            # is this really necessary
-            self.validate_type(component, new_value)
-
-            # -- parent instance
-            # parent_raw_attr_value = dexp_result.value_history[-2]
-            # parent_instance = parent_raw_attr_value.value
-
-            parent_instance = self.current_frame.instance
-            # TODO: not sure if this validation is ok
-            assert isinstance(parent_instance, 
-                        self.current_frame.container.bound_model.get_type_info().type_)
-
-            # -- attr_name - fetch from initial bind dexp (very first)
-            init_instance_attr_value = self.update_history[key_str][0]
-            assert init_instance_attr_value.is_from_bind
-            init_bind_dexp_result = init_instance_attr_value.dexp_result
-            # attribute name is in the last item
-            init_raw_attr_value = init_bind_dexp_result.value_history[-1]
-            attr_name = init_raw_attr_value.attr_name
-
-            assert hasattr(parent_instance, attr_name), f"{parent_instance}.{attr_name}"
-
-            # ----------------------------------------
-            # Finally change instance value
-            # ----------------------------------------
-            setattr(parent_instance, attr_name, new_value)
-
-            # NOTE: bind_dexp_result last value is not changed
-            #       maybe should be changed but ... 
-
-        # TODO: pass input arg value_owner_name - component.name does not have
-        #       any purpose
-        instance_attr_value = InstanceAttrValue(
-                                value_owner_name=component.name, 
-                                value=new_value,
-                                dexp_result=dexp_result,
-                                is_from_bind = is_from_init_bind,
-                                # TODO: source of change ...
-                                )
-
-        self.update_history[key_str].append(instance_attr_value)
-
-        return instance_attr_value
-
+        ...
 
     def push_frame_to_stack(self, frame: ApplyStackFrame):
         self.frames_stack.insert(0, frame)
@@ -1467,8 +1418,33 @@ def extract_type_info(
         valid_names = f"Valid attributes: {get_available_names_example(attr_node_name, field_names)}" if field_names else "Type has no attributes at all."
         raise RuleSetupNameNotFoundError(msg=f"Type object {parent_object} has no attribute '{attr_node_name}'. {valid_names}")
 
-    assert isinstance(type_info, TypeInfo)
+    if not isinstance(type_info, TypeInfo):
+        raise RuleInternalError(owner=self, msg=f"{type_info} is not TypeInfo") 
     return type_info, th_field # , func_node
 
 
+# ============================================================
+# OBSOLETE
+# ============================================================
 
+# ------------------------------------------------------------
+# ComponentBase
+# ------------------------------------------------------------
+
+# # TODO: this is rejected since dexp_result could be from non-bind dexp
+# #       and only bind dexp could provide parent_instance used for setting 
+# #       new instance attribute (see register_instance_attr_change() ).
+# def get_dexp_result_from_history(self, apply_session:IApplySession) -> ExecResult:
+#     """ Fetch ExecResult from component.bind from APPLY_SESSION.UPDATE_HISTORY
+#         last record.
+#         !!! ExecResult.value could be unadapted :( !!!
+#         Could work on non-stored fields.
+#         Probaly a bit faster, only dict queries.
+#     """
+#     # ALT: fetch from:
+#     #       bind_dexp: DotExpression = getattr(component, "bind", None)
+#     #       bind_dexp._evaluator.execute()
+#     key_str = self.get_key_string(apply_session=apply_session)
+#     assert key_str in apply_session.update_history
+#     instance_attr_value = apply_session.update_history[key_str][-1]
+#     return instance_attr_value.dexp_result
