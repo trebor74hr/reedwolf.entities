@@ -432,12 +432,12 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         return key_string
 
 
-    def get_key_string(self, apply_session:IApplySession) -> str:
-        " uses cache, when not found then gets intances and index0 from current frame "
-        return self.get_key_string_by_instance(
-                apply_session = apply_session,
-                instance = apply_session.current_frame.instance, 
-                index0 = apply_session.current_frame.index0)
+    # def get_key_string(self, apply_session:IApplySession) -> str:
+    #     " uses cache, when not found then gets intances and index0 from current frame "
+    #     return self.get_key_string_by_instance(
+    #             apply_session = apply_session,
+    #             instance = apply_session.current_frame.instance, 
+    #             index0 = apply_session.current_frame.index0)
 
 
     def get_key_pairs_or_index0(self, 

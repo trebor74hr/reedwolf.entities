@@ -84,7 +84,7 @@ class Validation(ValidationBase):
         if not bool(dexp_result.value):
             error = self.error if self.error else "Validation failed"
             return ValidationFailure(
-                            component_key_string = component.get_key_string(apply_session),
+                            component_key_string = apply_session.get_key_string(component),
                             error=error, 
                             validation_name=self.name,
                             validation_label=self.label,
@@ -114,7 +114,7 @@ class Required(SimpleValidationBase):
         value = apply_session.get_current_value(component)
         if value is None:
             return ValidationFailure(
-                            component_key_string = component.get_key_string(apply_session),
+                            component_key_string = apply_session.get_key_string(component),
                             error=self.error, 
                             validation_name=self.name,
                             validation_label=self.label,
@@ -153,7 +153,7 @@ class Readonly(SimpleValidationBase):
         if not is_readonly:
             return None
 
-        key_string = component.get_key_string(apply_session)
+        key_string = apply_session.get_key_string(component)
         update_history = apply_session.update_history.get(key_string)
         if update_history and len(update_history) > 1:
             initial_value = update_history[0].value
@@ -195,7 +195,7 @@ class MaxLength(ValidationBase):
         value = apply_session.get_current_value(component)
         if value and hasattr(value, "__len__") and len(value) > self.value:
             return ValidationFailure(
-                            component_key_string = component.get_key_string(apply_session),
+                            component_key_string = apply_session.get_key_string(component),
                             error=self.error, 
                             validation_name=self.name,
                             validation_label=self.label,
@@ -227,7 +227,7 @@ class MinLength(ValidationBase):
         value = apply_session.get_current_value(component)
         if value and hasattr(value, "__len__") and len(value) < self.value:
             return ValidationFailure(
-                            component_key_string = component.get_key_string(apply_session),
+                            component_key_string = apply_session.get_key_string(component),
                             error=self.error, 
                             validation_name=self.name,
                             validation_label=self.label,
@@ -274,7 +274,7 @@ class RangeLength(ValidationBase):
         if hasattr(value, "__len__"):
             if self.min and value and len(value) < self.min:
                 return ValidationFailure(
-                                component_key_string = component.get_key_string(apply_session),
+                                component_key_string = apply_session.get_key_string(component),
                                 error=self.error, 
                                 validation_name=self.name,
                                 validation_label=self.label,
@@ -282,7 +282,7 @@ class RangeLength(ValidationBase):
                                         f"({message_truncate(value)})")
             elif self.max and value and len(value) > self.max:
                 return ValidationFailure(
-                                component_key_string = component.get_key_string(apply_session),
+                                component_key_string = apply_session.get_key_string(component),
                                 error=self.error, 
                                 validation_name=self.name,
                                 validation_label=self.label,

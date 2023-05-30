@@ -31,6 +31,7 @@ from .meta import (
 from .base import (
         AttrValue,
         AttrName,
+        GlobalConfig,
         KeyString,
         ComponentBase,
         IApplySession,
@@ -283,7 +284,8 @@ class ApplyResult(IApplySession):
         if new_value is UNDEFINED:
             raise RuleInternalError(owner=component, msg="New value should not be UNDEFINED, fix the caller")
 
-        key_str = component.get_key_string(apply_session=self)
+        # key_str = component.get_key_string(apply_session=self)
+        key_str = self.get_key_string(component)
 
         if key_str not in self.update_history:
             if not is_from_init_bind:
@@ -927,8 +929,32 @@ class ApplyResult(IApplySession):
 
     # ------------------------------------------------------------
 
-    # apply_session:IApplySession
+    def get_key_string(self, component: ComponentBase):
+        # apply_session: IApplySession
+        # TODO: is caching possible? 
+        # TODO: consider moving to ApplySession/ApplyResult?
+        if component.is_container():
+            # raise RuleInternalError(owner=component, msg=f"Expecting non-container, got: {component}") 
+            " uses cache, when not found then gets intances and index0 from current frame "
+            key_string = component.get_key_string_by_instance(
+                    apply_session = self,
+                    instance = self.current_frame.instance, 
+                    index0 = self.current_frame.index0)
+        else:
+            container = component.get_container_owner(consider_self=True)
+            # container_key_string = container.get_key_string(apply_session)
+            # recursion
+            container_key_string = self.get_key_string(container)
+
+            key_string = GlobalConfig.ID_NAME_SEPARATOR.join(
+                    [container_key_string, component.name] 
+                    )
+        return key_string
+
+    # ------------------------------------------------------------
+
     def get_current_value(self, component: ComponentBase) -> LiteralType:
+        # apply_session:IApplySession
         """ Could work on non-stored fields.
             Probaly a bit faster, only dict queries.
         """
@@ -938,7 +964,8 @@ class ApplyResult(IApplySession):
         # ALT: fetch from:
         #       bind_dexp: DotExpression = getattr(component, "bind", None)
         #       bind_dexp._evaluator.execute()
-        key_str = component.get_key_string(apply_session=self)
+        # key_str = component.get_key_string(apply_session=self)
+        key_str = self.get_key_string(component)
         if not key_str in self.current_values:
             raise RuleInternalError(owner=component, msg=f"{key_str} not found in current values") 
         instance_attr_current_value = self.current_values[key_str]

@@ -354,7 +354,7 @@ class ComponentBase(SetOwnerMixin, ABC):
 
     # ------------------------------------------------------------
 
-    def get_components_tree_w_values_dict(self, apply_session: IApplySession, _depth:int=0) -> ComponentTreeWValuesDictType:
+    def get_components_tree_w_values_dict(self, apply_session: IApplySession) -> ComponentTreeWValuesDictType:
         """
         will go recursively through every children and
         fetch their "children" and collect to output structure.
