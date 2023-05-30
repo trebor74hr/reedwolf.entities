@@ -279,8 +279,6 @@ class ApplyResult(IApplySession):
         # NOTE: new_value is required - since dexp_result.value
         #       could be unadapted (see field.try_adapt_value()
 
-        assert component == self.current_frame.component
-
         if new_value is UNDEFINED:
             raise RuleInternalError(owner=component, msg="New value should not be UNDEFINED, fix the caller")
 
@@ -303,6 +301,7 @@ class ApplyResult(IApplySession):
             #   self.validate_type(component, new_value)
         else:
             assert key_str in self.current_values
+            assert component == self.current_frame.component
 
             if is_from_init_bind:
                 raise RuleInternalError(owner=component, msg=f"key_str '{key_str}' found in update_history and this is initialization")
@@ -798,7 +797,16 @@ class ApplyResult(IApplySession):
 
         if getattr(component, "bind", None):
             # Fill initial value from instance 
-            init_bind_dexp_result = self._init_by_bind_dexp(component)
+            key_str = self.get_key_string(component)
+            if key_str in self.current_values:
+                # Call to "self._init_by_bind_dexp()" can be done 
+                # in building tree values in some validations. In this case
+                # fetch that value.
+                assert len(self.update_history[key_str]) == 1, "expected only initial value, got updated value too"
+                instance_attr_value = self.update_history[key_str][-1]
+                init_bind_dexp_result = instance_attr_value.dexp_result
+            else:
+                init_bind_dexp_result = self._init_by_bind_dexp(component)
 
             # try to update if instance_new is provided and yields different value
             bind_dexp_result, _ = self._try_update_by_instance(
@@ -1019,13 +1027,16 @@ class ApplyResult(IApplySession):
 
     # ------------------------------------------------------------
 
-    def get_current_value_instance(self, component: ComponentBase) -> InstanceAttrCurrentValue:
+    def get_current_value_instance(self, component: ComponentBase, init_when_missing:bool=False) -> InstanceAttrCurrentValue:
         """ if not found will return UNDEFINED
             Probaly a bit faster, only dict queries.
         """
         key_str = self.get_key_string(component)
         if not key_str in self.current_values:
-            return UNDEFINED
+            if not init_when_missing:
+                return UNDEFINED
+            self._init_by_bind_dexp(component)
+            
         instance_attr_current_value = self.current_values[key_str]
         return instance_attr_current_value
 

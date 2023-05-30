@@ -373,26 +373,29 @@ class ComponentBase(SetOwnerMixin, ABC):
             children_dict_traversed["component"] = self
             children_dict_traversed["children"] = []
             if apply_session:
-                # instance_attr_current_value = apply_session.get_current_value_instance(component=self)
-                # print("here1", self.name, instance_attr_current_value)
-                # if instance_attr_current_value is not UNDEFINED:
-                #     children_dict_traversed["value"] = instance_attr_current_value.value
-
                 # TODO: not good - 
                 if getattr(self, "bind", None):
-                    bind_dexp_result = self.get_dexp_result_from_instance(apply_session=apply_session)
-                    value = bind_dexp_result.value
-                    children_dict_traversed["value"] = value
+                    if True:
+                        instance_attr_current_value = \
+                                apply_session.get_current_value_instance(
+                                    component=self, init_when_missing=True)
+                        assert instance_attr_current_value is not UNDEFINED
+                        children_dict_traversed["value"] = instance_attr_current_value.value
 
-                    # dexp = self.bind
-                    # dexp_result = execute_dexp_or_node(
-                    #                 dexp_or_value=dexp,
-                    #                 dexp_node=dexp,
-                    #                 dexp_result = UNDEFINED,
-                    #                 prev_node_type_info=None, # prev_node_type_info,
-                    #                 apply_session=apply_session)
-                    # value = dexp_result.value
-                    # children_dict_traversed["value"] = value
+                    else:
+                        bind_dexp_result = self.get_dexp_result_from_instance(apply_session=apply_session)
+                        value = bind_dexp_result.value
+                        children_dict_traversed["value"] = value
+
+                        # dexp = self.bind
+                        # dexp_result = execute_dexp_or_node(
+                        #                 dexp_or_value=dexp,
+                        #                 dexp_node=dexp,
+                        #                 dexp_result = UNDEFINED,
+                        #                 prev_node_type_info=None, # prev_node_type_info,
+                        #                 apply_session=apply_session)
+                        # value = dexp_result.value
+                        # children_dict_traversed["value"] = value
 
             for comp in self.get_children():
                 # recursion
