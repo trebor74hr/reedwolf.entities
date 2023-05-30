@@ -22,8 +22,8 @@ from .namespaces import (
         Namespace,
         )
 from .expressions import (
-        ValueExpression,
-        IValueExpressionNode,
+        DotExpression,
+        IDotExpressionNode,
         IAttributeAccessorBase,
         )
 from .meta import (
@@ -48,7 +48,7 @@ from .base import (
 
 
 @dataclass
-class AttrVexpNode(IValueExpressionNode):
+class AttrVexpNode(IDotExpressionNode):
     """
     Name comes from dot-chaining nodes - e.g.
         M.name
@@ -57,7 +57,7 @@ class AttrVexpNode(IValueExpressionNode):
     name: str
     # TODO: data can be also - check each:
     #   - some dataproviding function
-    # TODO: Union[TypeInfo, IFunctionVexpNode, ValueExpression, 'Component', type]  #
+    # TODO: Union[TypeInfo, IFunctionVexpNode, DotExpression, 'Component', type]  #
     #       noqa: F821
     data: Any 
     namespace: Namespace
@@ -110,7 +110,7 @@ class AttrVexpNode(IValueExpressionNode):
         # ---------------------------------------------
         # CASE: Value expressions and FunctinoBase 
         # ---------------------------------------------
-        elif isinstance(self.data, ValueExpression):
+        elif isinstance(self.data, DotExpression):
             if self.data._func_args:
                 self.attr_node_type = AttrVexpNodeTypeEnum.VEXP_FUNC
             else:

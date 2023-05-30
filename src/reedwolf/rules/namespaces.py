@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 # Namespaces - classes and singletons
 # ------------------------------------------------------------
 # Namespaces are dummy objects/classes to enable different namespaces in
-# ValueExpression declaration
+# DotExpression declaration
 
 
 class DynamicAttrsBase(ABC):
@@ -24,7 +24,7 @@ class Namespace(DynamicAttrsBase):
 
     def __init__(self, name:str, manual_setup:bool = False):
         self._name = name
-        # manual_setup == True ==> Setup() for ValueExpression-s needs to be
+        # manual_setup == True ==> Setup() for DotExpression-s needs to be
         # called postponed, manually, usually with extrra context - like ThisNS
         self._manual_setup = manual_setup
 
@@ -39,8 +39,8 @@ class Namespace(DynamicAttrsBase):
             from .exceptions import RuleSetupNameError
             raise RuleSetupNameError(owner=self, msg=f"Namespace attribute {aname} is reserved, choose another name.")
 
-        from .expressions import ValueExpression
-        return ValueExpression(node=aname, namespace=self)
+        from .expressions import DotExpression
+        return DotExpression(node=aname, namespace=self)
 
 
 # Instances - should be used as singletons

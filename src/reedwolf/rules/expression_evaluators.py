@@ -1,7 +1,7 @@
 """
 Process:
 
-    ValueExpression object:
+    DotExpression object:
         vexp = M.value.expressions.and.Functions().results 
 
     vexp.Setup converts to
@@ -13,7 +13,7 @@ Process:
         # there is OperationVexpNode() e.g. M.x + M.y
 
     what is saved inside of (last) value expression (and owner):
-        vexp_evaluator = ValueExpressionEvaluator()
+        vexp_evaluator = DotExpressionEvaluator()
             [AttrVexpNode(), AttrVexpNode(), Function(), AttrVexpNode()]
 
     and later could be evaluated/executed with concrete data objects/structure:
@@ -37,16 +37,16 @@ from .exceptions import (
         RuleApplyError,
         )
 from .expressions import (
-        IValueExpressionNode,
+        IDotExpressionNode,
         ExecResult,
         )
 
 # ------------------------------------------------------------
 
 @dataclass
-class ValueExpressionEvaluator:
+class DotExpressionEvaluator:
 
-    attr_node_list : List[IValueExpressionNode] = field(repr=False, init=False, default_factory=list)
+    attr_node_list : List[IDotExpressionNode] = field(repr=False, init=False, default_factory=list)
     finished: bool = field(repr=False, init=False, default= False)
     failed_reasons: List[str] = field(repr=False, init=False, default_factory=list)
 
@@ -55,17 +55,17 @@ class ValueExpressionEvaluator:
         return f"{self.__class__.__name__}({ok},nodes={'.'.join(str(dn) for dn in self.attr_node_list)})"
     __repr__ = __str__
 
-    def add(self, node:IValueExpressionNode):
+    def add(self, node:IDotExpressionNode):
         if self.finished:
             raise RuleInternalError(owner=self, msg="Already finished.")
-        if not isinstance(node, IValueExpressionNode):
-            raise RuleInternalError(owner=self, msg=f"node not 'IValueExpressionNode', got: {node}")
+        if not isinstance(node, IDotExpressionNode):
+            raise RuleInternalError(owner=self, msg=f"node not 'IDotExpressionNode', got: {node}")
         self.attr_node_list.append(node)
 
     def is_all_ok(self) -> bool:
         return (self.finished and bool(self.attr_node_list) and not bool(self.failed_reasons))
 
-    def last_node(self) -> IValueExpressionNode:
+    def last_node(self) -> IDotExpressionNode:
         if not self.finished:
             raise RuleInternalError(owner=self, msg="Not finished.")
         return self.attr_node_list[-1]

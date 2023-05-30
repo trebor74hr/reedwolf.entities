@@ -33,8 +33,8 @@ from .namespaces import (
         OperationsNS,
         )
 from .expressions import (
-        ValueExpression,
-        IValueExpressionNode,
+        DotExpression,
+        IDotExpressionNode,
         )
 from .meta import (
         is_model_class,
@@ -181,7 +181,7 @@ class ModelsRegistry(RegistryBase):
         bound_model_root = apply_session.current_frame.bound_model_root
 
         expected_type = bound_model_root.type_info.type_ \
-                        if isinstance(bound_model_root.model, ValueExpression) \
+                        if isinstance(bound_model_root.model, DotExpression) \
                         else bound_model_root.model
 
         if instance is None:
@@ -245,7 +245,7 @@ class FieldsRegistry(RegistryBase):
         elif isinstance(component, self.DENIED_BASE_TYPES): # 
             # stored - but should not be used
             denied = True
-            deny_reason = f"Component of type {component.__class__.__name__} can not be referenced in ValueExpressions"
+            deny_reason = f"Component of type {component.__class__.__name__} can not be referenced in DotExpressions"
             if hasattr(component, "type_info"):
                 type_info=component.type_info
             else:
@@ -297,9 +297,9 @@ class ContextRegistry(RegistryBase):
 
     def create_node(self, 
                     vexp_node_name: str, 
-                    parent_vexp_node: IValueExpressionNode, 
+                    parent_vexp_node: IDotExpressionNode, 
                     owner: ComponentBase,
-                    ) -> IValueExpressionNode:
+                    ) -> IDotExpressionNode:
 
         if not isinstance(owner, ComponentBase):
             raise RuleInternalError(owner=self, msg=f"Owner needs to be Component, got: {type(owner)} / {owner}")  
@@ -443,7 +443,7 @@ class SetupSession(SetupSessionBase):
 # 
 #     NAMESPACE = DataNS
 # 
-#     def create_vexp_node(self, data_var:IData) -> IValueExpressionNode:
+#     def create_vexp_node(self, data_var:IData) -> IDotExpressionNode:
 #         # ------------------------------------------------------------
 #         # A.2. DATAPROVIDERS - Collect all vexp_nodes from dataproviders fieldgroup
 #         # ------------------------------------------------------------

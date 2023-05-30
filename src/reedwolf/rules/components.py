@@ -31,7 +31,7 @@ from .base import (
         ValidationFailure,
         )
 from .expressions import (
-        ValueExpression,
+        DotExpression,
         ExecResult,
         )
 from .attr_nodes import (
@@ -150,7 +150,7 @@ class FieldGroup(Component):
     label:          Optional[TransMessageType] = field(repr=False, default=None)
     # TODO: allow ChildrenValidation too (currently only used in Extension, e.g. Cardinality/Unique)
     cleaners:       Optional[List[Union[ValidationBase, EvaluationBase]]] = None
-    available:      Union[bool, ValueExpression] = True
+    available:      Union[bool, DotExpression] = True
 
     def __post_init__(self):
         if not self.label:
@@ -179,10 +179,10 @@ class FieldGroup(Component):
 #     # evaluate:       bool = False # TODO: describe
 # 
 #     def __post_init__(self):
-#         if isinstance(self.value, ValueExpression):
+#         if isinstance(self.value, DotExpression):
 #             # TODO: should be model or enum
-#             # raise RuleSetupValueError(owner=self, msg=f"{self.name} -> {type(self.value)}: {type(self.value)} - to be done a ValueExpression")
-#             raise NotImplementedError(f"{self.name} -> {type(self.value)}: {type(self.value)} - to be done a ValueExpression")
+#             # raise RuleSetupValueError(owner=self, msg=f"{self.name} -> {type(self.value)}: {type(self.value)} - to be done a DotExpression")
+#             raise NotImplementedError(f"{self.name} -> {type(self.value)}: {type(self.value)} - to be done a DotExpression")
 #         self.type_info = TypeInfo.get_or_create_by_type(self.value)
 #         if not self.label:
 #             self.label = varname_to_title(self.name)
@@ -209,7 +209,7 @@ class FieldGroup(Component):
 # 
 #     def __post_init__(self):
 #         if not isinstance(self.function, CustomFunctionFactory):
-#             raise RuleSetupValueError(owner=self, msg=f"{self.function}: {type(self.function)} - not ValueExpression|Function()")
+#             raise RuleSetupValueError(owner=self, msg=f"{self.function}: {type(self.function)} - not DotExpression|Function()")
 #         # self.type_info = TypeInfo.extract_function_return_type_info(self.function)
 #         custon_function_factory: CustomFunctionFactory = self.function
 #         self.type_info = custon_function_factory.get_type_info()

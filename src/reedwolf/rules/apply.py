@@ -18,7 +18,7 @@ from .exceptions import (
 from .expressions import (
         ExecResult,
         NotAvailableExecResult,
-        ValueExpression,
+        DotExpression,
         execute_available_vexp,
         )
 from .meta import (
@@ -220,7 +220,7 @@ class ApplyResult(IApplySession):
                     msg=f"Component in frame {self.current_frame.component} must match component: {component}") 
 
         # evaluation_vexp = evaluation.value
-        # assert isinstance(evaluation_vexp, ValueExpression)
+        # assert isinstance(evaluation_vexp, DotExpression)
         # eval_vexp_result  = evaluation_vexp._evaluator.execute(apply_session=self)
         eval_vexp_result  = evaluation.execute(apply_session=self)
 
@@ -321,8 +321,8 @@ class ApplyResult(IApplySession):
             # ---- Extension case -----
 
             component : Extension = component
-            if not isinstance(component.bound_model.model, ValueExpression):
-                raise RuleInternalError(owner=self, msg=f"For Extension `bound_model` needs to be ValueExpression, got: {component.bound_model.model}") 
+            if not isinstance(component.bound_model.model, DotExpression):
+                raise RuleInternalError(owner=self, msg=f"For Extension `bound_model` needs to be DotExpression, got: {component.bound_model.model}") 
 
             if getattr(component.bound_model, "contains", None):
                 raise RuleInternalError(owner=self, msg=f"For Extension complex `bound_model` is currently not supported (e.g. `contains`), use simple BoundModel, got: {component.bound_model}") 
@@ -556,7 +556,7 @@ class ApplyResult(IApplySession):
     def __check_component_all_vexps(self, component: ComponentBase):
         # used only for testing
         for attr_name, attr_value in vars(component).items():
-            if isinstance(attr_value, ValueExpression):
+            if isinstance(attr_value, DotExpression):
                 # vexp_result: ExecResult = 
                 attr_value._evaluator.execute_vexp(apply_session=self)
                 # TODO: apply_session.config.logger.debug(f"{parent.name if parent else ''}.{component.name}.{attr_name} = VExp[{attr_value}] -> {vexp_result}")
@@ -625,7 +625,7 @@ class ApplyResult(IApplySession):
         if self.instance_new_struct_type is None:
             current_instance_new = None
         elif self.instance_new_struct_type == StructEnum.MODELS_LIKE:
-            assert isinstance(component.bound_model.model, ValueExpression), component.bound_model.model
+            assert isinstance(component.bound_model.model, DotExpression), component.bound_model.model
 
             if self.current_frame.instance_new not in (None, UNDEFINED):
 

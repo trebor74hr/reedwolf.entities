@@ -31,8 +31,8 @@ from .namespaces import (
         Namespace,
         )
 from .expressions import (
-        ValueExpression,
-        IValueExpressionNode,
+        DotExpression,
+        IDotExpressionNode,
         IFunctionVexpNode,
         IRegistry,
         ISetupSession,
@@ -184,7 +184,7 @@ class RegistryBase(IRegistry):
         return attr_node
 
 
-    def register_vexp_node(self, vexp_node:IValueExpressionNode, alt_vexp_node_name=None):
+    def register_vexp_node(self, vexp_node:IDotExpressionNode, alt_vexp_node_name=None):
         """
         Data can register IFunctionVexpNode-s instances since the
         output will be used directly as data and not as a function call.
@@ -196,7 +196,7 @@ class RegistryBase(IRegistry):
         if self.finished:
             raise RuleInternalError(owner=self, msg=f"Register({vexp_node}) - already finished, adding not possible.")
 
-        if not isinstance(vexp_node, IValueExpressionNode):
+        if not isinstance(vexp_node, IDotExpressionNode):
             raise RuleInternalError(f"{type(vexp_node)}->{vexp_node}")
         vexp_node_name = alt_vexp_node_name if alt_vexp_node_name else vexp_node.name
 
@@ -230,7 +230,7 @@ class RegistryBase(IRegistry):
     # ------------------------------------------------------------
     def create_func_node(self, 
             setup_session: ISetupSession,
-            caller: IValueExpressionNode,
+            caller: IDotExpressionNode,
             attr_node_name:str,
             func_args:FunctionArgumentsType,
             value_arg_type_info:TypeInfo,
@@ -252,10 +252,10 @@ class RegistryBase(IRegistry):
     # ------------------------------------------------------------
     def create_node(self, 
                     vexp_node_name: str, 
-                    parent_vexp_node: IValueExpressionNode, 
+                    parent_vexp_node: IDotExpressionNode, 
                     # func_args: FunctionArgumentsType
                     owner: ComponentBase,
-                    ) -> IValueExpressionNode:
+                    ) -> IDotExpressionNode:
         """
         Will create a new attr_node when missing, even in the case when the var
         is just "on the path" to final attr_node needed.
@@ -263,7 +263,7 @@ class RegistryBase(IRegistry):
         Namespace usually is: ModelsNS, FunctionsNS
 
         """
-        # can return ValueExpression / class member / object member
+        # can return DotExpression / class member / object member
         # TODO: circ dep?
         assert isinstance(vexp_node_name, str), vexp_node_name
 
@@ -274,8 +274,8 @@ class RegistryBase(IRegistry):
 
         if parent_vexp_node:
             assert parent_vexp_node.name!=vexp_node_name
-            if not isinstance(parent_vexp_node, IValueExpressionNode):
-                raise RuleSetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': '{vexp_node_name}' -> parent_vexp_node={parent_vexp_node} :{type(parent_vexp_node)} is not IValueExpressionNode")
+            if not isinstance(parent_vexp_node, IDotExpressionNode):
+                raise RuleSetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': '{vexp_node_name}' -> parent_vexp_node={parent_vexp_node} :{type(parent_vexp_node)} is not IDotExpressionNode")
 
         # TODO: za Sum(This.name) this is not good. Should be unique, since 
         #       This is ambigous - can evaluate to different contexts. 
@@ -361,8 +361,8 @@ class RegistryBase(IRegistry):
                             th_field=th_field, 
                             ) # function=function
 
-        if not isinstance(vexp_node, IValueExpressionNode):
-            raise RuleInternalError(owner=owner, msg=f"Namespace {self.NAMESPACE}: Type of found object is not IValueExpressionNode, got: {type(vexp_node)}.")
+        if not isinstance(vexp_node, IDotExpressionNode):
+            raise RuleInternalError(owner=owner, msg=f"Namespace {self.NAMESPACE}: Type of found object is not IDotExpressionNode, got: {type(vexp_node)}.")
 
         # NOTE: vexp_node.type_info can be None, will be filled later in finish()
 
@@ -469,7 +469,7 @@ class SetupSessionBase(ISetupSession):
 
     _registry_dict              : Dict[str, IRegistry] = field(init=False, repr=False, default_factory=dict)
     name                        : str = field(init=False, repr=False)
-    vexp_node_dict              : Dict[str, IValueExpressionNode] = field(init=False, repr=False, default_factory=dict)
+    vexp_node_dict              : Dict[str, IDotExpressionNode] = field(init=False, repr=False, default_factory=dict)
     finished                    : bool = field(init=False, repr=False, default=False)
     hook_on_finished_all_list   : Optional[List[HookOnFinishedAllCallable]] = field(init=False, repr=False)
 
@@ -504,7 +504,7 @@ class SetupSessionBase(ISetupSession):
 
         # compputed
         # self._registry_dict : Dict[str, IRegistry] = {}
-        # self.vexp_node_dict: Dict[str, IValueExpressionNode] = {}
+        # self.vexp_node_dict: Dict[str, IDotExpressionNode] = {}
         # self.finished: bool = False
 
         self.name: str = self.owner.name if self.owner else "no-owner"
@@ -622,17 +622,17 @@ class SetupSessionBase(ISetupSession):
     # ------------------------------------------------------------
 
     def get_vexp_node_by_vexp(self,
-                        vexp: ValueExpression,
+                        vexp: DotExpression,
                         default:[None, UndefinedType]=UNDEFINED,
                         strict:bool=False
-                        ) -> Union[IValueExpressionNode, None, UndefinedType]:
-        if not isinstance(vexp,  ValueExpression):
-            raise RuleInternalError(owner=self, msg=f"Vexp not ValueExpression, got {vexp} / {type(vexp)}")
+                        ) -> Union[IDotExpressionNode, None, UndefinedType]:
+        if not isinstance(vexp,  DotExpression):
+            raise RuleInternalError(owner=self, msg=f"Vexp not DotExpression, got {vexp} / {type(vexp)}")
         return vexp._vexp_node
 
     # ------------------------------------------------------------
 
-    def register_vexp_node(self, vexp_node: IValueExpressionNode):
+    def register_vexp_node(self, vexp_node: IDotExpressionNode):
         " used to validate if all value expressions are completely setup (called finish() and similar) in setup phase " 
         # TODO: this could be cache - to reuse M.name, F.id, etc. (not for functions and operations)
         #       key = vexp_node.name
@@ -655,7 +655,7 @@ class SetupSessionBase(ISetupSession):
 
         for ns, registry in self._registry_dict.items():
             for vname, vexp_node in registry.items():
-                assert isinstance(vexp_node, IValueExpressionNode)
+                assert isinstance(vexp_node, IDotExpressionNode)
                 # do some basic validate
                 vexp_node.finish()
 
@@ -691,7 +691,7 @@ class SetupSessionBase(ISetupSession):
 # 
 #     NAMESPACE = DataNS
 # 
-#     def create_vexp_node(self, data_var:IData) -> IValueExpressionNode:
+#     def create_vexp_node(self, data_var:IData) -> IDotExpressionNode:
 #         # ------------------------------------------------------------
 #         # A.2. DATAPROVIDERS - Collect all vexp_nodes from dataproviders fieldgroup
 #         # ------------------------------------------------------------

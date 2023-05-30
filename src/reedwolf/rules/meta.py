@@ -163,15 +163,15 @@ class FunctionArgumentsType:
 EmptyFunctionArguments  = FunctionArgumentsType([], {})
 
 
-# NOTE: when custom type with ValueExpression alias are defined, then
+# NOTE: when custom type with DotExpression alias are defined, then
 #       get_type_hints falls into problems producing NameError-s
 #         Object <class 'type'> / '<class 'reedwolf.rules.components.BooleanField'>'
 #         type hint is not possible/available: name 'OptionalBoolOrVExp' is not defined.
 #
-#   from .expressions import ValueExpression
-#   BoolOrVExpType          = Union[bool, ValueExpression]
+#   from .expressions import DotExpression
+#   BoolOrVExpType          = Union[bool, DotExpression]
 #   OptionalBoolOrVExpType  = Optional[BoolOrVExpType]
-#   StandardTypeOrVExpType  = Union[StandardType, ValueExpression]
+#   StandardTypeOrVExpType  = Union[StandardType, DotExpression]
 
 
 # ------------------------------------------------------------
@@ -228,8 +228,8 @@ def get_enum_members(enum_kls) -> List[Tuple[str, Any]]:
 #     # return hasattr(obj, name) and isfunction(getattr(obj, name))
 
 def is_function(maybe_function: Any) -> bool:
-    # assert not isinstance(maybe_function, ValueExpression), maybe_function
-    # e.g. ValueExpression, Namespace
+    # assert not isinstance(maybe_function, DotExpression), maybe_function
+    # e.g. DotExpression, Namespace
     if isinstance(maybe_function, DynamicAttrsBase):
         return False
 
@@ -358,7 +358,7 @@ def extract_py_type_hints(inspect_object: Any, caller_name: str, strict: bool = 
     except Exception as ex:
         if strict:
             # NOTE: sometimes there is NameError because some referenced types are not available in this place???
-            #       when custom type with ValueExpression alias are defined, then
+            #       when custom type with DotExpression alias are defined, then
             #       get_type_hints falls into problems producing NameError-s
             #         Object <class 'type'> / '<class 'reedwolf.rules.components.BooleanField'>'
             #         type hint is not possible/available: name 'OptionalBoolOrVExp' is not defined.

@@ -57,7 +57,7 @@ from .base import (
         SetupStackFrame,
         )
 from .expressions import (
-        ValueExpression,
+        DotExpression,
         )
 from .bound_models import (
         BoundModel,
@@ -138,7 +138,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
     def is_extension(self):
         # TODO: if self.owner is not None could be used as the term, put validation somewhere
         " if start model is value expression - that mean that the the Rules is Extension "
-        return isinstance(self.bound_model.model, ValueExpression)
+        return isinstance(self.bound_model.model, DotExpression)
 
     def is_container(self):
         return True
@@ -185,18 +185,18 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
         attr_node = None
         if is_extension_main_model:
-            if not isinstance(model, ValueExpression):
-                raise RuleSetupError(owner=self, msg=f"{bound_model.name}: For Extension main bound_model needs to be ValueExpression: {bound_model.model}")
+            if not isinstance(model, DotExpression):
+                raise RuleSetupError(owner=self, msg=f"{bound_model.name}: For Extension main bound_model needs to be DotExpression: {bound_model.model}")
 
         # alias_saved = False
         is_list = False
 
 
-        if isinstance(model, ValueExpression):
+        if isinstance(model, DotExpression):
             # TODO: for functions value expressions need to be stored
             #       with all parameters (func_args)
             if model.GetNamespace()!=ModelsNS:
-                raise RuleSetupError(owner=self, msg=f"{bound_model.name}: ValueExpression should be in ModelsNS namespace, got: {model.GetNamespace()}")
+                raise RuleSetupError(owner=self, msg=f"{bound_model.name}: DotExpression should be in ModelsNS namespace, got: {model.GetNamespace()}")
 
             if is_extension_main_model:
                 # TODO: DRY this - the only difference is setup_session - extract common logic outside / 
@@ -228,7 +228,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         # == M.name version
         self.setup_session[ModelsNS].register_all_nodes(root_attr_node=attr_node, bound_model=bound_model, model=model)
 
-        # if not isinstance(model, ValueExpression) and isinstance(bound_model, BoundModel):
+        # if not isinstance(model, DotExpression) and isinstance(bound_model, BoundModel):
         #     bound_model._register_nested_models(self.setup_session)
 
 
@@ -313,7 +313,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         # components recursively:
         #   it will validate every component attribute
         #   if attribute is another component - it will call recursively component.setup()
-        #   if component attribute is ValueExpression -> will call vexp.Setup()
+        #   if component attribute is DotExpression -> will call vexp.Setup()
         #   if component is another container i.e. is_extension() - it will
         #       process only that component and will not go deeper. later
         #       extension.setup() will do this within own tree dep (own .components / .setup_session)
@@ -335,7 +335,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         self.setup_session.finish()
 
         if self.keys:
-            # Inner BoundModel can have self.bound_model.model = ValueExpression
+            # Inner BoundModel can have self.bound_model.model = DotExpression
             self.keys.validate(self.bound_model.get_type_info().type_)
 
         if self.is_top_owner():
@@ -576,13 +576,13 @@ class Rules(ContainerBase):
     # --- Evaluated later
     setup_session      : Optional[SetupSession]    = field(init=False, repr=False, default=None)
     components      : Optional[Dict[str, Component]]  = field(repr=False, default=None)
-    models          : Dict[str, Union[type, ValueExpression]] = field(repr=False, init=False, default_factory=dict)
+    models          : Dict[str, Union[type, DotExpression]] = field(repr=False, init=False, default_factory=dict)
     # in Rules (top object) this case allway None - since it is top object
     owner           : Union[None, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     owner_name      : Union[str, UndefinedType]  = field(init=False, default=UNDEFINED)
 
     def __post_init__(self):
-        # TODO: check that BoundModel.model is_model_class() and not ValueExpression
+        # TODO: check that BoundModel.model is_model_class() and not DotExpression
 
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
         if not self.config:
@@ -738,7 +738,7 @@ class Extension(ContainerBase):
     # --- Evaluated later
     setup_session      : Optional[SetupSession] = field(init=False, repr=False, default=None)
     components      : Optional[Dict[str, Component]]  = field(repr=False, default=None)
-    models          : Dict[str, Union[type, ValueExpression]] = field(repr=False, init=False, default_factory=dict)
+    models          : Dict[str, Union[type, DotExpression]] = field(repr=False, init=False, default_factory=dict)
     owner           : Union[ComponentBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     owner_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 

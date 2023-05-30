@@ -53,7 +53,7 @@ from .base import (
         SetupStackFrame,
         )
 from .expressions   import (
-        ValueExpression,
+        DotExpression,
         VExpStatusEnum,
         IFunctionVexpNode,
         )
@@ -101,18 +101,18 @@ class FieldBase(Component, IFieldBase, ABC):
     REQUIRED_VALIDATIONS:ClassVar[Optional[List[ValidationBase]]] = None
 
     # to Model attribute
-    bind:           ValueExpression
+    bind:           DotExpression
     label:          Optional[TransMessageType] = field(repr=False, default=None)
 
     # NOTE: required - is also Validation, i.e. Required() - just commonly used
     #       validation, nothing special that deserves special attribute.
     #       Required() adds extra possible features.
-    #   required:       Optional[Union[bool,ValueExpression]] = False
+    #   required:       Optional[Union[bool,DotExpression]] = False
     #
     # NOTE: default - is initialization Evaluation, so use Default() - commonly
     #       used evaluation that is triggered on object instatation.
     #       Default() adds extra features.
-    #   default:        Optional[Union[StandardType, ValueExpression]] = None
+    #   default:        Optional[Union[StandardType, DotExpression]] = None
 
     description:    Optional[TransMessageType] = field(repr=False, default=None)
 
@@ -123,9 +123,9 @@ class FieldBase(Component, IFieldBase, ABC):
     #       - cleaners for the field
     #       - children tree (contains/enables)
     #   Only initial value is unchanged. See also BooleanField.enables.
-    available:      Union[bool, ValueExpression] = field(repr=False, default=True)
-    # NOTE: replaced with Readonly(False|ValueExpression...) 
-    #       editable:       Union[bool, ValueExpression] = field(repr=False, default=True)
+    available:      Union[bool, DotExpression] = field(repr=False, default=True)
+    # NOTE: replaced with Readonly(False|DotExpression...) 
+    #       editable:       Union[bool, DotExpression] = field(repr=False, default=True)
     cleaners:       Optional[List[Union[ValidationBase, EvaluationBase]]] = field(repr=False, default=None)
     autocomputed:   Union[bool, AutocomputedEnum] = field(repr=False, default=False)
 
@@ -168,8 +168,8 @@ class FieldBase(Component, IFieldBase, ABC):
 
     def init_clean(self):
         # TODO: check that value is simple M. value
-        if not isinstance(self.bind, ValueExpression):
-            raise RuleSetupValueError(owner=self, msg="'bind' needs to be ValueExpression (e.g. M.status).")
+        if not isinstance(self.bind, DotExpression):
+            raise RuleSetupValueError(owner=self, msg="'bind' needs to be DotExpression (e.g. M.status).")
         # ModelsNs.person.surname -> surname
         if not self.name:
             self.name = self.get_name_from_bind(self.bind)
@@ -197,10 +197,10 @@ class FieldBase(Component, IFieldBase, ABC):
                 owner = owner.owner
 
             if self.bind.GetNamespace()!=namespace_only:
-                raise RuleSetupValueError(owner=self, msg=f"{self.bind}: 'bind' needs to be in {namespace_only} ValueExpression (e.g. M.status).")
+                raise RuleSetupValueError(owner=self, msg=f"{self.bind}: 'bind' needs to be in {namespace_only} DotExpression (e.g. M.status).")
             if len(self.bind.Path) not in (1,2,3,4):
-                # warn(f"{self.bind}: 'bind' needs to be 1-4 deep ValueExpression (e.g. M.status, M.city.country.name ).")
-                raise RuleSetupValueError(owner=self, msg=f"'bind' needs to be 1-4 deep ValueExpression (e.g. M.status, M.city.country.name ), got: {self.bind}")
+                # warn(f"{self.bind}: 'bind' needs to be 1-4 deep DotExpression (e.g. M.status, M.city.country.name ).")
+                raise RuleSetupValueError(owner=self, msg=f"'bind' needs to be 1-4 deep DotExpression (e.g. M.status, M.city.country.name ), got: {self.bind}")
 
             self.bound_attr_node = setup_session.get_vexp_node_by_vexp(self.bind)
             if not self.bound_attr_node:
@@ -347,11 +347,11 @@ class UnsizedStringField(FieldBase):
 @dataclass
 class BooleanField(FieldBase):
     PYTHON_TYPE:ClassVar[type] = bool
-    # default:        Optional[Union[bool, ValueExpression]] = None
+    # default:        Optional[Union[bool, DotExpression]] = None
 
     # def __post_init__(self):
     #     self.init_clean()
-    #     if self.default is not None and not isinstance(self.default, (bool, ValueExpression)):
+    #     if self.default is not None and not isinstance(self.default, (bool, DotExpression)):
     #         raise RuleSetupValueError(owner=self, msg=f"'default'={self.default} needs to be bool value  (True/False).")
 
 # ------------------------------------------------------------
@@ -360,9 +360,9 @@ class BooleanField(FieldBase):
 
 @dataclass
 class ChoiceOption:
-    value:      ValueExpression # -> some Standard or Complex type
+    value:      DotExpression # -> some Standard or Complex type
     label:      TransMessageType
-    available:  Optional[Union[ValueExpression,bool]] = True # Vexp returns bool
+    available:  Optional[Union[DotExpression,bool]] = True # Vexp returns bool
 
 @dataclass
 class ChoiceField(FieldBase):
@@ -376,12 +376,12 @@ class ChoiceField(FieldBase):
     # List[Dict[str, TransMessageType]
     choices: Optional[Union[IFunctionVexpNode, 
                             CustomFunctionFactory, 
-                            ValueExpression, 
+                            DotExpression, 
                             Union[List[ChoiceOption], 
                             List[Union[int,str]]]]] = None
-    choice_value: Optional[ValueExpression] = None
-    choice_label: Optional[ValueExpression] = None
-    # choice_available: Optional[ValueExpression]=True # returns bool
+    choice_value: Optional[DotExpression] = None
+    choice_label: Optional[DotExpression] = None
+    # choice_available: Optional[DotExpression]=True # returns bool
 
     # computed later
     choice_value_attr_node: AttrVexpNode = field(init=False, default=None, repr=False)
@@ -395,7 +395,7 @@ class ChoiceField(FieldBase):
         if is_enum(self.choices):
             raise RuleSetupValueError(owner=self, msg="argument 'choices' is Enum, use EnumChoices instead.")
 
-        if isinstance(self.choices, (IFunctionVexpNode, CustomFunctionFactory, ValueExpression)):
+        if isinstance(self.choices, (IFunctionVexpNode, CustomFunctionFactory, DotExpression)):
             if not (self.choice_value and self.choice_label):
                 raise RuleSetupValueError(owner=self, msg="expected 'choice_label' and 'choice_value' passed.")
         elif is_function(self.choices):
@@ -419,7 +419,7 @@ class ChoiceField(FieldBase):
         # -- Factory cases
         if is_function(choices):
             raise RuleInternalError(owner=self, msg=f"Direct functions are not allowed, wrap with Function() instead. Got: {choices}")
-        elif isinstance(choices, ValueExpression):
+        elif isinstance(choices, DotExpression):
             # TODO: restrict to vexp only - no operation
             if choices._status!=VExpStatusEnum.BUILT:
                 # reported before - warn(f"TODO: There is an error with value expression {self.choices} - skip it for now.")
@@ -438,7 +438,7 @@ class ChoiceField(FieldBase):
                             func_args=EmptyFunctionArguments,
                             )
 
-        # -- ValueExpression node
+        # -- DotExpression node
         if vexp_node:
             if isinstance(vexp_node, IFunctionVexpNode):
                 func_node: IFunctionVexpNode = vexp_node  # better name
@@ -521,7 +521,7 @@ class ChoiceField(FieldBase):
                 self.python_type = type(choices[0])
 
         else:
-            raise RuleSetupValueError(owner=self, msg=f"Attribute choices has invalid value, not Union[Function(), ValueExpression, Union[List[ChoiceOption], List[int], List[str]], got : {choices} / {type(choices)}")
+            raise RuleSetupValueError(owner=self, msg=f"Attribute choices has invalid value, not Union[Function(), DotExpression, Union[List[ChoiceOption], List[int], List[str]], got : {choices} / {type(choices)}")
 
         if not self.python_type:
             warn(f"TODO: ChoiceField 'python_type' not set {self}")
@@ -537,13 +537,13 @@ class ChoiceField(FieldBase):
             # local_setup_session: SetupSession,
             setup_session: SetupSession, 
             aname: str, 
-            vexp: ValueExpression, 
+            vexp: DotExpression, 
             ):
         """
         Create choice AttrVexpNode() within local ThisRegistry
         """
-        if not (vexp and isinstance(vexp, ValueExpression) and vexp.GetNamespace()==ThisNS):
-            raise RuleSetupValueError(owner=self, msg=f"Argument '{aname}' is not set or has wrong type - should be ValueExpression in This. namespace. Got: {vexp} / {type(vexp)}")
+        if not (vexp and isinstance(vexp, DotExpression) and vexp.GetNamespace()==ThisNS):
+            raise RuleSetupValueError(owner=self, msg=f"Argument '{aname}' is not set or has wrong type - should be DotExpression in This. namespace. Got: {vexp} / {type(vexp)}")
 
         attr_node = vexp.Setup(setup_session=setup_session, owner=self)
         if vexp._status != VExpStatusEnum.BUILT:
@@ -557,7 +557,7 @@ class ChoiceField(FieldBase):
 class EnumField(FieldBase):
     PYTHON_TYPE:ClassVar[type] = UNDEFINED
 
-    enum: Optional[Enum, ValueExpression] = None
+    enum: Optional[Enum, DotExpression] = None
 
     enum_value_py_type: Optional[type] = field(init=False, default=None)
 
@@ -572,7 +572,7 @@ class EnumField(FieldBase):
         attr_node = setup_session.get_vexp_node_by_vexp(vexp=self.bind, strict=False)
         if attr_node:
 
-            if isinstance(self.enum, ValueExpression):
+            if isinstance(self.enum, DotExpression):
                 # EnumField(... enum=S.CompanyTypes)
                 enum_attr_node = setup_session.get_vexp_node_by_vexp(vexp=self.enum)
                 if not enum_attr_node:

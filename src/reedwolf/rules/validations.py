@@ -3,7 +3,7 @@
 # ------------------------------------------------------------
 """
 Validation-s are used in cleaners.
-Base is value:ValueExpression which shuuld return bool value 
+Base is value:DotExpression which shuuld return bool value 
 if False - validation.error should be registered/raised
 
 
@@ -36,7 +36,7 @@ from .components    import (
         ValidationBase, 
         )
 from .expressions   import (
-        ValueExpression,
+        DotExpression,
         NotAvailableExecResult,
         execute_available_vexp,
         )
@@ -62,15 +62,15 @@ class Validation(ValidationBase):
 
     """
     name:           str
-    ensure:         ValueExpression
+    ensure:         DotExpression
     error:          TransMessageType = field(repr=False)
-    available:      Optional[Union[bool, ValueExpression]] = field(repr=False, default=True)
+    available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
     label:          Optional[TransMessageType] = field(repr=False, default=None)
 
 
     def __post_init__(self):
-        if not isinstance(self.ensure, ValueExpression):
-            raise RuleSetupError(owner=self, msg=f"ensure must be ValueExpression, got: {type(self.ensure)} / {self.ensure}")
+        if not isinstance(self.ensure, DotExpression):
+            raise RuleSetupError(owner=self, msg=f"ensure must be DotExpression, got: {type(self.ensure)} / {self.ensure}")
         super().__post_init__()
 
     def validate(self, apply_session: IApplySession) -> Union[NoneType, ValidationFailure]:
@@ -98,7 +98,7 @@ class Validation(ValidationBase):
 class SimpleValidationBase(ValidationBase, ABC):
     name:           Optional[str] = None
     error:          Optional[TransMessageType] = field(repr=False, default=None)
-    available:      Optional[Union[bool, ValueExpression]] = field(repr=False, default=True)
+    available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
     label:          Optional[TransMessageType] = field(repr=False, default=None)
 
 @dataclass
@@ -130,11 +130,11 @@ class Readonly(SimpleValidationBase):
     # NOTE: Editable / Frozen
     #   after filled with initial value can the value be cheanged
     # TODO: if autocomputed = ALLWAYS should not be ...
-    value: Optional[Union[bool, ValueExpression]] = True
+    value: Optional[Union[bool, DotExpression]] = True
 
     def __post_init__(self):
-        if not isinstance(self.value, (bool, ValueExpression)):
-            raise RuleSetupError(owner=self, msg=f"ensure must be ValueExpression or bool, got: {type(self.value)} / {self.value}")
+        if not isinstance(self.value, (bool, DotExpression)):
+            raise RuleSetupError(owner=self, msg=f"ensure must be DotExpression or bool, got: {type(self.value)} / {self.value}")
 
         if not self.error:
             self.error = "The value is readonly"
@@ -144,7 +144,7 @@ class Readonly(SimpleValidationBase):
     def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
         component = apply_session.current_frame.component
 
-        if isinstance(self.value, ValueExpression):
+        if isinstance(self.value, DotExpression):
             vexp_result = self.value._evaluator.execute_vexp(apply_session)
             is_readonly = vexp_result.value
         else:
@@ -179,7 +179,7 @@ class MaxLength(ValidationBase):
     value:          int = None
     name:           Optional[str] = None
     error:          Optional[TransMessageType] = field(repr=False, default=None)
-    available:      Optional[Union[bool, ValueExpression]] = field(repr=False, default=True)
+    available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
     label:          Optional[TransMessageType] = field(repr=False, default=None)
 
     def __post_init__(self):
@@ -210,7 +210,7 @@ class MinLength(ValidationBase):
     value:          int
     name:           Optional[str] = None
     error:          Optional[TransMessageType] = field(repr=False, default=None)
-    available:      Optional[Union[bool, ValueExpression]] = field(repr=False, default=True)
+    available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
     label:          Optional[TransMessageType] = field(repr=False, default=None)
 
     def __post_init__(self):
@@ -242,7 +242,7 @@ class RangeLength(ValidationBase):
     max:            Optional[int] = None
     name:           Optional[str] = None
     error:          Optional[TransMessageType] = field(repr=False, default=None)
-    available:      Optional[Union[bool, ValueExpression]] = field(repr=False, default=True)
+    available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
     label:          Optional[TransMessageType] = field(repr=False, default=None)
 
     def __post_init__(self):

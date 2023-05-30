@@ -39,8 +39,8 @@ from .meta import (
         is_function,
         )
 from .expressions import (
-        ValueExpression,
-        IValueExpressionNode,
+        DotExpression,
+        IDotExpressionNode,
         ISetupSession,
         )
 from .attr_nodes import (
@@ -66,11 +66,11 @@ class PrepArg:
     # Example: F. namespace (FieldsNS.)
     type_info_or_callable: Union[TypeInfo, TypeInfoCallable]
 
-    # TODO: Union[NoneType, StdPyTypes (Literal[]), IValueExpressionNode
+    # TODO: Union[NoneType, StdPyTypes (Literal[]), IDotExpressionNode
     value_or_vexp: Any = field(repr=True)
 
     # Used in ReservedArgumentNames.INJECT_COMPONENT_TREE case / in apply() phase only
-    caller: Union[Namespace, IValueExpressionNode] = field(repr=False)
+    caller: Union[Namespace, IDotExpressionNode] = field(repr=False)
 
     def __post_init__(self):
         if self.type_info_or_callable is None:
@@ -106,7 +106,7 @@ class PreparedArguments:
     #          M.address_set.Count()
     #          M.name.Length()
     #   False- dot-chain mode -> value is not set. Allowed only when there is
-    #          any This ValueExpression within arguments, e.g.
+    #          any This DotExpression within arguments, e.g.
     #          M.Length(This.name)
     # TOOD: maybe change to True and adapt unit-tests?
     value_arg_implicit: Optional[bool] = field(repr=False)
@@ -202,7 +202,7 @@ class FunctionArguments:
 
 
     def _create_prep_arg(self, 
-                        caller: Union[Namespace, IValueExpressionNode],
+                        caller: Union[Namespace, IDotExpressionNode],
                         owner_name: str,
                         setup_session: Optional[ISetupSession],  # noqa: F821
                         arg_name: str, 
@@ -210,13 +210,13 @@ class FunctionArguments:
                         ) -> PrepArg:
         if isinstance(value_object, TypeInfo):
             type_info_or_callable = value_object
-            # TODO: should be ValueExpression or IValueExpressionNode
+            # TODO: should be DotExpression or IDotExpressionNode
             value_or_vexp = UNDEFINED 
-        elif isinstance(value_object, ValueExpression):
-            vexp: ValueExpression = value_object
+        elif isinstance(value_object, DotExpression):
+            vexp: DotExpression = value_object
 
             if vexp.IsFinished():
-                raise RuleInternalError(owner=self, msg=f"{owner_name}: ValueExpression is already setup {vexp}")
+                raise RuleInternalError(owner=self, msg=f"{owner_name}: DotExpression is already setup {vexp}")
 
             if not caller: 
                 # NOTE: Namespace top level like: Fn.Length(This.name) 
@@ -238,7 +238,7 @@ class FunctionArguments:
                 raise RuleSetupValueError(owner=self, msg=f"{owner_name}: Unsupported type: {caller} / {model_class}")
 
             if not setup_session:
-                raise RuleInternalError(owner=self, msg=f"{owner_name}: SetupSession is required for ValueExpression() function argument case") 
+                raise RuleInternalError(owner=self, msg=f"{owner_name}: SetupSession is required for DotExpression() function argument case") 
 
             with setup_session.use_stack_frame(
                     SetupStackFrame(
@@ -261,7 +261,7 @@ class FunctionArguments:
         elif is_function(value_object):
             # get_type_info method - for delayed cases - hooks
             type_info_or_callable = value_object
-            assert isinstance(caller, IValueExpressionNode)
+            assert isinstance(caller, IDotExpressionNode)
             value_or_vexp = caller
         else:
             # check that these are standard classes
@@ -281,7 +281,7 @@ class FunctionArguments:
     # ------------------------------------------------------------
 
     def _try_fill_given_args(self, 
-                        caller: Union[Namespace, IValueExpressionNode],
+                        caller: Union[Namespace, IDotExpressionNode],
                         owner_name: str,
                         setup_session: Optional[ISetupSession],  # noqa: F821
                         args_title: str, 
@@ -337,7 +337,7 @@ class FunctionArguments:
 
     def _fill_value_arg(self, 
             setup_session : ISetupSession,
-            caller: IValueExpressionNode, 
+            caller: IDotExpressionNode, 
             owner_name: str,
             value_arg_name: str,
             value_arg_type_info : Optional[TypeInfo],
@@ -346,8 +346,8 @@ class FunctionArguments:
 
         # value from chain / stream - previous dot-node. e.g. 
         #   M.name.Lower() # value is passed from .name
-        if not isinstance(caller, IValueExpressionNode):
-            raise RuleInternalError(f"{owner_name}: Caller is not IValueExpressionNode, got: {type(caller)} / {caller}")
+        if not isinstance(caller, IDotExpressionNode):
+            raise RuleInternalError(f"{owner_name}: Caller is not IDotExpressionNode, got: {type(caller)} / {caller}")
 
         value_arg_implicit = UNDEFINED
 
@@ -361,18 +361,18 @@ class FunctionArguments:
             prep_arg = expected_args.get(value_arg_name, UNDEFINED)
             if prep_arg:
                 value_or_vexp = prep_arg.value_or_vexp
-                if not (isinstance(value_or_vexp, ValueExpression) 
+                if not (isinstance(value_or_vexp, DotExpression) 
                         and value_or_vexp._namespace == ThisNS):
                     raise RuleSetupTypeError(owner=self, msg=f"{owner_name}: Function can not fill argument '{value_arg_name}' from '{caller.full_name}', argument is already filled with value '{value_or_vexp}'. Change arguments' setup or use 'This.' value expression.")
                 value_arg_implicit = False
         else:
             # value to first unfilled positional argument
             any_expected_args_unfilled = any([arg_name for arg_name, type_info in expected_args.items() if type_info is None])
-            # when everything is filled - allow only when there is any ValueExpression with reference to ThisNS
+            # when everything is filled - allow only when there is any DotExpression with reference to ThisNS
             if not any_expected_args_unfilled:
                 prep_args_within_thisns = [prep_arg for prep_arg in expected_args.values() 
                                                if prep_arg 
-                                               and isinstance(prep_arg.value_or_vexp, ValueExpression) 
+                                               and isinstance(prep_arg.value_or_vexp, DotExpression) 
                                                and prep_arg.value_or_vexp._namespace == ThisNS]
                 if not prep_args_within_thisns:
                     raise RuleSetupTypeError(owner=self, msg=f"{owner_name}: Function can not take additional argument from '{caller.full_name}'. Remove at least one predefined argument or use value expression argument within 'This.' namespace.")
@@ -401,7 +401,7 @@ class FunctionArguments:
             # TODO: validates vexp_node.get_type_info() matches value_arg_type_info
 
             args, kwargs = self._process_func_args_raw((FunctionArgumentsType(value_args, value_kwargs)))
-            # vexp_node : IValueExpressionNode = caller
+            # vexp_node : IDotExpressionNode = caller
             self._try_fill_given_args(
                     setup_session=setup_session,
                     caller=caller,
@@ -418,7 +418,7 @@ class FunctionArguments:
     # ------------------------------------------------------------
 
     def parse_func_args(self, 
-                 caller              : Union[Namespace, IValueExpressionNode],
+                 caller              : Union[Namespace, IDotExpressionNode],
                  owner_name          : str,
                  func_args           : FunctionArgumentsType,
                  setup_session       : ISetupSession,

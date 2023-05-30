@@ -55,8 +55,8 @@ from .meta import (
         NoneType,
         )
 from .expressions import (
-        ValueExpression,
-        IValueExpressionNode,
+        DotExpression,
+        IDotExpressionNode,
         IFunctionVexpNode,
         ExecResult,
         execute_vexp_or_node,
@@ -77,7 +77,7 @@ from .base import (
 ValueArgValidatorPyFuncType = Callable[..., NoneType]
 ValueArgValidatorPyFuncDictType = Dict[str, Union[ValueArgValidatorPyFuncType, List[ValueArgValidatorPyFuncType]]] 
 
-ValueOrVexp = Union[ValueExpression, IValueExpressionNode, Any]
+ValueOrVexp = Union[DotExpression, IDotExpressionNode, Any]
 
 # 4 types
 class DatatypeBasicEnum(Enum):
@@ -142,7 +142,7 @@ class IFunction(IFunctionVexpNode):
     function_arguments  : Optional[FunctionArguments] = field(repr=False, default=None)
 
     # 9. caller - value expression node which calls function, can be None
-    caller              : Optional[IValueExpressionNode] = field(default=None)
+    caller              : Optional[IDotExpressionNode] = field(default=None)
 
     # 10. extra validations of input arguments, list of python functions, 
     #    e.g. Length() can operate on objects that have __len__ function (btw.
@@ -163,9 +163,9 @@ class IFunction(IFunctionVexpNode):
     data: Optional[Any] = field(default=None, repr=False)
 
     # --- Autocomputed
-    # required for IValueExpressionNode
+    # required for IDotExpressionNode
     _output_type_info    : TypeInfo = field(init=False, repr=False)
-    # required for IValueExpressionNode
+    # required for IDotExpressionNode
     func_name           : str = field(init=False, repr=False)
 
     # computed from function_arguments(fixed_args, func_args)
@@ -276,7 +276,7 @@ class IFunction(IFunctionVexpNode):
 
     # def get_output_type_info(self) -> TypeInfo: return TypeInfo.extract_function_return_type_info(self.py_function)
 
-    # TODO: execute_arg - i.e. from ValueExpression to standard pythoh types
+    # TODO: execute_arg - i.e. from DotExpression to standard pythoh types
     #       this will need new input parameter: contexts/attr_node/...
     @staticmethod
     def execute_arg(
@@ -284,7 +284,7 @@ class IFunction(IFunctionVexpNode):
             arg_value: ValueOrVexp,
             prev_node_type_info:TypeInfo, 
             ) -> Any:
-        if isinstance(arg_value, (ValueExpression, IValueExpressionNode)):
+        if isinstance(arg_value, (DotExpression, IDotExpressionNode)):
             # arg_value._evaluator.execute(apply_session=apply_session)
             vexp_result = execute_vexp_or_node(
                             arg_value,
@@ -373,10 +373,10 @@ class IFunction(IFunctionVexpNode):
         if not prep_arg:
             return 
 
-        if not isinstance(prep_arg.caller, IValueExpressionNode):
-            raise RuleInternalError(owner=self, msg=f"Expected IValueExpressionNode, got: {type(prep_arg.caller)} / {prep_arg.caller}") 
+        if not isinstance(prep_arg.caller, IDotExpressionNode):
+            raise RuleInternalError(owner=self, msg=f"Expected IDotExpressionNode, got: {type(prep_arg.caller)} / {prep_arg.caller}") 
 
-        vexp_node: IValueExpressionNode = prep_arg.caller
+        vexp_node: IDotExpressionNode = prep_arg.caller
 
         if not (vexp_node.attr_node_type == AttrVexpNodeTypeEnum.FIELD
             and vexp_node.namespace == FieldsNS
@@ -467,7 +467,7 @@ class IFunctionFactory(ABC):
                 setup_session         : ISetupSession, # noqa: F821
                 value_arg_type_info: Optional[TypeInfo] = None,
                 name               : Optional[str] = None,
-                caller             : Optional[IValueExpressionNode] = None,
+                caller             : Optional[IDotExpressionNode] = None,
                 ) -> IFunction:
         custom_function = self.FUNCTION_CLASS(
                 py_function         = self.py_function,     # noqa: E251
@@ -493,8 +493,8 @@ def Function(py_function : Callable[..., Any],
              name: Optional[str] = None,
              value_arg_name:Optional[str]=None,
              # TODO: not only Vexp, can be literal too, e.g. 1, 2.3, "a"
-             args   : Optional[List[ValueExpression]] = UNDEFINED,
-             kwargs : Optional[Dict[str, ValueExpression]] = UNDEFINED,
+             args   : Optional[List[DotExpression]] = UNDEFINED,
+             kwargs : Optional[Dict[str, DotExpression]] = UNDEFINED,
              arg_validators : Optional[ValueArgValidatorPyFuncDictType] = None,
              ) -> CustomFunctionFactory:
     """
@@ -533,8 +533,8 @@ def create_builtin_function_factory(
             py_function : Callable[..., Any], 
             name: Optional[str] = None,
             value_arg_name:Optional[str]=None,
-            args   : Optional[List[ValueExpression]] = None,
-            kwargs: Optional[Dict[str, ValueExpression]] = None,
+            args   : Optional[List[DotExpression]] = None,
+            kwargs: Optional[Dict[str, DotExpression]] = None,
             arg_validators : Optional[ValueArgValidatorPyFuncDictType] = None,
             ) -> BuiltinFunctionFactory:
     """
@@ -668,7 +668,7 @@ class FunctionsFactoryRegistry:
 
 def try_create_function(
         setup_session: ISetupSession,  # noqa: F821
-        caller: IValueExpressionNode,
+        caller: IDotExpressionNode,
         # functions_factory_registry: IFunctionFactory, 
         attr_node_name:str, 
         func_args: FunctionArgumentsType,

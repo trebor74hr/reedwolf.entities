@@ -1,6 +1,6 @@
 """
 Evaluation-s are used in cleaners.
-Base is value:ValueExpression which shuuld return value compatible with
+Base is value:DotExpression which shuuld return value compatible with
 Field type.
 
 TODO: demo Evaluation - created/updated by/at: current user, timestamp
@@ -31,7 +31,7 @@ from .components  import (
         EvaluationBase,
         )
 from .expressions import (
-        ValueExpression, 
+        DotExpression, 
         ExecResult, 
         execute_available_vexp,
         )
@@ -55,12 +55,12 @@ class Evaluation(PresaveEvaluationBase):
     # TODO: check in Setup phase if type of evaluated VExpression has correct
     #       type - e.g.  for EnumField evaluated value must be within enum values.
     name:           str
-    value:          ValueExpression
+    value:          DotExpression
     label:          Optional[TransMessageType] = None
-    available:      Optional[Union[bool, ValueExpression]] = True
+    available:      Optional[Union[bool, DotExpression]] = True
 
     def __post_init__(self):
-        assert isinstance(self.value, ValueExpression), self.value
+        assert isinstance(self.value, DotExpression), self.value
 
     def execute(self, apply_session: IApplySession) -> Optional[ExecResult]:
         not_available_vexp_result = execute_available_vexp(self.available, apply_session=apply_session)
@@ -88,19 +88,19 @@ class Default(PresaveEvaluationBase):
         for EnumField should have default within enum values.
     """
 
-    value:          Union[LiteralType, ValueExpression]
+    value:          Union[LiteralType, DotExpression]
     name:           Optional[str] = None
     label:          Optional[TransMessageType] = None
-    available:      Optional[Union[bool, ValueExpression]] = True
+    available:      Optional[Union[bool, DotExpression]] = True
 
     REQUIRES_AUTOCOMPUTE: ClassVar[bool] = False
 
     def __post_init__(self):
-        # assert isinstance(self.value, ValueExpression), self.value
+        # assert isinstance(self.value, DotExpression), self.value
         pass
 
     def execute(self, apply_session: IApplySession) -> Optional[ExecResult]:
-        if isinstance(self.value, ValueExpression):
+        if isinstance(self.value, DotExpression):
             vexp_result = self.value._evaluator.execute_vexp(apply_session=apply_session)
             value = vexp_result.value
         else:

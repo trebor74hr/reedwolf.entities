@@ -34,7 +34,7 @@ from .meta import (
         EmptyFunctionArguments,
         )
 from .expressions import (
-        ValueExpression,
+        DotExpression,
         ISetupSession,
         ExecResult,
         )
@@ -235,13 +235,13 @@ class NestedBoundModelMixin:
 class BoundModel(NestedBoundModelMixin, BoundModelBase):
 
     # setup must be called first for this component, and later for others
-    # bigger comes first, 0 is ValueExpression default, 1 is for other copmonents default
+    # bigger comes first, 0 is DotExpression default, 1 is for other copmonents default
     SETUP_PRIORITY  : ClassVar[int] = 9
 
     name            : str
     # label           : TransMessageType
 
-    model           : Union[ModelType, ValueExpression] = field(repr=False)
+    model           : Union[ModelType, DotExpression] = field(repr=False)
     contains        : Optional[List[BoundModelWithHandlers]] = field(repr=False, default_factory=list)
 
     # evaluated later
@@ -260,14 +260,14 @@ class BoundModel(NestedBoundModelMixin, BoundModelBase):
 
 
     def _set_type_info(self):
-        # NOTE: model: ValueExpression - would be hard to fill automatically
-        #           when ValueExpression, vexp is evaluated setup() what is a bit late in
+        # NOTE: model: DotExpression - would be hard to fill automatically
+        #           when DotExpression, vexp is evaluated setup() what is a bit late in
         #           container.setup().
         assert not self.type_info
-        if not (is_model_class(self.model) or isinstance(self.model, ValueExpression)):
-            raise RuleSetupValueError(f"Model should be Model class (DC/PYD) or ValueExpression, got: {self.model}")
+        if not (is_model_class(self.model) or isinstance(self.model, DotExpression)):
+            raise RuleSetupValueError(f"Model should be Model class (DC/PYD) or DotExpression, got: {self.model}")
 
-        if isinstance(self.model, ValueExpression):
+        if isinstance(self.model, DotExpression):
             self.type_info = self.model._evaluator.last_node().type_info
         else:
             self.type_info = TypeInfo.get_or_create_by_type(

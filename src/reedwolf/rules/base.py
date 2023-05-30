@@ -55,9 +55,9 @@ from .meta import (
         TransMessageType,
         )
 from .expressions import (
-        ValueExpression,
+        DotExpression,
         ExecResult,
-        IValueExpressionNode,
+        IDotExpressionNode,
         IFunctionVexpNode,
         ISetupSession,
         execute_vexp_or_node,
@@ -204,7 +204,7 @@ class SubcomponentWrapper:
     name        : str # orig: vexp_node_name
     path        : str # orig: var_path
     # TODO: can be some other types too
-    subcomponent: Union[ComponentBase, ValueExpression]
+    subcomponent: Union[ComponentBase, DotExpression]
     th_field    : Optional[ModelField]
 
 
@@ -213,12 +213,12 @@ class SubcomponentWrapper:
         if not (self.name and self.path and self.th_field):
             raise RuleInternalError(owner=self, msg=f"name={self.name}, path={self.path}, subcomp={self.subcomponent}, th_field={self.th_field}")
 
-        # TODO: strange - ValueExpression in (None, UNDEFINED) returns True??
+        # TODO: strange - DotExpression in (None, UNDEFINED) returns True??
         if not bool(self.subcomponent) and self.subcomponent in (None, UNDEFINED):
             raise RuleInternalError(owner=self, msg=f"name={self.name}, path={self.path}, subcomp={self.subcomponent}, th_field={self.th_field}")
 
         # TODO: list all types available and include this check
-        # if not isinstance(self.subcomponent, (ComponentBase, ValueExpression)):
+        # if not isinstance(self.subcomponent, (ComponentBase, DotExpression)):
         #     raise RuleInternalError(owner=self, msg=f"wrong type of subcomponent {type(self.subcomponent)} / {self.subcomponent}")
 
 
@@ -449,7 +449,7 @@ class ComponentBase(SetOwnerMixin, ABC):
             if isinstance(component, Namespace):
                 raise RuleSetupValueError(owner=self, msg=f"Subcomponents should not be Namespace instances, got: {subcomponent_wrapper.name} = {subcomponent_wrapper.subcomponent}")
 
-            if isinstance(component, ValueExpression):
+            if isinstance(component, DotExpression):
                 pass
             elif hasattr(component, "fill_components"):
                 if hasattr(component, "is_extension") and component.is_extension():
@@ -482,15 +482,15 @@ class ComponentBase(SetOwnerMixin, ABC):
 
     def _invoke_component_setup(self, 
                     subcomponent_name: str, 
-                    subcomponent: Union[ComponentBase, ValueExpression], 
+                    subcomponent: Union[ComponentBase, DotExpression], 
                     setup_session: ISetupSession):  # noqa: F821
         called = False
 
         # print(f"_invoke_component_setup({subcomponent})")
 
-        if isinstance(subcomponent, (ValueExpression, )): # Operation
+        if isinstance(subcomponent, (DotExpression, )): # Operation
             # copy_to_setup_session=copy_to_setup_session,
-            vexp: ValueExpression = subcomponent
+            vexp: DotExpression = subcomponent
             namespace = vexp.GetNamespace()
             if namespace._manual_setup:
                 # needs manual Setup() later call with extra context - now is too
@@ -513,7 +513,7 @@ class ComponentBase(SetOwnerMixin, ABC):
         elif isinstance(subcomponent, (dict, list, tuple)):
             raise RuleSetupValueError(owner=self, msg=f"Subcomponents should not be dictionaries, lists or tuples, got: {type(subcomponent)} / {subcomponent}")
         else:
-            assert not hasattr(subcomponent, "Setup"), f"{self.name}.{subcomponent_name} has attribute that is not ValueExpression: {type(subcomponent)}"
+            assert not hasattr(subcomponent, "Setup"), f"{self.name}.{subcomponent_name} has attribute that is not DotExpression: {type(subcomponent)}"
             assert not hasattr(subcomponent, "setup"), f"{self.name}.{subcomponent_name} has attribute that is not Component: {type(subcomponent)}"
         return called
 
@@ -548,7 +548,7 @@ class ComponentBase(SetOwnerMixin, ABC):
               are:
                 1. component (ComponentBase)
                 2. have owner set (SetOwnerMixin)
-                3. ValueExpression
+                3. DotExpression
 
               all of them have some setup method:
                 setup() # case 1. and 2.
@@ -572,7 +572,7 @@ class ComponentBase(SetOwnerMixin, ABC):
         # NOTE: with vars() not the best way, other is to put metadata in field()
         subcomponent_items = []
         for sc_pair in vars(self).items():
-            if isinstance(sc_pair[1], ValueExpression):
+            if isinstance(sc_pair[1], DotExpression):
                 priority = 0
             else:
                 priority = getattr(sc_pair[1], "SETUP_PRIORITY", 1)
@@ -587,7 +587,7 @@ class ComponentBase(SetOwnerMixin, ABC):
 
         for subcomponent_name, subcomponent in subcomponent_items:
 
-            if not isinstance(subcomponent, ValueExpression):
+            if not isinstance(subcomponent, DotExpression):
                 if subcomponent_name.startswith("_"):
                     continue
 
@@ -660,7 +660,7 @@ class ComponentBase(SetOwnerMixin, ABC):
                     and th_field \
                     and "Component" not in str(th_field.type) \
                     and "Container" not in str(th_field.type) \
-                    and "ValueExpression" not in str(th_field.type) \
+                    and "DotExpression" not in str(th_field.type) \
                     and "Validation" not in str(th_field.type) \
                     and "Evaluation" not in str(th_field.type) \
                     and "BoundModel" not in str(th_field.type) \
@@ -738,7 +738,7 @@ class ComponentBase(SetOwnerMixin, ABC):
 
     # ------------------------------------------------------------
 
-    def get_name_from_bind(cls, bind: ValueExpression):
+    def get_name_from_bind(cls, bind: DotExpression):
         # rename function to _get_name_from_bind
         if len(bind.Path) <= 2:
             # Vexpr(Person.name) -> name
@@ -809,7 +809,7 @@ class ComponentBase(SetOwnerMixin, ABC):
     #         Probaly a bit faster, only dict queries.
     #     """
     #     # ALT: fetch from:
-    #     #       bind_vexp: ValueExpression = getattr(component, "bind", None)
+    #     #       bind_vexp: DotExpression = getattr(component, "bind", None)
     #     #       bind_vexp._evaluator.execute()
     #     key_str = self.get_key_string(apply_session=apply_session)
     #     assert key_str in apply_session.update_history
@@ -826,7 +826,7 @@ class ComponentBase(SetOwnerMixin, ABC):
             Probaly a bit faster, only dict queries.
         """
         # ALT: fetch from:
-        #       bind_vexp: ValueExpression = getattr(component, "bind", None)
+        #       bind_vexp: DotExpression = getattr(component, "bind", None)
         #       bind_vexp._evaluator.execute()
         key_str = self.get_key_string(apply_session=apply_session)
         assert key_str in apply_session.update_history
@@ -1388,7 +1388,7 @@ def extract_type_info(
     or IFunctionVexpNode instances 
 
     This function uses specific base interfaces/classes (BoundModelBase,
-    IValueExpressionNode), so it can not be put in meta.py
+    IDotExpressionNode), so it can not be put in meta.py
 
     See 'meta. def get_or_create_by_type()' for further explanation when to use
     this function (preffered) and when directly some other lower level meta.py
@@ -1399,7 +1399,7 @@ def extract_type_info(
 
     # function - callable and not class and not pydantic?
     parent_type_info = None
-    if isinstance(inspect_object, IValueExpressionNode):
+    if isinstance(inspect_object, IDotExpressionNode):
         parent_type_info = inspect_object.get_type_info()
         parent_object = parent_type_info.type_
     elif is_function(inspect_object):
@@ -1425,7 +1425,7 @@ def extract_type_info(
     th_field = None
     # func_node = None
 
-    is_vexp = isinstance(parent_object, ValueExpression)
+    is_vexp = isinstance(parent_object, DotExpression)
     if is_vexp:
         raise RuleSetupNameNotFoundError(item=inspect_object, msg=f"Attribute '{attr_node_name}' is not member of expression '{parent_object}'.")
 
