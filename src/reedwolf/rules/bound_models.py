@@ -59,7 +59,7 @@ from .base import (
 class ModelWithHandlers:
     name: str
     in_model: bool 
-    read_handler_vexp: IFunction = field(repr=False)
+    read_handler_dexp: IFunction = field(repr=False)
     type_info: TypeInfo = field(repr=False)
 
 
@@ -116,7 +116,7 @@ class NestedBoundModelMixin:
             # 1. if it is non-model -> Register new attribute node within M. /
             #    ModelsNS registry
             if not child_bound_model.in_model:
-                model_attr_vexp_node = AttrDexpNode(
+                model_attr_dexp_node = AttrDexpNode(
                                             name=child_bound_model.name,
                                             data=read_handler_type_info,
                                             namespace=models_registry.NAMESPACE,
@@ -124,7 +124,7 @@ class NestedBoundModelMixin:
                                             th_field=None,
                                             )
 
-                models_registry.register_attr_node(attr_node=model_attr_vexp_node)
+                models_registry.register_attr_node(attr_node=model_attr_dexp_node)
 
             # 2. Create function object and register that read handlers (with
             #    type_info) in local registry - will be called in apply phase
@@ -136,17 +136,17 @@ class NestedBoundModelMixin:
                         component = self, 
                         # bound_model_type_info=read_handler_type_info,
                     )):
-                read_handler_vexp = child_bound_model.read_handler.create_function(
+                read_handler_dexp = child_bound_model.read_handler.create_function(
                                         func_args  = EmptyFunctionArguments,
                                         setup_session = setup_session,
                                         name       = f"{child_bound_model.name}__{child_bound_model.read_handler.name}")
 
-            read_handler_vexp.finish()
+            read_handler_dexp.finish()
 
             model_with_handlers = ModelWithHandlers(
                         name=model_name,
                         in_model=child_bound_model.in_model,
-                        read_handler_vexp=read_handler_vexp,
+                        read_handler_dexp=read_handler_dexp,
                         type_info=read_handler_type_info,
                         )
 
@@ -196,15 +196,15 @@ class NestedBoundModelMixin:
 
                 # NOTE: can check 'model_with_handler.type_info'
 
-                rh_vexp_result = model_with_handler.read_handler_vexp.execute_node(
+                rh_dexp_result = model_with_handler.read_handler_dexp.execute_node(
                                     apply_session=apply_session, 
                                     vexp_result=ExecResult(),
                                     prev_node_type_info=None,
                                     is_last=True)
 
-                child_instances = rh_vexp_result.value
+                child_instances = rh_dexp_result.value
 
-                # apply_session.config.logger.warn(f"set bound model read_handler to instance: {to_repr(instance)}.{model_with_handler.name} = {to_repr(rh_vexp_result.value)}")
+                # apply_session.config.logger.warn(f"set bound model read_handler to instance: {to_repr(instance)}.{model_with_handler.name} = {to_repr(rh_dexp_result.value)}")
                 setattr(instance, model_with_handler.name, child_instances)
 
                 if child_instances:

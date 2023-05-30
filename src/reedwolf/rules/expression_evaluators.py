@@ -85,7 +85,7 @@ class DotExpressionEvaluator:
         # TODO:     raise RuleInternalError(owner=self, msg=f"Empty attr_node_list.")
         self.finished = True
 
-    def execute_vexp(self, apply_session: "IApplySession") -> ExecResult: # noqa: F821
+    def execute_dexp(self, apply_session: "IApplySession") -> ExecResult: # noqa: F821
         if not self.finished:
             raise RuleInternalError(owner=self, msg="Not yet finished.")
         if self.failed_reasons:

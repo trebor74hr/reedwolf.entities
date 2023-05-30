@@ -207,7 +207,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
                 # Rules - top owner container / normal case
                 setup_session_from = self.setup_session
 
-            attr_node = setup_session_from.get_vexp_node_by_vexp(vexp=model)
+            attr_node = setup_session_from.get_dexp_node_by_dexp(vexp=model)
             if attr_node:
                 raise RuleInternalError(owner=self, msg=f"AttrDexpNode data already in setup_session: {model} -> {attr_node}")
 

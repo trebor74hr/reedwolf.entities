@@ -59,7 +59,7 @@ from .expressions import (
         IDotExpressionNode,
         IFunctionDexpNode,
         ExecResult,
-        execute_vexp_or_node,
+        execute_dexp_or_node,
         ISetupSession,
         )
 from .func_args import (
@@ -216,7 +216,7 @@ class IFunction(IFunctionDexpNode):
         if self.arg_validators:
             self._call_arg_validators()
 
-        # self.setup_session.register_vexp_node(self)
+        # self.setup_session.register_dexp_node(self)
 
 
     def get_type_info(self) -> TypeInfo:
@@ -286,7 +286,7 @@ class IFunction(IFunctionDexpNode):
             ) -> Any:
         if isinstance(arg_value, (DotExpression, IDotExpressionNode)):
             # arg_value._evaluator.execute(apply_session=apply_session)
-            vexp_result = execute_vexp_or_node(
+            vexp_result = execute_dexp_or_node(
                             arg_value,
                             arg_value,
                             vexp_result = UNDEFINED,

@@ -76,7 +76,7 @@ class ISetupSession(ABC):
         ...
 
     @abstractmethod
-    def register_vexp_node(self, vexp_node: IDotExpressionNode):
+    def register_dexp_node(self, vexp_node: IDotExpressionNode):
         " TODO: can be done here "
         ...
 
@@ -141,32 +141,32 @@ class NotAvailableExecResult(ExecResult):
 
     @classmethod
     def create(cls, 
-            available_vexp_result: Union[ExecResult, UndefinedType]=UNDEFINED, 
+            available_dexp_result: Union[ExecResult, UndefinedType]=UNDEFINED, 
             reason: Optional[str] = None) -> NotAvailableExecResult:
         if not reason:
-            if available_vexp_result:
+            if available_dexp_result:
                 assert not isinstance(ExecResult, NotAvailableExecResult)
-                reason=f"Not available since expression yields: {available_vexp_result.value}", 
+                reason=f"Not available since expression yields: {available_dexp_result.value}", 
             else:
-                assert available_vexp_result is UNDEFINED
+                assert available_dexp_result is UNDEFINED
                 reason="Value not available"
         instance = cls(reason=reason)
-        instance.value = available_vexp_result
+        instance.value = available_dexp_result
         return instance
 
 
-def execute_available_vexp(
-        available_vexp: Optional[Union[bool, DotExpression]], 
+def execute_available_dexp(
+        available_dexp: Optional[Union[bool, DotExpression]], 
         apply_session: IApplySession) \
                 -> Optional[NotAvailableExecResult]: # noqa: F821
     " returns NotAvailableExecResult when not available with details in instance, if all ok -> returns None "
-    if isinstance(available_vexp, DotExpression):
-        available_vexp_result = available_vexp._evaluator.execute_vexp(apply_session=apply_session)
-        if not bool(available_vexp_result.value):
-            return NotAvailableExecResult.create(available_vexp_result=available_vexp_result)
-    elif isinstance(available_vexp, bool):
-        if available_vexp is False:
-            return NotAvailableExecResult.create(available_vexp_result=None)
+    if isinstance(available_dexp, DotExpression):
+        available_dexp_result = available_dexp._evaluator.execute_dexp(apply_session=apply_session)
+        if not bool(available_dexp_result.value):
+            return NotAvailableExecResult.create(available_dexp_result=available_dexp_result)
+    elif isinstance(available_dexp, bool):
+        if available_dexp is False:
+            return NotAvailableExecResult.create(available_dexp_result=None)
     # all ok
     return None
 
@@ -205,10 +205,10 @@ class IDotExpressionNode(ABC):
 
 
 # ------------------------------------------------------------
-# execute_vexp_or_node
+# execute_dexp_or_node
 # ------------------------------------------------------------
 
-def execute_vexp_or_node(
+def execute_dexp_or_node(
         vexp_or_value: Union[DotExpression, Any],
         # Union[OperationDexpNode, IFunctionDexpNode, LiteralDexpNode]
         vexp_node: Union[IDotExpressionNode, Any], 
@@ -220,7 +220,7 @@ def execute_vexp_or_node(
     # TODO: this function has ugly interface - solve this better
 
     if isinstance(vexp_or_value, DotExpression):
-        vexp_result = vexp_or_value._evaluator.execute_vexp(
+        vexp_result = vexp_or_value._evaluator.execute_dexp(
                             apply_session=apply_session,
                             )
     # AttrDexpNode, OperationDexpNode, IFunctionDexpNode, LiteralDexpNode,
@@ -351,8 +351,8 @@ class OperationDexpNode(IDotExpressionNode):
     _status : VExpStatusEnum = field(repr=False, init=False, default=VExpStatusEnum.INITIALIZED)
     _all_ok : Optional[bool] = field(repr=False, init=False, default=None)
 
-    _first_vexp_node : Optional[IDotExpressionNode] = field(repr=False, init=False, default=None)
-    _second_vexp_node : Optional[IDotExpressionNode] = field(repr=False, init=False, default=None)
+    _first_dexp_node : Optional[IDotExpressionNode] = field(repr=False, init=False, default=None)
+    _second_dexp_node : Optional[IDotExpressionNode] = field(repr=False, init=False, default=None)
 
     is_finished: bool = field(init=False, repr=False, default=False)
 
@@ -376,11 +376,11 @@ class OperationDexpNode(IDotExpressionNode):
         #       argumnent will persist to result
         # TODO: consider also last node if available
         if self._output_type_info is UNDEFINED:
-            self._output_type_info = self._first_vexp_node.get_type_info()
+            self._output_type_info = self._first_dexp_node.get_type_info()
         return self._output_type_info
 
     @staticmethod
-    def create_vexp_node(
+    def create_dexp_node(
                    vexp_or_other: Union[DotExpression, Any], 
                    label: str,
                    setup_session: ISetupSession, # noqa: F821
@@ -406,12 +406,12 @@ class OperationDexpNode(IDotExpressionNode):
             raise RuleSetupError(owner=setup_session, item=self, msg=f"AttrDexpNode not in INIT state, got {self._status}")
 
         # just to check if all ok
-        self._first_vexp_node = self.create_vexp_node(self.first, label="First", setup_session=setup_session, owner=owner)
-        setup_session.register_vexp_node(self._first_vexp_node)
+        self._first_dexp_node = self.create_dexp_node(self.first, label="First", setup_session=setup_session, owner=owner)
+        setup_session.register_dexp_node(self._first_dexp_node)
 
         if self.second is not UNDEFINED:
-            self._second_vexp_node = self.create_vexp_node(self.second, label="second", setup_session=setup_session, owner=owner)
-            setup_session.register_vexp_node(self._second_vexp_node)
+            self._second_dexp_node = self.create_dexp_node(self.second, label="second", setup_session=setup_session, owner=owner)
+            setup_session.register_dexp_node(self._second_dexp_node)
 
         self._status=VExpStatusEnum.BUILT
 
@@ -441,25 +441,25 @@ class OperationDexpNode(IDotExpressionNode):
         if vexp_result:
             raise NotImplementedError("TODO:")
 
-        first_vexp_result = execute_vexp_or_node(
+        first_dexp_result = execute_dexp_or_node(
                                 self.first, 
-                                self._first_vexp_node, 
+                                self._first_dexp_node, 
                                 prev_node_type_info=prev_node_type_info,
                                 vexp_result=vexp_result,
                                 apply_session=apply_session)
 
         # if self.second is not in (UNDEFINED, None):
-        if self._second_vexp_node is not None:
-            second_vexp_result = execute_vexp_or_node(
+        if self._second_dexp_node is not None:
+            second_dexp_result = execute_dexp_or_node(
                                     self.second, 
-                                    self._second_vexp_node, 
+                                    self._second_dexp_node, 
                                     prev_node_type_info=prev_node_type_info,
                                     vexp_result=vexp_result,
                                     apply_session=apply_session)
             # binary operation second argument adaption?
             #   string + number -> string + str(int)
-            first_value = first_vexp_result.value
-            second_value = second_vexp_result.value
+            first_value = first_dexp_result.value
+            second_value = second_dexp_result.value
             type_adapter = apply_session\
                     .binary_operations_type_adapters\
                     .get((type(first_value), type(second_value)), None)
@@ -470,22 +470,22 @@ class OperationDexpNode(IDotExpressionNode):
             try:
                 new_value = self.op_function(first_value, second_value)
             except Exception as ex:
-                raise RuleApplyError(owner=apply_session, msg=f"{self} := {self.op_function}({first_vexp_result.value}, {second_vexp_result.value}) raised error: {ex}")
+                raise RuleApplyError(owner=apply_session, msg=f"{self} := {self.op_function}({first_dexp_result.value}, {second_dexp_result.value}) raised error: {ex}")
         else:
             # unary operation
             try:
-                new_value = self.op_function(first_vexp_result.value)
+                new_value = self.op_function(first_dexp_result.value)
             except Exception as ex:
                 # raise
-                raise RuleApplyError(owner=apply_session, msg=f"{self} := {self.op_function}({first_vexp_result.value}) raised error: {ex}")
+                raise RuleApplyError(owner=apply_session, msg=f"{self} := {self.op_function}({first_dexp_result.value}) raised error: {ex}")
 
-        op_vexp_result = ExecResult()
+        op_dexp_result = ExecResult()
 
-        # TODO: we are loosing: first_vexp_result / second_vexp_result
+        # TODO: we are loosing: first_dexp_result / second_dexp_result
         #       to store it in result somehow?
-        op_vexp_result.set_value(new_value, "", f"Op[{self.op}]")
+        op_dexp_result.set_value(new_value, "", f"Op[{self.op}]")
 
-        return op_vexp_result
+        return op_dexp_result
 
 
 
@@ -508,10 +508,10 @@ class DotExpression(DynamicAttrsBase):
     # "Read", 
     RESERVED_ATTR_NAMES = {"Path", "Setup", "GetNamespace",
                            "_evaluator",  # allwyays filled, contains all nodes
-                           "_vexp_node",  # is last node (redundant), but None if case of error
+                           "_dexp_node",  # is last node (redundant), but None if case of error
                            "_node", "_namespace", "_name", "_func_args", "_is_top", "_status",
                            "_EnsureFinished", "IsFinished",
-                           } # "_read_functions",  "_vexp_node_name"
+                           } # "_read_functions",  "_dexp_node_name"
     RESERVED_FUNCTION_NAMES = ("Value",)
     # "First", "Second",
 
@@ -556,7 +556,7 @@ class DotExpression(DynamicAttrsBase):
         # not defined in is_predefined mode
         self._evaluator = UNDEFINED
         # the last one attr_node
-        self._vexp_node = UNDEFINED
+        self._dexp_node = UNDEFINED
 
 
     def GetNamespace(self) -> Namespace:
@@ -614,8 +614,8 @@ class DotExpression(DynamicAttrsBase):
         if self._namespace != registry.NAMESPACE:
             raise RuleInternalError(owner=self, msg=f"Registry has diff namespace from variable: {self._namespace} != {registry.NAMESPACE}")
 
-        current_vexp_node = None
-        last_vexp_node = None
+        current_dexp_node = None
+        last_dexp_node = None
         vexp_node_name = None
         vexp_evaluator = DotExpressionEvaluator()
 
@@ -626,8 +626,8 @@ class DotExpression(DynamicAttrsBase):
             # TODO: if self._func_args:
             # operator.attrgetter("last_name")
 
-            # last_vexp_node = (current_vexp_node
-            #                if current_vexp_node is not None
+            # last_dexp_node = (current_dexp_node
+            #                if current_dexp_node is not None
             #                else parent)
 
             # ========================================
@@ -638,7 +638,7 @@ class DotExpression(DynamicAttrsBase):
                 # one level deeper
                 # parent not required, but in this case should be 
                 assert bnr == 1
-                current_vexp_node = op_node.Setup(setup_session=setup_session, owner=owner)
+                current_dexp_node = op_node.Setup(setup_session=setup_session, owner=owner)
                 vexp_node_name = bit._node
                 # _read_functions.append(op_node.apply)
 
@@ -653,18 +653,18 @@ class DotExpression(DynamicAttrsBase):
                 func_args = FunctionArgumentsType(*bit._func_args)
 
                 vexp_node_name = bit._node
-                if last_vexp_node:
-                    parent_arg_type_info = last_vexp_node.get_type_info()
+                if last_dexp_node:
+                    parent_arg_type_info = last_dexp_node.get_type_info()
                     if parent_arg_type_info is None:
                         # Postponed ... e.g. F. / FieldsNS  - will be added to hooks later
-                        parent_arg_type_info = last_vexp_node.get_type_info
+                        parent_arg_type_info = last_dexp_node.get_type_info
                 else:
                     parent_arg_type_info = None
 
                 # : IFunctionDexpNode
-                current_vexp_node = registry.create_func_node(
+                current_dexp_node = registry.create_func_node(
                         setup_session=setup_session,
-                        caller=last_vexp_node,
+                        caller=last_dexp_node,
                         attr_node_name=vexp_node_name,
                         func_args=func_args,
                         value_arg_type_info=parent_arg_type_info
@@ -683,19 +683,19 @@ class DotExpression(DynamicAttrsBase):
                 # setup_session_read_from = setup_session
 
                 vexp_node_name = bit._node
-                current_vexp_node = registry.create_node(
+                current_dexp_node = registry.create_node(
                             vexp_node_name=vexp_node_name,
-                            parent_vexp_node=last_vexp_node,
+                            parent_dexp_node=last_dexp_node,
                             owner=owner,
                             # func_args=bit._func_args,
                             )
 
             # add node to evaluator
-            vexp_evaluator.add(current_vexp_node)
+            vexp_evaluator.add(current_dexp_node)
 
             # if is_last and copy_to_setup_session:
-            #     current_vexp_node.add_bound_vexp_node(BoundVar(setup_session.name, copy_to_setup_session.vexp_node_name))
-            #     setup_session.add(current_vexp_node, alt_vexp_node_name=copy_to_setup_session.vexp_node_name)
+            #     current_dexp_node.add_bound_dexp_node(BoundVar(setup_session.name, copy_to_setup_session.vexp_node_name))
+            #     setup_session.add(current_dexp_node, alt_dexp_node_name=copy_to_setup_session.vexp_node_name)
 
             # except NotImplementedError:
             #     raise 
@@ -705,12 +705,12 @@ class DotExpression(DynamicAttrsBase):
             #     # vexp_evaluator.failed(str(ex))
             #     # break
 
-            last_vexp_node = current_vexp_node
+            last_dexp_node = current_dexp_node
 
             # can be Component or can be managed Model dataclass Field - when .denied is not appliable
-            if hasattr(current_vexp_node, "denied") and current_vexp_node.denied:
+            if hasattr(current_dexp_node, "denied") and current_dexp_node.denied:
                 # '{vexp_node_name}' 
-                raise RuleSetupValueError(owner=self, msg=f"DexpNode (owner={owner.name}) references '{current_vexp_node.name}' what is not allowed due: {current_vexp_node.deny_reason}.")
+                raise RuleSetupValueError(owner=self, msg=f"DexpNode (owner={owner.name}) references '{current_dexp_node.name}' what is not allowed due: {current_dexp_node.deny_reason}.")
 
         vexp_evaluator.finish()
 
@@ -719,15 +719,15 @@ class DotExpression(DynamicAttrsBase):
             self._status = VExpStatusEnum.BUILT
             self._all_ok = True
             self._evaluator = vexp_evaluator
-            self._vexp_node = vexp_evaluator.last_node()
-            setup_session.register_vexp_node(self._vexp_node)
+            self._dexp_node = vexp_evaluator.last_node()
+            setup_session.register_dexp_node(self._dexp_node)
         else:
             # TODO: raise RuleSetupError()
             self._all_ok = False
             self._evaluator = vexp_evaluator
-            self._vexp_node = None
+            self._dexp_node = None
 
-        return self._vexp_node
+        return self._dexp_node
 
     # def __getitem__(self, ind):
     #     # list [0] or dict ["test"]

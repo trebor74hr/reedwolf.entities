@@ -67,7 +67,7 @@ class PrepArg:
     type_info_or_callable: Union[TypeInfo, TypeInfoCallable]
 
     # TODO: Union[NoneType, StdPyTypes (Literal[]), IDotExpressionNode
-    value_or_vexp: Any = field(repr=True)
+    value_or_dexp: Any = field(repr=True)
 
     # Used in ReservedArgumentNames.INJECT_COMPONENT_TREE case / in apply() phase only
     caller: Union[Namespace, IDotExpressionNode] = field(repr=False)
@@ -211,7 +211,7 @@ class FunctionArguments:
         if isinstance(value_object, TypeInfo):
             type_info_or_callable = value_object
             # TODO: should be DotExpression or IDotExpressionNode
-            value_or_vexp = UNDEFINED 
+            value_or_dexp = UNDEFINED 
         elif isinstance(value_object, DotExpression):
             vexp: DotExpression = value_object
 
@@ -253,26 +253,26 @@ class FunctionArguments:
             if not type_info_or_callable:
                 # if type_info is not provided then set callable which will start to return values after finish is completed
                 type_info_or_callable = vexp_node.get_type_info
-            value_or_vexp = vexp
+            value_or_dexp = vexp
 
         elif inspect.isclass(value_object):
             type_info_or_callable = TypeInfo.get_or_create_by_type(value_object, caller=self)
-            value_or_vexp = value_object
+            value_or_dexp = value_object
         elif is_function(value_object):
             # get_type_info method - for delayed cases - hooks
             type_info_or_callable = value_object
             assert isinstance(caller, IDotExpressionNode)
-            value_or_vexp = caller
+            value_or_dexp = caller
         else:
             # check that these are standard classes
             type_info_or_callable = TypeInfo.get_or_create_by_type(type(value_object), caller=self)
             # TODO: Literal()
-            value_or_vexp = value_object
+            value_or_dexp = value_object
 
         prep_arg = PrepArg(
                         name=arg_name, 
                         type_info_or_callable=type_info_or_callable, 
-                        value_or_vexp=value_or_vexp,
+                        value_or_dexp=value_or_dexp,
                         owner_name=owner_name,
                         caller=caller)
 
@@ -360,10 +360,10 @@ class FunctionArguments:
             # value_object = expected_args.get(value_arg_name, UNDEFINED)
             prep_arg = expected_args.get(value_arg_name, UNDEFINED)
             if prep_arg:
-                value_or_vexp = prep_arg.value_or_vexp
-                if not (isinstance(value_or_vexp, DotExpression) 
-                        and value_or_vexp._namespace == ThisNS):
-                    raise RuleSetupTypeError(owner=self, msg=f"{owner_name}: Function can not fill argument '{value_arg_name}' from '{caller.full_name}', argument is already filled with value '{value_or_vexp}'. Change arguments' setup or use 'This.' value expression.")
+                value_or_dexp = prep_arg.value_or_dexp
+                if not (isinstance(value_or_dexp, DotExpression) 
+                        and value_or_dexp._namespace == ThisNS):
+                    raise RuleSetupTypeError(owner=self, msg=f"{owner_name}: Function can not fill argument '{value_arg_name}' from '{caller.full_name}', argument is already filled with value '{value_or_dexp}'. Change arguments' setup or use 'This.' value expression.")
                 value_arg_implicit = False
         else:
             # value to first unfilled positional argument
@@ -372,8 +372,8 @@ class FunctionArguments:
             if not any_expected_args_unfilled:
                 prep_args_within_thisns = [prep_arg for prep_arg in expected_args.values() 
                                                if prep_arg 
-                                               and isinstance(prep_arg.value_or_vexp, DotExpression) 
-                                               and prep_arg.value_or_vexp._namespace == ThisNS]
+                                               and isinstance(prep_arg.value_or_dexp, DotExpression) 
+                                               and prep_arg.value_or_dexp._namespace == ThisNS]
                 if not prep_args_within_thisns:
                     raise RuleSetupTypeError(owner=self, msg=f"{owner_name}: Function can not take additional argument from '{caller.full_name}'. Remove at least one predefined argument or use value expression argument within 'This.' namespace.")
                 value_arg_implicit = False
@@ -491,8 +491,8 @@ class FunctionArguments:
         prepared_args = PreparedArguments(
                     owner_name=owner_name,
                     value_arg_implicit=value_arg_implicit,
-                    # NOTE: currently value_or_vexp could not be fetched here - need more info
-                    # PrepArg(name=arg_name, type_info=type_info, value_or_vexp=UNDEFINED) 
+                    # NOTE: currently value_or_dexp could not be fetched here - need more info
+                    # PrepArg(name=arg_name, type_info=type_info, value_or_dexp=UNDEFINED) 
                     #  for arg_name, type_info in expected_args.items() 
                     prep_arg_list=[
                         prep_arg

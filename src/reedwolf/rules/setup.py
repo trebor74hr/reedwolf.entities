@@ -65,7 +65,7 @@ from .attr_nodes import (
 # ------------------------------------------------------------
 
 
-def get_vexp_node_name(parent_name: Optional[str], 
+def get_dexp_node_name(parent_name: Optional[str], 
                        vexp_node_name: str, 
                        func_args: Optional[Union[FunctionArgumentsTupleType, FunctionArgumentsType]]
                        ) -> str:
@@ -184,7 +184,7 @@ class RegistryBase(IRegistry):
         return attr_node
 
 
-    def register_vexp_node(self, vexp_node:IDotExpressionNode, alt_vexp_node_name=None):
+    def register_dexp_node(self, vexp_node:IDotExpressionNode, alt_dexp_node_name=None):
         """
         Data can register IFunctionDexpNode-s instances since the
         output will be used directly as data and not as a function call.
@@ -198,7 +198,7 @@ class RegistryBase(IRegistry):
 
         if not isinstance(vexp_node, IDotExpressionNode):
             raise RuleInternalError(f"{type(vexp_node)}->{vexp_node}")
-        vexp_node_name = alt_vexp_node_name if alt_vexp_node_name else vexp_node.name
+        vexp_node_name = alt_dexp_node_name if alt_dexp_node_name else vexp_node.name
 
         if not vexp_node_name.count(".") == 0:
             raise RuleInternalError(owner=self, msg=f"Node {vexp_node_name} should not contain . - only first level vars allowed")
@@ -213,7 +213,7 @@ class RegistryBase(IRegistry):
             raise RuleInternalError(f"{type(attr_node)}->{attr_node}")
         if not self.NAMESPACE == attr_node.namespace:
             raise RuleInternalError(owner=self, msg=f"Method register({attr_node}) - namespace mismatch: {self.NAMESPACE} != {attr_node.namespace}")
-        return self.register_vexp_node(vexp_node=attr_node, alt_vexp_node_name=alt_attr_node_name)
+        return self.register_dexp_node(vexp_node=attr_node, alt_dexp_node_name=alt_attr_node_name)
 
     def pp(self):
         print(f"  Namespace {self.NAMESPACE._name}:")
@@ -252,7 +252,7 @@ class RegistryBase(IRegistry):
     # ------------------------------------------------------------
     def create_node(self, 
                     vexp_node_name: str, 
-                    parent_vexp_node: IDotExpressionNode, 
+                    parent_dexp_node: IDotExpressionNode, 
                     # func_args: FunctionArgumentsType
                     owner: ComponentBase,
                     ) -> IDotExpressionNode:
@@ -272,31 +272,31 @@ class RegistryBase(IRegistry):
 
         type_info = None
 
-        if parent_vexp_node:
-            assert parent_vexp_node.name!=vexp_node_name
-            if not isinstance(parent_vexp_node, IDotExpressionNode):
-                raise RuleSetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': '{vexp_node_name}' -> parent_vexp_node={parent_vexp_node} :{type(parent_vexp_node)} is not IDotExpressionNode")
+        if parent_dexp_node:
+            assert parent_dexp_node.name!=vexp_node_name
+            if not isinstance(parent_dexp_node, IDotExpressionNode):
+                raise RuleSetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': '{vexp_node_name}' -> parent_dexp_node={parent_dexp_node} :{type(parent_dexp_node)} is not IDotExpressionNode")
 
         # TODO: za Sum(This.name) this is not good. Should be unique, since 
         #       This is ambigous - can evaluate to different contexts. 
         #       should have some context @ID (parent)
-        full_vexp_node_name = get_vexp_node_name(
-                                    parent_name=parent_vexp_node.name if parent_vexp_node else None, 
+        full_dexp_node_name = get_dexp_node_name(
+                                    parent_name=parent_dexp_node.name if parent_dexp_node else None, 
                                     vexp_node_name=vexp_node_name,
                                     func_args=None # func_args
                                     )
 
-        if parent_vexp_node is None:
+        if parent_dexp_node is None:
             # --------------------------------------------------
             # get() -> TOP LEVEL - only level that is stored
             # --------------------------------------------------
             # e.g. M.company Predefined before in Rules.setup() function.
-            if full_vexp_node_name not in self.store:
-                names_avail = get_available_names_example(full_vexp_node_name, self.store.keys())
+            if full_dexp_node_name not in self.store:
+                names_avail = get_available_names_example(full_dexp_node_name, self.store.keys())
                 valid_names = f"Valid attributes: {names_avail}" if self.store.keys() else "Namespace has no attributes at all."
-                raise RuleSetupNameNotFoundError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': Invalid attribute name '{full_vexp_node_name}'. {valid_names}")
+                raise RuleSetupNameNotFoundError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': Invalid attribute name '{full_dexp_node_name}'. {valid_names}")
 
-            attr_node_template = self.store.get(full_vexp_node_name)
+            attr_node_template = self.store.get(full_dexp_node_name)
 
             # NOTE: RL 230525 do not clone, .finish() is not called for cloned,
             #       they were not registered anywhere. OLD:
@@ -308,22 +308,22 @@ class RegistryBase(IRegistry):
             # IN-DEPTH LEVEL 2+, e.g. M.company.<this-node-and-next>
             # ---------------------------------------------------------------
 
-            if isinstance(parent_vexp_node, IFunctionDexpNode):
-                inspect_object = parent_vexp_node.get_type_info()
+            if isinstance(parent_dexp_node, IFunctionDexpNode):
+                inspect_object = parent_dexp_node.get_type_info()
             else:
-                assert isinstance(parent_vexp_node, AttrDexpNode)
+                assert isinstance(parent_dexp_node, AttrDexpNode)
 
                 if False:
                     ...
-                # elif isinstance(parent_vexp_node.data, StaticData):
-                #     inspect_object = parent_vexp_node.data.value
-                # elif isinstance(parent_vexp_node.data, DynamicData):
+                # elif isinstance(parent_dexp_node.data, StaticData):
+                #     inspect_object = parent_dexp_node.data.value
+                # elif isinstance(parent_dexp_node.data, DynamicData):
                 #     raise NotImplementedError("TODO")
-                elif isinstance(parent_vexp_node.data, BoundModelBase):
-                    inspect_object = parent_vexp_node.data.model
+                elif isinstance(parent_dexp_node.data, BoundModelBase):
+                    inspect_object = parent_dexp_node.data.model
                 else:
                     # can be TypeInfo, @dataclass, Pydantic etc.
-                    inspect_object = parent_vexp_node.data
+                    inspect_object = parent_dexp_node.data
 
             try:
                 # , func_node
@@ -338,7 +338,7 @@ class RegistryBase(IRegistry):
                 ex.set_msg(f"{owner} / {self.NAMESPACE}-NS: {ex.msg}")
                 raise 
             except RuleError as ex:
-                ex.set_msg(f"'{owner} / {self.NAMESPACE}-NS: {parent_vexp_node.full_name} -> '.{vexp_node_name}' metadata / type-hints read problem: {ex}")
+                ex.set_msg(f"'{owner} / {self.NAMESPACE}-NS: {parent_dexp_node.full_name} -> '.{vexp_node_name}' metadata / type-hints read problem: {ex}")
                 raise 
 
             # if func_node:
@@ -354,7 +354,7 @@ class RegistryBase(IRegistry):
             # --------------------------------------------------
             # attributes / functions / operations
             vexp_node = AttrDexpNode(
-                            name=full_vexp_node_name,
+                            name=full_dexp_node_name,
                             data=type_info,
                             namespace=self.NAMESPACE,
                             type_info=type_info, 
@@ -420,7 +420,7 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
                     owner=self.component,
                     msg=f"Attribute '{attr_name}' is '{type(component)}' type which has no binding, therefore can not extract value. Use standard *Field components instead.")
         # TODO: needs some class wrapper and caching ...
-        vexp_result = component.bind._evaluator.execute_vexp(apply_session)
+        vexp_result = component.bind._evaluator.execute_dexp(apply_session)
         out = vexp_result.value
 
         # OLD: 
@@ -611,7 +611,7 @@ class SetupSessionBase(ISetupSession):
     def _register_attr_node(self, attr_node:AttrDexpNode, alt_attr_node_name=None):
         """
         !!!!! NOTE helper method - USED ONLY IN UNIT TESTING !!!!!
-        TODO: replace with register_vexp_node
+        TODO: replace with register_dexp_node
         """
         assert not self.finished
         ns_name = attr_node.namespace._name
@@ -621,18 +621,18 @@ class SetupSessionBase(ISetupSession):
 
     # ------------------------------------------------------------
 
-    def get_vexp_node_by_vexp(self,
+    def get_dexp_node_by_dexp(self,
                         vexp: DotExpression,
                         default:[None, UndefinedType]=UNDEFINED,
                         strict:bool=False
                         ) -> Union[IDotExpressionNode, None, UndefinedType]:
         if not isinstance(vexp,  DotExpression):
             raise RuleInternalError(owner=self, msg=f"Dexp not DotExpression, got {vexp} / {type(vexp)}")
-        return vexp._vexp_node
+        return vexp._dexp_node
 
     # ------------------------------------------------------------
 
-    def register_vexp_node(self, vexp_node: IDotExpressionNode):
+    def register_dexp_node(self, vexp_node: IDotExpressionNode):
         " used to validate if all value expressions are completely setup (called finish() and similar) in setup phase " 
         # TODO: this could be cache - to reuse M.name, F.id, etc. (not for functions and operations)
         #       key = vexp_node.name
@@ -691,7 +691,7 @@ class SetupSessionBase(ISetupSession):
 # 
 #     NAMESPACE = DataNS
 # 
-#     def create_vexp_node(self, data_var:IData) -> IDotExpressionNode:
+#     def create_dexp_node(self, data_var:IData) -> IDotExpressionNode:
 #         # ------------------------------------------------------------
 #         # A.2. DATAPROVIDERS - Collect all vexp_nodes from dataproviders fieldgroup
 #         # ------------------------------------------------------------
@@ -721,10 +721,10 @@ class SetupSessionBase(ISetupSession):
 #         return vexp_node
 # 
 #     def register(self, data_var:IData):
-#         vexp_node = self.create_vexp_node(data_var)
+#         vexp_node = self.create_dexp_node(data_var)
 #         # can be AttrDexpNode or FunctionDexpNode
-#         # alt_vexp_node_name=data_var.name
-#         self.register_vexp_node(vexp_node)
+#         # alt_dexp_node_name=data_var.name
+#         self.register_dexp_node(vexp_node)
 #         return vexp_node
 # 
 #     def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:

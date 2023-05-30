@@ -297,7 +297,7 @@ class ContextRegistry(RegistryBase):
 
     def create_node(self, 
                     vexp_node_name: str, 
-                    parent_vexp_node: IDotExpressionNode, 
+                    parent_dexp_node: IDotExpressionNode, 
                     owner: ComponentBase,
                     ) -> IDotExpressionNode:
 
@@ -309,7 +309,7 @@ class ContextRegistry(RegistryBase):
 
         return super().create_node(
                 vexp_node_name=vexp_node_name,
-                parent_vexp_node=parent_vexp_node,
+                parent_dexp_node=parent_dexp_node,
                 owner=owner,
                 )
 
@@ -323,7 +323,7 @@ class ContextRegistry(RegistryBase):
             self.register_attr_node(attr_node)
 
         # map User, Session, Now and similar Attribute -> function calls
-        for attr_name, py_function in self.context_class.get_vexp_attrname_dict().items():
+        for attr_name, py_function in self.context_class.get_dexp_attrname_dict().items():
             type_info = TypeInfo.extract_function_return_type_info(
                             py_function,
                             allow_nonetype=True)
@@ -345,7 +345,7 @@ class ContextRegistry(RegistryBase):
         if context in (UNDEFINED, None):
             component = apply_session.current_frame.component
             raise RuleApplyNameError(owner=self, msg=f"ContextNS attribute '{component.name}' can not be fetched since context is not set ({type(context)}).")
-        # if attr_name in self.context_class.get_vexp_attrname_dict():
+        # if attr_name in self.context_class.get_dexp_attrname_dict():
         return context
 
 
@@ -443,7 +443,7 @@ class SetupSession(SetupSessionBase):
 # 
 #     NAMESPACE = DataNS
 # 
-#     def create_vexp_node(self, data_var:IData) -> IDotExpressionNode:
+#     def create_dexp_node(self, data_var:IData) -> IDotExpressionNode:
 #         # ------------------------------------------------------------
 #         # A.2. DATAPROVIDERS - Collect all vexp_nodes from dataproviders fieldgroup
 #         # ------------------------------------------------------------
@@ -473,10 +473,10 @@ class SetupSession(SetupSessionBase):
 #         return vexp_node
 # 
 #     def register(self, data_var:IData):
-#         vexp_node = self.create_vexp_node(data_var)
+#         vexp_node = self.create_dexp_node(data_var)
 #         # can be AttrDexpNode or FunctionDexpNode
-#         # alt_vexp_node_name=data_var.name
-#         self.register_vexp_node(vexp_node)
+#         # alt_dexp_node_name=data_var.name
+#         self.register_dexp_node(vexp_node)
 #         return vexp_node
 # 
 #     def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:

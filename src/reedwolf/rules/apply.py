@@ -19,7 +19,7 @@ from .expressions import (
         ExecResult,
         NotAvailableExecResult,
         DotExpression,
-        execute_available_vexp,
+        execute_available_dexp,
         )
 from .meta import (
         UNDEFINED,
@@ -219,30 +219,30 @@ class ApplyResult(IApplySession):
             raise RuleInternalError(owner=self.current_frame.component, 
                     msg=f"Component in frame {self.current_frame.component} must match component: {component}") 
 
-        # evaluation_vexp = evaluation.value
-        # assert isinstance(evaluation_vexp, DotExpression)
-        # eval_vexp_result  = evaluation_vexp._evaluator.execute(apply_session=self)
-        eval_vexp_result  = evaluation.execute(apply_session=self)
+        # evaluation_dexp = evaluation.value
+        # assert isinstance(evaluation_dexp, DotExpression)
+        # eval_dexp_result  = evaluation_dexp._evaluator.execute(apply_session=self)
+        eval_dexp_result  = evaluation.execute(apply_session=self)
 
-        if eval_vexp_result.is_not_available():
-            return eval_vexp_result
+        if eval_dexp_result.is_not_available():
+            return eval_dexp_result
 
-        eval_value = eval_vexp_result.value
+        eval_value = eval_dexp_result.value
 
         if isinstance(component, FieldBase):
             eval_value = component.try_adapt_value(eval_value)
 
-        # ALT: bind_vexp_result = component.get_vexp_result_from_instance(apply_session)
+        # ALT: bind_dexp_result = component.get_dexp_result_from_instance(apply_session)
         orig_value = component.get_current_value_from_history(apply_session=self)
 
         if (orig_value != eval_value):
             self.register_instance_attr_change(
                     component=component, 
-                    vexp_result=eval_vexp_result,
+                    vexp_result=eval_dexp_result,
                     new_value=eval_value
                     )
 
-        return eval_vexp_result
+        return eval_dexp_result
 
     # ------------------------------------------------------------
 
@@ -329,7 +329,7 @@ class ApplyResult(IApplySession):
 
             # original instance
             vexp_result: ExecResult = component.bound_model.model \
-                                        ._evaluator.execute_vexp(apply_session=self)
+                                        ._evaluator.execute_dexp(apply_session=self)
             instance = vexp_result.value
 
             # new instance if any
@@ -489,8 +489,8 @@ class ApplyResult(IApplySession):
 
                 if process_further and getattr(component, "enables", None):
                     assert not getattr(component, "contains", None), component
-                    bind_vexp_result = component.get_vexp_result_from_instance(apply_session=self)
-                    value = bind_vexp_result.value
+                    bind_dexp_result = component.get_dexp_result_from_instance(apply_session=self)
+                    value = bind_dexp_result.value
                     if not isinstance(value, (bool, NoneType)):
                         raise RuleApplyValueError(owner=component, 
                                 msg=f"Component.enables can be applied only for Boolean or None values, got: {value} : {type(value)}")
@@ -503,7 +503,7 @@ class ApplyResult(IApplySession):
 
             # ------------------------------------------------------------
             # NOTE: used only for test if all Dexp values could evaluate ...
-            #       self.__check_component_all_vexps(component)
+            #       self.__check_component_all_dexps(component)
 
             # ------------------------------------------------------------
             # --- Recursive walk down - for each child call _apply
@@ -553,12 +553,12 @@ class ApplyResult(IApplySession):
 
     # ------------------------------------------------------------
 
-    def __check_component_all_vexps(self, component: ComponentBase):
+    def __check_component_all_dexps(self, component: ComponentBase):
         # used only for testing
         for attr_name, attr_value in vars(component).items():
             if isinstance(attr_value, DotExpression):
                 # vexp_result: ExecResult = 
-                attr_value._evaluator.execute_vexp(apply_session=self)
+                attr_value._evaluator.execute_dexp(apply_session=self)
                 # TODO: apply_session.config.logger.debug(f"{parent.name if parent else ''}.{component.name}.{attr_name} = VExp[{attr_value}] -> {vexp_result}")
 
     # ------------------------------------------------------------
@@ -651,7 +651,7 @@ class ApplyResult(IApplySession):
                                         component \
                                         .bound_model \
                                         .model \
-                                        ._evaluator.execute_vexp(
+                                        ._evaluator.execute_dexp(
                                                 apply_session=self, 
                                                 )
                 # set new value
@@ -690,22 +690,22 @@ class ApplyResult(IApplySession):
         # ----------------------------------------------------------------
 
         if getattr(component, "available", None):
-            not_available_vexp_result = execute_available_vexp(
+            not_available_dexp_result = execute_available_dexp(
                                                 component.available, 
                                                 apply_session=self)
-            if not_available_vexp_result: 
+            if not_available_dexp_result: 
                 return False
 
         if getattr(component, "bind", None):
             # Fill initial value from instance 
-            init_bind_vexp_result = self._init_by_bind_vexp(component)
+            init_bind_dexp_result = self._init_by_bind_dexp(component)
 
             # try to update if instance_new is provided and yields different value
-            bind_vexp_result, _ = self._try_update_by_instance(
+            bind_dexp_result, _ = self._try_update_by_instance(
                                         component=component, 
-                                        init_bind_vexp_result=init_bind_vexp_result)
+                                        init_bind_dexp_result=init_bind_dexp_result)
         else:
-            bind_vexp_result = None
+            bind_dexp_result = None
 
 
         # TODO: provide last value to all evaluations and validations 
@@ -728,7 +728,7 @@ class ApplyResult(IApplySession):
                     if self.execute_validation(component=component, validation=cleaner):
                         all_ok = False
                 elif isinstance(cleaner, EvaluationBase):
-                    if not bind_vexp_result:
+                    if not bind_dexp_result:
                         # TODO: this belongs to Setup phase
                         raise RuleApplyError(owner=self, msg="Evaluator can be defined only for components with 'bind' defined. Remove 'Evaluation' or define 'bind'.")
                     self.execute_evaluation(component=component, evaluation=cleaner)
@@ -745,34 +745,34 @@ class ApplyResult(IApplySession):
 
     # ------------------------------------------------------------
 
-    def _init_by_bind_vexp(self, component: ComponentBase) -> ExecResult:
+    def _init_by_bind_dexp(self, component: ComponentBase) -> ExecResult:
         " get initial vexp value, if instance_new try to updated/overwrite with it"
 
         if not isinstance(component, FieldBase):
             raise RuleInternalError(owner=self, msg=f"Expected FieldBase field, got: {component}")
 
-        bind_vexp_result = component.get_vexp_result_from_instance(apply_session=self)
-        init_value = bind_vexp_result.value
+        bind_dexp_result = component.get_dexp_result_from_instance(apply_session=self)
+        init_value = bind_dexp_result.value
 
         self.register_instance_attr_change(
                 component = component, 
-                vexp_result = bind_vexp_result, 
+                vexp_result = bind_dexp_result, 
                 new_value = init_value,
                 is_from_init_bind = True)
 
-        return bind_vexp_result
+        return bind_dexp_result
 
 
     # ------------------------------------------------------------
 
-    def _try_update_by_instance(self, component: ComponentBase, init_bind_vexp_result: ExecResult) \
+    def _try_update_by_instance(self, component: ComponentBase, init_bind_dexp_result: ExecResult) \
             -> Tuple[ExecResult, bool]:
         """
         try to update if instance_new is provided and yields different value
         bool -> returns if updated or not, but not if value is adapted
         """
-        init_value = init_bind_vexp_result.value
-        bind_vexp_result = init_bind_vexp_result
+        init_value = init_bind_dexp_result.value
+        bind_dexp_result = init_bind_dexp_result
 
         # try adapt of initial value changed value?
         last_value = component.try_adapt_value(init_value)
@@ -788,16 +788,16 @@ class ApplyResult(IApplySession):
                                    instance=self.current_frame.instance_new,
                                    instance_new=UNDEFINED, 
                         )):
-                    instance_new_bind_vexp_result = \
-                            component.get_vexp_result_from_instance(apply_session=self)
-                    new_value = instance_new_bind_vexp_result.value
+                    instance_new_bind_dexp_result = \
+                            component.get_dexp_result_from_instance(apply_session=self)
+                    new_value = instance_new_bind_dexp_result.value
 
             elif self.instance_new_struct_type == StructEnum.RULES_LIKE:
-                instance_new_bind_vexp_result = \
+                instance_new_bind_dexp_result = \
                         self.get_attr_value_by_comp_name(
                                 component=component, 
                                 instance=self.current_frame.instance_new)
-                new_value = instance_new_bind_vexp_result.value
+                new_value = instance_new_bind_dexp_result.value
             else: 
                 raise RuleInternalError(owner=self, msg=f"Invalid instance_new_struct_type = {self.instance_new_struct_type}")
 
@@ -808,11 +808,11 @@ class ApplyResult(IApplySession):
                 if new_value != last_value:
                     self.register_instance_attr_change(
                             component = component, 
-                            vexp_result = instance_new_bind_vexp_result, 
+                            vexp_result = instance_new_bind_dexp_result, 
                             new_value = new_value,
                             )
                     last_value = new_value 
-                    bind_vexp_result = instance_new_bind_vexp_result
+                    bind_dexp_result = instance_new_bind_dexp_result
                     updated = True
 
         if not updated and init_value != last_value:
@@ -825,7 +825,7 @@ class ApplyResult(IApplySession):
                     new_value=last_value
                     )
 
-        return bind_vexp_result, updated
+        return bind_dexp_result, updated
 
     # ------------------------------------------------------------
 

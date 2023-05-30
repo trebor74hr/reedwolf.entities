@@ -33,7 +33,7 @@ from .components  import (
 from .expressions import (
         DotExpression, 
         ExecResult, 
-        execute_available_vexp,
+        execute_available_dexp,
         )
 
 # ------------------------------------------------------------
@@ -63,10 +63,10 @@ class Evaluation(PresaveEvaluationBase):
         assert isinstance(self.value, DotExpression), self.value
 
     def execute(self, apply_session: IApplySession) -> Optional[ExecResult]:
-        not_available_vexp_result = execute_available_vexp(self.available, apply_session=apply_session)
-        if not_available_vexp_result: 
-            return not_available_vexp_result
-        return self.value._evaluator.execute_vexp(apply_session=apply_session)
+        not_available_dexp_result = execute_available_dexp(self.available, apply_session=apply_session)
+        if not_available_dexp_result: 
+            return not_available_dexp_result
+        return self.value._evaluator.execute_dexp(apply_session=apply_session)
 
 # ------------------------------------------------------------
 # Evaluations on object/instance initialization
@@ -101,7 +101,7 @@ class Default(PresaveEvaluationBase):
 
     def execute(self, apply_session: IApplySession) -> Optional[ExecResult]:
         if isinstance(self.value, DotExpression):
-            vexp_result = self.value._evaluator.execute_vexp(apply_session=apply_session)
+            vexp_result = self.value._evaluator.execute_dexp(apply_session=apply_session)
             value = vexp_result.value
         else:
             value = self.value

@@ -60,7 +60,7 @@ from .expressions import (
         IDotExpressionNode,
         IFunctionDexpNode,
         ISetupSession,
-        execute_vexp_or_node,
+        execute_dexp_or_node,
         )
 from .contexts import (
         IContext,
@@ -374,7 +374,7 @@ class ComponentBase(SetOwnerMixin, ABC):
             if apply_session:
                 if getattr(self, "bind", None):
                     vexp = self.bind
-                    vexp_result = execute_vexp_or_node(
+                    vexp_result = execute_dexp_or_node(
                                     vexp,
                                     vexp,
                                     vexp_result = UNDEFINED,
@@ -778,7 +778,7 @@ class ComponentBase(SetOwnerMixin, ABC):
 
     # ------------------------------------------------------------
 
-    def get_vexp_result_from_instance(self, apply_session:IApplySession, strict:bool = True) -> ExecResult:
+    def get_dexp_result_from_instance(self, apply_session:IApplySession, strict:bool = True) -> ExecResult:
         """ Fetch ExecResult from component.bind from INSTANCE (storage)
             by executing bind._evaluator.execute() fetch value process
             Work on stored fields only.
@@ -787,21 +787,21 @@ class ComponentBase(SetOwnerMixin, ABC):
             with initial value for the component.
         """
         # TODO: put in common function
-        bind_vexp = self.bind
-        if not bind_vexp:
+        bind_dexp = self.bind
+        if not bind_dexp:
             if strict:
                 # TODO: move this to Setup phase
                 raise RuleApplyError(owner=self, msg=f"Component '{self.name}' has no bind")
             return None
-        bind_vexp_result = bind_vexp._evaluator.execute_vexp(apply_session=apply_session)
-        return bind_vexp_result
+        bind_dexp_result = bind_dexp._evaluator.execute_dexp(apply_session=apply_session)
+        return bind_dexp_result
 
     # ------------------------------------------------------------
 
     # # TODO: this is rejected since vexp_result could be from non-bind vexp
     # #       and only bind vexp could provide parent_instance used for setting 
     # #       new instance attribute (see register_instance_attr_change() ).
-    # def get_vexp_result_from_history(self, apply_session:IApplySession) -> ExecResult:
+    # def get_dexp_result_from_history(self, apply_session:IApplySession) -> ExecResult:
     #     """ Fetch ExecResult from component.bind from APPLY_SESSION.UPDATE_HISTORY
     #         last record.
     #         !!! ExecResult.value could be unadapted :( !!!
@@ -809,8 +809,8 @@ class ComponentBase(SetOwnerMixin, ABC):
     #         Probaly a bit faster, only dict queries.
     #     """
     #     # ALT: fetch from:
-    #     #       bind_vexp: DotExpression = getattr(component, "bind", None)
-    #     #       bind_vexp._evaluator.execute()
+    #     #       bind_dexp: DotExpression = getattr(component, "bind", None)
+    #     #       bind_dexp._evaluator.execute()
     #     key_str = self.get_key_string(apply_session=apply_session)
     #     assert key_str in apply_session.update_history
     #     instance_attr_value = apply_session.update_history[key_str][-1]
@@ -826,8 +826,8 @@ class ComponentBase(SetOwnerMixin, ABC):
             Probaly a bit faster, only dict queries.
         """
         # ALT: fetch from:
-        #       bind_vexp: DotExpression = getattr(component, "bind", None)
-        #       bind_vexp._evaluator.execute()
+        #       bind_dexp: DotExpression = getattr(component, "bind", None)
+        #       bind_dexp._evaluator.execute()
         key_str = self.get_key_string(apply_session=apply_session)
         assert key_str in apply_session.update_history
         instance_attr_value = apply_session.update_history[key_str][-1]
@@ -1224,8 +1224,8 @@ class IApplySession:
 
     # def get_current_component_bind_value(self):
     #     component = self.current_frame.component
-    #     bind_vexp_result = component.get_vexp_result_from_instance(apply_session=self)
-    #     return bind_vexp_result.value
+    #     bind_dexp_result = component.get_dexp_result_from_instance(apply_session=self)
+    #     return bind_dexp_result.value
 
     def validate_type(self, component: ComponentBase, value: Any = UNDEFINED):
         validation_failure = None
@@ -1288,9 +1288,9 @@ class IApplySession:
             # -- attr_name - fetch from initial bind vexp (very first)
             init_instance_attr_value = self.update_history[key_str][0]
             assert init_instance_attr_value.is_from_bind
-            init_bind_vexp_result = init_instance_attr_value.vexp_result
+            init_bind_dexp_result = init_instance_attr_value.vexp_result
             # attribute name is in the last item
-            init_raw_attr_value = init_bind_vexp_result.value_history[-1]
+            init_raw_attr_value = init_bind_dexp_result.value_history[-1]
             attr_name = init_raw_attr_value.attr_name
 
             assert hasattr(parent_instance, attr_name), f"{parent_instance}.{attr_name}"
@@ -1300,7 +1300,7 @@ class IApplySession:
             # ----------------------------------------
             setattr(parent_instance, attr_name, new_value)
 
-            # NOTE: bind_vexp_result last value is not changed
+            # NOTE: bind_dexp_result last value is not changed
             #       maybe should be changed but ... 
 
         # TODO: pass input arg value_owner_name - component.name does not have
@@ -1425,13 +1425,13 @@ def extract_type_info(
     th_field = None
     # func_node = None
 
-    is_vexp = isinstance(parent_object, DotExpression)
-    if is_vexp:
+    is_dexp = isinstance(parent_object, DotExpression)
+    if is_dexp:
         raise RuleSetupNameNotFoundError(item=inspect_object, msg=f"Attribute '{attr_node_name}' is not member of expression '{parent_object}'.")
 
     # when parent virtual expression is not assigned to data-type/data-attr_node, 
     # then it is sent directly what will later raise error "attribute not found" 
-    if not is_vexp:
+    if not is_dexp:
         if is_method_by_name(parent_object, attr_node_name):
             # parent_object, attr_node_name
             raise RuleSetupNameError(item=inspect_object,

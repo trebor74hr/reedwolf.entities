@@ -202,14 +202,14 @@ class FieldBase(Component, IFieldBase, ABC):
                 # warn(f"{self.bind}: 'bind' needs to be 1-4 deep DotExpression (e.g. M.status, M.city.country.name ).")
                 raise RuleSetupValueError(owner=self, msg=f"'bind' needs to be 1-4 deep DotExpression (e.g. M.status, M.city.country.name ), got: {self.bind}")
 
-            self.bound_attr_node = setup_session.get_vexp_node_by_vexp(self.bind)
+            self.bound_attr_node = setup_session.get_dexp_node_by_dexp(self.bind)
             if not self.bound_attr_node:
                 # TODO: not nice :(
                 owner_container = self.get_container_owner(consider_self=True)
                 owner_setup_session = getattr(owner_container, "owner_setup_session", owner_container.setup_session)
                 if owner_setup_session!=setup_session:
                     # TODO: does not goes deeper - should be done with while loop until the top
-                    self.bound_attr_node = owner_setup_session.get_vexp_node_by_vexp(self.bind)
+                    self.bound_attr_node = owner_setup_session.get_dexp_node_by_dexp(self.bind)
 
             # self.attr_node = setup_session.get_attr_node(FieldsNS, self.name, strict=True)
             self.attr_node = setup_session[FieldsNS].get(self.name)
@@ -425,7 +425,7 @@ class ChoiceField(FieldBase):
                 # reported before - warn(f"TODO: There is an error with value expression {self.choices} - skip it for now.")
                 choices = None
             else:
-                vexp_node = setup_session.get_vexp_node_by_vexp(vexp=choices)
+                vexp_node = setup_session.get_dexp_node_by_dexp(vexp=choices)
                 if not vexp_node:
                     vexp_node = choices.Setup(setup_session=setup_session, owner=self)
 
@@ -569,12 +569,12 @@ class EnumField(FieldBase):
         super().setup(setup_session=setup_session)
 
         # TODO: revert to: strict=True - and process exception properly
-        attr_node = setup_session.get_vexp_node_by_vexp(vexp=self.bind, strict=False)
+        attr_node = setup_session.get_dexp_node_by_dexp(vexp=self.bind, strict=False)
         if attr_node:
 
             if isinstance(self.enum, DotExpression):
                 # EnumField(... enum=S.CompanyTypes)
-                enum_attr_node = setup_session.get_vexp_node_by_vexp(vexp=self.enum)
+                enum_attr_node = setup_session.get_dexp_node_by_dexp(vexp=self.enum)
                 if not enum_attr_node:
                     enum_attr_node = self.enum.Setup(setup_session=setup_session, owner=self)
 

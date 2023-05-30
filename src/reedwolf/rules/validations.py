@@ -38,7 +38,7 @@ from .components    import (
 from .expressions   import (
         DotExpression,
         NotAvailableExecResult,
-        execute_available_vexp,
+        execute_available_dexp,
         )
 from .exceptions    import RuleSetupError
 from .utils         import (
@@ -74,13 +74,13 @@ class Validation(ValidationBase):
         super().__post_init__()
 
     def validate(self, apply_session: IApplySession) -> Union[NoneType, ValidationFailure]:
-        not_available_vexp_result: NotAvailableExecResult  = execute_available_vexp(self.available, apply_session=apply_session)
-        if not_available_vexp_result: 
+        not_available_dexp_result: NotAvailableExecResult  = execute_available_dexp(self.available, apply_session=apply_session)
+        if not_available_dexp_result: 
             # TODO: log ...
             return None
 
         component = apply_session.current_frame.component
-        vexp_result: ExecResult = self.ensure._evaluator.execute_vexp(apply_session)
+        vexp_result: ExecResult = self.ensure._evaluator.execute_dexp(apply_session)
         if not bool(vexp_result.value):
             error = self.error if self.error else "Validation failed"
             return ValidationFailure(
@@ -145,7 +145,7 @@ class Readonly(SimpleValidationBase):
         component = apply_session.current_frame.component
 
         if isinstance(self.value, DotExpression):
-            vexp_result = self.value._evaluator.execute_vexp(apply_session)
+            vexp_result = self.value._evaluator.execute_dexp(apply_session)
             is_readonly = vexp_result.value
         else:
             is_readonly = self.value

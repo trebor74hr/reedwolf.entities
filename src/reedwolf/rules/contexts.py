@@ -48,7 +48,7 @@ class IContext(ABC):
         return TypeInfo.get_or_create_by_type(cls)
 
     @classmethod
-    def get_vexp_attrname_dict(cls) -> Dict[str, Callable[[], Any]]:
+    def get_dexp_attrname_dict(cls) -> Dict[str, Callable[[], Any]]:
         return {
             "User" : cls.get_user,
             "Session" : cls.get_session,
