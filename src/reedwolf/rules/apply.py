@@ -429,9 +429,17 @@ class ApplyResult(IApplySession):
               tree depth.
 
         """
+        comp_container = component.get_container_owner(consider_self=True)
+
         if mode_dexp_dependency:
-            ...
-            # TODO: instance must match
+            # TODO: self.config.logger.info(f"apply - mode_dexp_dependency - {self.current_frame.component.name} depends on {component.name} - calling apply() ...")
+
+            # instance i.e. containers must match
+            assert self.frames_stack
+            caller_container = self.current_frame.component.get_container_owner(consider_self=True)
+            if comp_container is not caller_container:
+                raise RuleInternalError(owner=component, msg=f"Componenent's container '{comp_container}' must match caller's '{self.current_frame.component.name}' container: {caller_container.name}") 
+
             # TODO: detect circular dependency
 
         assert not (mode_extension_list and mode_dexp_dependency)
