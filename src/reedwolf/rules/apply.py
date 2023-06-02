@@ -514,7 +514,11 @@ class ApplyResult(IApplySession):
         process_further = True
 
         with self.use_stack_frame(new_frame):
-            # obnly when full apply or partial apply
+            # key_string = self.is_component_processed(component)
+            # if key_string:
+            #     raise RuleInternalError(owner=self, msg=f"Component '{component.name}' already processed: {key_string}") 
+
+            # only when full apply or partial apply
             if not (self.component_only and not in_component_only_tree):
                 # ============================================================
                 # Update, validate, evaluate
@@ -862,8 +866,8 @@ class ApplyResult(IApplySession):
             key_str = self.get_key_string(component)
             if key_str in self.current_values:
                 # Call to "self._init_by_bind_dexp()" is already done 
-                # in building tree values in some validations. In this case
-                # fetch that value.
+                # in building tree values in some validations. 
+                # In this case fetch that existing value.
                 assert len(self.update_history[key_str]) == 1, "expected only initial value, got updated value too"
                 instance_attr_value = self.update_history[key_str][-1]
                 init_bind_dexp_result = instance_attr_value.dexp_result
@@ -1011,15 +1015,14 @@ class ApplyResult(IApplySession):
             # raise RuleInternalError(owner=component, msg=f"Expecting non-container, got: {component}") 
             " uses cache, when not found then gets intances and index0 from current frame "
             key_string = self.get_key_string_by_instance(
-                            component=component,
+                            component = component,
                             instance = self.current_frame.instance, 
                             index0 = self.current_frame.index0)
         else:
             container = component.get_container_owner(consider_self=True)
-            # container_key_string = container.get_key_string(apply_session)
-            # recursion
+            # Recursion
             container_key_string = self.get_key_string(container)
-
+            # construct
             key_string = GlobalConfig.ID_NAME_SEPARATOR.join(
                     [container_key_string, component.name] 
                     )
@@ -1090,6 +1093,11 @@ class ApplyResult(IApplySession):
 
         return key_string
 
+    # ------------------------------------------------------------
+
+    def is_component_processed(self, component: ComponentBase) -> Optional[KeyString]:
+        key_str = self.get_key_string(component)
+        return key_str if (key_str in self.current_values) else None
 
     # ------------------------------------------------------------
 

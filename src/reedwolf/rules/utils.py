@@ -2,6 +2,8 @@ import re
 import keyword
 from typing import (
         Callable, 
+        ClassVar,
+        Dict,
         Any, 
         List,
         Optional,
@@ -14,6 +16,8 @@ class Singleton(type):
     " https://stackoverflow.com/questions/6760685/creating-a-singleton-in-python "
     _instances = {}
     def __call__(cls, *args, **kwargs):
+        if args:
+            raise ValueError(f"only kwargs are supported, got args: {args}")
         if cls not in cls._instances:
             cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
         return cls._instances[cls]
@@ -22,17 +26,18 @@ class Singleton(type):
 # UNDEFINED
 # ------------------------------------------------------------
 
-class UndefinedType(metaclass=Singleton):
+class UndefinedType: # (metaclass=Singleton):
 
-    instance:'UndefinedType'= None
+    instance_dict: ClassVar[Dict[str, 'UndefinedType']] = {}
 
-    def __init__(self):
-        if self.__class__.instance:
-            raise ValueError("Undefined already instantiated, this is a singleton class")
-        self.__class__.instance = self
+    def __init__(self, name: str):
+        self.name = name
+        if self.name in self.__class__.instance_dict:
+            raise ValueError(f"{self.__class__.__name__}({self.name}) already instantiated, this is a singleton class")
+        self.__class__.instance_dict[self.name] = self
 
     def __str__(self):
-        return "UNDEFINED"
+        return self.name
 
     def __bool__(self):
         return False
@@ -51,7 +56,9 @@ class UndefinedType(metaclass=Singleton):
     __repr__ = __str__
 
 
-UNDEFINED = UndefinedType()
+UNDEFINED = UndefinedType(name="UNDEFINED")
+MISSING   = UndefinedType(name="MISSING")
+UNAVAILABLE = UndefinedType(name="UNAVAILABLE")
 
 # ------------------------------------------------------------
 # Utility functions ...
