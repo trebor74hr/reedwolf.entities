@@ -437,112 +437,20 @@ class ApplyResult(IApplySession):
 
 
             if isinstance(instance, (list, tuple)):
-                # == Extension with item List ==
-
-                instance_list = instance
-
-                # TODO: validate cardinality before or after changes
-
-                new_instances_by_key = None
-                if current_instance_new not in (None, UNDEFINED):
-                    if not isinstance(current_instance_new, (list, tuple)):
-                        raise RuleApplyValueError(owner=self, msg=f"{component}: Expected list/tuple in the new instance, got: {current_instance_new}")
-
-                    new_instances_by_key = {}
-                    for index0, item_instance_new in enumerate(current_instance_new, 0):
-                        key = component.get_key_pairs_or_index0(instance=item_instance_new, index0=index0)
-                        if key in new_instances_by_key:
-                            raise RuleApplyValueError(owner=self, msg=f"{component}: Duplicate key {key}, first item is: {new_instances_by_key[key]}")
-                        new_instances_by_key[key] = item_instance_new
-
-
-                # NOTE: considered to use dict() since dictionaries are ordered in Python 3.6+ 
-                #       ordering-perserving As of Python 3.7, this is a guaranteed, i.e.  Dict keeps insertion order
-                #       https://stackoverflow.com/questions/39980323/are-dictionaries-ordered-in-python-3-6
-                instances_by_key = OrderedDict()
-
-                for index0, instance in enumerate(instance_list, 0):
-                    key = component.get_key_pairs_or_index0(instance=instance, index0=index0)
-                    if component.keys:
-                        missing_keys = [kn for kn, kv in key if isinstance(kv, MissingKey)]
-                        if missing_keys:
-                            raise RuleApplyValueError(owner=self, msg=f"Instance {instance} has key(s) with value None, got: {', '.join(missing_keys)}")
-
-                    if current_instance_new not in (None, UNDEFINED):
-                        item_instance_new = new_instances_by_key.get(key, UNDEFINED)
-                        if item_instance_new is UNDEFINED:
-                            key_string = self.get_key_string_by_instance(
-                                    component = component, 
-                                    instance = instance, 
-                                    index0 = index0)
-
-                            self.changes.append(
-                                    InstanceChange(
-                                        key_string = key_string,
-                                        key_pairs = key,
-                                        operation = ChangeOpEnum.DELETE,
-                                        instance = instance,
-                                    ))
-                            item_instance_new = None
-                    else:
-                        item_instance_new = None
-
-                    if key in instances_by_key:
-                        raise RuleApplyValueError(owenr=self, msg=f"Found duplicate key {key}:\n  == {instance}\n  == {instances_by_key[key]}")
-
-                    instances_by_key[key] = (instance, index0, item_instance_new)
-
-                if new_instances_by_key:
-                    index0_new = len(instances_by_key)
-                    new_keys = [key for key in new_instances_by_key.keys() if key not in instances_by_key]
-                    # register new items and add to processing
-                    for key in new_keys:
-                        item_instance_new = new_instances_by_key[key]
-
-                        key_string = self.get_key_string_by_instance(
-                                        component = component,
-                                        instance = item_instance_new, 
-                                        index0 = index0_new)
-
-                        self.changes.append(
-                                InstanceChange(
-                                    key_string = key_string,
-                                    key_pairs = key,
-                                    operation = ChangeOpEnum.CREATE,
-                                    instance = item_instance_new,
-                                ))
-                        instances_by_key[key] = (item_instance_new, index0_new, None)
-                        index0_new += 1
-
-                # Apply for all items
-                for key, (instance, index0, item_instance_new) in instances_by_key.items():
-                    # Go one level deeper 
-                    with self.use_stack_frame(
-                            ApplyStackFrame(
-                                container = component,
-                                component = component, 
-                                index0 = index0,
-                                # main instance - original values
-                                instance = instance, 
-                                parent_instance=self.current_frame.instance,
-                                # new instance - new values (when update mode)
-                                instance_new = item_instance_new, 
-                                parent_instance_new=self.current_frame.instance_new,
-                                )):
-                        # Recursion with prevention to hit this code again
-                        self._apply(parent=parent, 
-                                    component=component, 
-                                    in_component_only_tree=in_component_only_tree,
-                                    depth=depth+1,
-                                    # prevent is_extension_logic again -> infinitive recursion
-                                    extension_list_mode=True)
-
+                # enters recursion -> _apply() -> ...
+                self._apply_extension_list(
+                        component=component,
+                        parent=parent,
+                        in_component_only_tree=in_component_only_tree,
+                        instance_list=instance,
+                        current_instance_list_new=current_instance_new,
+                        depth=depth,
+                        )
                 # ========================================
                 # Finished, processed all children
                 # ========================================
                 return
                 # ========================================
-
 
 
             # == Extension with single item ==
@@ -649,6 +557,122 @@ class ApplyResult(IApplySession):
         # TODO: logger: apply_session.config.logger.debug(f"depth={depth}, comp={component.name}, bind={bind} => {dexp_result}")
 
         return
+
+    # ------------------------------------------------------------
+
+    def _apply_extension_list(self, 
+            component: ComponentBase,
+            parent: Optional[ComponentBase], 
+            in_component_only_tree:bool,
+            instance_list: List[ModelType],
+            current_instance_list_new: Union[NoneType, UNDEFINED, ModelType],
+            depth: int,
+            ):
+        """
+        Extension with item List
+        Recursion -> _apply() -> ...
+        """
+        if not isinstance(instance_list, (list, tuple)):
+            raise RuleApplyValueError(owner=self, msg=f"{component}: Expected list/tuple in the new instance, got: {current_instance_list_new}")
+
+        # instance_list = instance
+
+        # TODO: validate cardinality before or after changes
+
+        new_instances_by_key = None
+        if current_instance_list_new not in (None, UNDEFINED):
+            if not isinstance(current_instance_list_new, (list, tuple)):
+                raise RuleApplyValueError(owner=self, msg=f"{component}: Expected list/tuple in the new instance, got: {current_instance_list_new}")
+
+            new_instances_by_key = {}
+            for index0, item_instance_new in enumerate(current_instance_list_new, 0):
+                key = component.get_key_pairs_or_index0(instance=item_instance_new, index0=index0)
+                if key in new_instances_by_key:
+                    raise RuleApplyValueError(owner=self, msg=f"{component}: Duplicate key {key}, first item is: {new_instances_by_key[key]}")
+                new_instances_by_key[key] = item_instance_new
+
+
+        # NOTE: considered to use dict() since dictionaries are ordered in Python 3.6+ 
+        #       ordering-perserving As of Python 3.7, this is a guaranteed, i.e.  Dict keeps insertion order
+        #       https://stackoverflow.com/questions/39980323/are-dictionaries-ordered-in-python-3-6
+        instances_by_key = OrderedDict()
+
+        for index0, instance in enumerate(instance_list, 0):
+            key = component.get_key_pairs_or_index0(instance=instance, index0=index0)
+            if component.keys:
+                missing_keys = [kn for kn, kv in key if isinstance(kv, MissingKey)]
+                if missing_keys:
+                    raise RuleApplyValueError(owner=self, msg=f"Instance {instance} has key(s) with value None, got: {', '.join(missing_keys)}")
+
+            if current_instance_list_new not in (None, UNDEFINED):
+                item_instance_new = new_instances_by_key.get(key, UNDEFINED)
+                if item_instance_new is UNDEFINED:
+                    key_string = self.get_key_string_by_instance(
+                            component = component, 
+                            instance = instance, 
+                            index0 = index0)
+
+                    self.changes.append(
+                            InstanceChange(
+                                key_string = key_string,
+                                key_pairs = key,
+                                operation = ChangeOpEnum.DELETE,
+                                instance = instance,
+                            ))
+                    item_instance_new = None
+            else:
+                item_instance_new = None
+
+            if key in instances_by_key:
+                raise RuleApplyValueError(owenr=self, msg=f"Found duplicate key {key}:\n  == {instance}\n  == {instances_by_key[key]}")
+
+            instances_by_key[key] = (instance, index0, item_instance_new)
+
+        if new_instances_by_key:
+            index0_new = len(instances_by_key)
+            new_keys = [key for key in new_instances_by_key.keys() if key not in instances_by_key]
+            # register new items and add to processing
+            for key in new_keys:
+                item_instance_new = new_instances_by_key[key]
+
+                key_string = self.get_key_string_by_instance(
+                                component = component,
+                                instance = item_instance_new, 
+                                index0 = index0_new)
+
+                self.changes.append(
+                        InstanceChange(
+                            key_string = key_string,
+                            key_pairs = key,
+                            operation = ChangeOpEnum.CREATE,
+                            instance = item_instance_new,
+                        ))
+                instances_by_key[key] = (item_instance_new, index0_new, None)
+                index0_new += 1
+
+        # Apply for all items
+        for key, (instance, index0, item_instance_new) in instances_by_key.items():
+            # Go one level deeper 
+            with self.use_stack_frame(
+                    ApplyStackFrame(
+                        container = component,
+                        component = component, 
+                        index0 = index0,
+                        # main instance - original values
+                        instance = instance, 
+                        parent_instance=self.current_frame.instance,
+                        # new instance - new values (when update mode)
+                        instance_new = item_instance_new, 
+                        parent_instance_new=self.current_frame.instance_new,
+                        )):
+                # Recursion with prevention to hit this code again
+                self._apply(parent=parent, 
+                            component=component, 
+                            in_component_only_tree=in_component_only_tree,
+                            depth=depth+1,
+                            # prevent is_extension_logic again -> infinitive recursion
+                            extension_list_mode=True)
+
 
     # ------------------------------------------------------------
 
@@ -796,7 +820,7 @@ class ApplyResult(IApplySession):
                 return False
 
         if getattr(component, "bind", None):
-            # Fill initial value from instance 
+            # 1. Fill initial value from instance 
             key_str = self.get_key_string(component)
             if key_str in self.current_values:
                 # Call to "self._init_by_bind_dexp()" can be done 
@@ -808,7 +832,7 @@ class ApplyResult(IApplySession):
             else:
                 init_bind_dexp_result = self._init_by_bind_dexp(component)
 
-            # try to update if instance_new is provided and yields different value
+            # 2. try to update if instance_new is provided and yields different value
             bind_dexp_result, _ = self._try_update_by_instance(
                                         component=component, 
                                         init_bind_dexp_result=init_bind_dexp_result)
@@ -832,10 +856,12 @@ class ApplyResult(IApplySession):
                 #               cleaner = cleaner, 
                 #               )):
                 if isinstance(cleaner, ValidationBase):
+                    # 3.a. run validations
                     # returns validation_failure
                     if self.execute_validation(component=component, validation=cleaner):
                         all_ok = False
                 elif isinstance(cleaner, EvaluationBase):
+                    # 3.b. run validations
                     if not bind_dexp_result:
                         # TODO: this belongs to Setup phase
                         raise RuleApplyError(owner=self, msg="Evaluator can be defined only for components with 'bind' defined. Remove 'Evaluation' or define 'bind'.")
@@ -846,6 +872,8 @@ class ApplyResult(IApplySession):
         # NOTE: initial value from instance is not checked - only
         #       intermediate and the last value
         # returns validation_failure
+
+        # 5. validate type is ok?
         if self.validate_type(component):
             all_ok = False
 
