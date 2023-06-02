@@ -58,7 +58,11 @@ class UndefinedType: # (metaclass=Singleton):
 
 UNDEFINED = UndefinedType(name="UNDEFINED")
 MISSING   = UndefinedType(name="MISSING")
-UNAVAILABLE = UndefinedType(name="UNAVAILABLE")
+
+# not available while in progress - used in Apply()
+NA_IN_PROGRESS = UndefinedType(name="NA_IN_PROGRESS")
+
+NOT_APPLIABLE  = UndefinedType(name="NOT_APPLIABLE")
 
 # ------------------------------------------------------------
 # Utility functions ...

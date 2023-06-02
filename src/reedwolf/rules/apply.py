@@ -24,7 +24,8 @@ from .expressions import (
         )
 from .utils import (
         UNDEFINED,
-        UNAVAILABLE,
+        NA_IN_PROGRESS,
+        NOT_APPLIABLE,
         )
 from .meta import (
         NoneType,
@@ -307,7 +308,10 @@ class ApplyResult(IApplySession):
 
             self.update_history[key_str] = []
 
-            assert key_str not in self.current_values
+            # Can be various UndefinedType: NA_IN_PROGRESS, NOT_APPLIABLE
+            if self.current_values.get(key_str):
+                raise RuleInternalError(owner=self, msg=f"current_values[{key_str}] ==  {self.current_values[key_str]}") 
+
             self.current_values[key_str] = InstanceAttrCurrentValue(
                                                 key_string=key_str, 
                                                 component=component)
@@ -429,6 +433,8 @@ class ApplyResult(IApplySession):
               tree depth.
 
         """
+        assert not (mode_extension_list and mode_dexp_dependency)
+
         comp_container = component.get_container_owner(consider_self=True)
         comp_container_model = comp_container.bound_model.get_type_info().type_
 
@@ -441,10 +447,6 @@ class ApplyResult(IApplySession):
             if comp_container is not caller_container:
                 raise RuleInternalError(owner=component, msg=f"Componenent's container '{comp_container}' must match caller's '{self.current_frame.component.name}' container: {caller_container.name}") 
 
-            # TODO: detect circular dependency
-
-        assert not (mode_extension_list and mode_dexp_dependency)
-
         if self.finished:
             raise RuleInternalError(owner=self, msg=f"Already finished") 
 
@@ -456,14 +458,16 @@ class ApplyResult(IApplySession):
             if not component.is_extension():
                 if not isinstance(self.current_frame.instance, comp_container_model):
                     raise RuleInternalError(owner=self, msg=f"Current frame's instance's model does not corresponds to component's container's model. Expected: {comp_container_model}, got: {type(self.instance)}") 
-            # TODO: for extension() any need to check this at all in this
-            #       phase?
+
+            # TODO: for extension() any need to check this at all in this phase?
+
         else:
             depth = 0
             in_component_only_tree = False
 
             if not isinstance(self.instance, comp_container_model):
                 raise RuleInternalError(owner=self, msg=f"Rules instance's model does not corresponds to component's container's model. Expected: {comp_container_model}, got: {type(self.instance)}") 
+
 
         if self.component_only and component == self.component_only:
             # partial apply - detected component
@@ -586,12 +590,19 @@ class ApplyResult(IApplySession):
 
         with self.use_stack_frame(new_frame):
 
+            comp_key_str = self.get_key_string(component)
+            current_value_instance = self.current_values.get(comp_key_str, UNDEFINED)
+            if current_value_instance is NA_IN_PROGRESS:
+                 raise RuleApplyError(owner=component, 
+                            msg=f"The component is already in progress state. Probably circular dependency issue. Fix problematic references to this component and try again.") 
+            elif current_value_instance is UNDEFINED:
+                self.current_values[comp_key_str] = NA_IN_PROGRESS
+
             # only when full apply or partial apply
             if not (self.component_only and not in_component_only_tree):
 
                 # TODO: maybe a bit too late to check this but this works
-                key_str = self.is_component_instance_processed(component)
-                if key_str:
+                if current_value_instance:
                     process_further = False
                 else:
                     # ============================================================
@@ -663,6 +674,9 @@ class ApplyResult(IApplySession):
                         ))
 
         # TODO: logger: apply_session.config.logger.debug(f"depth={depth}, comp={component.name}, bind={bind} => {dexp_result}")
+
+        if self.current_values[comp_key_str] is NA_IN_PROGRESS:
+            self.current_values[comp_key_str] = NOT_APPLIABLE
 
         return
 
@@ -941,7 +955,9 @@ class ApplyResult(IApplySession):
         if getattr(component, "bind", None):
             # 1. Fill initial value from instance 
             key_str = self.get_key_string(component)
-            if key_str in self.current_values:
+
+            if self.current_values.get(key_str, None) not in (
+                    None, NA_IN_PROGRESS, NOT_APPLIABLE):
                 # Call to "self._init_by_bind_dexp()" is already done 
                 # in building tree values in some validations. 
                 # In this case fetch that existing value.
@@ -1084,17 +1100,24 @@ class ApplyResult(IApplySession):
 
     # ------------------------------------------------------------
 
-    def get_key_string(self, component: ComponentBase):
-        # apply_session: IApplySession
-        # TODO: is caching possible? 
-        # TODO: consider moving to ApplySession/ApplyResult?
+    def get_key_string(self, component: ComponentBase) -> KeyString:
+        """
+        Caching is on containers only - by id(indstance)
+        for other components only attach name to it.
+        Container - when not found then gets intances and index0 
+        from current frame
+        """
+        # NOTE: this could be different 
+        #       component == self.current_frame.component
+        instance = self.current_frame.instance
+        index0 = self.current_frame.index0
+
         if component.is_container():
             # raise RuleInternalError(owner=component, msg=f"Expecting non-container, got: {component}") 
-            " uses cache, when not found then gets intances and index0 from current frame "
             key_string = self.get_key_string_by_instance(
                             component = component,
-                            instance = self.current_frame.instance, 
-                            index0 = self.current_frame.index0)
+                            instance = instance, 
+                            index0 = index0)
         else:
             container = component.get_container_owner(consider_self=True)
             # Recursion
@@ -1148,15 +1171,14 @@ class ApplyResult(IApplySession):
                 if self.current_frame.parent_instance:
                     parent_instance = self.current_frame.parent_instance
                     parent_id = id(parent_instance)
-                    if parent_id not in self.key_string_container_cache:
-                        # must_be_in_cache
-                        if not self.component_name_only:
-                            raise RuleInternalError(owner=component, msg=f"Parent instance's key not found in cache, got: {parent_instance}") 
-                        parent_key_string = f"__PARTIAL__{self.component_name_only}"
-                    else:
-                        parent_key_string = self.key_string_container_cache[parent_id]
+                    # if parent_id not in self.key_string_container_cache:
+                    #     # must_be_in_cache
+                    #     if not self.component_name_only:
+                    #         raise RuleInternalError(owner=component, msg=f"Parent instance's key not found in cache, got: {parent_instance}") 
+                    #     parent_key_string = f"__PARTIAL__{self.component_name_only}"
+                    # else:
+                    parent_key_string = self.key_string_container_cache[parent_id]
                     key_string = GlobalConfig.ID_NAME_SEPARATOR.join([parent_key_string, key_string])
-
             else:
                 key_string = component.name
 
@@ -1172,11 +1194,18 @@ class ApplyResult(IApplySession):
 
     # ------------------------------------------------------------
 
-    def is_component_instance_processed(self, component: ComponentBase) -> Optional[KeyString]:
-        # instance is grabbed from current_frame
-        assert self.frames_stack
-        key_str = self.get_key_string(component)
-        return key_str if self.current_values.get(key_str, None) else None
+    # def is_component_instance_processed(self, component: ComponentBase) -> Optional[KeyString]:
+    #     # instance is grabbed from current_frame
+    #     assert self.frames_stack
+    #     key_str = self.get_key_string(component)
+    #     return key_str if self.current_values.get(key_str, None) else None
+
+    # def is_apply_component_instance_in_progress(self, component: ComponentBase) -> Optional[KeyString]:
+    #     if self.frames_stack:
+    #         key_str = self.get_key_string(component)
+    #         if self.current_values.get(key_str, None) is NA_IN_PROGRESS:
+    #             return key_str
+    #     return None
 
     # ------------------------------------------------------------
 
@@ -1190,7 +1219,6 @@ class ApplyResult(IApplySession):
         key_str = self.get_key_string(component)
         if not key_str in self.current_values:
             if not init_when_missing:
-                # return UNAVAILABLE
                 raise RuleInternalError(owner=component, msg=f"Value fetch too early") 
 
             # ------------------------------------------------------------
