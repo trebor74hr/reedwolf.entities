@@ -1062,6 +1062,10 @@ class ApplyStackFrame:
     # component is found and its subtree is being processed
     in_component_only_tree: bool = field(repr=False, default=False)
 
+    # recursion depth - used for calling ._apply() in dependency tree branches 
+    # e.g. DotExpression -> .get_current_value() -> ._apply()
+    depth: Optional[int] = field(repr=False, default = None)
+
     # TODO: this is ugly 
     # set only in single case: partial mode, in_component_only_tree, component=component_only, instance_new
     on_component_only: Optional[ComponentBase] = field(repr=False, default=None)

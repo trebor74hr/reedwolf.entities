@@ -86,6 +86,8 @@ class UseApplyStackFrame(AbstractContextManager):
 
         self._copy_attr_from_previous_frame(previous_frame, "in_component_only_tree", 
                                             if_set_must_be_same=False)
+        self._copy_attr_from_previous_frame(previous_frame, "depth", 
+                                            if_set_must_be_same=False)
 
         # do not use ==, compare by instance (ALT: use id(instance) ) 
         if self.frame.instance is previous_frame.instance:
@@ -384,14 +386,19 @@ class ApplyResult(IApplySession):
                component: ComponentBase, 
 
                # -- RECURSION -- internal props
-               # partial apply - passed through recursion further
-               # in_component_only_tree: bool = False,
                # caller is extension_list processing - NOT passed through recursion further
                extension_list_mode:bool = False, 
-               # recursion depth
-               depth:int=0, 
+
+               # Moved to stack
+               #    # partial apply - passed through recursion further
+               #    in_component_only_tree: bool = False,
+               #    # recursion depth
+               #    depth:int=0, 
                ):
         assert not self.finished
+
+        depth = self.current_frame.depth \
+                if self.frames_stack else 0
 
         in_component_only_tree = \
                 self.current_frame.in_component_only_tree \
@@ -513,18 +520,24 @@ class ApplyResult(IApplySession):
 
         process_further = True
 
+        # one level deeper
+        new_frame.depth = depth + 1
+
         with self.use_stack_frame(new_frame):
-            # key_string = self.is_component_processed(component)
-            # if key_string:
-            #     raise RuleInternalError(owner=self, msg=f"Component '{component.name}' already processed: {key_string}") 
 
             # only when full apply or partial apply
             if not (self.component_only and not in_component_only_tree):
-                # ============================================================
-                # Update, validate, evaluate
-                # ============================================================
-                process_further = self._update_and_clean(component=component)
-                # also if validation fails ...
+
+                # TODO: maybe a bit too late to check this but this works
+                key_str = self.is_component_instance_processed(component)
+                if key_str:
+                    process_further = False
+                else:
+                    # ============================================================
+                    # Update, validate, evaluate
+                    # ============================================================
+                    process_further = self._update_and_clean(component=component)
+                    # also if validation fails ...
 
                 if process_further and getattr(component, "enables", None):
                     assert not getattr(component, "contains", None), component
@@ -553,7 +566,8 @@ class ApplyResult(IApplySession):
                                 # parent=component, 
                                 # in_component_only_tree=in_component_only_tree,
                                 component=child, 
-                                depth=depth+1)
+                                # depth=depth+1,
+                                )
 
 
         if depth==0:
@@ -699,6 +713,7 @@ class ApplyResult(IApplySession):
                         instance_new = item_instance_new, 
                         parent_instance_new=self.current_frame.instance_new,
                         in_component_only_tree=in_component_only_tree,
+                        depth=depth+1,
                         )):
                 # ------------------------------------------------
                 # Recursion with prevention to hit this code again
@@ -706,10 +721,11 @@ class ApplyResult(IApplySession):
                 self._apply(
                             # parent=parent, 
                             component=component, 
+                            extension_list_mode=True,
                             # in_component_only_tree=in_component_only_tree,
-                            depth=depth+1,
+                            # depth=depth+1,
                             # prevent is_extension_logic again -> infinitive recursion
-                            extension_list_mode=True)
+                            )
 
 
     # ------------------------------------------------------------
@@ -1095,13 +1111,18 @@ class ApplyResult(IApplySession):
 
     # ------------------------------------------------------------
 
-    def is_component_processed(self, component: ComponentBase) -> Optional[KeyString]:
+    def is_component_instance_processed(self, component: ComponentBase) -> Optional[KeyString]:
+        # instance is grabbed from current_frame
+        assert self.frames_stack
         key_str = self.get_key_string(component)
         return key_str if (key_str in self.current_values) else None
 
     # ------------------------------------------------------------
 
-    def get_current_value_instance(self, component: ComponentBase, init_when_missing:bool=False) -> InstanceAttrCurrentValue:
+    def get_current_value_instance(self, 
+                                   component: ComponentBase, 
+                                   init_when_missing:bool=False
+                                   ) -> InstanceAttrCurrentValue:
         """ if not found will return UNDEFINED
             Probaly a bit faster, only dict queries.
         """
@@ -1109,6 +1130,7 @@ class ApplyResult(IApplySession):
         if not key_str in self.current_values:
             if not init_when_missing:
                 return UNDEFINED
+            # self._apply(component=component)
             self._init_by_bind_dexp(component)
             
         instance_attr_current_value = self.current_values[key_str]
