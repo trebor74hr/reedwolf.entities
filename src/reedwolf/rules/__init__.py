@@ -1,3 +1,6 @@
+from .utils import (
+        UNDEFINED,
+        )
 from .namespaces import (  # noqa: F401
         FieldsNS,
         F,
@@ -88,6 +91,8 @@ from .apply import ApplyResult
 
 
 __all__ = [
+    # utils
+    UNDEFINED,
     # namespaces - no aliases
     "FunctionsNS",
     "ModelsNS",
