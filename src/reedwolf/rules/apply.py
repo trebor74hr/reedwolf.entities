@@ -367,7 +367,7 @@ class ApplyResult(IApplySession):
     # ------------------------------------------------------------
 
     def _apply(self, 
-               parent: Optional[ComponentBase], 
+               # parent: Optional[ComponentBase], 
                component: ComponentBase, 
                # -- recursion - internal props
                # partial apply
@@ -381,7 +381,8 @@ class ApplyResult(IApplySession):
             # partial apply - detected component
             if not extension_list_mode and in_component_only_tree:
                 raise RuleInternalError(owner=self, 
-                        msg=f"{parent} -> {component}: in_component_only_tree should be False, got {in_component_only_tree}")
+                        # {parent} -> 
+                        msg=f"{component}: in_component_only_tree should be False, got {in_component_only_tree}")
 
             if self.instance_new not in (None, UNDEFINED) and not self.instance_new_struct_type:
                 self._detect_instance_new_struct_type(component)
@@ -399,7 +400,7 @@ class ApplyResult(IApplySession):
         if depth==0:
             # ---- Rules case -----
 
-            assert parent is None
+            # assert parent is None
 
             # NOTE: frame not set so 'self.current_frame.instance' is not available
             #       thus sending 'instance' param
@@ -440,7 +441,7 @@ class ApplyResult(IApplySession):
                 # enters recursion -> _apply() -> ...
                 self._apply_extension_list(
                         component=component,
-                        parent=parent,
+                        # parent=parent,
                         in_component_only_tree=in_component_only_tree,
                         instance_list=instance,
                         current_instance_list_new=current_instance_new,
@@ -453,7 +454,9 @@ class ApplyResult(IApplySession):
                 # ========================================
 
 
+            # ========================================
             # == Extension with single item ==
+            # ========================================
 
             if instance is None:
                 # must be type_info.is_optional ...
@@ -512,13 +515,13 @@ class ApplyResult(IApplySession):
             # NOTE: used only for test if all Dexp values could evaluate ...
             #       self.__check_component_all_dexps(component)
 
-            # ------------------------------------------------------------
-            # --- Recursive walk down - for each child call _apply
-            # ------------------------------------------------------------
-
             if process_further:
+                # ------------------------------------------------------------
+                # --- Recursive walk down - for each child call _apply
+                # ------------------------------------------------------------
                 for child in component.get_children():
-                    self._apply(parent=component, 
+                    self._apply(
+                                # parent=component, 
                                 in_component_only_tree=in_component_only_tree,
                                 component=child, 
                                 depth=depth+1)
@@ -528,11 +531,12 @@ class ApplyResult(IApplySession):
             assert len(self.frames_stack)==0
 
             # ---------------------------------------------------------------------
-            # Check which attributes are changed and collect original + new value
+            # For changed attributes -> collect original + new value
             # ---------------------------------------------------------------------
             updated_values_dict: Dict[KeyString, Dict[AttrName, Tuple[AttrValue, AttrValue]]] = defaultdict(dict)
             for key_string, instance_attr_values in self.update_history.items():
                 if len(instance_attr_values)>1:
+                    # any change?
                     first_val = instance_attr_values[0]
                     last_val = instance_attr_values[-1]
                     if last_val.value != first_val.value:
@@ -562,7 +566,7 @@ class ApplyResult(IApplySession):
 
     def _apply_extension_list(self, 
             component: ComponentBase,
-            parent: Optional[ComponentBase], 
+            # parent: Optional[ComponentBase], 
             in_component_only_tree:bool,
             instance_list: List[ModelType],
             current_instance_list_new: Union[NoneType, UNDEFINED, ModelType],
@@ -570,7 +574,7 @@ class ApplyResult(IApplySession):
             ):
         """
         Extension with item List
-        Recursion -> _apply() -> ...
+        Recursion -> _apply(extension_list_mode=True) -> ...
         """
         if not isinstance(instance_list, (list, tuple)):
             raise RuleApplyValueError(owner=self, msg=f"{component}: Expected list/tuple in the new instance, got: {current_instance_list_new}")
@@ -665,8 +669,11 @@ class ApplyResult(IApplySession):
                         instance_new = item_instance_new, 
                         parent_instance_new=self.current_frame.instance_new,
                         )):
+                # ------------------------------------------------
                 # Recursion with prevention to hit this code again
-                self._apply(parent=parent, 
+                # ------------------------------------------------
+                self._apply(
+                            # parent=parent, 
                             component=component, 
                             in_component_only_tree=in_component_only_tree,
                             depth=depth+1,
@@ -694,7 +701,10 @@ class ApplyResult(IApplySession):
         if all ok - Result.instance contains a new instance (clone + update) of the bound model type 
         if not ok - errors contain all details.
         """
-        self._apply(parent=None, component=self.rules)
+        self._apply(
+                # parent=None, 
+                component=self.rules,
+                )
         self.finish()
 
         return self
@@ -804,13 +814,14 @@ class ApplyResult(IApplySession):
         """ returns if children should be processed 
                 False - when available yields False
                 False - when validation fails
-                True - everything is clean
+                True - everything is clean, update went well
+
+        it does following:
+            1. init change history by bind of self.instance
+            2. update value by bind of self.instance_new
+            3. call cleaners - validations and evaluations in given order
+            4. validate type is ok?
         """
-        # ----------------------------------------------------------------
-        # 1. init change history by bind of self.instance
-        # 2. update value by bind of self.instance_new
-        # 3. call cleaners - validations and evaluations in given order
-        # ----------------------------------------------------------------
 
         if getattr(component, "available", None):
             not_available_dexp_result = execute_available_dexp(
@@ -861,7 +872,7 @@ class ApplyResult(IApplySession):
                     if self.execute_validation(component=component, validation=cleaner):
                         all_ok = False
                 elif isinstance(cleaner, EvaluationBase):
-                    # 3.b. run validations
+                    # 3.b. run evaluation
                     if not bind_dexp_result:
                         # TODO: this belongs to Setup phase
                         raise RuleApplyError(owner=self, msg="Evaluator can be defined only for components with 'bind' defined. Remove 'Evaluation' or define 'bind'.")
@@ -873,7 +884,7 @@ class ApplyResult(IApplySession):
         #       intermediate and the last value
         # returns validation_failure
 
-        # 5. validate type is ok?
+        # 4. validate type is ok?
         if self.validate_type(component):
             all_ok = False
 
