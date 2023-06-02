@@ -1058,8 +1058,12 @@ class ApplyStackFrame:
     # required but is None when not update
     instance_new: Union[ModelType, NoneType, UndefinedType] = field(repr=False, default=UNDEFINED)
 
+    # partial mode - component subtree in processing
+    # component is found and its subtree is being processed
+    in_component_only_tree: bool = field(repr=False, default=False)
+
     # TODO: this is ugly 
-    # set only in single case: partial mode, in_component_only_tree, compoent=component_only, instance_new
+    # set only in single case: partial mode, in_component_only_tree, component=component_only, instance_new
     on_component_only: Optional[ComponentBase] = field(repr=False, default=None)
 
     # this is currently created on 1st level and then copied to each next level

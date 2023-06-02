@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from enum import Enum
 from dataclasses import dataclass
 from typing import (
         Dict,
@@ -83,12 +84,16 @@ class UseApplyStackFrame(AbstractContextManager):
 
         previous_frame = self.apply_session.frames_stack[0]
 
+        self._copy_attr_from_previous_frame(previous_frame, "in_component_only_tree", 
+                                            if_set_must_be_same=False)
+
         # do not use ==, compare by instance (ALT: use id(instance) ) 
         if self.frame.instance is previous_frame.instance:
             self._copy_attr_from_previous_frame(previous_frame, "container", may_be_copied=False)
             self._copy_attr_from_previous_frame(previous_frame, "bound_model_root", may_be_copied=False)
             self._copy_attr_from_previous_frame(previous_frame, "instance_new")
             self._copy_attr_from_previous_frame(previous_frame, "index0")
+
             # only these can be copied
             self._copy_attr_from_previous_frame(previous_frame, "parent_instance")
             self._copy_attr_from_previous_frame(previous_frame, "parent_instance_new")
@@ -105,7 +110,11 @@ class UseApplyStackFrame(AbstractContextManager):
             self.frame.clean()
 
 
-    def _copy_attr_from_previous_frame(self, previous_frame: ApplyStackFrame, attr_name: str, may_be_copied: bool = True):
+    def _copy_attr_from_previous_frame(self, 
+            previous_frame: ApplyStackFrame, 
+            attr_name: str, 
+            may_be_copied: bool = True,
+            if_set_must_be_same: bool = True):
 
         if not hasattr(self.frame, attr_name):
             raise RuleInternalError(owner=self, msg=f"This frame {self.frame}.{attr_name} not found") 
@@ -125,7 +134,7 @@ class UseApplyStackFrame(AbstractContextManager):
                 setattr(self.frame, attr_name, prev_frame_attr_value)
         else:
             # in some cases id() / is should be used?
-            if prev_frame_attr_value != this_frame_attr_value:
+            if if_set_must_be_same and prev_frame_attr_value != this_frame_attr_value:
                 raise RuleInternalError(owner=self, 
                     msg=f"Attribute '{attr_name}' value in previous frame is different from current:\n  {previous_frame}\n    = {prev_frame_attr_value}\n<>\n  {self.frame}\n    = {this_frame_attr_value} ") 
 
@@ -141,6 +150,8 @@ class UseApplyStackFrame(AbstractContextManager):
         if not exc_type and frame_popped != self.frame:
             raise RuleInternalError(owner=self, msg=f"Something wrong with frame stack, got {frame_popped}, expected {self.frame}")
 
+
+# ============================================================
 
 
 @dataclass
@@ -365,17 +376,26 @@ class ApplyResult(IApplySession):
 
 
     # ------------------------------------------------------------
+    # _apply() -> main apply function
+    # ------------------------------------------------------------
 
     def _apply(self, 
                # parent: Optional[ComponentBase], 
                component: ComponentBase, 
-               # -- recursion - internal props
-               # partial apply
-               in_component_only_tree: bool = False,
-               depth:int=0, 
+
+               # -- RECURSION -- internal props
+               # partial apply - passed through recursion further
+               # in_component_only_tree: bool = False,
+               # caller is extension_list processing - NOT passed through recursion further
                extension_list_mode:bool = False, 
+               # recursion depth
+               depth:int=0, 
                ):
         assert not self.finished
+
+        in_component_only_tree = \
+                self.current_frame.in_component_only_tree \
+                if self.frames_stack else False
 
         if self.component_only and component == self.component_only:
             # partial apply - detected component
@@ -396,7 +416,6 @@ class ApplyResult(IApplySession):
 
         new_frame = None
 
-
         if depth==0:
             # ---- Rules case -----
 
@@ -414,6 +433,7 @@ class ApplyResult(IApplySession):
                             component = component, 
                             instance = self.instance,
                             instance_new = self.instance_new,
+                            in_component_only_tree=in_component_only_tree,
                             )
 
 
@@ -433,7 +453,8 @@ class ApplyResult(IApplySession):
             instance = dexp_result.value
 
             # new instance if any
-            current_instance_new = self._get_current_instance_new(component=component,
+            current_instance_new = self._get_current_instance_new(
+                                            component=component,
                                             in_component_only_tree=in_component_only_tree)
 
 
@@ -456,35 +477,39 @@ class ApplyResult(IApplySession):
 
             # ========================================
             # == Extension with single item ==
+            #    will be processed as any other fields
             # ========================================
-
             if instance is None:
-                # must be type_info.is_optional ...
-                pass
+                # TODO: check that type_info.is_optional ...
+                ...
             elif not is_model_instance(instance):
                 raise RuleApplyValueError(owner=self, msg=f"Expected list/tuple or model instance, got: {instance} : {type(instance)}")
-
 
             new_frame = ApplyStackFrame(
                             container = component, 
                             component = component, 
                             instance = instance,
                             instance_new = current_instance_new,
+                            in_component_only_tree=in_component_only_tree,
                             )
 
         # ------------------------------------------------------------
 
         if not new_frame:
+            # -- Fallback case --
             # register non-container frame - only component is new. take instance from previous frame
             new_frame = ApplyStackFrame(
                             component = component, 
                             # copy
                             instance = self.current_frame.instance,
                             container = self.current_frame.container, 
+                            in_component_only_tree=in_component_only_tree,
                             # automatically copied
                             #   instance_new = self.current_frame.instance_new,
                             #   index0 = self.current_frame.index0,
                             )
+
+
 
         process_further = True
 
@@ -522,7 +547,7 @@ class ApplyResult(IApplySession):
                 for child in component.get_children():
                     self._apply(
                                 # parent=component, 
-                                in_component_only_tree=in_component_only_tree,
+                                # in_component_only_tree=in_component_only_tree,
                                 component=child, 
                                 depth=depth+1)
 
@@ -576,6 +601,7 @@ class ApplyResult(IApplySession):
         Extension with item List
         Recursion -> _apply(extension_list_mode=True) -> ...
         """
+
         if not isinstance(instance_list, (list, tuple)):
             raise RuleApplyValueError(owner=self, msg=f"{component}: Expected list/tuple in the new instance, got: {current_instance_list_new}")
 
@@ -668,6 +694,7 @@ class ApplyResult(IApplySession):
                         # new instance - new values (when update mode)
                         instance_new = item_instance_new, 
                         parent_instance_new=self.current_frame.instance_new,
+                        in_component_only_tree=in_component_only_tree,
                         )):
                 # ------------------------------------------------
                 # Recursion with prevention to hit this code again
@@ -675,7 +702,7 @@ class ApplyResult(IApplySession):
                 self._apply(
                             # parent=parent, 
                             component=component, 
-                            in_component_only_tree=in_component_only_tree,
+                            # in_component_only_tree=in_component_only_tree,
                             depth=depth+1,
                             # prevent is_extension_logic again -> infinitive recursion
                             extension_list_mode=True)
@@ -834,7 +861,7 @@ class ApplyResult(IApplySession):
             # 1. Fill initial value from instance 
             key_str = self.get_key_string(component)
             if key_str in self.current_values:
-                # Call to "self._init_by_bind_dexp()" can be done 
+                # Call to "self._init_by_bind_dexp()" is already done 
                 # in building tree values in some validations. In this case
                 # fetch that value.
                 assert len(self.update_history[key_str]) == 1, "expected only initial value, got updated value too"
