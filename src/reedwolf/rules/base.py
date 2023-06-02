@@ -1064,6 +1064,9 @@ class ApplyStackFrame:
 
     # recursion depth - used for calling ._apply() in dependency tree branches 
     # e.g. DotExpression -> .get_current_value() -> ._apply()
+    #
+    # See doc for _apply() / mode_dexp_dependency -> recursion depth 
+    # does not correspond with component's tree depth.
     depth: Optional[int] = field(repr=False, default = None)
 
     # TODO: this is ugly 

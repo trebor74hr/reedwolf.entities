@@ -22,8 +22,11 @@ from .expressions import (
         DotExpression,
         execute_available_dexp,
         )
-from .meta import (
+from .utils import (
         UNDEFINED,
+        UNAVAILABLE,
+        )
+from .meta import (
         NoneType,
         ModelType,
         is_model_class,
@@ -386,8 +389,12 @@ class ApplyResult(IApplySession):
                component: ComponentBase, 
 
                # -- RECURSION -- internal props
-               # caller is extension_list processing - NOT passed through recursion further
-               extension_list_mode:bool = False, 
+
+               # see dox below
+               mode_extension_list:bool = False, 
+
+               # see dox below
+               mode_dexp_dependency: bool = False,
 
                # Moved to stack
                #    # partial apply - passed through recursion further
@@ -395,18 +402,54 @@ class ApplyResult(IApplySession):
                #    # recursion depth
                #    depth:int=0, 
                ):
-        assert not self.finished
+        """
+        Main entry function 'apply' logic.
+        Recursion in 3 main modes:
 
-        depth = self.current_frame.depth \
-                if self.frames_stack else 0
+            normal_mode 
+               for each child in children -> ._apply()
 
-        in_component_only_tree = \
-                self.current_frame.in_component_only_tree \
-                if self.frames_stack else False
+            mode_extension_list
+               if extension and list - for each item in items -> ._apply()
+               caller is extension_list processing - NOT passed through recursion further
+
+            mode_dexp_dependency 
+               if cleaner.DotExpression references component which is not yet
+               processed - it skip normal order. 
+
+               Example:
+                ._apply() 
+                -> DotExpression 
+                -> get_current_value_instance() 
+                -> ._apply()
+
+              this component and its subtreee will be skipped later when it
+              comes again in normal order (cases A / B).
+              In this case frame . depth does not correspond with component's
+              tree depth.
+
+        """
+        if mode_dexp_dependency:
+            ...
+            # TODO: instance must match
+            # TODO: detect circular dependency
+
+        assert not (mode_extension_list and mode_dexp_dependency)
+
+        if self.finished:
+            raise RuleInternalError(owner=self, msg=f"Already finished") 
+
+        if self.frames_stack:
+            depth = self.current_frame.depth
+            in_component_only_tree = self.current_frame.in_component_only_tree 
+        else:
+            depth = 0
+            in_component_only_tree = False
+
 
         if self.component_only and component == self.component_only:
             # partial apply - detected component
-            if not extension_list_mode and in_component_only_tree:
+            if not mode_extension_list and in_component_only_tree:
                 raise RuleInternalError(owner=self, 
                         # {parent} -> 
                         msg=f"{component}: in_component_only_tree should be False, got {in_component_only_tree}")
@@ -444,7 +487,7 @@ class ApplyResult(IApplySession):
                             )
 
 
-        elif not extension_list_mode and component.is_extension():
+        elif not mode_extension_list and component.is_extension():
             # ---- Extension case -----
 
             component : Extension = component
@@ -476,7 +519,7 @@ class ApplyResult(IApplySession):
                         depth=depth,
                         )
                 # ========================================
-                # Finished, processed all children
+                # Finished, processed all children items
                 # ========================================
                 return
                 # ========================================
@@ -617,7 +660,7 @@ class ApplyResult(IApplySession):
             ):
         """
         Extension with item List
-        Recursion -> _apply(extension_list_mode=True) -> ...
+        Recursion -> _apply(mode_extension_list=True) -> ...
         """
 
         if not isinstance(instance_list, (list, tuple)):
@@ -721,7 +764,7 @@ class ApplyResult(IApplySession):
                 self._apply(
                             # parent=parent, 
                             component=component, 
-                            extension_list_mode=True,
+                            mode_extension_list=True,
                             # in_component_only_tree=in_component_only_tree,
                             # depth=depth+1,
                             # prevent is_extension_logic again -> infinitive recursion
@@ -1129,9 +1172,23 @@ class ApplyResult(IApplySession):
         key_str = self.get_key_string(component)
         if not key_str in self.current_values:
             if not init_when_missing:
-                return UNDEFINED
-            # self._apply(component=component)
-            self._init_by_bind_dexp(component)
+                # return UNAVAILABLE
+                raise RuleInternalError(owner=component, msg=f"Value fetch too early") 
+
+            # ------------------------------------------------------------
+            # NOTE: apply() / mode_dexp_dependency 
+            #       complex case - value is required from node that was not yet
+            #       processed. So process it now and later will be skipped when
+            #       it comes in normal order.
+            #       Example:
+            #       apply() -> ._apply() -> DotExpression 
+            #               -> get_current_value_instance() 
+            #               -> ._apply()
+            # 
+            # This yields RECURSION! See doc for _apply() - mode_dexp_dependency
+            # ------------------------------------------------------------
+            self._apply(component=component, mode_dexp_dependency=True)
+            # self._init_by_bind_dexp(component)
             
         instance_attr_current_value = self.current_values[key_str]
         return instance_attr_current_value
