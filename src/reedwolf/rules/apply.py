@@ -301,7 +301,7 @@ class ApplyResult(IApplySession):
         # key_str = component.get_key_string(apply_session=self)
         key_str = self.get_key_string(component)
 
-        if key_str not in self.update_history:
+        if self.update_history.get(key_str, UNDEFINED) == UNDEFINED:
             if not is_from_init_bind:
                 raise RuleInternalError(owner=component, msg=f"key_str '{key_str}' not found in update_history and this is not initialization")
 
@@ -430,6 +430,7 @@ class ApplyResult(IApplySession):
 
         """
         comp_container = component.get_container_owner(consider_self=True)
+        comp_container_model = comp_container.bound_model.get_type_info().type_
 
         if mode_dexp_dependency:
             # TODO: self.config.logger.info(f"apply - mode_dexp_dependency - {self.current_frame.component.name} depends on {component.name} - calling apply() ...")
@@ -450,10 +451,19 @@ class ApplyResult(IApplySession):
         if self.frames_stack:
             depth = self.current_frame.depth
             in_component_only_tree = self.current_frame.in_component_only_tree 
+
+            # check if instance model is ok
+            if not component.is_extension():
+                if not isinstance(self.current_frame.instance, comp_container_model):
+                    raise RuleInternalError(owner=self, msg=f"Current frame's instance's model does not corresponds to component's container's model. Expected: {comp_container_model}, got: {type(self.instance)}") 
+            # TODO: for extension() any need to check this at all in this
+            #       phase?
         else:
             depth = 0
             in_component_only_tree = False
 
+            if not isinstance(self.instance, comp_container_model):
+                raise RuleInternalError(owner=self, msg=f"Rules instance's model does not corresponds to component's container's model. Expected: {comp_container_model}, got: {type(self.instance)}") 
 
         if self.component_only and component == self.component_only:
             # partial apply - detected component
@@ -1166,7 +1176,7 @@ class ApplyResult(IApplySession):
         # instance is grabbed from current_frame
         assert self.frames_stack
         key_str = self.get_key_string(component)
-        return key_str if (key_str in self.current_values) else None
+        return key_str if self.current_values.get(key_str, None) else None
 
     # ------------------------------------------------------------
 
