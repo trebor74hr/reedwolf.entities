@@ -643,6 +643,10 @@ class ApplyResult(IApplySession):
                                 # depth=depth+1,
                                 )
 
+            if self.current_frame.component.is_container():
+                # Fill internal cache for possible later use by some `dump_` functions
+                self.current_frame.component.get_children_tree_w_values(apply_session=self)
+
 
         if depth==0:
             assert len(self.frames_stack)==0
@@ -1109,13 +1113,12 @@ class ApplyResult(IApplySession):
         Container - when not found then gets intances and index0 
         from current frame
         """
-        # NOTE: this could be different 
-        #       component == self.current_frame.component
-        instance = self.current_frame.instance
-        index0 = self.current_frame.index0
-
         if component.is_container():
             # raise RuleInternalError(owner=component, msg=f"Expecting non-container, got: {component}") 
+            instance = self.current_frame.instance
+            index0 = self.current_frame.index0
+            # NOTE: this could be different 
+            #       component == self.current_frame.component
             key_string = self.get_key_string_by_instance(
                             component = component,
                             instance = instance, 
@@ -1294,7 +1297,7 @@ class ApplyResult(IApplySession):
         assert depth <= MAX_RECURSIONS
         output = {}
         output["name"] = tree["name"]
-        # if depth==0: import pdb;pdb.set_trace() 
+
         if "instance_attr_current_value" in tree:
             value = tree["instance_attr_current_value"].value
             output["value"] = value
@@ -1305,11 +1308,11 @@ class ApplyResult(IApplySession):
             # exposed struct
             output["contains"] = []
             for child in children:
-                child_out = self._dump_values(child)
+                # recursion
+                child_out = self._dump_values(child, depth+1)
                 output["contains"].append(child_out)
 
         return output
-
 
 
 # ------------------------------------------------------------

@@ -565,10 +565,10 @@ class Rules(ContainerBase):
 
     # --- optional - following can be bound later with .bind_to()
     label           : Optional[TransMessageType] = field(repr=False, default=None)
-    bound_model     : Optional[BoundModel] = field(repr=False, default=None)
+    bound_model     : Optional[BoundModel] = field(repr=False, default=None, metadata={"skip_dump": True})
     # will be filled automatically with Config() if not supplied
-    config          : Optional[Type[Config]] = field(repr=False, default=None)
-    context_class   : Optional[Type[IContext]] = field(repr=False, default=None)
+    config          : Optional[Type[Config]] = field(repr=False, default=None, metadata={"skip_dump": True})
+    context_class   : Optional[Type[IContext]] = field(repr=False, default=None, metadata={"skip_dump": True})
     functions       : Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list)
     # --- only list of model names allowed
     keys            : Optional[KeysBase] = field(repr=False, default=None)
@@ -577,7 +577,7 @@ class Rules(ContainerBase):
 
     # --- Evaluated later
     setup_session      : Optional[SetupSession]    = field(init=False, repr=False, default=None)
-    components      : Optional[Dict[str, Component]]  = field(repr=False, default=None)
+    components      : Optional[Dict[str, Component]]  = field(init=False, repr=False, default=None)
     models          : Dict[str, Union[type, DotExpression]] = field(repr=False, init=False, default_factory=dict)
     # in Rules (top object) this case allway None - since it is top object
     owner           : Union[None, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)

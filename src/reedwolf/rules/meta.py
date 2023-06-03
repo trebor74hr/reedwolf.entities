@@ -30,7 +30,8 @@ from dataclasses import (
         is_dataclass,
         dataclass,
         Field as DcField,
-        field
+        field,
+        fields as dc_fields,
         )
 
 from .utils import (
@@ -157,9 +158,14 @@ ComponentTreeWValuesType = Dict[ComponentNameType, TreeNode]
 
 # TreeNode :: 
 #   name: str self.name
-#   value: LiteralValue
-#   Optional[items: List[TreeNode]]
+#   Optional[value: LiteralValue]
+#   Optional[contains: List[TreeNode]]
 ValuesTree = Dict[ComponentNameType, TreeNode]
+
+# TreeNode :: 
+#   name: str self.name
+#   Optional[contains: List[TreeNode]]
+MetaTree = Dict[ComponentNameType, TreeNode]
 
 
 # ------------------------------------------------------------
@@ -332,6 +338,13 @@ def get_methods(owner: Any) -> Dict[str, Callable[..., Any]]:
     # inspect.getmembers(DemoClass(), predicate=inspect.ismethod)
     methods = inspect.getmembers(owner, predicate=is_function)
     return {mname: method for (mname, method) in methods if not mname.startswith("_")}
+
+# ------------------------------------------------------------
+
+def get_dataclass_fields(inspect_object: Any) -> Tuple[DcField]:
+    if not is_dataclass(inspect_object):
+        raise ValueError(f"Expecting dataclass object, got: {inspect_object}")
+    return dc_fields(inspect_object)
 
 # ------------------------------------------------------------
 

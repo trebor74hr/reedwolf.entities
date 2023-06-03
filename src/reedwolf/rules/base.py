@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 import inspect
 from enum import Enum
+from collections import OrderedDict
 from typing import (
         List, 
         Any, 
@@ -17,6 +18,8 @@ from typing import (
 from dataclasses import (
         dataclass,
         field,
+        field as DcField,
+        MISSING as DC_MISSING,
         )
 
 from .utils import (
@@ -56,6 +59,7 @@ from .meta import (
         extract_py_type_hints,
         STANDARD_TYPE_LIST,
         TransMessageType,
+        get_dataclass_fields,
         )
 from .expressions import (
         DotExpression,
@@ -84,7 +88,7 @@ from .contexts import (
 YAML_INDENT :str = "  "
 PY_INDENT : str  = "    "
 MAX_RECURSIONS: int = 30
-
+DEXP_PREFIX = "DEXP::"
 
 def warn(msg):
     print(f"WARNING: {msg}")  # noqa: T001
@@ -381,6 +385,7 @@ class ComponentBase(SetOwnerMixin, ABC):
                     instance_attr_current_value = \
                             apply_session.get_current_value_instance(
                                 component=self, init_when_missing=True)
+
                     assert instance_attr_current_value is not UNDEFINED
                     children_dict_traversed["instance_attr_current_value"] = instance_attr_current_value
 
@@ -393,6 +398,103 @@ class ComponentBase(SetOwnerMixin, ABC):
 
         return getattr(self, key)
 
+    # ------------------------------------------------------------
+
+    def dump_meta(self) -> MetaTree:
+        """
+        Recursively traverse children's tree and and collect current values to
+        recursive output dict structure.
+        """
+        # tree: ComponentTreeType = self.get_children_tree()
+        return self._dump_meta()
+
+    # ------------------------------------------------------------
+
+    def _dump_meta(self, depth: int=0) -> MetaTree:
+        # tree: ComponentTreeType
+        assert depth <= MAX_RECURSIONS
+
+        output = {} # OrderedDict()
+        component = self
+        # output["name"] = component.name
+        output["type"] = component.__class__.__name__
+
+        attr_dc_fields: Tuple[DcField] = get_dataclass_fields(component)
+
+
+        attr_dict = {}
+
+        for nr, attr_field in enumerate(attr_dc_fields, 1):
+
+            if not attr_field.init:
+                continue
+
+            if    attr_field.metadata \
+              and isinstance(attr_field.metadata, dict) \
+              and attr_field.metadata("skip_dump", None):
+                continue
+
+            attr_name = attr_field.name
+
+            if attr_name in ("config", "bound_model"):
+                continue
+
+            if not hasattr(component, attr_name):
+                continue 
+
+            # -- fetch value
+            attr_value = getattr(component, attr_name, UNDEFINED)
+
+            # -- fetch default value
+            attr_default = attr_field.default
+
+            if attr_default is DC_MISSING \
+              and attr_field.default_factory is not DC_MISSING \
+              and callable(attr_field.default_factory):
+                # e.g. dict, list => initiate and compare later
+                attr_default = attr_field.default_factory()
+
+
+            # -- is value supplied i.e. is it different from default
+            if isinstance(attr_value, (ComponentBase, DotExpression)) \
+              or (    attr_value is not UNDEFINED 
+                  and attr_value is not DC_MISSING 
+                  and (attr_default is DC_MISSING or attr_value!=attr_default)
+                  ):
+                assert attr_name not in attr_dict
+
+                if isinstance(attr_value, (list, tuple)):
+                    new_attr_value = []
+                    for attr_value_item in attr_value:
+                        # can call recursion
+                        attr_value_item = self._dump_meta_process_node(attr_value_item, depth=depth)
+                        new_attr_value.append(attr_value_item)
+                    attr_value = new_attr_value
+                else:
+                    # can call recursion
+                    attr_value = self._dump_meta_process_node(attr_value, depth=depth)
+
+                assert attr_value is not self
+
+                attr_dict[attr_name] = attr_value
+
+        if attr_dict:
+            output["attrs"] = attr_dict
+
+        return output
+
+    # ------------------------------------------------------------
+
+    @staticmethod
+    def _dump_meta_process_node(node: Any, depth: int) -> Any:
+        if isinstance(node, DotExpression):
+            # string representation contains all data 
+            node = f"{DEXP_PREFIX}{str(node)}"
+        else:
+            if hasattr(node, "_dump_meta"):
+                # recursion
+                node = node._dump_meta(depth=depth+1)
+        return node
 
     # ------------------------------------------------------------
 
