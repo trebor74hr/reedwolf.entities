@@ -35,7 +35,7 @@ from .utils import (
         UNDEFINED,
         )
 from .base import (
-        ComponentTreeWValuesDictType,
+        ComponentTreeWValuesType,
         )
 
 def get_builtin_function_factories_dict() -> Dict[str, BuiltinFunctionFactory]:
@@ -84,7 +84,7 @@ def EnumMembers(
 
 T = TypeVar("T", bound=Any)
 
-def children(value: Any, inject_component_tree: ComponentTreeWValuesDictType) -> List[ItemType]:
+def children(value: Any, inject_component_tree: ComponentTreeWValuesType) -> List[ItemType]:
     """ Component's list of children """
     return inject_component_tree["children"]
 
@@ -96,7 +96,7 @@ Children = create_builtin_function_factory( # noqa: E305
 
 def single_bool_selected(children_list: List[ItemType]) -> int:
     """ for objects from datastores - e.g. rows, iterables """
-    return len([child for child in children_list if child["value"]==True])==1
+    return len([child for child in children_list if child["instance_attr_current_value"].value==True])==1
 
 SingleBoolSelected = create_builtin_function_factory( # noqa: E305
             single_bool_selected, name="SingleBoolSelected", 

@@ -148,7 +148,8 @@ class NotAvailableExecResult(ExecResult):
                 assert not isinstance(ExecResult, NotAvailableExecResult)
                 reason=f"Not available since expression yields: {available_dexp_result.value}", 
             else:
-                assert available_dexp_result is UNDEFINED
+                if available_dexp_result not in (None, UNDEFINED):
+                    raise RuleInternalError(owner=self, msg=f"Expected None/Undefined, got: {available_dexp_result}") 
                 reason="Value not available"
         instance = cls(reason=reason)
         instance.value = available_dexp_result

@@ -49,7 +49,7 @@ from .attr_nodes import (
 from .base import (
         SetupStackFrame,
         ReservedArgumentNames,
-        ComponentTreeWValuesDictType,
+        ComponentTreeWValuesType,
         )
 
 TypeInfoCallable = Callable[[], TypeInfo]
@@ -389,7 +389,7 @@ class FunctionArguments:
                 if not (isinstance(caller, AttrDexpNode)
                         and caller.namespace == FieldsNS):
                     raise RuleInternalError(owner=self, msg=f"Expected F.<fieldname>, got: {caller}") 
-                component_tree_type_info = TypeInfo.get_or_create_by_type(py_type_hint=ComponentTreeWValuesDictType, caller=caller)
+                component_tree_type_info = TypeInfo.get_or_create_by_type(py_type_hint=ComponentTreeWValuesType, caller=caller)
                 # NOTE: caller is here lost, hopefully won't be needed
                 value_kwargs[ReservedArgumentNames.INJECT_COMPONENT_TREE] = component_tree_type_info
 

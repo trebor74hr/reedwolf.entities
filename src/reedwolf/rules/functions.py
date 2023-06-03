@@ -386,7 +386,7 @@ class IFunction(IFunctionDexpNode):
 
         component: ComponentBase = dexp_node.data
 
-        output = component.get_components_tree_w_values_dict(apply_session=apply_session)
+        output = component.get_children_tree_w_values(apply_session=apply_session)
         # from pprint import pprint; print("----here:"); pprint(output)
 
         assert ReservedArgumentNames.INJECT_COMPONENT_TREE not in kwargs

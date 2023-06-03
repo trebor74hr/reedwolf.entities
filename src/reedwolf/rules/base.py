@@ -77,8 +77,8 @@ from .contexts import (
 #   value:      LiteralType
 #   children:   List[Self]
 #   
-ComponentTreeDictType = Dict[str, Any]
-ComponentTreeWValuesDictType = Dict[str, Any]
+ComponentTreeType = Dict[str, Union["ComponentTreeType", Any]]
+ComponentTreeWValuesType = Dict[str, Union["ComponentTreeWValuesType", Any]]
 
 
 YAML_INDENT = "  "
@@ -306,7 +306,7 @@ class ComponentBase(SetOwnerMixin, ABC):
 
     # ------------------------------------------------------------
 
-    def get_children_dict(self, ) -> Dict[ComponentNameType, ComponentBase]:
+    def get_children_dict(self) -> Dict[ComponentNameType, ComponentBase]:
         """
         only direct children in flat dict
         """
@@ -344,28 +344,28 @@ class ComponentBase(SetOwnerMixin, ABC):
 
     # ------------------------------------------------------------
 
-    def get_components_tree_dict(self) -> ComponentTreeDictType:
+    def get_children_tree(self) -> ComponentTreeType:
         """
         will go recursively through every children and
         fetch their "children" and collect to output structure.
         selects all nodes, put in tree, includes self
         """
-        return self._get_components_tree_dict_impl(key="_children_tree_dict", apply_session=None)
+        return self._get_children_tree_impl(key="_children_tree", apply_session=None)
 
     # ------------------------------------------------------------
 
-    def get_components_tree_w_values_dict(self, apply_session: IApplySession) -> ComponentTreeWValuesDictType:
+    def get_children_tree_w_values(self, apply_session: IApplySession) -> ComponentTreeWValuesType:
         """
         will go recursively through every children and
         fetch their "children" and collect to output structure.
         selects all nodes, put in tree, includes self
         for every node bind (M.<field>) is evaluated
         """
-        return self._get_components_tree_dict_impl(key="_children_tree_w_values_dict", apply_session=apply_session)
+        return self._get_children_tree_impl(key="_children_tree_w_values", apply_session=apply_session)
 
     # ------------------------------------------------------------
 
-    def _get_components_tree_dict_impl(self, key: str, apply_session: Optional[IApplySession], _depth:int=0) -> Dict[ComponentNameType, ComponentBase]:
+    def _get_children_tree_impl(self, key: str, apply_session: Optional[IApplySession], _depth:int=0) -> Dict[ComponentNameType, ComponentBase]:
         if not hasattr(self, key):
             assert _depth<=30
             children_dict_traversed = {}
@@ -373,33 +373,17 @@ class ComponentBase(SetOwnerMixin, ABC):
             children_dict_traversed["component"] = self
             children_dict_traversed["children"] = []
             if apply_session:
-                # TODO: not good - 
                 if getattr(self, "bind", None):
-                    if True:
-                        instance_attr_current_value = \
-                                apply_session.get_current_value_instance(
-                                    component=self, init_when_missing=True)
-                        assert instance_attr_current_value is not UNDEFINED
-                        children_dict_traversed["value"] = instance_attr_current_value.value
-
-                    else:
-                        bind_dexp_result = self.get_dexp_result_from_instance(apply_session=apply_session)
-                        value = bind_dexp_result.value
-                        children_dict_traversed["value"] = value
-
-                        # dexp = self.bind
-                        # dexp_result = execute_dexp_or_node(
-                        #                 dexp_or_value=dexp,
-                        #                 dexp_node=dexp,
-                        #                 dexp_result = UNDEFINED,
-                        #                 prev_node_type_info=None, # prev_node_type_info,
-                        #                 apply_session=apply_session)
-                        # value = dexp_result.value
-                        # children_dict_traversed["value"] = value
+                    instance_attr_current_value = \
+                            apply_session.get_current_value_instance(
+                                component=self, init_when_missing=True)
+                    assert instance_attr_current_value is not UNDEFINED
+                    children_dict_traversed["instance_attr_current_value"] = instance_attr_current_value
+                    # .value
 
             for comp in self.get_children():
                 # recursion
-                comp_chidren_dict = comp._get_components_tree_dict_impl(key=key, apply_session=apply_session, _depth=_depth+1)
+                comp_chidren_dict = comp._get_children_tree_impl(key=key, apply_session=apply_session, _depth=_depth+1)
                 children_dict_traversed["children"].append(comp_chidren_dict)
 
             setattr(self, key, children_dict_traversed)
@@ -1029,8 +1013,9 @@ class InstanceAttrCurrentValue:
     component: ComponentBase = field(repr=False)
     value: Union[LiteralType, UndefinedType] = field(init=False, default=UNDEFINED)
 
-    def set_value(self, value: LiteralType):
+    def set_value(self, value: LiteralType) -> "InstanceAttrCurrentValue":
         self.value = value
+        return self
 
 # ------------------------------------------------------------
 
@@ -1445,3 +1430,18 @@ def extract_type_info(
 #     assert key_str in apply_session.update_history
 #     instance_attr_value = apply_session.update_history[key_str][-1]
 #     return instance_attr_value.dexp_result
+
+# def _get_children_tree_impl(self, key: str, apply_session: Optional[IApplySession], _depth:int=0) -> Dict[ComponentNameType, ComponentBase]:
+#     bind_dexp_result = self.get_dexp_result_from_instance(apply_session=apply_session)
+#     value = bind_dexp_result.value
+#     children_dict_traversed["value"] = value
+#
+#     # dexp = self.bind
+#     # dexp_result = execute_dexp_or_node(
+#     #                 dexp_or_value=dexp,
+#     #                 dexp_node=dexp,
+#     #                 dexp_result = UNDEFINED,
+#     #                 prev_node_type_info=None, # prev_node_type_info,
+#     #                 apply_session=apply_session)
+#     # value = dexp_result.value
+#     # children_dict_traversed["value"] = value
