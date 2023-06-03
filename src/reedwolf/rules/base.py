@@ -40,6 +40,8 @@ from .namespaces import (
         )
 from .meta import (
         ComponentNameType,
+        ComponentTreeType,
+        ComponentTreeWValuesType,
         NoneType,
         ModelField,
         TypeInfo,
@@ -77,12 +79,11 @@ from .contexts import (
 #   value:      LiteralType
 #   children:   List[Self]
 #   
-ComponentTreeType = Dict[str, Union["ComponentTreeType", Any]]
-ComponentTreeWValuesType = Dict[str, Union["ComponentTreeWValuesType", Any]]
 
 
-YAML_INDENT = "  "
-PY_INDENT = "    "
+YAML_INDENT :str = "  "
+PY_INDENT : str  = "    "
+MAX_RECURSIONS: int = 30
 
 
 def warn(msg):
@@ -252,8 +253,8 @@ class ComponentBase(SetOwnerMixin, ABC):
         out = []
         out.append(f"{self.__class__.__name__}(")
         # vars(self.kwargs).items():
-        if len(path) > 15:
-            raise RuleSetupError("Maximum object tree depth reached, not allowed depth more than 15.")
+        if len(path) > MAX_RECURSIONS:
+            raise RuleSetupError(f"Maximum object tree depth reached, not allowed depth more than {MAX_RECURSIONS}.")
         for name, field in self.__dataclass_fields__.items():  # noqa: F402
             # if name.startswith("_") or callable(k):
             #     continue
@@ -325,7 +326,7 @@ class ComponentBase(SetOwnerMixin, ABC):
         """
         key = "_children_tree_flatten_dict"
         if not hasattr(self, key):
-            assert _depth<=30
+            assert _depth <= MAX_RECURSIONS
             children_dict_traversed = {}
 
             for comp in self.get_children():
@@ -363,15 +364,18 @@ class ComponentBase(SetOwnerMixin, ABC):
         """
         return self._get_children_tree_impl(key="_children_tree_w_values", apply_session=apply_session)
 
+
     # ------------------------------------------------------------
 
     def _get_children_tree_impl(self, key: str, apply_session: Optional[IApplySession], _depth:int=0) -> Dict[ComponentNameType, ComponentBase]:
         if not hasattr(self, key):
-            assert _depth<=30
+            assert _depth <= MAX_RECURSIONS
+
             children_dict_traversed = {}
             children_dict_traversed["name"] = self.name
             children_dict_traversed["component"] = self
             children_dict_traversed["children"] = []
+
             if apply_session:
                 if getattr(self, "bind", None):
                     instance_attr_current_value = \
@@ -379,7 +383,6 @@ class ComponentBase(SetOwnerMixin, ABC):
                                 component=self, init_when_missing=True)
                     assert instance_attr_current_value is not UNDEFINED
                     children_dict_traversed["instance_attr_current_value"] = instance_attr_current_value
-                    # .value
 
             for comp in self.get_children():
                 # recursion
@@ -865,7 +868,7 @@ class BoundModelBase(ComponentBase, ABC):
     def get_full_name(self, owner: Optional[BoundModelBase] = None, depth: int = 0, init: bool = False):
         if not hasattr(self, "_name"):
             assert init
-            assert depth < 20
+            assert depth < MAX_RECURSIONS
             names = []
             if owner:
                 # recusion

@@ -116,7 +116,6 @@ RuleDatatype            = Union[StandardType, List[StandardType,], Dict[str, Sta
 
 FunctionArgumentsTupleType = Tuple[List[Any], Dict[str, Any]]
 
-
 HookOnFinishedAllCallable = Callable[[], None]
 
 # ------------------------------------------------------------
@@ -139,6 +138,28 @@ StringAttrNameType = TypeVar(f"String{TYPE_FIELDNAME_SUFFIX}", bound=str)
 # NumberAttrNameType = TypeVar("NumberAttrNameType") 
 # # NOTE: *NUMBER_TYPES # self.type_.__constraints__
 # #   (<class 'int'>, <class 'float'>, <class 'decimal.Decimal'>)
+
+# Currently find no way on describing Dict-s
+TreeNode = Any
+
+# TreeNode :: 
+#   name: str self.name
+#   component: ComponentBase
+#   children: List[Self]
+ComponentTreeType = Dict[ComponentNameType, TreeNode]
+
+# TreeNode :: 
+#   name: str self.name
+#   component: ComponentBase
+#   children: List[Self]
+#   instance_attr_current_value: InstanceAttrCurrentValue
+ComponentTreeWValuesType = Dict[ComponentNameType, TreeNode]
+
+# TreeNode :: 
+#   name: str self.name
+#   value: LiteralValue
+#   Optional[items: List[TreeNode]]
+ValuesTree = Dict[ComponentNameType, TreeNode]
 
 
 # ------------------------------------------------------------

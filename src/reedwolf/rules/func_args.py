@@ -37,6 +37,7 @@ from .meta import (
         is_model_class,
         STANDARD_TYPE_LIST,
         is_function,
+        ComponentTreeWValuesType,
         )
 from .expressions import (
         DotExpression,
@@ -49,7 +50,6 @@ from .attr_nodes import (
 from .base import (
         SetupStackFrame,
         ReservedArgumentNames,
-        ComponentTreeWValuesType,
         )
 
 TypeInfoCallable = Callable[[], TypeInfo]

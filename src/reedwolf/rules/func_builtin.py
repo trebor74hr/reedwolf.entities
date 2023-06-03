@@ -30,13 +30,12 @@ from .meta import (
         NumberAttrNameType,
         is_enum,
         get_enum_members,
+        ComponentTreeWValuesType,
         )
 from .utils import (
         UNDEFINED,
         )
-from .base import (
-        ComponentTreeWValuesType,
-        )
+# from .base import ()
 
 def get_builtin_function_factories_dict() -> Dict[str, BuiltinFunctionFactory]:
     out : Dict[str, BuiltinFunctionFactory] = {}

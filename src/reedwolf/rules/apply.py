@@ -32,8 +32,11 @@ from .meta import (
         ModelType,
         is_model_class,
         is_model_instance,
+        ValuesTree,
+        ComponentTreeWValuesType,
         )
 from .base import (
+        MAX_RECURSIONS,
         AttrValue,
         AttrName,
         GlobalConfig,
@@ -64,7 +67,6 @@ from .containers import (
         )
 
 
-MAX_RECURSIONS = 30
 
 
 class UseApplyStackFrame(AbstractContextManager):
@@ -1275,6 +1277,39 @@ class ApplyResult(IApplySession):
         exec_result = ExecResult()
         exec_result.set_value(value, attr_name, changer_name=f"{component.name}.ATTR")
         return exec_result
+
+    # ------------------------------------------------------------
+
+    def dump(self) -> ValuesTree:
+        """
+        Recursively traverse children's tree and and collect current values to
+        recursive output dict structure.
+        """
+        tree: ComponentTreeWValuesType = self.rules.get_children_tree_w_values(apply_session=self)
+        return self._dump_values(tree)
+
+    # ------------------------------------------------------------
+
+    def _dump_values(self, tree: ComponentTreeWValuesType, depth: int=0) -> ValuesTree:
+        assert depth <= MAX_RECURSIONS
+        output = {}
+        output["name"] = tree["name"]
+        # if depth==0: import pdb;pdb.set_trace() 
+        if "instance_attr_current_value" in tree:
+            value = tree["instance_attr_current_value"].value
+            output["value"] = value
+
+        children = tree["children"]
+        if children:
+            # children is renamed to contains since it is meant to be publicly
+            # exposed struct
+            output["contains"] = []
+            for child in children:
+                child_out = self._dump_values(child)
+                output["contains"].append(child_out)
+
+        return output
+
 
 
 # ------------------------------------------------------------
