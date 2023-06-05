@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from .utils import (
         get_available_names_example,
         UNDEFINED,
+        NA_DEFAULTS_MODE,
         UndefinedType,
         varname_to_title,
         )
@@ -33,6 +34,7 @@ from .exceptions import (
         RuleNameNotFoundError,
         RuleSetupNameNotFoundError,
         RuleApplyNameNotFoundError,
+        RuleValidationError,
         )
 from .namespaces import (
         ModelsNS,
@@ -359,7 +361,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
     # ------------------------------------------------------------
 
-    def pp(self):
+    def pprint(self):
         if not hasattr(self, "components"):
             raise RuleSetupError(owner=self, msg="Call .setup() first")
         print(f"{self.name}: {self.__class__.__name__} ::")
@@ -684,7 +686,6 @@ class Rules(ContainerBase):
                   raise_if_failed=raise_if_failed)
 
 
-
     def _apply(self, 
               instance: DataclassType, 
               instance_new: Optional[ModelType] = None,
@@ -692,13 +693,12 @@ class Rules(ContainerBase):
               context: Optional[IContext] = None, 
               raise_if_failed:bool = True) -> IApplySession:
         """
-        proxy to Result().apply()
-        TODO: check that this is container / extension / fieldgroup
+        create and config ApplyResult() and call apply_session.apply()
         """
         from .apply import ApplyResult
         container = self.get_container_owner(consider_self=True)
 
-        apply_result = \
+        apply_session = \
                 ApplyResult(setup_session=container.setup_session, 
                       rules=self, 
                       component_name_only=component_name_only,
@@ -708,10 +708,49 @@ class Rules(ContainerBase):
                       )\
                   .apply()
 
-        if raise_if_failed:
-            apply_result.raise_if_failed()
+        if not apply_session.finished:
+            raise RuleInternalError(owner=self, msg="Apply process is not finished")
 
-        return apply_result
+        if raise_if_failed:
+            apply_session.raise_if_failed()
+
+        return apply_session
+
+    # ------------------------------------------------------------
+
+    def dump_defaults(self, 
+              context: Optional[IContext] = None, 
+              ) -> IApplySession:
+        """
+        In defaults mode:
+            - context should be applied if Rules have (same as in apply())
+            - validations are not called
+        """
+        from .apply import ApplyResult
+        container = self.get_container_owner(consider_self=True)
+
+        apply_session = \
+                ApplyResult(
+                    defaults_mode=True,
+                    setup_session=container.setup_session, 
+                    rules=self, 
+                    component_name_only=None,
+                    context=context, 
+                    instance=NA_DEFAULTS_MODE,
+                    instance_new=None,
+                    )\
+                  .apply()
+
+        if not apply_session.finished:
+            raise RuleInternalError(owner=self, msg="Apply process is not finished")
+
+        if apply_session.errors:
+            validation_error = RuleValidationError(owner=apply_session.rules, errors=apply_session.errors)
+            raise RuleInternalError(owner=self, msg=f"Internal issue, apply process should not yield validation error(s), got: {validation_error}")
+
+        output = apply_session._dump_defaults()
+
+        return output
 
 
 # ------------------------------------------------------------

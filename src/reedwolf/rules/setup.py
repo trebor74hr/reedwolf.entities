@@ -215,10 +215,10 @@ class RegistryBase(IRegistry):
             raise RuleInternalError(owner=self, msg=f"Method register({attr_node}) - namespace mismatch: {self.NAMESPACE} != {attr_node.namespace}")
         return self.register_dexp_node(dexp_node=attr_node, alt_dexp_node_name=alt_attr_node_name)
 
-    def pp(self):
+    def pprint(self):
         print(f"  Namespace {self.NAMESPACE._name}:")
         for dexp_node_name, dexp_node in self.store.items():
-            print(f"    {dexp_node_name} = {dexp_node.pp()}")
+            print(f"    {dexp_node_name} = {dexp_node.as_str()}")
 
     def __str__(self):
         return f"{self.__class__.__name__}(cnt={len(self.store)})"
@@ -596,12 +596,13 @@ class SetupSessionBase(ISetupSession):
 
     # ------------------------------------------------------------
 
-    def dump_all(self, with_functions:bool = False) -> None:
+    def pprint(self, with_functions:bool = False) -> None:
+        " ppprint == pp == pretty print "
         # recursive: bool = False, depth: int = 0, 
         # has {self.entries_count} attr_node(s), 
         print(f"{self.owner}: SetupSession '{self.name}', finished={self.finished}. List:")
         for ns_name, store in self._registry_dict.items():
-            store.pp()
+            store.pprint()
 
         if with_functions:
             self.functions_factory_registry.dump_all()

@@ -24,6 +24,7 @@ from .expressions import (
         )
 from .utils import (
         UNDEFINED,
+        NA_DEFAULTS_MODE,
         NA_IN_PROGRESS,
         NOT_APPLIABLE,
         )
@@ -185,13 +186,6 @@ class ApplyResult(IApplySession):
         if not self.bound_model:
             raise RuleApplyError(owner=self, msg=f"Component object '{self.rules}' has no bound model")
 
-        # self.model = self.bound_model.model
-        # if not self.model:
-        #     raise RuleInternalError(owner=self, item=component, msg=f"Bound model '{self.bound_model}' has empty model.")
-
-        if not isinstance(self.instance, self.bound_model.model):
-            raise RuleApplyError(owner=self, msg=f"Object '{self.instance}' is not instance of bound model '{self.bound_model.model}'.")
-
         if self.rules.context_class:
             if not self.context:
                 raise RuleApplyError(owner=self.rules, msg=f"Pass context object to .apply*(). Context should be instance of '{self.rules.context_class}'.")
@@ -201,12 +195,24 @@ class ApplyResult(IApplySession):
             if self.context:
                 raise RuleApplyError(owner=self, msg=f"Given context object '{self.context}', but context class in component is not setup. Provide 'context_class' to Rules object and try again.")
 
+        # self.model = self.bound_model.model
+        # if not self.model:
+        #     raise RuleInternalError(owner=self, item=component, msg=f"Bound model '{self.bound_model}' has empty model.")
+
+        if self.defaults_mode:
+            if not (self.instance is NA_DEFAULTS_MODE and self.instance_new is None and not self.component_name_only):
+                raise RuleInternalError(owner=self, msg=f"Defaults mode does not expect instance or instance_new or component_name_only, got: {self.instance} / {self.instance_new} / {self.component_name_only}") 
+        else:
+            if not isinstance(self.instance, self.bound_model.model):
+                raise RuleApplyError(owner=self, msg=f"Object '{self.instance}' is not instance of bound model '{self.bound_model.model}'.")
+
+
+            if self.instance_new is not None and not self.component_name_only:
+                self._detect_instance_new_struct_type(self.rules)
+
         # ----------------------------------------
         # see IApplySession for description 
         self.binary_operations_type_adapters[(str, int)] = str
-
-        if self.instance_new is not None and not self.component_name_only:
-            self._detect_instance_new_struct_type(self.rules)
 
 
     def is_ok(self) -> bool:
@@ -275,6 +281,7 @@ class ApplyResult(IApplySession):
         """
         assert isinstance(validation, ValidationBase)
         assert component == validation.owner
+        assert not self.defaults_mode
 
         if not component == self.current_frame.component:
             raise RuleInternalError(owner=self.current_frame.component, 
@@ -336,7 +343,7 @@ class ApplyResult(IApplySession):
             if value_current == new_value:
                 raise RuleApplyError(owner=component, msg=f"register change failed, the value is the same: {value_current}")
 
-            # is this really necessary
+            # TODO: is this really necessary - will be done in apply() later
             self.validate_type(component, new_value)
 
             # -- parent instance
@@ -344,28 +351,30 @@ class ApplyResult(IApplySession):
             # parent_instance = parent_raw_attr_value.value
 
             parent_instance = self.current_frame.instance
-            # TODO: not sure if this validation is ok
-            if not isinstance(parent_instance, 
-                    self.current_frame.container.bound_model.get_type_info().type_):
-                raise RuleInternalError(owner=self, msg=f"Parent instance {parent_instance} has wrong type")
+
+            if parent_instance is not NA_DEFAULTS_MODE:
+                # TODO: not sure if this validation is ok
+                if not isinstance(parent_instance, 
+                        self.current_frame.container.bound_model.get_type_info().type_):
+                    raise RuleInternalError(owner=self, msg=f"Parent instance {parent_instance} has wrong type")
 
 
-            # -- attr_name - fetch from initial bind dexp (very first)
-            init_instance_attr_value = self.update_history[key_str][0]
-            if not init_instance_attr_value.is_from_bind:
-                raise RuleInternalError(owner=self, msg=f"{init_instance_attr_value} is not from bind")
-            init_bind_dexp_result = init_instance_attr_value.dexp_result
-            # attribute name is in the last item
-            init_raw_attr_value = init_bind_dexp_result.value_history[-1]
-            attr_name = init_raw_attr_value.attr_name
+                # -- attr_name - fetch from initial bind dexp (very first)
+                init_instance_attr_value = self.update_history[key_str][0]
+                if not init_instance_attr_value.is_from_bind:
+                    raise RuleInternalError(owner=self, msg=f"{init_instance_attr_value} is not from bind")
+                init_bind_dexp_result = init_instance_attr_value.dexp_result
+                # attribute name is in the last item
+                init_raw_attr_value = init_bind_dexp_result.value_history[-1]
+                attr_name = init_raw_attr_value.attr_name
 
-            if not hasattr(parent_instance, attr_name):
-                raise RuleInternalError(owner=self, msg=f"Missing {parent_instance}.{attr_name}")
+                if not hasattr(parent_instance, attr_name):
+                    raise RuleInternalError(owner=self, msg=f"Missing {parent_instance}.{attr_name}")
 
-            # ----------------------------------------
-            # Finally change instance value
-            # ----------------------------------------
-            setattr(parent_instance, attr_name, new_value)
+                # ----------------------------------------
+                # Finally change instance value
+                # ----------------------------------------
+                setattr(parent_instance, attr_name, new_value)
 
             # NOTE: bind_dexp_result last value is not changed
             #       maybe should be changed but ... 
@@ -401,6 +410,8 @@ class ApplyResult(IApplySession):
 
                # see dox below
                mode_dexp_dependency: bool = False,
+
+               entry_call: bool = False,
 
                # Moved to stack
                #    # partial apply - passed through recursion further
@@ -453,22 +464,32 @@ class ApplyResult(IApplySession):
             raise RuleInternalError(owner=self, msg=f"Already finished") 
 
         if self.frames_stack:
+            assert not entry_call
             depth = self.current_frame.depth
             in_component_only_tree = self.current_frame.in_component_only_tree 
 
             # check if instance model is ok
             if not component.is_extension():
-                if not isinstance(self.current_frame.instance, comp_container_model):
-                    raise RuleInternalError(owner=self, msg=f"Current frame's instance's model does not corresponds to component's container's model. Expected: {comp_container_model}, got: {type(self.instance)}") 
+                if self.defaults_mode:
+                    if self.current_frame.instance is not NA_DEFAULTS_MODE:
+                        raise RuleInternalError(owner=self, msg=f"Defaults mode - current frame's instance's model must be NA_DEFAULTS_MODE, got: {type(self.instance)}") 
+                else:
+                    if not isinstance(self.current_frame.instance, comp_container_model):
+                        raise RuleInternalError(owner=self, msg=f"Current frame's instance's model does not corresponds to component's container's model. Expected: {comp_container_model}, got: {type(self.instance)}") 
 
             # TODO: for extension() any need to check this at all in this phase?
-
         else:
+            # no stack around -> initial call -> depth=0
+            assert entry_call
             depth = 0
             in_component_only_tree = False
 
-            if not isinstance(self.instance, comp_container_model):
-                raise RuleInternalError(owner=self, msg=f"Rules instance's model does not corresponds to component's container's model. Expected: {comp_container_model}, got: {type(self.instance)}") 
+            if self.defaults_mode:
+                if not self.instance is NA_DEFAULTS_MODE:
+                    raise RuleInternalError(owner=self, msg=f"Defaults mode - instance must be NA_DEFAULTS_MODE, got: {type(self.instance)}") 
+            else:
+                if not isinstance(self.instance, comp_container_model):
+                    raise RuleInternalError(owner=self, msg=f"Rules instance's model does not corresponds to component's container's model. Expected: {comp_container_model}, got: {type(self.instance)}") 
 
 
         if self.component_only and component == self.component_only:
@@ -615,9 +636,13 @@ class ApplyResult(IApplySession):
 
                 if process_further and getattr(component, "enables", None):
                     assert not getattr(component, "contains", None), component
-                    bind_dexp_result = component.get_dexp_result_from_instance(apply_session=self)
-                    value = bind_dexp_result.value
-                    if not isinstance(value, (bool, NoneType)):
+
+                    value = self.get_current_value(component)
+                    # OLD: delete this - not good in mode_dexp_dependency mode
+                    #       bind_dexp_result = component.get_dexp_result_from_instance(apply_session=self)
+                    #       value = bind_dexp_result.value
+                    if value is not NA_DEFAULTS_MODE \
+                      and not isinstance(value, (bool, NoneType)):
                         raise RuleApplyValueError(owner=component, 
                                 msg=f"Component.enables can be applied only for Boolean or None values, got: {value} : {type(value)}")
                     if not value: 
@@ -832,6 +857,7 @@ class ApplyResult(IApplySession):
         self._apply(
                 # parent=None, 
                 component=self.rules,
+                entry_call=True,
                 )
         self.finish()
 
@@ -959,9 +985,10 @@ class ApplyResult(IApplySession):
                 return False
 
         if getattr(component, "bind", None):
-            # 1. Fill initial value from instance 
+            # --- 1. Fill initial value from instance 
             key_str = self.get_key_string(component)
 
+            # TODO: NA_DEFAULTS_MODE
             if self.current_values.get(key_str, None) not in (
                     None, NA_IN_PROGRESS, NOT_APPLIABLE):
                 # Call to "self._init_by_bind_dexp()" is already done 
@@ -973,7 +1000,7 @@ class ApplyResult(IApplySession):
             else:
                 init_bind_dexp_result = self._init_by_bind_dexp(component)
 
-            # 2. try to update if instance_new is provided and yields different value
+            # --- 2. try to update if instance_new is provided and yields different value
             bind_dexp_result, _ = self._try_update_by_instance(
                                         component=component, 
                                         init_bind_dexp_result=init_bind_dexp_result)
@@ -997,12 +1024,13 @@ class ApplyResult(IApplySession):
                 #               cleaner = cleaner, 
                 #               )):
                 if isinstance(cleaner, ValidationBase):
-                    # 3.a. run validations
+                    # --- 3.a. run validations
                     # returns validation_failure
-                    if self.execute_validation(component=component, validation=cleaner):
-                        all_ok = False
+                    if not self.defaults_mode:
+                        if self.execute_validation(component=component, validation=cleaner):
+                            all_ok = False
                 elif isinstance(cleaner, EvaluationBase):
-                    # 3.b. run evaluation
+                    # --- 3.b. run evaluation
                     if not bind_dexp_result:
                         # TODO: this belongs to Setup phase
                         raise RuleApplyError(owner=self, msg="Evaluator can be defined only for components with 'bind' defined. Remove 'Evaluation' or define 'bind'.")
@@ -1010,11 +1038,20 @@ class ApplyResult(IApplySession):
                 else:
                     raise RuleApplyError(owner=self, msg=f"Unknown cleaner type {type(cleaner)}. Expected Evaluation or Validation.")
 
-        # NOTE: initial value from instance is not checked - only
-        #       intermediate and the last value
-        # returns validation_failure
+        if self.defaults_mode and isinstance(component, FieldBase):
+            # NOTE: change NA_DEFAULTS_MODE to most reasonable and
+            #       common empty value -> None
+            value = self.get_current_value(component)
+            if value is NA_DEFAULTS_MODE:
+                self.register_instance_attr_change(
+                        component=component, 
+                        dexp_result=None,
+                        new_value=None
+                        )
 
-        # 4. validate type is ok?
+        # --- 4. validate type is ok?
+        # NOTE: initial value from instance is not checked - only
+        #       intermediate and the last value (returns validation_failure)
         if self.validate_type(component):
             all_ok = False
 
@@ -1288,6 +1325,17 @@ class ApplyResult(IApplySession):
         Recursively traverse children's tree and and collect current values to
         recursive output dict structure.
         """
+        tree: ComponentTreeWValuesType = self.rules.get_children_tree_w_values(apply_session=self)
+        return self._dump_values(tree)
+
+    # ------------------------------------------------------------
+
+    def _dump_defaults(self) -> ValuesTree:
+        """
+        In defaults_mode - recursively traverse children's tree and and collect
+        current values to recursive output dict structure.
+        """
+        assert self.defaults_mode
         tree: ComponentTreeWValuesType = self.rules.get_children_tree_w_values(apply_session=self)
         return self._dump_values(tree)
 

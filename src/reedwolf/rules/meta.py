@@ -642,7 +642,7 @@ class TypeInfo:
 
         return "".join(out)
 
-    def pp(self) -> str:
+    def as_str(self) -> str:
         return self.py_type_hint.__name__ if type(self.py_type_hint)==type else str(self.py_type_hint)
 
     # ------------------------------------------------------------

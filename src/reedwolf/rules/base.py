@@ -24,6 +24,7 @@ from dataclasses import (
 
 from .utils import (
         UNDEFINED,
+        NA_DEFAULTS_MODE,
         UndefinedType,
         get_available_names_example,
         ThreadSafeCounter,
@@ -900,11 +901,6 @@ class ComponentBase(SetOwnerMixin, ABC):
         return bind_dexp_result
 
 
-    # ------------------------------------------------------------
-
-    # Moved to apply.py::ApplyResult
-    # def get_current_value(self, apply_session:iapplysession) -> any:
-
 
 # ------------------------------------------------------------
 # IFieldBase
@@ -952,7 +948,7 @@ class IContainerBase(ABC):
         ...
 
     @abstractmethod
-    def pp(self):
+    def pprint(self):
         """ pretty print - prints to stdout all components """
         ...
 
@@ -1203,7 +1199,11 @@ class ApplyStackFrame:
             self.bound_model_root = self.container.bound_model
             instance_to_test = self.instance
 
-        if instance_to_test is None:
+        if instance_to_test is NA_DEFAULTS_MODE:
+            # defaults_mode
+            pass
+        elif instance_to_test is None:
+            # TODO: explain when this happens ...
             pass
         elif not is_model_class(instance_to_test.__class__):
             raise RuleInternalError(owner=self, msg=f"Expected model instance or list[instances], got: {self.instance}")
@@ -1258,15 +1258,21 @@ class IApplySession:
     instance_new: Optional[ModelType] = field(repr=False)
 
     context: Optional[IContext] = field(repr=False)
-    # apply_partial
+    # used in apply_partial
     component_name_only: Optional[str] = field(repr=False, default=None)
 
-    # automatically computed
+    # used in dump_defaults() - to get defaults dictionary
+    defaults_mode: bool = field(repr=False, default=False)
+
+    # ---- automatically computed -----
+
     # extracted from component
     bound_model : BoundModelBase = field(repr=False, init=False)
+
+    # final status
     finished: bool = field(repr=False, init=False, default=False)
 
-    # ---- internal structs ----
+    # ---- internal attrs and structs ----
 
     # stack of frames - first frame is current. On the end of the process the
     # stack must be empty
@@ -1333,6 +1339,10 @@ class IApplySession:
     def apply(self) -> IApplySession:
         ...
 
+    @abstractmethod
+    def get_current_value(self, component: ComponentBase) -> LiteralType:
+        ...
+
 
     # def get_current_component_bind_value(self):
     #     component = self.current_frame.component
@@ -1340,11 +1350,21 @@ class IApplySession:
     #     return bind_dexp_result.value
 
     def validate_type(self, component: ComponentBase, value: Any = UNDEFINED):
+        " only Fields can have values - all others components are ignored "
         validation_failure = None
+
         if isinstance(component, IFieldBase):
-            validation_failure = component.validate_type(apply_session=self, value=value)
-            if validation_failure:
-                self.register_instance_validation_failed(component, validation_failure)
+            if self.defaults_mode:
+                validation_failure = component.validate_type(apply_session=self, value=value)
+                if validation_failure:
+                    raise RuleInternalError(owner=self, msg=f"TODO: Type validation failed in defaults_mode - probably should default value to None ") 
+                # if validation_failure: import pdb;pdb.set_trace() 
+                validation_failure = None
+            else:
+                validation_failure = component.validate_type(apply_session=self, value=value)
+                if validation_failure:
+                    self.register_instance_validation_failed(component, validation_failure)
+
         return validation_failure
 
 

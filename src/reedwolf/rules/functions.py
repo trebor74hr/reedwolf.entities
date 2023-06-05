@@ -656,7 +656,7 @@ class FunctionsFactoryRegistry:
         assert len(self.store)>=3, self.store
         return len(self.store)
 
-    def dump_all(self):
+    def pprint(self):
         print("Functions:")
         for func_name, function in self.store.items():
             print(f"  {func_name} -> {function}")

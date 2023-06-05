@@ -20,6 +20,7 @@ from enum import Enum, IntEnum
 
 from .utils import (
         UNDEFINED,
+        NA_DEFAULTS_MODE,
         UndefinedType,
         message_truncate,
         varname_to_title,
@@ -296,12 +297,22 @@ class FieldBase(Component, IFieldBase, ABC):
 
 
     def validate_type(self, apply_session: IApplySession, value: Any = UNDEFINED) -> Optional[ValidationFailure]:
+        """
+        returns None if all ok, otherwise ValidationFailure()
+        """
         component = apply_session.current_frame.component
+        
+        if component is not self:
+            raise RuleInternalError(owner=self, msg=f"Current frame component should match current objects (self), got:\n  {component}\n  !=\n  {self}") 
+
         if value is UNDEFINED:
             value = apply_session.get_current_value(component)
 
+        # NA_DEFAULTS_MODE - no value is evaluated in defaults_mode -> no
+        # validation 
         if self.PYTHON_TYPE not in (UNDEFINED, None) \
                 and value is not None \
+                and value is not NA_DEFAULTS_MODE \
                 and not isinstance(value, self.PYTHON_TYPE):
             error = f"Value type '{type(value)}' is not compoatible with '{self.PYTHON_TYPE}' " \
                     f"(value is '{message_truncate(value)}')"

@@ -10,6 +10,7 @@ from enum import Enum
 
 from .utils import (
         UNDEFINED,
+        NA_DEFAULTS_MODE,
         to_repr,
         )
 from .exceptions import (
@@ -277,6 +278,9 @@ class AttrDexpNode(IDotExpressionNode):
                     else:
                         if val_prev is None:
                             value_new = UNDEFINED
+                        elif val_prev is NA_DEFAULTS_MODE:
+                            # 'Maybe monad' like
+                            value_new = val_prev
                         else:
                             if not hasattr(val_prev, attr_name):
                                 # TODO: list which fields are available
@@ -319,7 +323,7 @@ class AttrDexpNode(IDotExpressionNode):
     def islist(self):
         return self.type_info.is_list if self.type_info else False
 
-    def pp(self):
+    def as_str(self) -> str:
         # pretty print
         denied = "DENIED" if self.denied else ""
         # bound= ("BOUND[{}]".format(", ".join([f"{setup_session_name}->{ns._name}.{attr_node_name}" for setup_session_name, ns, attr_node_name in self.bound_list]))) if self.bound_list else ""
@@ -327,7 +331,7 @@ class AttrDexpNode(IDotExpressionNode):
         altname = f"{self.data_supplier_name}" if self.data_supplier_name != self.name else ""
         # function = f"Function({self.function.name}{', custom' if self.function.is_custom else ''})" if self.function else ""
         # , used, bound, function
-        out = self.type_info.pp() if self.type_info else "-"
+        out = self.type_info.as_str() if self.type_info else "-"
         out += " " + (", ".join([val for val in [altname, denied] if val]))
         return out.strip()
 
