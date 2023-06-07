@@ -472,7 +472,7 @@ class SetupSessionBase(ISetupSession):
 
     # stack of frames - first frame is current. On the end of the process the
     # stack must be empty
-    frames_stack: List[SetupStackFrame] = field(repr=False, init=False, default_factory=list)
+    stack_frames: List[SetupStackFrame] = field(repr=False, init=False, default_factory=list)
 
 
     # def __init__(self, 
@@ -553,18 +553,18 @@ class SetupSessionBase(ISetupSession):
     # ------------------------------------------------------------
 
     def push_frame_to_stack(self, frame: SetupStackFrame):
-        self.frames_stack.insert(0, frame)
+        self.stack_frames.insert(0, frame)
 
     def pop_frame_from_stack(self) -> SetupStackFrame:
-        assert self.frames_stack
-        return self.frames_stack.pop(0)
+        assert self.stack_frames
+        return self.stack_frames.pop(0)
 
     @property
     def current_frame(self) -> Optional[SetupStackFrame]:
-        if not self.frames_stack:
+        if not self.stack_frames:
             # raise RuleInternalError(owner=self, msg=f"current_frame not available, stack frame is empty")
             return None
-        return self.frames_stack[0]
+        return self.stack_frames[0]
 
     # ------------------------------------------------------------
 
@@ -648,8 +648,8 @@ class SetupSessionBase(ISetupSession):
         if self.finished:
             raise RuleSetupError(owner=self, msg="Method finish() already called.")
 
-        if not len(self.frames_stack) == 0:
-            raise RuleInternalError(owner=self, msg=f"Stack frames not released: {self.frames_stack}") 
+        if not len(self.stack_frames) == 0:
+            raise RuleInternalError(owner=self, msg=f"Stack frames not released: {self.stack_frames}") 
 
         for ns, registry in self._registry_dict.items():
             for vname, dexp_node in registry.items():

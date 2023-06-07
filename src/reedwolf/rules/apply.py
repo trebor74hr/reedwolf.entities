@@ -87,10 +87,10 @@ class UseApplyStackFrame(AbstractContextManager):
         if the instance is the same - consider from last frame 
         container (copy/check), index0 (copy/check), component ...
         """
-        if not self.apply_session.frames_stack:
+        if not self.apply_session.stack_frames:
             return
 
-        previous_frame = self.apply_session.frames_stack[0]
+        previous_frame = self.apply_session.stack_frames[0]
 
         self._copy_attr_from_previous_frame(previous_frame, "in_component_only_tree", 
                                             if_set_must_be_same=False)
@@ -460,7 +460,7 @@ class ApplyResult(IApplySession):
             # TODO: self.config.logger.info(f"apply - mode_dexp_dependency - {self.current_frame.component.name} depends on {component.name} - calling apply() ...")
 
             # instance i.e. containers must match
-            assert self.frames_stack
+            assert self.stack_frames
             caller_container = self.current_frame.component.get_container_owner(consider_self=True)
             if comp_container is not caller_container:
                 raise RuleInternalError(owner=component, msg=f"Componenent's container '{comp_container}' must match caller's '{self.current_frame.component.name}' container: {caller_container.name}") 
@@ -468,7 +468,7 @@ class ApplyResult(IApplySession):
         if self.finished:
             raise RuleInternalError(owner=self, msg=f"Already finished") 
 
-        if self.frames_stack:
+        if self.stack_frames:
             assert not entry_call
             depth = self.current_frame.depth
             in_component_only_tree = self.current_frame.in_component_only_tree 
@@ -699,7 +699,7 @@ class ApplyResult(IApplySession):
 
 
         if depth==0:
-            assert len(self.frames_stack)==0
+            assert len(self.stack_frames)==0
 
             # ---------------------------------------------------------------------
             # For changed attributes -> collect original + new value
@@ -1314,12 +1314,12 @@ class ApplyResult(IApplySession):
 
     # def is_component_instance_processed(self, component: ComponentBase) -> Optional[KeyString]:
     #     # instance is grabbed from current_frame
-    #     assert self.frames_stack
+    #     assert self.stack_frames
     #     key_str = self.get_key_string(component)
     #     return key_str if self.current_values.get(key_str, None) else None
 
     # def is_apply_component_instance_in_progress(self, component: ComponentBase) -> Optional[KeyString]:
-    #     if self.frames_stack:
+    #     if self.stack_frames:
     #         key_str = self.get_key_string(component)
     #         if self.current_values.get(key_str, None) is NA_IN_PROGRESS:
     #             return key_str

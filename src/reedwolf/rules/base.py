@@ -1285,7 +1285,7 @@ class IApplySession:
 
     # stack of frames - first frame is current. On the end of the process the
     # stack must be empty
-    frames_stack: List[ApplyStackFrame] = field(repr=False, init=False, default_factory=list)
+    stack_frames: List[ApplyStackFrame] = field(repr=False, init=False, default_factory=list)
 
     # I do not prefer attaching key_string to instance i.e. setattr(instance, key_string)
     # but having instance not expanded, but to store in a special structure
@@ -1389,23 +1389,23 @@ class IApplySession:
         ...
 
     def push_frame_to_stack(self, frame: ApplyStackFrame):
-        self.frames_stack.insert(0, frame)
+        self.stack_frames.insert(0, frame)
 
     def pop_frame_from_stack(self) -> ApplyStackFrame:
-        assert self.frames_stack
-        return self.frames_stack.pop(0)
+        assert self.stack_frames
+        return self.stack_frames.pop(0)
 
     @property
     def current_frame(self) -> ApplyStackFrame:
-        assert self.frames_stack
-        return self.frames_stack[0]
+        assert self.stack_frames
+        return self.stack_frames[0]
 
     def finish(self):
         if self.finished:
             raise RuleSetupError(owner=self, msg="Method finish() already called.")
 
-        if not len(self.frames_stack) == 0:
-            raise RuleInternalError(owner=self, msg=f"Stack frames not released: {self.frames_stack}") 
+        if not len(self.stack_frames) == 0:
+            raise RuleInternalError(owner=self, msg=f"Stack frames not released: {self.stack_frames}") 
 
         self.finished = True
 
