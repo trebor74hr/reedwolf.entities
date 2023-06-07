@@ -23,7 +23,6 @@ from typing import (
         )
 from .utils import (
         UNDEFINED,
-        NA_DEFAULTS_MODE,
         UndefinedType,
         )
 from .exceptions import (

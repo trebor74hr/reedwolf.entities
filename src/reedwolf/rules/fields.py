@@ -327,7 +327,7 @@ class FieldBase(Component, IFieldBase, ABC):
         return value
 
 
-    def validate_type(self, apply_session: IApplySession, value: Any = UNDEFINED) -> Optional[ValidationFailure]:
+    def validate_type(self, apply_session: IApplySession, strict:bool, value: Any = UNDEFINED) -> Optional[ValidationFailure]:
         """
         returns None if all ok, otherwise ValidationFailure()
         """
@@ -337,7 +337,7 @@ class FieldBase(Component, IFieldBase, ABC):
             raise RuleInternalError(owner=self, msg=f"Current frame component should match current objects (self), got:\n  {component}\n  !=\n  {self}") 
 
         if value is UNDEFINED:
-            value = apply_session.get_current_value(component)
+            value = apply_session.get_current_value(component, strict=strict)
 
         # NA_DEFAULTS_MODE - no value is evaluated in defaults_mode -> no
         # validation 

@@ -264,7 +264,7 @@ class ApplyResult(IApplySession):
             eval_value = component.try_adapt_value(eval_value)
 
         # ALT: bind_dexp_result = component.get_dexp_result_from_instance(apply_session)
-        orig_value = self.get_current_value(component)
+        orig_value = self.get_current_value(component, strict=False)
 
         if (orig_value != eval_value):
             self.register_instance_attr_change(
@@ -347,7 +347,7 @@ class ApplyResult(IApplySession):
                 raise RuleApplyError(owner=component, msg=f"register change failed, the value is the same: {value_current}")
 
             # TODO: is this really necessary - will be done in apply() later
-            self.validate_type(component, new_value)
+            self.validate_type(component, strict=False, value=new_value)
 
             # -- parent instance
             # parent_raw_attr_value = dexp_result.value_history[-2]
@@ -654,7 +654,7 @@ class ApplyResult(IApplySession):
                 if process_further and getattr(component, "enables", None):
                     assert not getattr(component, "contains", None), component
 
-                    value = self.get_current_value(component)
+                    value = self.get_current_value(component, strict=False)
 
                     # OLD: delete this - not good in mode_dexp_dependency mode
                     #       bind_dexp_result = component.get_dexp_result_from_instance(apply_session=self)
@@ -1078,7 +1078,7 @@ class ApplyResult(IApplySession):
         if self.defaults_mode and isinstance(component, FieldBase):
             # NOTE: change NA_DEFAULTS_MODE to most reasonable and
             #       common empty value -> None
-            value = self.get_current_value(component)
+            value = self.get_current_value(component, strict=True)
             if value is NA_DEFAULTS_MODE:
                 self.register_instance_attr_change(
                         component=component, 
@@ -1086,12 +1086,8 @@ class ApplyResult(IApplySession):
                         new_value=None
                         )
 
-        # --- 4. validate type is ok?
-        # NOTE: initial value from instance is not checked - only
-        #       intermediate and the last value (returns validation_failure)
-        if self.validate_type(component):
-            all_ok = False
 
+        # --- 4.1 finalize last value and mark as finished
         current_value_instance = self.current_values[key_string]
         if current_value_instance is NA_IN_PROGRESS:
             current_value_instance = NOT_APPLIABLE
@@ -1104,6 +1100,12 @@ class ApplyResult(IApplySession):
                 raise RuleInternalError(owner=self, msg=f"Unexpected current value instance found for {key_string}, got: {current_value_instance}")  
             current_value_instance.mark_finished()
 
+
+        # --- 4.2 validate type is ok?
+        # NOTE: initial value from instance is not checked - only
+        #       intermediate and the last value (returns validation_failure)
+        if self.validate_type(component, strict=True):
+            all_ok = False
 
         return all_ok, current_value_instance
 
@@ -1359,7 +1361,7 @@ class ApplyResult(IApplySession):
 
     # ------------------------------------------------------------
 
-    def get_current_value(self, component: ComponentBase) -> LiteralType:
+    def get_current_value(self, component: ComponentBase, strict:bool) -> LiteralType:
         # apply_session:IApplySession
         """ Could work on non-stored fields.
             Probaly a bit faster, only dict queries.
@@ -1375,7 +1377,7 @@ class ApplyResult(IApplySession):
         if not key_str in self.current_values:
             raise RuleInternalError(owner=component, msg=f"{key_str} not found in current values") 
         attr_current_value_instance = self.current_values[key_str]
-        return attr_current_value_instance.value
+        return attr_current_value_instance.get_value(strict=strict)
 
     # ------------------------------------------------------------
 
@@ -1574,7 +1576,7 @@ class ApplyResult(IApplySession):
         output["name"] = tree["name"]
 
         if "attr_current_value_instance" in tree:
-            output["value"] = tree["attr_current_value_instance"].value
+            output["value"] = tree["attr_current_value_instance"].get_value(strict=True)
 
         self._dump_values_children(tree=tree, output=output, key_name="contains", depth=depth)
         self._dump_values_children(tree=tree, output=output, key_name="extension_items", depth=depth)

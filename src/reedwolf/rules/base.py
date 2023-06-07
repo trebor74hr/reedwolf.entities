@@ -1099,19 +1099,29 @@ class InstanceAttrValue:
 class InstanceAttrCurrentValue:
     key_string: KeyString = field()
     component: ComponentBase = field(repr=False)
-    value: Union[LiteralType, UndefinedType] = field(init=False, default=UNDEFINED)
+    _value: Union[LiteralType, UndefinedType] = field(init=False, default=UNDEFINED)
     # do not compare - for unit tests
     finished: bool = field(repr=False, init=False, default=False, compare=False)
 
     def set_value(self, value: LiteralType) -> "InstanceAttrCurrentValue":
         if self.finished:
-            raise RuleInternalError(owner=self, msg=f"Current value already finished, last value: {self.value}") 
-        self.value = value
+            raise RuleInternalError(owner=self, msg=f"Current value already finished, last value: {self._value}") 
+        self._value = value
+        # if self._value is NA_DEFAULTS_MODE:
+        #     # TODO: check if finish immediatelly
+        #     self.mark_finished()
         return self
 
+    def get_value(self, strict:bool) -> LiteralType:
+        if strict and not self.finished:
+            # print("TODO: riješi ovu iznimku")
+            # import pdb;pdb.set_trace() 
+            raise RuleInternalError(owner=self, msg=f"Current value is not finished, last value: {self._value}") 
+        return self._value
+
     def mark_finished(self):
-        if self.finished:
-            raise RuleInternalError(owner=self, msg=f"Current value already finished, last value: {self.value}") 
+        if self.finished: # and self._value is not NA_DEFAULTS_MODE:
+            raise RuleInternalError(owner=self, msg=f"Current value already finished, last value: {self._value}") 
         self.finished = True
 
 # ------------------------------------------------------------
@@ -1353,7 +1363,7 @@ class IApplySession:
         ...
 
     @abstractmethod
-    def get_current_value(self, component: ComponentBase) -> LiteralType:
+    def get_current_value(self, component: ComponentBase, strict: bool) -> LiteralType:
         ...
 
 
@@ -1362,18 +1372,18 @@ class IApplySession:
     #     bind_dexp_result = component.get_dexp_result_from_instance(apply_session=self)
     #     return bind_dexp_result.value
 
-    def validate_type(self, component: ComponentBase, value: Any = UNDEFINED):
+    def validate_type(self, component: ComponentBase, strict:bool, value: Any = UNDEFINED):
         " only Fields can have values - all others components are ignored "
         validation_failure = None
 
         if isinstance(component, IFieldBase):
             if self.defaults_mode:
-                validation_failure = component.validate_type(apply_session=self, value=value)
+                validation_failure = component.validate_type(apply_session=self, strict=strict, value=value)
                 if validation_failure:
                     raise RuleInternalError(owner=self, msg=f"TODO: Type validation failed in defaults_mode - probably should default value to None ") 
                 validation_failure = None
             else:
-                validation_failure = component.validate_type(apply_session=self, value=value)
+                validation_failure = component.validate_type(apply_session=self, strict=strict, value=value)
                 if validation_failure:
                     self.register_instance_validation_failed(component, validation_failure)
 
