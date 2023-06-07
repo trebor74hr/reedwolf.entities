@@ -1078,7 +1078,7 @@ class ApplyResult(IApplySession):
         if self.defaults_mode and isinstance(component, FieldBase):
             # NOTE: change NA_DEFAULTS_MODE to most reasonable and
             #       common empty value -> None
-            value = self.get_current_value(component, strict=True)
+            value = self.get_current_value(component, strict=False)
             if value is NA_DEFAULTS_MODE:
                 self.register_instance_attr_change(
                         component=component, 
