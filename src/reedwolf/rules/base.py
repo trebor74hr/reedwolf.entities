@@ -24,6 +24,7 @@ from dataclasses import (
 
 from .utils import (
         UNDEFINED,
+        NOT_APPLIABLE,
         NA_DEFAULTS_MODE,
         UndefinedType,
         get_available_names_example,
@@ -322,7 +323,7 @@ class ComponentBase(SetOwnerMixin, ABC):
 
     # ------------------------------------------------------------
 
-    def get_children_tree_flatten_dict(self, _depth:int=0) -> Dict[ComponentNameType, ComponentBase]:
+    def get_children_tree_flatten_dict(self, depth:int=0) -> Dict[ComponentNameType, ComponentBase]:
         """
         will go recursively through every children and
         fetch their "children" and collect to output structure:
@@ -331,13 +332,15 @@ class ComponentBase(SetOwnerMixin, ABC):
         """
         key = "_children_tree_flatten_dict"
         if not hasattr(self, key):
-            assert _depth <= MAX_RECURSIONS
+            if depth > MAX_RECURSIONS:
+                raise RuleInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
+
             children_dict_traversed = {}
 
             for comp in self.get_children():
                 if not comp.is_extension():
                     # recursion
-                    comp_chidren_dict = comp.get_children_tree_flatten_dict(_depth=_depth+1)
+                    comp_chidren_dict = comp.get_children_tree_flatten_dict(depth=depth+1)
                     children_dict_traversed.update(comp_chidren_dict)
 
                 # closer children are overriding further ones
@@ -356,48 +359,29 @@ class ComponentBase(SetOwnerMixin, ABC):
         fetch their "children" and collect to output structure.
         selects all nodes, put in tree, includes self
         """
-        return self._get_children_tree_impl(key="_children_tree", apply_session=None)
-
-    # ------------------------------------------------------------
-
-    def get_children_tree_w_values(self, apply_session: IApplySession) -> ComponentTreeWValuesType:
-        """
-        will go recursively through every children and
-        fetch their "children" and collect to output structure.
-        selects all nodes, put in tree, includes self
-        for every node bind (M.<field>) is evaluated
-        """
-        return self._get_children_tree_impl(key="_children_tree_w_values", apply_session=apply_session)
+        return self._get_children_tree(key="_children_tree")
 
 
-    # ------------------------------------------------------------
-
-    def _get_children_tree_impl(self, key: str, apply_session: Optional[IApplySession], _depth:int=0) -> Dict[ComponentNameType, ComponentBase]:
+    def _get_children_tree(self, key: str, depth:int=0) -> Dict[ComponentNameType, ComponentBase]:
         if not hasattr(self, key):
-            assert _depth <= MAX_RECURSIONS
+            if depth > MAX_RECURSIONS:
+                raise RuleInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
 
             children_dict_traversed = {}
             children_dict_traversed["name"] = self.name
             children_dict_traversed["component"] = self
             children_dict_traversed["children"] = []
 
-            if apply_session:
-                if getattr(self, "bind", None):
-                    instance_attr_current_value = \
-                            apply_session.get_current_value_instance(
-                                component=self, init_when_missing=True)
-
-                    assert instance_attr_current_value is not UNDEFINED
-                    children_dict_traversed["instance_attr_current_value"] = instance_attr_current_value
 
             for comp in self.get_children():
                 # recursion
-                comp_chidren_dict = comp._get_children_tree_impl(key=key, apply_session=apply_session, _depth=_depth+1)
+                comp_chidren_dict = comp._get_children_tree(key=key, depth=depth+1)
                 children_dict_traversed["children"].append(comp_chidren_dict)
 
             setattr(self, key, children_dict_traversed)
-
-        return getattr(self, key)
+        else:
+            children_dict_traversed = getattr(self, key)
+        return children_dict_traversed
 
     # ------------------------------------------------------------
 
@@ -413,7 +397,8 @@ class ComponentBase(SetOwnerMixin, ABC):
 
     def _dump_meta(self, depth: int=0) -> MetaTree:
         # tree: ComponentTreeType
-        assert depth <= MAX_RECURSIONS
+        if depth > MAX_RECURSIONS:
+            raise RuleInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
 
         output = {} # OrderedDict()
         component = self
@@ -965,8 +950,10 @@ class BoundModelBase(ComponentBase, ABC):
 
     def get_full_name(self, owner: Optional[BoundModelBase] = None, depth: int = 0, init: bool = False):
         if not hasattr(self, "_name"):
+            if depth > MAX_RECURSIONS:
+                raise RuleInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
+
             assert init
-            assert depth < MAX_RECURSIONS
             names = []
             if owner:
                 # recusion
@@ -1113,10 +1100,19 @@ class InstanceAttrCurrentValue:
     key_string: KeyString = field()
     component: ComponentBase = field(repr=False)
     value: Union[LiteralType, UndefinedType] = field(init=False, default=UNDEFINED)
+    # do not compare - for unit tests
+    finished: bool = field(repr=False, init=False, default=False, compare=False)
 
     def set_value(self, value: LiteralType) -> "InstanceAttrCurrentValue":
+        if self.finished:
+            raise RuleInternalError(owner=self, msg=f"Current value already finished, last value: {self.value}") 
         self.value = value
         return self
+
+    def mark_finished(self):
+        if self.finished:
+            raise RuleInternalError(owner=self, msg=f"Current value already finished, last value: {self.value}") 
+        self.finished = True
 
 # ------------------------------------------------------------
 
@@ -1155,6 +1151,9 @@ class ApplyStackFrame:
     # does not correspond with component's tree depth.
     depth: Optional[int] = field(repr=False, default = None)
 
+    # used for cache only - holds current subtree
+    parent_values_subtree: Optional[ComponentTreeWValuesType] = field(init=False, repr=False, default=None)
+
     # TODO: this is ugly 
     # set only in single case: partial mode, in_component_only_tree, component=component_only, instance_new
     on_component_only: Optional[ComponentBase] = field(repr=False, default=None)
@@ -1180,6 +1179,8 @@ class ApplyStackFrame:
 
     # used to check root value in models registry 
     bound_model_root : Optional[BoundModelBase] = field(repr=False, init=False, default=None)
+
+
 
     def __post_init__(self):
 
@@ -1209,6 +1210,14 @@ class ApplyStackFrame:
             raise RuleInternalError(owner=self, msg=f"Expected model instance or list[instances], got: {self.instance}")
 
         assert self.bound_model_root
+
+    def set_parent_values_subtree(self, parent_values_subtree: Union[Dict, List]) -> Union[Dict, List]:
+        " returns original values "
+        # NOTE: didn't want to introduce a new stack frame layer for just changing one attribute
+        # part of ComponentTreeWValuesType]
+        parent_values_subtree_orig = self.parent_values_subtree
+        self.parent_values_subtree = parent_values_subtree
+        return parent_values_subtree_orig
 
 
     def clean(self):
@@ -1335,6 +1344,10 @@ class IApplySession:
                 ]
             ]= field(init=False, repr=False, default_factory=dict)
 
+    # used for cache only - holds complete tree
+    values_tree: Optional[ComponentTreeWValuesType] = field(init=False, repr=False, default=None)
+    values_tree_by_key_string: Optional[Dict[KeyString, ComponentTreeWValuesType]] = field(init=False, repr=False, default=None)
+
     @abstractmethod
     def apply(self) -> IApplySession:
         ...
@@ -1358,7 +1371,6 @@ class IApplySession:
                 validation_failure = component.validate_type(apply_session=self, value=value)
                 if validation_failure:
                     raise RuleInternalError(owner=self, msg=f"TODO: Type validation failed in defaults_mode - probably should default value to None ") 
-                # if validation_failure: import pdb;pdb.set_trace() 
                 validation_failure = None
             else:
                 validation_failure = component.validate_type(apply_session=self, value=value)
@@ -1556,7 +1568,7 @@ def extract_type_info(
 #     instance_attr_value = apply_session.update_history[key_str][-1]
 #     return instance_attr_value.dexp_result
 
-# def _get_children_tree_impl(self, key: str, apply_session: Optional[IApplySession], _depth:int=0) -> Dict[ComponentNameType, ComponentBase]:
+# def _get_children_tree_impl(self, key: str, apply_session: Optional[IApplySession], depth:int=0) -> Dict[ComponentNameType, ComponentBase]:
 #     bind_dexp_result = self.get_dexp_result_from_instance(apply_session=apply_session)
 #     value = bind_dexp_result.value
 #     children_dict_traversed["value"] = value

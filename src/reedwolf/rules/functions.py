@@ -385,9 +385,11 @@ class IFunction(IFunctionDexpNode):
             raise RuleInternalError(owner=self, msg=f"INJECT_COMPONENT_TREE :: PrepArg '{prep_arg.name}' expected DExp(F.<field>) -> Field(),  got: '{dexp_node}' -> '{dexp_node.data}' ") 
 
         component: ComponentBase = dexp_node.data
+        assert component == apply_session.current_frame.component
 
-        output = component.get_children_tree_w_values(apply_session=apply_session)
-        # from pprint import pprint; print("----here:"); pprint(output)
+        key_string = apply_session.get_key_string(component)
+        # get complete tree with values
+        output = apply_session.get_values_tree(key_string=key_string)
 
         assert ReservedArgumentNames.INJECT_COMPONENT_TREE not in kwargs
         kwargs[ReservedArgumentNames.INJECT_COMPONENT_TREE] = output

@@ -423,9 +423,6 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
         dexp_result = component.bind._evaluator.execute_dexp(apply_session)
         out = dexp_result.value
 
-        # OLD: 
-        #   else:
-        #       out = ComponentAttributeAccessor(component, instance=self.instance, _depth=self._depth+1)
         return out
 
 

@@ -9,7 +9,15 @@ check components.py too
 from __future__ import annotations
 
 from abc import ABC
-from typing import Union, List, Optional, Any, ClassVar, Dict
+from typing import (
+        Union, 
+        List, 
+        Optional, 
+        Any, 
+        ClassVar, 
+        Dict,
+        Tuple,
+        )
 from dataclasses import dataclass, field
 import inspect
 
@@ -69,6 +77,7 @@ from .registries import (
         )
 from .validations   import (
         MaxLength,
+        ExactLength,
         )
 from .components    import (
         Component,
@@ -76,6 +85,11 @@ from .components    import (
         EvaluationBase,
         )
 
+
+# Items are: 
+#   - when single - that must be added
+#   - when tuple(validtions) then one of listed must be added
+RequiredValidationsType = List[Union[ValidationBase, List[ValidationBase]]]
 
 
 class AutocomputedEnum(IntEnum):
@@ -99,7 +113,7 @@ class AutocomputedEnum(IntEnum):
 class FieldBase(Component, IFieldBase, ABC):
     # abstract property:
     PYTHON_TYPE:ClassVar[type(UNDEFINED)] = UNDEFINED
-    REQUIRED_VALIDATIONS:ClassVar[Optional[List[ValidationBase]]] = None
+    REQUIRED_VALIDATIONS:ClassVar[Optional[RequiredValidationsType]] = None
 
     # to Model attribute
     bind:           DotExpression
@@ -240,12 +254,29 @@ class FieldBase(Component, IFieldBase, ABC):
             raise RuleSetupError(owner=self, msg=f"'When you have at least one Evaluation cleaner, set 'autocomputed = AutocomputedEnum.ALLWAYS/SOMETIMES' (got '{self.autocomputed.name}').")
 
         if self.REQUIRED_VALIDATIONS:
-            validations_kls_required = set(self.REQUIRED_VALIDATIONS)
-            validations_kls_found = set([type(cleaner) for cleaner in self.cleaners if isinstance(cleaner, ValidationBase)]) if self.cleaners else set()
-            missing = (validations_kls_required - validations_kls_found)
-            if missing:
-                missing_names = ", ".join([validation.__name__ for validation in missing])
-                raise RuleSetupError(owner=self, msg=f"'{self.__class__.__name__}' requires following Validations (cleaners attribute): {missing_names}")
+            if True:
+                validations_kls_found = set([type(cleaner) for cleaner in self.cleaners if isinstance(cleaner, ValidationBase)]) if self.cleaners else set()
+                missing_names = []
+                for validation_kls_or_list in self.REQUIRED_VALIDATIONS:
+                    validation_kls_list = validation_kls_or_list if isinstance(validation_kls_or_list, (list, tuple)) else [validation_kls_or_list]
+                    any_found = any([validation_kls for validation_kls in validation_kls_list if validation_kls in validations_kls_found])
+                    if not any_found:
+                        if len(validation_kls_list)>1:
+                            missing = "(" + f" or ".join([vk.__name__ for vk in validation_kls_list]) + ")"
+                        else:
+                            missing = vk.__name__
+                        missing_names.append(missing)
+                if missing_names:
+                    missing_names = " and ".join(missing_names)
+                    raise RuleSetupError(owner=self, msg=f"'{self.__class__.__name__}' requires following Validations (cleaners attribute): {missing_names}")
+
+            else:
+                validations_kls_required = set(self.REQUIRED_VALIDATIONS)
+                validations_kls_found = set([type(cleaner) for cleaner in self.cleaners if isinstance(cleaner, ValidationBase)]) if self.cleaners else set()
+                missing = (validations_kls_required - validations_kls_found)
+                if missing:
+                    missing_names = ", ".join([validation.__name__ for validation in missing])
+                    raise RuleSetupError(owner=self, msg=f"'{self.__class__.__name__}' requires following Validations (cleaners attribute): {missing_names}")
 
         return self
 
@@ -334,7 +365,7 @@ class FieldBase(Component, IFieldBase, ABC):
 class StringField(FieldBase):
     # django: CharField
     PYTHON_TYPE:ClassVar[type] = str
-    REQUIRED_VALIDATIONS:ClassVar[List[ValidationBase]] = [MaxLength]
+    REQUIRED_VALIDATIONS:ClassVar[List[RequiredValidationsType]] = [(MaxLength, ExactLength)]
 
     def try_adapt_value(self, value: Any) -> Any:
         " apply phase: if not string and is standard type, convert to string "

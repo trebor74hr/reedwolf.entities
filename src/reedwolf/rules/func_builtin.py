@@ -85,7 +85,7 @@ T = TypeVar("T", bound=Any)
 
 def children(value: Any, inject_component_tree: ComponentTreeWValuesType) -> List[ItemType]:
     """ Component's list of children """
-    return inject_component_tree["children"]
+    return inject_component_tree["contains"]
 
 Children = create_builtin_function_factory( # noqa: E305
             children, name="Children", 
@@ -95,7 +95,7 @@ Children = create_builtin_function_factory( # noqa: E305
 
 def single_bool_selected(children_list: List[ItemType]) -> int:
     """ for objects from datastores - e.g. rows, iterables """
-    return len([child for child in children_list if child["instance_attr_current_value"].value==True])==1
+    return len([child for child in children_list if child["attr_current_value_instance"].value==True])==1
 
 SingleBoolSelected = create_builtin_function_factory( # noqa: E305
             single_bool_selected, name="SingleBoolSelected", 

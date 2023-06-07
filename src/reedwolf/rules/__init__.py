@@ -53,6 +53,7 @@ from .validations import (
         Required,
         Readonly,
         MaxLength,
+        ExactLength,
         MinLength,
         )
 from .valid_children import (
@@ -151,6 +152,7 @@ __all__ = [
     "Required",
     "MinLength",
     "MaxLength",
+    "ExactLength",
     "RangeLength",
     "Readonly",
 

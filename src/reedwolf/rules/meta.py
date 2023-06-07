@@ -153,7 +153,7 @@ ComponentTreeType = Dict[ComponentNameType, TreeNode]
 #   name: str self.name
 #   component: ComponentBase
 #   children: List[Self]
-#   instance_attr_current_value: InstanceAttrCurrentValue
+#   attr_current_value_instance: InstanceAttrCurrentValue
 ComponentTreeWValuesType = Dict[ComponentNameType, TreeNode]
 
 # TreeNode :: 

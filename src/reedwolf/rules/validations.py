@@ -172,6 +172,35 @@ class Readonly(SimpleValidationBase):
 
 
 @dataclass
+class ExactLength(ValidationBase):
+    value:          int = None
+    name:           Optional[str] = None
+    error:          Optional[TransMessageType] = field(repr=False, default=None)
+    available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
+    label:          Optional[TransMessageType] = field(repr=False, default=None)
+
+    def __post_init__(self):
+        if not to_int(self.value, 0) > 0:
+            raise RuleSetupError(owner=self, msg="'value' must be integer > 0")
+        if not self.error:
+            self.error = f"Provide value with length at most {self.value}"
+        super().__post_init__()
+
+    def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
+        component = apply_session.current_frame.component
+        value = apply_session.get_current_value(component)
+        if value and hasattr(value, "__len__") and len(value) != self.value:
+            return ValidationFailure(
+                            component_key_string = apply_session.get_key_string(component),
+                            error=self.error, 
+                            validation_name=self.name,
+                            validation_label=self.label,
+                            details=f"Value's length of {len(value)} must be exactly {self.value}" 
+                                    f" (value is '{message_truncate(value)}')"
+                            )
+        return None
+
+@dataclass
 class MaxLength(ValidationBase):
     # NOTE: list all attributes, do not reuse SimpleValidationBase, due 
     #       goal of having proper types and order: single required positional

@@ -23,6 +23,7 @@ from .expressions import (
         execute_available_dexp,
         )
 from .utils import (
+        get_available_names_example,
         UNDEFINED,
         NA_DEFAULTS_MODE,
         NA_IN_PROGRESS,
@@ -94,6 +95,8 @@ class UseApplyStackFrame(AbstractContextManager):
         self._copy_attr_from_previous_frame(previous_frame, "in_component_only_tree", 
                                             if_set_must_be_same=False)
         self._copy_attr_from_previous_frame(previous_frame, "depth", 
+                                            if_set_must_be_same=False)
+        self._copy_attr_from_previous_frame(previous_frame, "parent_values_subtree", 
                                             if_set_must_be_same=False)
 
         # do not use ==, compare by instance (ALT: use id(instance) ) 
@@ -390,6 +393,7 @@ class ApplyResult(IApplySession):
                                 )
 
         self.update_history[key_str].append(instance_attr_value)
+        # set current value 
         self.current_values[key_str].set_value(new_value)
 
         return instance_attr_value
@@ -446,6 +450,7 @@ class ApplyResult(IApplySession):
               tree depth.
 
         """
+        # TODO: self.config.loger.debug(...)
         assert not (mode_extension_list and mode_dexp_dependency)
 
         comp_container = component.get_container_owner(consider_self=True)
@@ -507,10 +512,11 @@ class ApplyResult(IApplySession):
 
 
         if depth > MAX_RECURSIONS:
-            raise RecursionError("Maximum recursion depth exceeded ({depth})")
+            raise RuleInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
 
         new_frame = None
 
+        parent_values_subtree = None
         if depth==0:
             # ---- Rules case -----
 
@@ -531,9 +537,9 @@ class ApplyResult(IApplySession):
                             in_component_only_tree=in_component_only_tree,
                             )
 
-
         elif not mode_extension_list and component.is_extension():
-            # ---- Extension case -----
+            # ---- Extension case -> process single or iterate all items -----
+
 
             component : Extension = component
             if not isinstance(component.bound_model.model, DotExpression):
@@ -555,6 +561,8 @@ class ApplyResult(IApplySession):
 
             if isinstance(instance, (list, tuple)):
                 # enters recursion -> _apply() -> ...
+                # parent_values_subtree = self.current_frame.parent_values_subtree
+
                 self._apply_extension_list(
                         component=component,
                         # parent=parent,
@@ -583,6 +591,8 @@ class ApplyResult(IApplySession):
             new_frame = ApplyStackFrame(
                             container = component, 
                             component = component, 
+                            # must inherit previous instance
+                            parent_instance=self.current_frame.instance,
                             instance = instance,
                             instance_new = current_instance_new,
                             in_component_only_tree=in_component_only_tree,
@@ -605,16 +615,21 @@ class ApplyResult(IApplySession):
                             )
 
 
-
         process_further = True
 
         # one level deeper
         new_frame.depth = depth + 1
 
+        # ------------------------------------------------------------
+        # ----- Main processing - must use new stack frame
+        # ------------------------------------------------------------
         with self.use_stack_frame(new_frame):
 
             comp_key_str = self.get_key_string(component)
+
+            # try to initialize (create value instance), but if exists, check for circular dependency loop
             current_value_instance = self.current_values.get(comp_key_str, UNDEFINED)
+
             if current_value_instance is NA_IN_PROGRESS:
                  raise RuleApplyError(owner=component, 
                             msg=f"The component is already in progress state. Probably circular dependency issue. Fix problematic references to this component and try again.") 
@@ -631,30 +646,38 @@ class ApplyResult(IApplySession):
                     # ============================================================
                     # Update, validate, evaluate
                     # ============================================================
-                    process_further = self._update_and_clean(component=component)
-                    # also if validation fails ...
+                    process_further, current_value_instance_new = self._update_and_clean(component=component, key_string=comp_key_str)
+                    # ============================================================
+                    if current_value_instance_new is not None:
+                        current_value_instance = current_value_instance_new
 
                 if process_further and getattr(component, "enables", None):
                     assert not getattr(component, "contains", None), component
 
                     value = self.get_current_value(component)
+
                     # OLD: delete this - not good in mode_dexp_dependency mode
                     #       bind_dexp_result = component.get_dexp_result_from_instance(apply_session=self)
                     #       value = bind_dexp_result.value
-                    if value is not NA_DEFAULTS_MODE \
-                      and not isinstance(value, (bool, NoneType)):
-                        raise RuleApplyValueError(owner=component, 
-                                msg=f"Component.enables can be applied only for Boolean or None values, got: {value} : {type(value)}")
-                    if not value: 
-                        process_further = False
+                    if not self.defaults_mode:
+                        if not isinstance(value, (bool, NoneType)):
+                            raise RuleApplyValueError(owner=component, 
+                                    msg=f"Component.enables can be applied only for Boolean or None values, got: {value} : {type(value)}")
+                        if not value: 
+                            process_further = False
 
             # if parent yields None - do not process on children
-            if self.current_frame.instance in (None, UNDEFINED):
+            if self.current_frame.instance is None \
+              or self.current_frame.instance is UNDEFINED:
                 process_further = False
 
             # ------------------------------------------------------------
             # NOTE: used only for test if all Dexp values could evaluate ...
             #       self.__check_component_all_dexps(component)
+
+            # -- fill values dict
+            # TODO: consider: recursive=True - currently causes lot of issues
+            self._fill_values_dict(filler="_apply", is_init=(depth==0), process_further=process_further) 
 
             if process_further:
                 # ------------------------------------------------------------
@@ -667,10 +690,12 @@ class ApplyResult(IApplySession):
                                 component=child, 
                                 # depth=depth+1,
                                 )
+                # TODO: consider to reset - although should not influence since stack_frame will be disposed
+                # self.current_frame.set_parent_values_subtree(parent_values_subtree)
 
-            if self.current_frame.component.is_container():
-                # Fill internal cache for possible later use by some `dump_` functions
-                self.current_frame.component.get_children_tree_w_values(apply_session=self)
+            # if self.current_frame.component.is_container():
+            # Fill internal cache for possible later use by some `dump_` functions
+
 
 
         if depth==0:
@@ -705,9 +730,6 @@ class ApplyResult(IApplySession):
                         ))
 
         # TODO: logger: apply_session.config.logger.debug(f"depth={depth}, comp={component.name}, bind={bind} => {dexp_result}")
-
-        if self.current_values[comp_key_str] is NA_IN_PROGRESS:
-            self.current_values[comp_key_str] = NOT_APPLIABLE
 
         return
 
@@ -746,11 +768,12 @@ class ApplyResult(IApplySession):
                 new_instances_by_key[key] = item_instance_new
 
 
+        parent_instance = self.current_frame.instance
+
         # NOTE: considered to use dict() since dictionaries are ordered in Python 3.6+ 
         #       ordering-perserving As of Python 3.7, this is a guaranteed, i.e.  Dict keeps insertion order
         #       https://stackoverflow.com/questions/39980323/are-dictionaries-ordered-in-python-3-6
         instances_by_key = OrderedDict()
-
         for index0, instance in enumerate(instance_list, 0):
             key = component.get_key_pairs_or_index0(instance=instance, index0=index0)
             if component.keys:
@@ -764,6 +787,7 @@ class ApplyResult(IApplySession):
                     key_string = self.get_key_string_by_instance(
                             component = component, 
                             instance = instance, 
+                            parent_instance=parent_instance,
                             index0 = index0)
 
                     self.changes.append(
@@ -782,6 +806,7 @@ class ApplyResult(IApplySession):
 
             instances_by_key[key] = (instance, index0, item_instance_new)
 
+
         if new_instances_by_key:
             index0_new = len(instances_by_key)
             new_keys = [key for key in new_instances_by_key.keys() if key not in instances_by_key]
@@ -792,6 +817,7 @@ class ApplyResult(IApplySession):
                 key_string = self.get_key_string_by_instance(
                                 component = component,
                                 instance = item_instance_new, 
+                                parent_instance=parent_instance,
                                 index0 = index0_new)
 
                 self.changes.append(
@@ -805,34 +831,42 @@ class ApplyResult(IApplySession):
                 index0_new += 1
 
         # Apply for all items
-        for key, (instance, index0, item_instance_new) in instances_by_key.items():
-            # Go one level deeper 
-            with self.use_stack_frame(
-                    ApplyStackFrame(
-                        container = component,
-                        component = component, 
-                        index0 = index0,
-                        # main instance - original values
-                        instance = instance, 
-                        parent_instance=self.current_frame.instance,
-                        # new instance - new values (when update mode)
-                        instance_new = item_instance_new, 
-                        parent_instance_new=self.current_frame.instance_new,
-                        in_component_only_tree=in_component_only_tree,
-                        depth=depth+1,
-                        )):
-                # ------------------------------------------------
-                # Recursion with prevention to hit this code again
-                # ------------------------------------------------
-                self._apply(
-                            # parent=parent, 
-                            component=component, 
-                            mode_extension_list=True,
-                            # in_component_only_tree=in_component_only_tree,
-                            # depth=depth+1,
-                            # prevent is_extension_logic again -> infinitive recursion
-                            )
 
+        if instances_by_key:
+
+            # -- fill values dict
+            self._fill_values_dict(filler="ext_list", component=component, is_init=False, process_further=True, extension_items_mode=True)
+
+            for key, (instance, index0, item_instance_new) in instances_by_key.items():
+                # Go one level deeper 
+                with self.use_stack_frame(
+                        ApplyStackFrame(
+                            container = component,
+                            component = component, 
+                            index0 = index0,
+                            # main instance - original values
+                            instance = instance, 
+                            parent_instance=parent_instance,
+                            # new instance - new values (when update mode)
+                            instance_new = item_instance_new, 
+                            parent_instance_new=self.current_frame.instance_new,
+                            in_component_only_tree=in_component_only_tree,
+                            depth=depth+1,
+                            )):
+                    # ------------------------------------------------
+                    # Recursion with prevention to hit this code again
+                    # ------------------------------------------------
+                    self._apply(
+                                # parent=parent, 
+                                component=component, 
+                                mode_extension_list=True,
+                                # in_component_only_tree=in_component_only_tree,
+                                # depth=depth+1,
+                                # prevent is_extension_logic again -> infinitive recursion
+                                )
+
+            # TODO: consider to reset - although should not influence since stack_frame will be disposed
+            # self.current_frame.set_parent_values_subtree(parent_values_subtree)
 
     # ------------------------------------------------------------
 
@@ -964,11 +998,14 @@ class ApplyResult(IApplySession):
     # _update_and_clean - Update, validate, evaluate
     # ============================================================
 
-    def _update_and_clean(self, component: ComponentBase) -> bool:
+    def _update_and_clean(self, component: ComponentBase, key_string=KeyString) -> (bool, InstanceAttrCurrentValue):
         """ returns if children should be processed 
                 False - when available yields False
                 False - when validation fails
                 True - everything is clean, update went well
+
+            2nd return value:
+                current_value_instance - object which holds evaluated value
 
         it does following:
             1. init change history by bind of self.instance
@@ -976,13 +1013,13 @@ class ApplyResult(IApplySession):
             3. call cleaners - validations and evaluations in given order
             4. validate type is ok?
         """
-
+         
         if getattr(component, "available", None):
             not_available_dexp_result = execute_available_dexp(
                                                 component.available, 
                                                 apply_session=self)
             if not_available_dexp_result: 
-                return False
+                return False, None
 
         if getattr(component, "bind", None):
             # --- 1. Fill initial value from instance 
@@ -1055,7 +1092,20 @@ class ApplyResult(IApplySession):
         if self.validate_type(component):
             all_ok = False
 
-        return all_ok
+        current_value_instance = self.current_values[key_string]
+        if current_value_instance is NA_IN_PROGRESS:
+            current_value_instance = NOT_APPLIABLE
+            self.current_values[key_string] = current_value_instance
+
+        elif current_value_instance is not UNDEFINED \
+          and current_value_instance is not NOT_APPLIABLE:
+
+            if not isinstance(current_value_instance, InstanceAttrCurrentValue):
+                raise RuleInternalError(owner=self, msg=f"Unexpected current value instance found for {key_string}, got: {current_value_instance}")  
+            current_value_instance.mark_finished()
+
+
+        return all_ok, current_value_instance
 
     # ------------------------------------------------------------
 
@@ -1143,36 +1193,55 @@ class ApplyResult(IApplySession):
 
     # ------------------------------------------------------------
 
-    def get_key_string(self, component: ComponentBase) -> KeyString:
+    def get_key_string(self, component: ComponentBase, depth:int=0, force:bool=False) -> KeyString:
         """
+        Recursion
         Caching is on containers only - by id(indstance)
         for other components only attach name to it.
         Container - when not found then gets intances and index0 
         from current frame
         """
-        if component.is_container():
-            # raise RuleInternalError(owner=component, msg=f"Expecting non-container, got: {component}") 
+        if depth > MAX_RECURSIONS:
+            raise RuleInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
+
+        # Started to process extension, but not yet positioned on any extension instance item 
+        # the key will have no extension::<instance_id>, just owner_key_string::owner_key_string::extension_name
+        extension_no_instance_case = (component.get_container_owner(consider_self=True) 
+                                      != 
+                                      self.current_frame.component.get_container_owner(consider_self=True))
+
+        # NOTE: this could be different 
+        #       component == self.current_frame.component
+
+        if component.is_container() and not extension_no_instance_case:
             instance = self.current_frame.instance
+            parent_instance = self.current_frame.parent_instance
             index0 = self.current_frame.index0
-            # NOTE: this could be different 
-            #       component == self.current_frame.component
+
             key_string = self.get_key_string_by_instance(
                             component = component,
                             instance = instance, 
-                            index0 = index0)
+                            parent_instance=parent_instance,
+                            index0 = index0,
+                            force=force,
+                            )
         else:
-            container = component.get_container_owner(consider_self=True)
+            consider_self = False if extension_no_instance_case else True
+            container = component.get_container_owner(consider_self=consider_self)
+
             # Recursion
-            container_key_string = self.get_key_string(container)
+            container_key_string = self.get_key_string(container, depth=depth+1)
+
             # construct
             key_string = GlobalConfig.ID_NAME_SEPARATOR.join(
                     [container_key_string, component.name] 
                     )
+
         return key_string
 
     # ------------------------------------------------------------
 
-    def get_key_string_by_instance(self, component: ComponentBase, instance: ModelType, index0: Optional[int]) -> str:
+    def get_key_string_by_instance(self, component: ComponentBase, instance: ModelType, parent_instance: ModelType, index0: Optional[int], force:bool=False) -> str:
         # apply_session:IApplySession,  -> self
         """
         Two cases - component has .keys or not:
@@ -1197,7 +1266,7 @@ class ApplyResult(IApplySession):
 
         instance_id = id(instance)
         key_string = self.key_string_container_cache.get(instance_id, None)
-        if key_string is None:
+        if key_string is None or force:
 
             if component.keys:
                 key_pairs = component.get_key_pairs(instance)
@@ -1209,20 +1278,27 @@ class ApplyResult(IApplySession):
                                 ))
             elif index0 is not None:
                 key_string = f"{component.name}[{index0}]"
-
-                if self.current_frame.parent_instance:
-                    parent_instance = self.current_frame.parent_instance
-                    parent_id = id(parent_instance)
-                    # if parent_id not in self.key_string_container_cache:
-                    #     # must_be_in_cache
-                    #     if not self.component_name_only:
-                    #         raise RuleInternalError(owner=component, msg=f"Parent instance's key not found in cache, got: {parent_instance}") 
-                    #     parent_key_string = f"__PARTIAL__{self.component_name_only}"
-                    # else:
-                    parent_key_string = self.key_string_container_cache[parent_id]
-                    key_string = GlobalConfig.ID_NAME_SEPARATOR.join([parent_key_string, key_string])
             else:
                 key_string = component.name
+
+            if parent_instance:
+                # prepend parent key_string(s)
+
+                # parent_instance = self.current_frame.parent_instance
+                parent_id = id(parent_instance)
+                # if parent_id not in self.key_string_container_cache:
+                #     # must_be_in_cache
+                #     if not self.component_name_only:
+                #         raise RuleInternalError(owner=component, msg=f"Parent instance's key not found in cache, got: {parent_instance}") 
+                #     parent_key_string = f"__PARTIAL__{self.component_name_only}"
+                # else:
+                parent_key_string = self.key_string_container_cache[parent_id]
+                key_string = GlobalConfig.ID_NAME_SEPARATOR.join([parent_key_string, key_string])
+            else:
+                container_owner = component.get_container_owner(consider_self=True)
+                if container_owner.is_extension():
+                    raise RuleInternalError(owner=component, msg=f"Owner container {container_owner.name} is an extension and parent_instance is empty") 
+
 
             self.key_string_container_cache[instance_id] = key_string
             self.instance_by_key_string_cache[key_string] = instance
@@ -1278,8 +1354,8 @@ class ApplyResult(IApplySession):
             self._apply(component=component, mode_dexp_dependency=True)
             # self._init_by_bind_dexp(component)
             
-        instance_attr_current_value = self.current_values[key_str]
-        return instance_attr_current_value
+        attr_current_value_instance = self.current_values[key_str]
+        return attr_current_value_instance
 
     # ------------------------------------------------------------
 
@@ -1298,8 +1374,8 @@ class ApplyResult(IApplySession):
         key_str = self.get_key_string(component)
         if not key_str in self.current_values:
             raise RuleInternalError(owner=component, msg=f"{key_str} not found in current values") 
-        instance_attr_current_value = self.current_values[key_str]
-        return instance_attr_current_value.value
+        attr_current_value_instance = self.current_values[key_str]
+        return attr_current_value_instance.value
 
     # ------------------------------------------------------------
 
@@ -1320,12 +1396,158 @@ class ApplyResult(IApplySession):
 
     # ------------------------------------------------------------
 
+    def get_values_tree(self, key_string: Optional[KeyString] = None) -> ComponentTreeWValuesType:
+        # component: ComponentBase
+        """
+        will go recursively through every children and
+        fetch their "children" and collect to output structure.
+        selects all nodes, put in tree, includes self
+        for every node bind (M.<field>) is evaluated
+        """
+        if self.values_tree is None:
+            raise RuleInternalError(owner=self, msg=f"_get_values_tree() did not filled _values_tree cache") 
+        if key_string is None:
+            component = self.rules
+            tree = self.values_tree
+        else:
+            if key_string not in self.values_tree_by_key_string.keys():
+                if key_string not in self.current_values:
+                    names_avail = get_available_names_example(key_string, self.values_tree_by_key_string.keys())
+                    raise RuleInternalError(owner=self, msg=f"Key string not found in values tree, got: {key_string}. Available: {names_avail}") 
+
+                # -- fill values dict
+                assert not (self.current_frame.component==self.rules)
+                # NOTE: can trigger recursion 
+                # extension_items_mode = False, component = component, 
+                self._fill_values_dict(filler="get_values_tree", is_init=False, recursive=True)
+
+            tree = self.values_tree_by_key_string[key_string]
+
+        return tree
+
+    # ------------------------------------------------------------
+
+    def _fill_values_dict(self, 
+                          filler:str,
+                          is_init:bool, 
+                          process_further:bool=True,
+                          extension_items_mode: bool = False,
+                          component: Optional[ComponentBase] = None, 
+                          recursive: bool = False,
+                          depth: int=0,
+                          ) -> ComponentTreeWValuesType:
+        " see unit test for example - test_dump.py "
+        if depth > MAX_RECURSIONS:
+            raise RuleInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
+
+        if not component:
+            component = self.current_frame.component
+        # else:
+        #     # fetching values not allowed since stack is maybe not set up correctly
+        #     assert not getattr(component, "bind", None), component
+
+        # process_further currently not used
+        if is_init:
+            assert not extension_items_mode
+            assert self.values_tree_by_key_string is None
+            self.values_tree_by_key_string = {}
+        else:
+            assert self.values_tree_by_key_string is not None
+
+        # -- fill cache by key_string 
+        key_string = self.get_key_string(component)
+
+        if key_string in self.values_tree_by_key_string:
+            # already in cache
+            values_dict = self.values_tree_by_key_string[key_string] 
+            return values_dict
+
+        # -- create a values_dict for this component
+        filler = filler + ("+RECURSIVE" if recursive else "") + (f"+{depth}" if depth or recursive else "") 
+
+        values_dict = {}
+
+        # set immediatelly - to avoid duplicate calls in 
+        self.values_tree_by_key_string[key_string] = values_dict
+
+        values_dict["name"] = component.name
+        # DEBUG: values_dict["filler"] = filler
+        attr_current_value_instance = None
+        if getattr(component, "bind", None):
+            # can trigger recursion - filling tree 
+            attr_current_value_instance = \
+                    self.get_current_value_instance(
+                        component=component, init_when_missing=True)
+
+            if attr_current_value_instance is not NOT_APPLIABLE:
+                if attr_current_value_instance is UNDEFINED:
+                    raise RuleInternalError(owner=component, msg="Not expected to have undefined current instance value") 
+            else:
+                attr_current_value_instance = None
+
+        if attr_current_value_instance is not None:
+            values_dict["attr_current_value_instance"] = attr_current_value_instance
+            # values_dict["key_string"] = attr_current_value_instance.key_string
+
+        # -- add to parent object or call recursion and fill the tree completely
+
+        if extension_items_mode:
+            self.current_frame.parent_values_subtree.append(values_dict)
+            values_dict["extension_items"] = []
+            self.current_frame.set_parent_values_subtree(values_dict["extension_items"])
+            if recursive:
+                raise RuleInternalError(owner=component, msg=f"Did not implement this case - extension_items + recursive") 
+        else:
+            if is_init:
+                assert not recursive, "did not consider this case"
+                # only first object is a dict
+                parent_values_subtree = values_dict
+                assert self.values_tree is None
+                self.values_tree = parent_values_subtree
+            else:
+                parent_values_subtree = self.current_frame.parent_values_subtree
+                # all next objects are lists
+                assert isinstance(parent_values_subtree, list)
+
+                # TODO: explain. For now: don't ask ... some special case
+                #       needed to be skipped - otherwise duplicate and
+                #       mislocated items
+                if not (recursive and depth>0):
+                    parent_values_subtree.append(values_dict)
+
+            children = component.get_children()
+            if children: 
+                if recursive:
+                    values_dict["contains"] = []
+                    for child_component in component.get_children():
+                        # recursion
+                        child_values_dict = self._fill_values_dict(
+                                filler=filler,
+                                is_init=False,
+                                component=child_component, 
+                                process_further=process_further,
+                                recursive=recursive,
+                                depth=depth+1)
+                        values_dict["contains"].append(child_values_dict)
+                    # set to None to prevent further filling 
+                    self.current_frame.set_parent_values_subtree(None) # parent_values_subtree)
+                else:
+                    # recursion on the caller, setup target, caller will fill everything
+                    values_dict["contains"] = []
+                    self.current_frame.set_parent_values_subtree(values_dict["contains"])
+
+
+        return values_dict
+
+    # ------------------------------------------------------------
+
     def dump(self) -> ValuesTree:
         """
         Recursively traverse children's tree and and collect current values to
         recursive output dict structure.
+        Everything should be already cached.
         """
-        tree: ComponentTreeWValuesType = self.rules.get_children_tree_w_values(apply_session=self)
+        tree: ComponentTreeWValuesType = self.get_values_tree()
         return self._dump_values(tree)
 
     # ------------------------------------------------------------
@@ -1336,32 +1558,40 @@ class ApplyResult(IApplySession):
         current values to recursive output dict structure.
         """
         assert self.defaults_mode
-        tree: ComponentTreeWValuesType = self.rules.get_children_tree_w_values(apply_session=self)
+        tree: ComponentTreeWValuesType = self.get_values_tree()
         return self._dump_values(tree)
 
     # ------------------------------------------------------------
 
+
     def _dump_values(self, tree: ComponentTreeWValuesType, depth: int=0) -> ValuesTree:
-        assert depth <= MAX_RECURSIONS
+        # recursion
+        if depth > MAX_RECURSIONS:
+            raise RuleInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
+
         output = {}
+        # component's name
         output["name"] = tree["name"]
 
-        if "instance_attr_current_value" in tree:
-            value = tree["instance_attr_current_value"].value
-            output["value"] = value
+        if "attr_current_value_instance" in tree:
+            output["value"] = tree["attr_current_value_instance"].value
 
-        children = tree["children"]
-        if children:
-            # children is renamed to contains since it is meant to be publicly
-            # exposed struct
-            output["contains"] = []
-            for child in children:
-                # recursion
-                child_out = self._dump_values(child, depth+1)
-                output["contains"].append(child_out)
+        self._dump_values_children(tree=tree, output=output, key_name="contains", depth=depth)
+        self._dump_values_children(tree=tree, output=output, key_name="extension_items", depth=depth)
 
         return output
 
+    def _dump_values_children(self, tree: ComponentTreeWValuesType, output: ComponentTreeWValuesType, key_name: str, depth:int):
+        # recursion
+        children = tree.get(key_name, None)
+        if children:
+            # children is renamed to contains since it is meant to be publicly
+            # exposed struct
+            output[key_name] = []
+            for child in children:
+                # recursion
+                child_out = self._dump_values(child, depth+1)
+                output[key_name].append(child_out)
 
 # ------------------------------------------------------------
 # OBSOLETE
