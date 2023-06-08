@@ -87,7 +87,13 @@ This = ThisNS
 Ctx = ContextNS
 Cfg = ConfigNS
 
-# ALL_NS_OBJECTS = (ContextNS, FieldsNS, ThisNS, UtilsNS, FunctionsNS)
+# Collect all namespaces
+ALL_NS_OBJECTS = {
+        name: obj 
+        for name, obj in globals().items()
+        if isinstance(obj, Namespace)
+        }
+
 
 # # Context - Direct access to managed models underneath and global Rules objects like Validation/FieldGroup etc
 # ContextNS = Namespace("Context")

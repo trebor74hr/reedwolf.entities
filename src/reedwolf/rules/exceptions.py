@@ -50,7 +50,7 @@ class RuleNameNotFoundError(RuleError):
     pass
 
 # ------------------------------------------------------------
-# Rules setup (boot time) validation errors
+# Rules Setup phase (boot time) validation errors
 # ------------------------------------------------------------
 class RuleSetupError(RuleError):
     pass
@@ -69,7 +69,7 @@ class RuleSetupTypeError(RuleSetupError):
 
 
 # ------------------------------------------------------------
-# Rules setup (boot time) validation errors
+# Rules Apply phase validation errors
 # ------------------------------------------------------------
 class RuleApplyError(RuleError):
     pass
@@ -86,6 +86,23 @@ class RuleApplyNameNotFoundError(RuleApplyNameError):
 class RuleApplyTypeError(RuleApplyError):
     pass
 
+# ------------------------------------------------------------
+# Rules Load phase validation errors
+# ------------------------------------------------------------
+class RuleLoadError(RuleError):
+    pass
+
+class RuleLoadValueError(RuleLoadError):
+    pass
+
+class RuleLoadNameError(RuleLoadError):
+    pass
+
+class RuleLoadNameNotFoundError(RuleLoadNameError):
+    pass
+
+class RuleLoadTypeError(RuleLoadError):
+    pass
 
 
 # ------------------------------------------------------------

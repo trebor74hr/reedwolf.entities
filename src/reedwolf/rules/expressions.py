@@ -563,6 +563,12 @@ class DotExpression(DynamicAttrsBase):
     def GetNamespace(self) -> Namespace:
         return self._namespace
 
+    def Equals(self, other: Any) -> bool:
+        return (isinstance(other, self.__class__)
+                and other._namespace == self._namespace
+                and other._func_args == self._func_args
+                and other.Path == self.Path)
+
     def IsFinished(self):
         return self._status!=DExpStatusEnum.INITIALIZED
 
