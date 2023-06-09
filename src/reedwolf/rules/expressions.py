@@ -507,7 +507,7 @@ class DotExpression(DynamicAttrsBase):
     # NOTE: each item in this list should be implemented as attribute or method in this class
     # "GetAttrDexpNode",
     # "Read", 
-    RESERVED_ATTR_NAMES = {"Path", "Setup", "GetNamespace",
+    RESERVED_ATTR_NAMES = {"Clone", "Path", "Setup", "GetNamespace", "Equals", 
                            "_evaluator",  # allwyays filled, contains all nodes
                            "_dexp_node",  # is last node (redundant), but None if case of error
                            "_node", "_namespace", "_name", "_func_args", "_is_top", "_status",
@@ -522,6 +522,7 @@ class DotExpression(DynamicAttrsBase):
         namespace: Namespace,
         Path: Optional[List[DotExpression]] = None,
     ):
+        " NOTE: when adding new params, add to Clone() too "
         # SAFE OPERATIONS
         self._status : DExpStatusEnum = DExpStatusEnum.INITIALIZED
         self._namespace = namespace
@@ -559,6 +560,10 @@ class DotExpression(DynamicAttrsBase):
         # the last one attr_node
         self._dexp_node = UNDEFINED
 
+
+    def Clone(self) -> DotExpression:
+        # NOTE: currently not used
+        return self.__class__(node=node, namespace=namespace, Path=Path)
 
     def GetNamespace(self) -> Namespace:
         return self._namespace
@@ -750,7 +755,8 @@ class DotExpression(DynamicAttrsBase):
         return DotExpression(node=aname, namespace=self._namespace, Path=self.Path)
 
     def __call__(self, *args, **kwargs):
-        assert self._func_args is None
+        if self._func_args is not None:
+            raise RuleInternalError(owner=self, msg=f"Node already a function, duplicate call?") 
         self._func_args = [args, kwargs]
         return self
 
