@@ -98,38 +98,46 @@ class Builder:
         with self.use_call_trace(f"parse({ast_node_repr(expr_node)})") as call_repr:
 
             if type(expr_node)==ast.BinOp:
+                raise NotImplementedError()
                 # recursion
-                dexp_node = self._process_ast_binop(node=expr_node, call_repr=call_repr, depth=depth+1)
+                # dexp_node = self._process_ast_binop(node=expr_node, call_repr=call_repr, depth=depth+1)
             else:
                 ast_node_list: List[ast.AST] = self._ast_nodes_prepare(expr_node)
+                if not ast_node_list:
+                    return None
 
-                # --- check start node - must be namespace
-                if len(ast_node_list) <= 1:
-                    raise RuleLoadTypeError(owner=call_repr, msg=f"Expected at minimal <Namespace>.<attribute/function>, got: {ast_node_list}")
+                start_node = ast_node_list[0]
 
-                node = ast_node_list[0]
-                if not type(node)==ast.Name:
-                    raise RuleInternalError(owner=self, msg=f"Expected Name, got: {type(node)} / {node}") 
-                ns_name = node.id
-                if ns_name not in ALL_NS_OBJECTS:
-                    ops_avail = get_available_names_example(ns_name, ALL_NS_OBJECTS.keys())
-                    raise RuleLoadNameError(owner=call_repr, msg=f"Starting node should be namespace, found: {ns_name}, available: {ops_avail}")
+                if type(start_node)==ast.BinOp:
+                    if len(ast_node_list) != 1:
+                        raise NotImplementedError()
+                    # recursion
+                    dexp_node = self._process_ast_binop(node=start_node, call_repr=call_repr, depth=depth+1)
+                elif type(start_node)==ast.Name:
+                    # --- check start node - must be namespace
+                    if len(ast_node_list) <= 1:
+                        raise RuleLoadTypeError(owner=call_repr, msg=f"Expected at minimal <Namespace>.<attribute/function>, got: {ast_node_list}")
 
-                # iterate all others
-                namespace = ALL_NS_OBJECTS[ns_name]
-                dexp_node = namespace
+                    ns_name = start_node.id
+                    if ns_name not in ALL_NS_OBJECTS:
+                        ops_avail = get_available_names_example(ns_name, ALL_NS_OBJECTS.keys())
+                        raise RuleLoadNameError(owner=call_repr, msg=f"Starting node should be namespace, found: {ns_name}, available: {ops_avail}")
 
-                for nr, node in enumerate(ast_node_list[1:]):
-                    if type(node)==ast.Attribute:
-                        # indirect recursion
-                        dexp_node = self._process_ast_attribute(dexp_node=dexp_node, node=node, call_repr=call_repr, depth=depth+1)
-                    elif type(node)==ast.Call:
-                        # indirect recursion
-                        dexp_node = self._process_ast_call(dexp_node=dexp_node, node=node, call_repr=call_repr, depth=depth+1)
-                    # elif type(node)==ast.BinOp:
-                    #     dexp_node = self._process_ast_binop(dexp_node=dexp_node, node=node, call_repr=call_repr)
-                    else:
-                        raise RuleLoadTypeError(owner=call_repr, msg=f"Expected expression, attribute or name, got: {type(node)} / {node}")
+                    # iterate all others
+                    namespace = ALL_NS_OBJECTS[ns_name]
+                    dexp_node = namespace
+
+                    for nr, node in enumerate(ast_node_list[1:]):
+                        if type(node)==ast.Attribute:
+                            # indirect recursion
+                            dexp_node = self._process_ast_attribute(dexp_node=dexp_node, node=node, call_repr=call_repr, depth=depth+1)
+                        elif type(node)==ast.Call:
+                            # indirect recursion
+                            dexp_node = self._process_ast_call(dexp_node=dexp_node, node=node, call_repr=call_repr, depth=depth+1)
+                        else:
+                            raise RuleLoadTypeError(owner=call_repr, msg=f"Expected expression, attribute or name, got: {type(node)} / {node}")
+                else:
+                    raise RuleInternalError(owner=self, msg=f"Expected Name/BinOp, got: {type(node)} / {node}") 
 
             return dexp_node
 
@@ -158,6 +166,9 @@ class Builder:
                 elif type(node)==ast.Call:
                     node = node.func
                 elif type(node)==ast.Name:
+                    # terminate
+                    break
+                elif type(node)==ast.BinOp:
                     # terminate
                     break
                 else:
@@ -225,7 +236,7 @@ class Builder:
 
     # ------------------------------------------------------------
 
-    def _process_ast_binop(self, dexp_node: DotExpression, node: ast.BinOp, call_repr: str, depth: int) -> DotExpression:
+    def _process_ast_binop(self, node: ast.BinOp, call_repr: str, depth: int) -> DotExpression:
         assert type(node)==ast.BinOp, node
 
         if type(node.op) not in AST_NODE_TYPE_TO_FUNCTION:
