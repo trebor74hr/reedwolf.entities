@@ -98,9 +98,8 @@ class Builder:
         with self.use_call_trace(f"parse({ast_node_repr(expr_node)})") as call_repr:
 
             if type(expr_node)==ast.BinOp:
-                raise NotImplementedError()
                 # recursion
-                # dexp_node = self._process_ast_binop(node=expr_node, call_repr=call_repr, depth=depth+1)
+                dexp_node = self._process_ast_binop(node=expr_node, call_repr=call_repr, depth=depth+1)
             else:
                 ast_node_list: List[ast.AST] = self._ast_nodes_prepare(expr_node)
                 if not ast_node_list:
