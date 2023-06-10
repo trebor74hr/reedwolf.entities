@@ -207,6 +207,12 @@ def to_repr(instance: Any, max_len: int = REPR_MAX_LEN):
         out = out[:max_len-5] + ".." + out[-3:]
     return out
 
+def to_str(instance: Any, max_len: int = REPR_MAX_LEN):
+    out = str(instance)
+    if len(out) > max_len:
+        out = out[:max_len-5] + ".." + out[-3:]
+    return out
+
 # ------------------------------------------------------------
 
 _RE_ID_NAME_1, _RE_ID_NAME_2 = "a-zA-Z", "a-zA-Z0-9_" # noqa: E305

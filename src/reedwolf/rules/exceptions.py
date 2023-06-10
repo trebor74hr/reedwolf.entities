@@ -27,12 +27,18 @@ class RuleError(Exception, ABC):
 
     def _get_full_msg(self) -> str:
         # TODO: fix: ApplyResult('ApplyResult()')
-        return f"{self.owner.__class__.__name__}('{self.owner.name}') -> {self.msg}" \
-                    if self.owner and not isinstance(self.owner, DynamicAttrsBase) and getattr(self.owner, "name", None) \
-                    else \
-                    (f"{self.owner.__class__.__name__}('{str(self.owner)}') -> {self.msg}" 
-                     if self.owner else 
-                     f"{self.msg}")
+        out = []
+
+        if self.owner and isinstance(self.owner, str):
+            out.append(f"{self.owner} -> ")
+        elif self.owner:
+            out.append(f"{self.owner.__class__.__name__}")
+            if not isinstance(self.owner, DynamicAttrsBase) and getattr(self.owner, "name", None):
+                out.append(f"('{self.owner.name}') -> ")
+            else:
+                out.append(f"('{str(self.owner)}') -> ")
+        out.append(f"{self.msg}")
+        return "".join(out)
 
     def __str__(self):
         return f"{self.full_msg}"

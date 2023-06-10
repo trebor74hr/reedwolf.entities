@@ -6,6 +6,7 @@ from abc import (
         abstractmethod,
         )
 import operator
+import ast
 from dataclasses import (
         dataclass, 
         field,
@@ -306,6 +307,8 @@ def _op_apply_or(first, second):
 # https://florian-dahlitz.de/articles/introduction-to-pythons-operator-module
 # https://docs.python.org/3/library/operator.html#mapping-operators-to-functions
 OPCODE_TO_FUNCTION = {
+    # stay in sync with AST_NODE_TYPE_TO_FUNCTION
+
     # NOTE: no need to check unary/binary vs have 1 or 2 params
     #       python parser/interpretor will ensure this
     # binary operatorsy - buultin
@@ -330,6 +333,41 @@ OPCODE_TO_FUNCTION = {
 
     # unary operators:
     , "not" : operator.not_   # orig: ~
+
+}
+
+AST_NODE_TYPE_TO_FUNCTION = {
+    # stay in sync with OPCODE_TO_FUNCTION
+      ast.Eq       : operator.eq  # noqa: E131
+    , ast.NotEq    : operator.ne   
+    , ast.Gt       : operator.gt
+    , ast.GtE      : operator.ge
+    , ast.Lt       : operator.lt
+    , ast.LtE      : operator.le
+
+    , ast.Add      : operator.add
+    , ast.Sub      : operator.sub
+    , ast.Mult     : operator.mul
+    , ast.Div      : operator.truediv
+    , ast.FloorDiv : operator.floordiv
+
+    # TODO: ast.NotIn
+    , ast.In       : operator.contains
+
+    # binary ops
+    # TODO: maybe: ast.BitAnd and ast.BitOr
+    , ast.And      : _op_apply_and   # orig: &
+    , ast.Or       : _op_apply_or    # orig: |
+
+    # unary operators:
+    # TODO: maybe ast.Not
+    , ast.Invert   : operator.not_   # orig: ~
+
+    # ast.Dict ast.DictComp ast.List ast.ListComp
+    # AST.UnaryOp
+    # ast.Pow ast.MatMult ast.Mod
+    # ast.BitXor ast.RShift ast.LShift
+    # ast.BoolOp ast.Compare ast.Constant ast.ExtSlice ast.Index ast.Is ast.IsNot ast.Slice
 
 }
 
