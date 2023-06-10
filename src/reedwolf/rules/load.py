@@ -107,7 +107,10 @@ class Builder:
 
         with self.use_call_trace(f"parse({ast_node_repr(ast_node)})") as call_repr:
 
-            if type(ast_node)==ast.BinOp:
+            if type(ast_node)==ast.UnaryOp:
+                # recursion
+                dexp_node = self._process_ast_unaryop(node=ast_node, call_repr=call_repr, depth=depth+1)
+            elif type(ast_node)==ast.BinOp:
                 # recursion
                 dexp_node = self._process_ast_binop(node=ast_node, call_repr=call_repr, depth=depth+1)
             elif type(ast_node)==ast.Call:
@@ -125,12 +128,21 @@ class Builder:
                         # TODO: if this happens, then do not call _ast_nodes_prepare() due reverse ...
                         raise NotImplementedError()
                     dexp_node = self._process_constant(node = start_node, call_repr=call_repr)
+
+                elif type(start_node)==ast.UnaryOp:
+                    if len(ast_node_list) != 1:
+                        # TODO: if this happens, then do not call _ast_nodes_prepare() due reverse ...
+                        raise NotImplementedError()
+                    # recursion
+                    dexp_node = self._process_ast_unaryop(node=start_node, call_repr=call_repr, depth=depth+1)
+
                 elif type(start_node)==ast.BinOp:
                     if len(ast_node_list) != 1:
                         # TODO: if this happens, then do not call _ast_nodes_prepare() due reverse ...
                         raise NotImplementedError()
                     # recursion
                     dexp_node = self._process_ast_binop(node=start_node, call_repr=call_repr, depth=depth+1)
+
                 elif type(start_node)==ast.Name:
                     # --- check start node - must be namespace
                     if len(ast_node_list)>=2 and type(start_node)==ast.Name and type(ast_node_list[1])==ast.Call:
@@ -177,6 +189,8 @@ class Builder:
                 node = start_node
             elif type(start_node)==ast.BinOp:
                 node = start_node
+            elif type(start_node)==ast.UnaryOp:
+                node = start_node
             elif type(start_node)==ast.Constant:
                 node = start_node
             else:
@@ -197,12 +211,11 @@ class Builder:
                     node = node.value
                     if isinstance(node, STANDARD_TYPE_W_NONE_LIST):
                         break
-                    import pdb;pdb.set_trace() 
                     # NOTE: do not terminate when Just("name").Lower()
                 elif type(node)==ast.Name:
                     # terminate
                     break
-                elif type(node)==ast.BinOp:
+                elif type(node) in (ast.BinOp, ast.UnaryOp):
                     # terminate
                     break
                 else:
@@ -277,16 +290,31 @@ class Builder:
             names_avail = get_available_names_example(
                     str(type(node.op)), 
                     [str(nt) for nt in AST_NODE_TYPE_TO_FUNCTION.keys()]),
-            raise RuleLoadTypeError(owner=call_repr, msg=f"Expected expression, attribute or name, got: {type(node)} / {ast_node_repr(node)}. Available: {names_avail}")
+            raise RuleLoadTypeError(owner=call_repr, msg=f"Operation '{ast_node_repr(node.op)}' not supported. Available: {names_avail}")
 
-        function = AST_NODE_TYPE_TO_FUNCTION[type(node.op)]
+        operation = AST_NODE_TYPE_TO_FUNCTION[type(node.op)]
+        function = operation.load_function
         # recursion
         dexp_arg_left = self._parse_expression_node(ast_node=node.left, depth=depth+1)
         # recursion
         dexp_arg_right = self._parse_expression_node(ast_node=node.right, depth=depth+1)
-
         dexp_node = function(dexp_arg_left, dexp_arg_right)
+        return dexp_node
 
+    def _process_ast_unaryop(self, node: ast.UnaryOp, call_repr: str, depth: int) -> DotExpression:
+        assert type(node)==ast.UnaryOp, node
+
+        if type(node.op) not in AST_NODE_TYPE_TO_FUNCTION:
+            names_avail = get_available_names_example(
+                    str(type(node.op)), 
+                    [str(nt) for nt in AST_NODE_TYPE_TO_FUNCTION.keys()]),
+            raise RuleLoadTypeError(owner=call_repr, msg=f"Operation '{ast_node_repr(node.op)}' not supported. Available: {names_avail}")
+
+        operation = AST_NODE_TYPE_TO_FUNCTION[type(node.op)]
+        function = operation.load_function
+        # recursion
+        dexp_arg_operand = self._parse_expression_node(ast_node=node.operand, depth=depth+1)
+        dexp_node = function(dexp_arg_operand)
         return dexp_node
 
     def _process_ast_start_node_call(self, ast_node: ast.AST, call_repr: str) -> DotExpression:

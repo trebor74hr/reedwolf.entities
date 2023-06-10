@@ -304,73 +304,77 @@ def _op_apply_and(first, second):
 def _op_apply_or(first, second):
     return bool(first) or bool(second)
 
+@dataclass
+class Operation:
+    code: str
+    dexp_code: str
+    ast_node_type : ast.AST
+    apply_function: Callable
+    load_function : Callable
 
 # https://florian-dahlitz.de/articles/introduction-to-pythons-operator-module
 # https://docs.python.org/3/library/operator.html#mapping-operators-to-functions
 OPCODE_TO_FUNCTION = {
-    # stay in sync with AST_NODE_TYPE_TO_FUNCTION
-
     # NOTE: no need to check unary/binary vs have 1 or 2 params
     #       python parser/interpretor will ensure this
     # binary operatorsy - buultin
-      "=="  : operator.eq  # noqa: E131
-    , "!="  : operator.ne   
-    , ">"   : operator.gt
-    , ">="  : operator.ge
-    , "<"   : operator.lt
-    , "<="  : operator.le
+      "=="  : Operation(code="==" , dexp_code="==" , ast_node_type= ast.Eq      , apply_function= operator.eq      , load_function= operator.eq)
+    , "!="  : Operation(code="!=" , dexp_code="!=" , ast_node_type= ast.NotEq   , apply_function= operator.ne      , load_function= operator.ne)
+    , ">"   : Operation(code=">"  , dexp_code=">"  , ast_node_type= ast.Gt      , apply_function= operator.gt      , load_function= operator.gt)
+    , ">="  : Operation(code=">=" , dexp_code=">=" , ast_node_type= ast.GtE     , apply_function= operator.ge      , load_function= operator.ge)
+    , "<"   : Operation(code="<"  , dexp_code="<"  , ast_node_type= ast.Lt      , apply_function= operator.lt      , load_function= operator.lt)
+    , "<="  : Operation(code="<=" , dexp_code="<=" , ast_node_type= ast.LtE     , apply_function= operator.le      , load_function= operator.le)
 
-    , "+"   : operator.add
-    , "-"   : operator.sub
-    , "*"   : operator.mul
-    , "/"   : operator.truediv
-    , "//"  : operator.floordiv
+    , "+"   : Operation(code="+"  , dexp_code="+"  , ast_node_type= ast.Add     , apply_function= operator.add     , load_function= operator.add)
+    , "-"   : Operation(code="-"  , dexp_code="-"  , ast_node_type= ast.Sub     , apply_function= operator.sub     , load_function= operator.sub)
+    , "*"   : Operation(code="*"  , dexp_code="*"  , ast_node_type= ast.Mult    , apply_function= operator.mul     , load_function= operator.mul)
+    , "/"   : Operation(code="/"  , dexp_code="/"  , ast_node_type= ast.Div     , apply_function= operator.truediv , load_function= operator.truediv)
+    , "//"  : Operation(code="//" , dexp_code="//" , ast_node_type= ast.FloorDiv, apply_function= operator.floordiv, load_function= operator.floordiv)
 
-    , "in"  : operator.contains
+    , "in"  : Operation(code="in" , dexp_code="in" , ast_node_type= ast.In      , apply_function= operator.contains, load_function= operator.contains)
 
-    # binary operatorsy - custom implementation 
-    , "and" : _op_apply_and   # orig: &
-    , "or"  : _op_apply_or    # orig: |
+    # binary operatorsy                            
+    , "and" : Operation(code="and", dexp_code="&"  , ast_node_type= ast.BitAnd  , apply_function= _op_apply_and    , load_function= operator.iand)
+    , "or"  : Operation(code="or" , dexp_code="|"  , ast_node_type= ast.BitOr   , apply_function= _op_apply_or     , load_function= operator.ior)
 
-    # unary operators:
-    , "not" : operator.not_   # orig: ~
+    # unary operators                              
+    , "not" : Operation(code="not", dexp_code="~"  , ast_node_type= ast.Invert  , apply_function= operator.not_    , load_function= operator.invert)
+    }
 
-}
+# Other:
+#   ast.Dict ast.DictComp ast.List ast.ListComp
+#   ast.Pow ast.MatMult ast.Mod
+#   ast.BitXor ast.RShift ast.LShift
+#   ast.BoolOp ast.Compare ast.Constant ast.ExtSlice ast.Index ast.Is ast.IsNot ast.Slice
 
 AST_NODE_TYPE_TO_FUNCTION = {
-    # stay in sync with OPCODE_TO_FUNCTION
-      ast.Eq       : operator.eq  # noqa: E131
-    , ast.NotEq    : operator.ne   
-    , ast.Gt       : operator.gt
-    , ast.GtE      : operator.ge
-    , ast.Lt       : operator.lt
-    , ast.LtE      : operator.le
-
-    , ast.Add      : operator.add
-    , ast.Sub      : operator.sub
-    , ast.Mult     : operator.mul
-    , ast.Div      : operator.truediv
-    , ast.FloorDiv : operator.floordiv
-
-    # TODO: ast.NotIn
-    , ast.In       : operator.contains
-
-    # binary ops
-    # TODO: maybe: ast.BitAnd and ast.BitOr
-    , ast.And      : _op_apply_and   # orig: &
-    , ast.Or       : _op_apply_or    # orig: |
-
-    # unary operators:
-    # TODO: maybe ast.Not
-    , ast.Invert   : operator.not_   # orig: ~
-
-    # ast.Dict ast.DictComp ast.List ast.ListComp
-    # AST.UnaryOp
-    # ast.Pow ast.MatMult ast.Mod
-    # ast.BitXor ast.RShift ast.LShift
-    # ast.BoolOp ast.Compare ast.Constant ast.ExtSlice ast.Index ast.Is ast.IsNot ast.Slice
-
+    operation.ast_node_type: operation
+    for operation in OPCODE_TO_FUNCTION.values()
 }
+#       ast.Eq       : operator.eq  # noqa: E131
+#     , ast.NotEq    : operator.ne   
+#     , ast.Gt       : operator.gt
+#     , ast.GtE      : operator.ge
+#     , ast.Lt       : operator.lt
+#     , ast.LtE      : operator.le
+# 
+#     , ast.Add      : operator.add
+#     , ast.Sub      : operator.sub
+#     , ast.Mult     : operator.mul
+#     , ast.Div      : operator.truediv
+#     , ast.FloorDiv : operator.floordiv
+# 
+#     , ast.In       : operator.contains
+# 
+#     # binary ops
+#     , ast.BitAnd   : operator.iand # &
+#     , ast.BitOr    : operator.ior  #  |
+# 
+#     # unary operators:
+#     , ast.Invert   : operator.invert  # ~
+# 
+# 
+# }
 
 
 @dataclass
@@ -388,6 +392,7 @@ class OperationDexpNode(IDotExpressionNode):
 
     # later evaluated
     op_function: Callable[[...], Any] = field(repr=False, init=False)
+    operation: Operation = field(repr=False, init=False)
     _status : DExpStatusEnum = field(repr=False, init=False, default=DExpStatusEnum.INITIALIZED)
     _all_ok : Optional[bool] = field(repr=False, init=False, default=None)
 
@@ -397,18 +402,20 @@ class OperationDexpNode(IDotExpressionNode):
     is_finished: bool = field(init=False, repr=False, default=False)
 
     def __post_init__(self):
-        self.op_function = self._get_op_function(self.op)
+        self.operation = self._get_operation(self.op)
+        self.op_function = self.operation.apply_function
+
         self._status : DExpStatusEnum = DExpStatusEnum.INITIALIZED
         self._all_ok : Optional[bool] = None
         self._output_type_info: Union[TypeInfo, UNDEFINED] = UNDEFINED 
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
 
 
-    def _get_op_function(self, op: str) -> Callable[..., Any]:
-        op_function = OPCODE_TO_FUNCTION.get(op, None)
-        if op_function is None:
+    def _get_operation(self, op: str) -> Operation:
+        operation = OPCODE_TO_FUNCTION.get(op, None)
+        if operation is None:
             raise RuleSetupValueError(owner=self, msg="Invalid operation code, {self.op} not one of: {', '.join(self.OP_TO_CODE.keys())}")
-        return op_function
+        return operation
 
     def get_type_info(self) -> TypeInfo:
         " type_info from first node "
@@ -459,9 +466,9 @@ class OperationDexpNode(IDotExpressionNode):
 
     def __str__(self):
         if self.second is not UNDEFINED:
-            return f"({self.first} {self.op} {self.second})"
+            return f"({self.first} {self.operation.dexp_code} {self.second})"
         else:
-            return f"({self.op} {self.first})"
+            return f"({self.operation.dexp_code} {self.first})"
 
     def __repr__(self):
         return f"Op{self}"
