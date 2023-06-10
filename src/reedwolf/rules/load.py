@@ -18,9 +18,13 @@ from .exceptions import (
         RuleInternalError,
         )
 from .namespaces import ALL_NS_OBJECTS
+from .meta import (
+        STANDARD_TYPE_W_NONE_LIST,
+        )
 from .expressions import (
         DotExpression,
         AST_NODE_TYPE_TO_FUNCTION,
+        Just,
         )
 from .base import (
         ComponentBase,
@@ -34,6 +38,12 @@ def ast_node_repr(ast_node: ast.AST, depth: int = 0) -> str:
 
     if isinstance(ast_node, (int, str,)):
         out = ast_node
+    elif isinstance(ast_node, (list, tuple)):
+        out = []
+        for ast_subitem in ast_node:
+            subitem_repr = ast_node_repr(ast_subitem, depth=depth+1)
+            out.append(subitem_repr)
+        out = f"[{', '.join(out)}]"
     else:
         out = []
         for fname, fval in iter_fields(ast_node):
@@ -82,32 +92,47 @@ class Builder:
             if len(module_node.body)!=1:
                 raise RuleLoadTypeError(owner=call_repr, msg=f"Start ast.Module node should have only single body (expression) , got: {module_node.body}")
 
-            expr_node = module_node.body[0]
+            ast_node = module_node.body[0]
 
-            dexp_node = self._parse_expression_node(expr_node, depth=0) 
+            dexp_node = self._parse_expression_node(ast_node, depth=0) 
 
             return dexp_node
 
 
     # ------------------------------------------------------------
 
-    def _parse_expression_node(self, expr_node: ast.Expr, depth: int) -> DotExpression:
+    def _parse_expression_node(self, ast_node: ast.Expr, depth: int) -> DotExpression:
         if depth > MAX_RECURSIONS:
-            raise RuleInternalError(owner=expr_node, msg=f"Maximum recursion depth exceeded ({depth})")
+            raise RuleInternalError(owner=ast_node, msg=f"Maximum recursion depth exceeded ({depth})")
 
-        with self.use_call_trace(f"parse({ast_node_repr(expr_node)})") as call_repr:
+        with self.use_call_trace(f"parse({ast_node_repr(ast_node)})") as call_repr:
 
-            if type(expr_node)==ast.BinOp:
+            if type(ast_node)==ast.BinOp:
                 # recursion
-                dexp_node = self._process_ast_binop(node=expr_node, call_repr=call_repr, depth=depth+1)
+                dexp_node = self._process_ast_binop(node=ast_node, call_repr=call_repr, depth=depth+1)
+            elif type(ast_node)==ast.Call:
+                # recursion
+                if ast_node.func.id == "Just":
+                    if not (len(ast_node.args) == 1 and len(ast_node.keywords)==0):
+                        raise RuleLoadTypeError(owner=call_repr, msg=f"Function 'Just' function can receive simple constant argument, got: {ast_node_repr(ast_node.args)} / {ast_node_repr(ast_node.keywords)}")
+                    arg_node = ast_node.args[0]
+                    if type(arg_node) != ast.Constant:
+                        raise RuleLoadTypeError(owner=call_repr, msg=f"Function 'Just' argument must be Constant, got: {ast_node_repr(arg_node)}")
+                    dexp_node = self._process_constant(node = arg_node, call_repr=call_repr)
+                else:
+                    raise RuleLoadTypeError(owner=call_repr, msg=f"Only 'Just' function can be a starting point, got: {ast_node.func.id}")
             else:
-                ast_node_list: List[ast.AST] = self._ast_nodes_prepare(expr_node)
+                ast_node_list: List[ast.AST] = self._ast_nodes_prepare(ast_node)
                 if not ast_node_list:
                     return None
 
                 start_node = ast_node_list[0]
 
-                if type(start_node)==ast.BinOp:
+                if type(start_node)==ast.Constant:
+                    if len(ast_node_list) != 1:
+                        raise NotImplementedError()
+                    dexp_node = self._process_constant(node = start_node, call_repr=call_repr)
+                elif type(start_node)==ast.BinOp:
                     if len(ast_node_list) != 1:
                         raise NotImplementedError()
                     # recursion
@@ -136,7 +161,7 @@ class Builder:
                         else:
                             raise RuleLoadTypeError(owner=call_repr, msg=f"Expected expression, attribute or name, got: {type(node)} / {node}")
                 else:
-                    raise RuleInternalError(owner=self, msg=f"Expected Name/BinOp, got: {type(node)} / {node}") 
+                    raise RuleInternalError(owner=self, msg=f"Expected Name/BinOp, got: {type(start_node)} / {start_node}") 
 
             return dexp_node
 
@@ -148,7 +173,9 @@ class Builder:
                 node = start_node.value
             elif type(start_node)==ast.Attribute:
                 node = start_node
-            elif type(node)==ast.BinOp:
+            elif type(start_node)==ast.BinOp:
+                node = start_node
+            elif type(start_node)==ast.Constant:
                 node = start_node
             else:
                 raise RuleLoadTypeError(owner=call_repr, msg=f"Expected expression/attribute for start node, got: {type(start_node)} / {ast_node_repr(start_node)}")
@@ -164,6 +191,11 @@ class Builder:
                     node = node.value
                 elif type(node)==ast.Call:
                     node = node.func
+                elif type(node)==ast.Constant:
+                    node = node.value
+                    if isinstance(node, STANDARD_TYPE_W_NONE_LIST):
+                        break
+                    # NOTE: do not terminate when "name".lower()
                 elif type(node)==ast.Name:
                     # terminate
                     break
@@ -171,7 +203,7 @@ class Builder:
                     # terminate
                     break
                 else:
-                    raise RuleLoadTypeError(owner=call_repr, msg=f"Expected expression, attribute or name, got: {type(node)} / {ast_node_repr(node)}")
+                    raise RuleLoadTypeError(owner=call_repr, msg=f"Expected expression, attribute, constant, bioop or name, got: {type(node)} / {ast_node_repr(node)}")
 
             ast_node_list = list(reversed(ast_node_list))
             return ast_node_list
@@ -199,14 +231,14 @@ class Builder:
         if node.args:
             for arg_node in node.args:
                 # recursion
-                dexp_arg = self._parse_expression_node(expr_node=arg_node, depth=depth+1)
+                dexp_arg = self._parse_expression_node(ast_node=arg_node, depth=depth+1)
                 args.append(dexp_arg)
 
         kwargs = {}
         if node.keywords:
             for kwarg_node in node.keywords:
                 # recursion
-                dexp_arg = self._parse_expression_node(expr_node=kwarg_node.value, depth=depth+1)
+                dexp_arg = self._parse_expression_node(ast_node=kwarg_node.value, depth=depth+1)
                 kwargs[kwarg_node.arg] = dexp_arg
 
         # NOTE: need to remove previous attr_node, ast works:
@@ -246,12 +278,19 @@ class Builder:
 
         function = AST_NODE_TYPE_TO_FUNCTION[type(node.op)]
         # recursion
-        dexp_arg_left = self._parse_expression_node(expr_node=node.left, depth=depth+1)
+        dexp_arg_left = self._parse_expression_node(ast_node=node.left, depth=depth+1)
         # recursion
-        dexp_arg_right = self._parse_expression_node(expr_node=node.right, depth=depth+1)
+        dexp_arg_right = self._parse_expression_node(ast_node=node.right, depth=depth+1)
 
         dexp_node = function(dexp_arg_left, dexp_arg_right)
 
+        return dexp_node
+
+    def _process_constant(self, node: ast.Constant, call_repr: str) -> Just:
+        value = node.value
+        if not isinstance(value, STANDARD_TYPE_W_NONE_LIST):
+            raise RuleLoadTypeError(owner=call_repr, msg=f"Function 'Just' argument must be standard type: {STANDARD_TYPE_W_NONE_LIST}, got: {ast_node_repr(node)}")
+        dexp_node = Just(value)
         return dexp_node
 
 
