@@ -21,6 +21,9 @@ from .exceptions import (
         RuleValidationError,
         RuleNameNotFoundError,
         )
+from .base import (
+        ComponentBase,
+        )
 from .bound_models import (
         BoundModel,
         BoundModelWithHandlers,
@@ -90,6 +93,8 @@ from .func_builtin import (
 
 from .apply import ApplyResult
 from .load import load
+
+
 
 __all__ = [
     # utils
@@ -191,4 +196,8 @@ __all__ = [
 
     # load
     "load",
+
+    # this module
+    "COMPONNENTS_REGISTRY"
     ]
+

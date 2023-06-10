@@ -7,10 +7,16 @@ from typing import (
         Union,
         )
 from contextlib import contextmanager
+from copy import deepcopy
+
+from .containers import COMPONNENTS_REGISTRY
 
 from .utils import (
         to_str,
+        to_repr,
         get_available_names_example,
+        DumpFormatEnum,
+        load_from_format,
         )
 from .exceptions import (
         RuleLoadTypeError,
@@ -29,7 +35,24 @@ from .expressions import (
 from .base import (
         ComponentBase,
         MAX_RECURSIONS,
+        DEXP_PREFIX,
         )
+
+
+
+class CallTraceMixin:
+
+    @contextmanager
+    def use_call_trace(self, call_trace_id: str):
+        # Code to acquire resource, e.g.:
+        self.call_trace.append(call_trace_id)
+        call_repr = [f"{'  '*nr}-> {bit}" for nr, bit in enumerate(self.call_trace)]
+        call_repr = "\n".join(call_repr) 
+        call_repr += f"\n{'  ' * (len(self.call_trace))}"
+        try:
+            yield call_repr
+        finally:
+            self.call_trace.pop()
 
 
 def ast_node_repr(ast_node: ast.AST, depth: int = 0) -> str:
@@ -60,22 +83,11 @@ def ast_node_repr(ast_node: ast.AST, depth: int = 0) -> str:
         out = to_str(", ".join(out))
     return out
 
+
 @dataclass
-class Builder:
+class DotExpressionLoader(CallTraceMixin):
     # ast_node_list: List[Any] = field(init=False)
     call_trace: List[str] = field(init=False, default_factory=list)
-
-    @contextmanager
-    def use_call_trace(self, call_trace_id: str):
-        # Code to acquire resource, e.g.:
-        self.call_trace.append(call_trace_id)
-        call_repr = [f"{'  '*nr}-> {bit}" for nr, bit in enumerate(self.call_trace)]
-        call_repr = "\n".join(call_repr) 
-        call_repr += f"\n{'  ' * (len(self.call_trace))}"
-        try:
-            yield call_repr
-        finally:
-            self.call_trace.pop()
 
     # ------------------------------------------------------------
 
@@ -339,11 +351,73 @@ class Builder:
         return dexp_node
 
 
+# ------------------------------------------------------------
+
+
+@dataclass
+class ComponentsLoader(CallTraceMixin):
+    call_trace: List[str] = field(init=False, default_factory=list)
+
+    def load_component(self, input_dict: dict) -> ComponentBase:
+        out = self._load_component(input_dict, depth=0)
+        return out
+
+    def _load_component(self, input_dict: dict, depth: int) -> ComponentBase:
+        with self.use_call_trace(f"load({to_repr(input_dict)})") as call_repr:
+            if not isinstance(input_dict, dict):
+                raise RuleLoadTypeError(owner=call_repr, msg=f"Expecting dict, got: {to_repr(input_dict)}")
+            input_dict = deepcopy(input_dict)
+
+            comp_class_name = input_dict.pop("type", None)
+            if not comp_class_name:
+                raise RuleLoadTypeError(owner=call_repr, msg=f"Expecting dict key 'type', not found between: {to_repr(input_dict.keys())}")
+
+            comp_klass = COMPONNENTS_REGISTRY.get(comp_class_name, None)
+            if comp_klass is None:
+                klass_names_avail = get_available_names_example(comp_class_name, COMPONNENTS_REGISTRY.keys())
+                raise RuleLoadTypeError(owner=call_repr, msg=f"Class name '{comp_class_name}' is unknown. Available: {klass_names_avail}")
+
+            comp_class_attrs = input_dict.pop("attrs", None)
+            if not comp_class_attrs:
+                raise RuleLoadTypeError(owner=call_repr, msg=f"Expecting dict key 'attrs', not found between: {to_repr(input_dict.keys())}")
+
+            if input_dict.keys():
+                raise RuleLoadTypeError(owner=call_repr, msg=f"Found unrecognized dict key(s): {to_repr(input_dict.keys())}")
+
+            kwargs = {}
+            for attr_name, attr_value in comp_class_attrs.items():
+                if isinstance(attr_value, dict) and "type" in attr_value:
+                    # recursion
+                    value: ComponentBase = self._load_component(attr_value, depth=depth+1)
+                elif isinstance(attr_value, str) and attr_value.startswith(DEXP_PREFIX):
+                    code_string = attr_value[len(DEXP_PREFIX):]
+                    value: DotExpression = load_dot_expression(code_string)
+                else:
+                    value: Any = attr_value
+
+                kwargs[attr_name] = value
+
+            # try:
+            component = comp_klass(**kwargs)
+            # except Exception as ex:
+
+        return component
 
 # ------------------------------------------------------------
 
 def load_dot_expression(code_string: str) -> DotExpression:
-    return Builder().load_dot_expression(code_string)
+    return DotExpressionLoader().load_dot_expression(code_string)
 
-def load(input: str) -> ComponentBase:
-    raise NotImplementedError()
+
+def load(input: Union[dict, str], format: DumpFormatEnum = None) -> ComponentBase:
+    if format is not None:
+        assert isinstance(input , str)
+        input_dict = load_from_format(input, format=format)
+        assert isinstance(input, dict)
+    else:
+        assert isinstance(input, dict)
+        input_dict = input
+
+    return ComponentsLoader().load_component(input_dict)
+
+    

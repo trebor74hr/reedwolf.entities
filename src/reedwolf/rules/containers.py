@@ -14,8 +14,7 @@ from typing import (
         Union,
         Type,
         )
-# https://peps.python.org/pep-0673/
-# python 3.11+ from typing import Self
+from inspect import isclass, isabstract
 
 from dataclasses import dataclass, field
 
@@ -92,6 +91,8 @@ from .contexts import (
 from .config import (
         Config,
         )
+
+from ..rules import components, fields, validations, evaluations
 
 # ------------------------------------------------------------
 
@@ -759,3 +760,33 @@ class Extension(ContainerBase):
         return self
 
 
+
+def collect_classes(componnents_registry: Dict, module: Any, klass_match: type) -> Dict:
+    if module:
+        names = [(n, getattr(module, n)) 
+                 for n in dir(module) 
+                 if not n.startswith("_")]
+    else:
+        names = [(n,c) 
+                 for n,c in globals().items() 
+                 if not n.startswith("_")]
+
+    for name, comp_klass in names:
+        if isclass(comp_klass) \
+          and issubclass(comp_klass, klass_match)\
+          and not isabstract(comp_klass) \
+          and not name.endswith("Base") \
+          and name not in ("Component",) \
+          :
+            # and not hasattr(comp_klass, "__abstractmethods__"):
+            componnents_registry[name] = comp_klass
+    return componnents_registry
+
+
+# TODO: not the best way + move function to some utils
+COMPONNENTS_REGISTRY = {}
+collect_classes(COMPONNENTS_REGISTRY, components, ComponentBase)
+collect_classes(COMPONNENTS_REGISTRY, fields, ComponentBase)
+collect_classes(COMPONNENTS_REGISTRY, validations, ComponentBase)
+collect_classes(COMPONNENTS_REGISTRY, evaluations, ComponentBase)
+collect_classes(COMPONNENTS_REGISTRY, None, ComponentBase)
