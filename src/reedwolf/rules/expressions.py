@@ -45,6 +45,7 @@ from .meta import (
         FunctionArgumentsTupleType,
         STANDARD_TYPE_W_NONE_LIST,
         HookOnFinishedAllCallable,
+        LiteralType,
         )
 
 
@@ -549,6 +550,7 @@ class DotExpression(DynamicAttrsBase):
                            "_evaluator",  # allwyays filled, contains all nodes
                            "_dexp_node",  # is last node (redundant), but None if case of error
                            "_node", "_namespace", "_name", "_func_args", "_is_top", "_status",
+                           "_is_literal",
                            "_EnsureFinished", "IsFinished",
                            } # "_read_functions",  "_dexp_node_name"
     RESERVED_FUNCTION_NAMES = ("Value",)
@@ -556,9 +558,10 @@ class DotExpression(DynamicAttrsBase):
 
     def __init__(
         self,
-        node: Union[str, OperationDexpNode],
+        node: Union[str, LiteralType, OperationDexpNode],
         namespace: Namespace,
         Path: Optional[List[DotExpression]] = None,
+        is_literal: bool = False,
     ):
         " NOTE: when adding new params, add to Clone() too "
         # SAFE OPERATIONS
@@ -567,6 +570,7 @@ class DotExpression(DynamicAttrsBase):
         self._node = node
         self._is_top = Path is None
         self._name = str(self._node)
+        self._is_literal = is_literal
         # init Path => to make __str__ works
         self.Path = None 
 
@@ -576,7 +580,12 @@ class DotExpression(DynamicAttrsBase):
         # risky -> can cause failure in: str(self), repr(self)
         if not isinstance(self._namespace, Namespace):
             raise RuleSetupValueError(owner=self, msg=f"Namespace parameter '{self._namespace}' needs to be instance of Namespace inherited class.")
-        if isinstance(self._node, str):
+
+        if self._is_literal:
+            if not isinstance(self._node, STANDARD_TYPE_W_NONE_LIST):
+                raise RuleSetupValueError(owner=self, msg=f"Literal type '{self._node}' needs to some standard type: {STANDARD_TYPE_W_NONE_LIST}, got: {type(self._node)}")
+
+        elif isinstance(self._node, str):
             if self._node in self.RESERVED_ATTR_NAMES:
                 raise RuleSetupValueError(owner=self, msg=f"Value expression's attribute '{self._node}' is a reserved name, choose another.")
         else:
@@ -679,6 +688,9 @@ class DotExpression(DynamicAttrsBase):
             # last_dexp_node = (current_dexp_node
             #                if current_dexp_node is not None
             #                else parent)
+
+            # TODO: what with: 
+            #       if bit._is_literal:
 
             # ========================================
             # Operations 
@@ -799,18 +811,22 @@ class DotExpression(DynamicAttrsBase):
         return self
 
     def as_str(self):
-        out = ""
-        if self._is_top:
-            out += f"{self._namespace}."
-        out += f"{self._node}"
-        if self._func_args:
-            out += "("
-            args, kwargs = self._func_args
-            if args:
-                out += ", ".join([f"{a}" for a in args])
-            if kwargs:
-                out += ", ".join([f"{k}={v}" for k, v in kwargs.items()])
-            out += ")"
+        " NOTE: this is important for dumping and later loading - must match same string as code "
+        if self._is_literal:
+            out=f"Just({self._node})"
+        else:
+            out = ""
+            if self._is_top and self._namespace != OperationsNS:
+                out += f"{self._namespace}."
+            out += f"{self._node}"
+            if self._func_args:
+                out += "("
+                args, kwargs = self._func_args
+                if args:
+                    out += ", ".join([f"{a}" for a in args])
+                if kwargs:
+                    out += ", ".join([f"{k}={v}" for k, v in kwargs.items()])
+                out += ")"
         return out
 
     def __str__(self):
@@ -888,4 +904,18 @@ class DotExpression(DynamicAttrsBase):
     #         Instance >> Function()       # receives Instance, returns
     #     """
     #     return DotExpression(StreamOperation(">>", self, other), namespace=OperationsNS)  # >>
+
+
+class Just(DotExpression):
+    """ simple wrapper to enable literal as first argument in operations - e.g. 1 + M.id => Just(1) + M.id """
+
+    def __init__(self, value: LiteralType):
+        if not isinstance(value, STANDARD_TYPE_W_NONE_LIST):
+            raise NotImplementedError(f"{value}.type unhandled: '{type(value)}'")
+        super().__init__(
+            node = value,
+            namespace=OperationsNS,
+            is_literal=True,
+            )
+
 
