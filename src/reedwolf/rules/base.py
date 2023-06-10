@@ -29,6 +29,8 @@ from .utils import (
         UndefinedType,
         get_available_names_example,
         ThreadSafeCounter,
+        DumpFormatEnum,
+        dump_to_format,
         )
 from .exceptions import (
         RuleInternalError,
@@ -385,13 +387,16 @@ class ComponentBase(SetOwnerMixin, ABC):
 
     # ------------------------------------------------------------
 
-    def dump_meta(self) -> MetaTree:
+    def dump_meta(self, format: DumpFormatEnum = None) -> MetaTree:
         """
         Recursively traverse children's tree and and collect current values to
         recursive output dict structure.
         """
         # tree: ComponentTreeType = self.get_children_tree()
-        return self._dump_meta()
+        out = self._dump_meta()
+        if format:
+            out = dump_to_format(out, format=format)
+        return out
 
     # ------------------------------------------------------------
 

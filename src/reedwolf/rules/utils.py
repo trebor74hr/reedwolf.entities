@@ -1,5 +1,7 @@
 import re
 import keyword
+import json
+from enum import Enum
 from typing import (
         Callable, 
         ClassVar,
@@ -7,9 +9,15 @@ from typing import (
         Any, 
         List,
         Optional,
+        Union,
         )
 from functools import reduce
 from threading import Lock
+
+try:
+    import yaml
+except ImportError:
+    yaml = None
 
 
 class Singleton(type):
@@ -67,6 +75,23 @@ NA_IN_PROGRESS = UndefinedType(name="NA_IN_PROGRESS")
 
 # used in combination with NA_IN_PROGRESS, detection of circular dependency detection
 NOT_APPLIABLE = UndefinedType(name="NOT_APPLIABLE")
+
+
+class DumpFormatEnum(str, Enum):
+    JSON = "json"
+    YAML = "yaml"
+
+def dump_to_format(instance: Union[dict, list], format: DumpFormatEnum) -> str:
+    if format==DumpFormatEnum.JSON:
+        out = json.dumps(instance, indent=2)
+    elif format==DumpFormatEnum.YAML:
+        if yaml is None:
+            raise TypeError(f"Format '{format}' not available. Install PyYaml and try again.")
+        out = yaml.dump(instance)
+    else:
+        aval_formats = ", ".join([str(v) for v in DumpFormatEnum.__members__.keys()])
+        raise TypeError(f"Format '{format}' not supported. Available are: {aval_formats}")
+    return out
 
 
 # ------------------------------------------------------------
@@ -236,4 +261,6 @@ def check_identificator_name(dexp_node_name: str):
         raise RuleSetupNameError(owner=None, msg=f"Name '{dexp_node_name}' is python keyword. Use another name.")
 
     # return dexp_node_name
+
+
 

@@ -495,13 +495,17 @@ class Rules(ContainerBase):
 
     # --- optional - following can be bound later with .bind_to()
     label           : Optional[TransMessageType] = field(repr=False, default=None)
+
+    # binding interface - not dumped/exported
     bound_model     : Optional[BoundModel] = field(repr=False, default=None, metadata={"skip_dump": True})
     # will be filled automatically with Config() if not supplied
     config          : Optional[Type[Config]] = field(repr=False, default=None, metadata={"skip_dump": True})
     context_class   : Optional[Type[IContext]] = field(repr=False, default=None, metadata={"skip_dump": True})
-    functions       : Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list)
+    functions       : Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
+
     # --- only list of model names allowed
     keys            : Optional[KeysBase] = field(repr=False, default=None)
+
     # --- validators and evaluators
     cleaners        : Optional[List[Union[ValidationBase, EvaluationBase]]] = field(repr=False, default_factory=list)
 
