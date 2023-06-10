@@ -813,7 +813,7 @@ class DotExpression(DynamicAttrsBase):
     def as_str(self):
         " NOTE: this is important for dumping and later loading - must match same string as code "
         if self._is_literal:
-            out=f"Just({self._node})"
+            out=f"Just({repr(self._node)})"
         else:
             out = ""
             if self._is_top and self._namespace != OperationsNS:

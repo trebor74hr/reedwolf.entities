@@ -111,17 +111,9 @@ class Builder:
                 # recursion
                 dexp_node = self._process_ast_binop(node=ast_node, call_repr=call_repr, depth=depth+1)
             elif type(ast_node)==ast.Call:
-                # recursion
-                if ast_node.func.id == "Just":
-                    if not (len(ast_node.args) == 1 and len(ast_node.keywords)==0):
-                        raise RuleLoadTypeError(owner=call_repr, msg=f"Function 'Just' function can receive simple constant argument, got: {ast_node_repr(ast_node.args)} / {ast_node_repr(ast_node.keywords)}")
-                    arg_node = ast_node.args[0]
-                    if type(arg_node) != ast.Constant:
-                        raise RuleLoadTypeError(owner=call_repr, msg=f"Function 'Just' argument must be Constant, got: {ast_node_repr(arg_node)}")
-                    dexp_node = self._process_constant(node = arg_node, call_repr=call_repr)
-                else:
-                    raise RuleLoadTypeError(owner=call_repr, msg=f"Only 'Just' function can be a starting point, got: {ast_node.func.id}")
+                depx_node = self._process_ast_start_node_call(ast_node, call_repr=call_repr)
             else:
+                # Multiple items cases, M.id.test.Call, Fn(test=1).test.test, ...
                 ast_node_list: List[ast.AST] = self._ast_nodes_prepare(ast_node)
                 if not ast_node_list:
                     return None
@@ -130,28 +122,37 @@ class Builder:
 
                 if type(start_node)==ast.Constant:
                     if len(ast_node_list) != 1:
+                        # TODO: if this happens, then do not call _ast_nodes_prepare() due reverse ...
                         raise NotImplementedError()
                     dexp_node = self._process_constant(node = start_node, call_repr=call_repr)
                 elif type(start_node)==ast.BinOp:
                     if len(ast_node_list) != 1:
+                        # TODO: if this happens, then do not call _ast_nodes_prepare() due reverse ...
                         raise NotImplementedError()
                     # recursion
                     dexp_node = self._process_ast_binop(node=start_node, call_repr=call_repr, depth=depth+1)
                 elif type(start_node)==ast.Name:
                     # --- check start node - must be namespace
-                    if len(ast_node_list) <= 1:
-                        raise RuleLoadTypeError(owner=call_repr, msg=f"Expected at minimal <Namespace>.<attribute/function>, got: {ast_node_list}")
+                    if len(ast_node_list)>=2 and type(start_node)==ast.Name and type(ast_node_list[1])==ast.Call:
+                        # Just("Peter").Lower() ...
+                        ast_node = ast_node_list[1]
+                        dexp_node = self._process_ast_start_node_call(ast_node, call_repr=call_repr)
+                        ast_node_list = ast_node_list[2:]
+                    else:
+                        # Namespace.attrib/Func() case
+                        if len(ast_node_list) <= 1:
+                            raise RuleLoadTypeError(owner=call_repr, msg=f"Expected at minimal <Namespace>.<attribute/function>, got: {ast_node_list}")
+                        ns_name = start_node.id
+                        if ns_name not in ALL_NS_OBJECTS:
+                            ops_avail = get_available_names_example(ns_name, ALL_NS_OBJECTS.keys())
+                            raise RuleLoadNameError(owner=call_repr, msg=f"Starting node should be namespace, found: {ns_name}, available: {ops_avail}")
 
-                    ns_name = start_node.id
-                    if ns_name not in ALL_NS_OBJECTS:
-                        ops_avail = get_available_names_example(ns_name, ALL_NS_OBJECTS.keys())
-                        raise RuleLoadNameError(owner=call_repr, msg=f"Starting node should be namespace, found: {ns_name}, available: {ops_avail}")
+                        # iterate all others
+                        namespace = ALL_NS_OBJECTS[ns_name]
+                        dexp_node = namespace
+                        ast_node_list = ast_node_list[1:]
 
-                    # iterate all others
-                    namespace = ALL_NS_OBJECTS[ns_name]
-                    dexp_node = namespace
-
-                    for nr, node in enumerate(ast_node_list[1:]):
+                    for nr, node in enumerate(ast_node_list):
                         if type(node)==ast.Attribute:
                             # indirect recursion
                             dexp_node = self._process_ast_attribute(dexp_node=dexp_node, node=node, call_repr=call_repr, depth=depth+1)
@@ -195,7 +196,8 @@ class Builder:
                     node = node.value
                     if isinstance(node, STANDARD_TYPE_W_NONE_LIST):
                         break
-                    # NOTE: do not terminate when "name".lower()
+                    import pdb;pdb.set_trace() 
+                    # NOTE: do not terminate when Just("name").Lower()
                 elif type(node)==ast.Name:
                     # terminate
                     break
@@ -285,6 +287,20 @@ class Builder:
         dexp_node = function(dexp_arg_left, dexp_arg_right)
 
         return dexp_node
+
+    def _process_ast_start_node_call(self, ast_node: ast.AST, call_repr: str) -> DotExpression:
+        if ast_node.func.id == "Just":
+            if not (len(ast_node.args) == 1 and len(ast_node.keywords)==0):
+                raise RuleLoadTypeError(owner=call_repr, msg=f"Function 'Just' function can receive simple constant argument, got: {ast_node_repr(ast_node.args)} / {ast_node_repr(ast_node.keywords)}")
+            arg_node = ast_node.args[0]
+            if type(arg_node) != ast.Constant:
+                raise RuleLoadTypeError(owner=call_repr, msg=f"Function 'Just' argument must be Constant, got: {ast_node_repr(arg_node)}")
+            dexp_node = self._process_constant(node = arg_node, call_repr=call_repr)
+        else:
+            raise RuleLoadTypeError(owner=call_repr, msg=f"Only 'Just' function can be a starting point, got: {ast_node.func.id}")
+
+        return dexp_node
+
 
     def _process_constant(self, node: ast.Constant, call_repr: str) -> Just:
         value = node.value
