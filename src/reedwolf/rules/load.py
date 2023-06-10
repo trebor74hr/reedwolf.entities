@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from typing import (
         List,
         Any,
+        Union,
         )
 from contextlib import contextmanager
 
@@ -23,7 +24,7 @@ from .base import ComponentBase
 
 @dataclass
 class Builder:
-    # out_nodes: List[Any] = field(init=False)
+    # ast_node_list: List[Any] = field(init=False)
     call_trace: List[str] = field(init=False, default_factory=list)
 
     @contextmanager
@@ -36,60 +37,40 @@ class Builder:
         finally:
             self.call_trace.pop()
 
+    # ------------------------------------------------------------
+
     def load_dot_expression(self, expr_code: str) -> DotExpression:
-        with self.use_call_trace(f"load_dot_expr({expr_code})") as call_repr:
+        with self.use_call_trace(f"load_dot_expr(to_repr({expr_code}))") as call_repr:
             try:
-                start_node = ast.parse(expr_code)
+                module_node = ast.parse(expr_code)
             except Exception as ex:
                 raise RuleLoadTypeError(owner=call_repr, msg=f"Parsing failed: {ex}")
 
-            out_nodes = self._ast_nodes_prepare(start_node)
+            if type(module_node)!=ast.Module:
+                raise RuleLoadTypeError(owner=call_repr, msg=f"Expected ast.Module type, got: {type(module_node)}")
 
-            out_node = self._parse_dot_expression_nodes(out_nodes)
+            if len(module_node.body)!=1:
+                raise RuleLoadTypeError(owner=call_repr, msg=f"Start ast.Module node should have only single body (expression) , got: {module_node.body}")
 
-            return out_node
+            expr_node = module_node.body[0]
 
-    def _ast_nodes_prepare(self, start_node: ast.Module) -> List[ast.AST]:
-        with self.use_call_trace(f"prepare({start_node})") as call_repr:
-            if type(start_node)!=ast.Module:
-                raise RuleLoadTypeError(owner=call_repr, msg=f"Expected ast.Module type, got: {type(start_node)}")
+            dexp_node = self._parse_expression_node(expr_node) 
 
-            assert len(start_node.body)==1, start_node.body
-            node = start_node.body[0]
-
-            if type(node)==ast.Expr:
-                node = node.value
-            else:
-                raise RuleLoadTypeError(owner=call_repr, msg=f"Expected expression, got: {type(node)} / {node}")
-
-            out_nodes = []
-            nr = 0
-            while True:
-                nr += 1
-                if nr > 200:
-                    raise RuleInternalError(owner=call_repr, msg=f"Too many nodes to process...")  
-                out_nodes.append(node)
-                if type(node)==ast.Attribute:
-                    node = node.value
-                elif type(node)==ast.Call:
-                    node = node.func
-                elif type(node)==ast.Name:
-                    # terminate
-                    break
-                else:
-                    raise RuleLoadTypeError(owner=call_repr, msg=f"Expected expression, attribute or name, got: {type(node)} / {node}")
-
-            out_nodes = list(reversed(out_nodes))
-            return out_nodes
+            return dexp_node
 
 
-    def _parse_dot_expression_nodes(self, out_nodes: List[ast.AST]) -> DotExpression:
-        with self.use_call_trace(f"nodes({out_nodes})") as call_repr:
+    # ------------------------------------------------------------
+
+    def _parse_expression_node(self, expr_node: ast.Expr) -> DotExpression:
+        with self.use_call_trace(f"_pars_expr({to_repr(expr_node)})") as call_repr:
+
+            ast_node_list: List[ast.AST] = self._ast_nodes_prepare(expr_node)
+
             # --- check start node - must be namespace
-            if len(out_nodes) <= 1:
-                raise RuleLoadTypeError(owner=call_repr, msg=f"Expected at minimal <Namespace>.<attribute/function>, got: {out_nodes}")
+            if len(ast_node_list) <= 1:
+                raise RuleLoadTypeError(owner=call_repr, msg=f"Expected at minimal <Namespace>.<attribute/function>, got: {ast_node_list}")
 
-            node = out_nodes[0]
+            node = ast_node_list[0]
             if not type(node)==ast.Name:
                 raise RuleInternalError(owner=self, msg=f"Expected Name, got: {type(node)} / {node}") 
             ns_name = node.id
@@ -99,32 +80,44 @@ class Builder:
 
             # iterate all others
             namespace = ALL_NS_OBJECTS[ns_name]
-            out_node = namespace
+            dexp_node = namespace
 
-            for node in out_nodes[1:]:
+            for node in ast_node_list[1:]:
                 if type(node)==ast.Attribute:
                     attr_name = node.attr
                     try:
-                        out_node = getattr(out_node, attr_name)
+                        dexp_node = getattr(dexp_node, attr_name)
                     except Exception as ex:
                         raise RuleLoadNameError(owner=call_repr, msg=f"Failed when creating DotExpression.attribute '{attr_name}' caused error: {ex}")
                 elif type(node)==ast.Call:
                     method_name = node.func.attr
-                    # TODO: recursion for node.args and node.kwargs
-                    #       self._ast_nodes_prepare func.args, func.keywords
-                    args, kwargs = (), {}
+
+                    args = []
+                    if node.args:
+                        for arg_node in node.args:
+                            # recursion
+                            dexp_arg = self._parse_expression_node(expr_node=arg_node)
+                            args.append(dexp_arg)
+
+                    kwargs = {}
+                    if node.keywords:
+                        for kwarg_node in node.keywords:
+                            # recursion
+                            dexp_arg = self._parse_expression_node(expr_node=kwarg_node.value)
+                            kwargs[kwarg_node.arg] = dexp_arg
+
 
                     # NOTE: need to remove previous attr_node, ast works:
                     #       ast.Attribute + ast.Call, this ast.Attribute is
                     #       extra, but must be checked later 
-                    if len(out_node.Path)>=2:
-                        func_attr_node = out_node.Path[-1]
-                        out_node_previous = out_node.Path[-2]
+                    if len(dexp_node.Path)>=2:
+                        func_attr_node = dexp_node.Path[-1]
+                        dexp_node_previous = dexp_node.Path[-2]
                     else:
-                        func_attr_node = out_node.Path[-1]
-                        out_node_previous = out_node.GetNamespace()
+                        func_attr_node = dexp_node.Path[-1]
+                        dexp_node_previous = dexp_node.GetNamespace()
                     try:
-                        method_node = getattr(out_node_previous, method_name)
+                        method_node = getattr(dexp_node_previous, method_name)
                     except Exception as ex:
                         raise RuleLoadNameError(owner=call_repr, msg=f"Failed when creating DotExpression.Function '{method_name}' caused error: {ex}")
 
@@ -132,14 +125,45 @@ class Builder:
                         raise RuleInternalError(owner=self, msg=f"Failed in creating function DotExpression node, duplication removal failed: {method_node} != {func_attr_node}") 
 
                     try:
-                        out_node = method_node(*args, **kwargs)
+                        dexp_node = method_node(*args, **kwargs)
                     except Exception as ex:
                         raise RuleLoadNameError(owner=call_repr, msg=f"Failed when creating DotExpression.Function '{method_name}' caused error: {ex}")
 
                 else:
                     raise RuleLoadTypeError(owner=call_repr, msg=f"Expected expression, attribute or name, got: {type(node)} / {node}")
 
-            return out_node
+            return dexp_node
+
+    # ------------------------------------------------------------
+
+    def _ast_nodes_prepare(self, start_node: Union[ast.Expr, ast.Attribute]) -> List[ast.AST]:
+        with self.use_call_trace(f"prepare({start_node})") as call_repr:
+            if type(start_node)==ast.Expr:
+                node = start_node.value
+            elif type(start_node)==ast.Attribute:
+                node = start_node
+            else:
+                raise RuleLoadTypeError(owner=call_repr, msg=f"Expected expression/attribute for start node, got: {type(start_node)} / {to_repr(start_node)}")
+
+            ast_node_list = []
+            nr = 0
+            while True:
+                nr += 1
+                if nr > 200:
+                    raise RuleInternalError(owner=call_repr, msg=f"Too many nodes to process...")  
+                ast_node_list.append(node)
+                if type(node)==ast.Attribute:
+                    node = node.value
+                elif type(node)==ast.Call:
+                    node = node.func
+                elif type(node)==ast.Name:
+                    # terminate
+                    break
+                else:
+                    raise RuleLoadTypeError(owner=call_repr, msg=f"Expected expression, attribute or name, got: {type(node)} / {to_repr(node)}")
+
+            ast_node_list = list(reversed(ast_node_list))
+            return ast_node_list
 
 # ------------------------------------------------------------
 
