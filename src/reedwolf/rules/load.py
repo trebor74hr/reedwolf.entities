@@ -111,7 +111,7 @@ class Builder:
                 # recursion
                 dexp_node = self._process_ast_binop(node=ast_node, call_repr=call_repr, depth=depth+1)
             elif type(ast_node)==ast.Call:
-                depx_node = self._process_ast_start_node_call(ast_node, call_repr=call_repr)
+                dexp_node = self._process_ast_start_node_call(ast_node, call_repr=call_repr)
             else:
                 # Multiple items cases, M.id.test.Call, Fn(test=1).test.test, ...
                 ast_node_list: List[ast.AST] = self._ast_nodes_prepare(ast_node)
@@ -152,6 +152,7 @@ class Builder:
                         dexp_node = namespace
                         ast_node_list = ast_node_list[1:]
 
+                    # iterate further
                     for nr, node in enumerate(ast_node_list):
                         if type(node)==ast.Attribute:
                             # indirect recursion
