@@ -1115,7 +1115,6 @@ class InstanceAttrCurrentValue:
     def get_value(self, strict:bool) -> LiteralType:
         if strict and not self.finished:
             # print("TODO: riješi ovu iznimku")
-            # import pdb;pdb.set_trace() 
             raise RuleInternalError(owner=self, msg=f"Current value is not finished, last value: {self._value}") 
         return self._value
 
