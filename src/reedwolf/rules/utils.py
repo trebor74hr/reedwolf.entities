@@ -87,7 +87,10 @@ def dump_to_format(instance: Union[dict, list], format: DumpFormatEnum) -> str:
     elif format==DumpFormatEnum.YAML:
         if yaml is None:
             raise TypeError(f"Format '{format}' not available. Install PyYaml and try again.")
-        out = yaml.dump(instance)
+        # NOTE: safe_dump produces only standard YAML tags and cannot represent
+        #   an arbitrary Python object. Unsafe (standard) alternative:
+        #       out = yaml.dump(instance)
+        out = yaml.safe_dump(instance)
     else:
         aval_formats = ", ".join([str(v) for v in DumpFormatEnum.__members__.keys()])
         raise TypeError(f"Format '{format}' not supported. Available are: {aval_formats}")
@@ -100,7 +103,12 @@ def load_from_format(input_str: str, format: DumpFormatEnum) -> Union[dict, list
     elif format==DumpFormatEnum.YAML:
         if yaml is None:
             raise TypeError(f"Format '{format}' not available. Install PyYaml and try again.")
-        out = yaml.load(input_str)
+
+        # NOTE: safe_load recognizes only standard YAML tags and cannot
+        #   construct an arbitrary Python object. Unsafe (standard) alternative:
+        #       out = yaml.load(input_str)
+        #   https://pyyaml.org/wiki/PyYAMLDocumentation
+        out = yaml.safe_load(input_str)
     else:
         aval_formats = ", ".join([str(v) for v in DumpFormatEnum.__members__.keys()])
         raise TypeError(f"Format '{format}' not supported. Available are: {aval_formats}")
