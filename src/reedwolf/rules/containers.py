@@ -107,6 +107,7 @@ def create_setup_session(
                     functions=functions,
                     owner_setup_session=owner.setup_session if owner.owner else None,
                     include_builtin_functions=owner.is_top_owner())
+
     setup_session.add_registry(ModelsRegistry())
     setup_session.add_registry(FieldsRegistry())
     setup_session.add_registry(FunctionsRegistry())

@@ -63,6 +63,11 @@ from .meta import (
         STANDARD_TYPE_LIST,
         TransMessageType,
         get_dataclass_fields,
+        KeyPairs,
+        InstanceId,
+        KeyString,
+        AttrName,
+        AttrValue,
         )
 from .expressions import (
         DotExpression,
@@ -147,8 +152,24 @@ class AttrDexpNodeTypeEnum(str, Enum):
 
 
 class ReservedAttributeNames(str, Enum):
+
+    # Applies to model instances, e.g. This.Instance <= Company()
     INSTANCE_ATTR_NAME = "Instance" 
-    # CHILDREN_KEY = "__children__" 
+
+    # Applies to model instance's attributes, e.g. This.Value <= Company().name
+    VALUE_ATTR_NAME = "Value" 
+
+    # TODO: reach 1 level deep:
+    #   PARENT_ATTR_NAME = "Parent" 
+    #   CHILDREN_ATTR_NAME = "Children" 
+    #   ITEMS_ATTR_NAME = "Items" 
+    #   CHILDREN_KEY = "__children__" 
+
+    # TODO: traversing?:
+    #   PARENT_PATH_ATTR_NAME = "ParentPath" 
+    #   ITEMS_TREE_ATTR_NAME = 
+    #   CHILDREN_TREE_ATTR_NAME = "ParentPath" 
+    #   VALUE_TREE_ATTR_NAME = 
 
 # ------------------------------------------------------------
 
@@ -617,10 +638,24 @@ class ComponentBase(SetOwnerMixin, ABC):
 
         container = self.get_container_owner(consider_self=True)
 
+        if getattr(self, "bind", None):
+            # similar logic in apply.py :: _apply()
+            assert not self.is_container()
+            attr_node = self.bind.Setup(setup_session=setup_session, owner=self)
+            if not attr_node:
+                raise RuleSetupNameError(owner=self, msg=f"{attr_node.name}.bind='{self.bind}' could not be evaluated")
+            local_setup_session = setup_session.create_local_setup_session(
+                                        this_ns_instance_model_class=None,
+                                        this_ns_value_attr_node = attr_node,
+                                        )
+        else:
+            local_setup_session = None
+
         with setup_session.use_stack_frame(
                 SetupStackFrame(
                     container = container, 
                     component = self, 
+                    local_setup_session=local_setup_session,
                 )):
             ret = self._setup(setup_session=setup_session)
 
@@ -992,6 +1027,40 @@ class BoundModelBase(ComponentBase, ABC):
 # ============================================================
 
 
+class UseStackFrameMixin:
+
+    def _copy_attr_from_previous_frame(self, 
+            previous_frame: "Self", 
+            attr_name: str, 
+            may_be_copied: bool = True,
+            if_set_must_be_same: bool = True):
+
+        if not hasattr(self.frame, attr_name):
+            raise RuleInternalError(owner=self, msg=f"This frame {self.frame}.{attr_name} not found") 
+        if not hasattr(previous_frame, attr_name):
+            raise RuleInternalError(owner=self, msg=f"Previous frame {previous_frame}.{attr_name} not found") 
+
+        this_frame_attr_value = getattr(self.frame, attr_name)
+        prev_frame_attr_value = getattr(previous_frame, attr_name)
+
+        if this_frame_attr_value in (None, UNDEFINED):
+            if prev_frame_attr_value not in (None, UNDEFINED):
+                if not may_be_copied:
+                    raise RuleInternalError(owner=self, 
+                        msg=f"Attribute '{attr_name}' value in previous frame is non-empty and current frame has empty value:\n  {previous_frame}\n    = {prev_frame_attr_value}\n<>\n  {self.frame}\n    = {this_frame_attr_value} ") 
+                # Copy from previous frame
+                # apply_session.config.loggeer.debugf"setattr '{attr_name}' current_frame <= previous_frame := {prev_frame_attr_value} (frame={self.frame})")
+                setattr(self.frame, attr_name, prev_frame_attr_value)
+        else:
+            # in some cases id() / is should be used?
+            if if_set_must_be_same and prev_frame_attr_value != this_frame_attr_value:
+                raise RuleInternalError(owner=self, 
+                    msg=f"Attribute '{attr_name}' value in previous frame is different from current:\n  {previous_frame}\n    = {prev_frame_attr_value}\n<>\n  {self.frame}\n    = {this_frame_attr_value} ") 
+
+
+# ============================================================
+
+
 @dataclass
 class SetupStackFrame:
     # current container
@@ -1059,13 +1128,6 @@ def get_instance_key_string_attrname_pair(key_string: str) -> Tuple[str, str]:
 # --------------------------------------------------
 # Key types aliases
 # --------------------------------------------------
-KeyPairs = Sequence[Tuple[str, Any]]
-
-InstanceId = int
-KeyString = str
-
-AttrName = str
-AttrValue = Any
 
 class ChangeOpEnum(str, Enum):
     CREATE = "CREATE"
@@ -1222,6 +1284,9 @@ class ApplyStackFrame:
         elif not is_model_class(instance_to_test.__class__):
             raise RuleInternalError(owner=self, msg=f"Expected model instance or list[instances], got: {self.instance}")
 
+        if self.local_setup_session:
+            assert isinstance(self.local_setup_session, ISetupSession)
+
         assert self.bound_model_root
 
     def set_parent_values_subtree(self, parent_values_subtree: Union[Dict, List]) -> Union[Dict, List]:
@@ -1231,6 +1296,12 @@ class ApplyStackFrame:
         parent_values_subtree_orig = self.parent_values_subtree
         self.parent_values_subtree = parent_values_subtree
         return parent_values_subtree_orig
+
+
+    def set_local_setup_session(self, local_setup_session: ISetupSession):
+        if self.local_setup_session:
+            raise RuleInternalError(owner=self, msg=f"local_setup_session alread set to '{self.local_setup_session}', got: '{local_setup_session}'") 
+        self.local_setup_session = local_setup_session
 
 
     def clean(self):

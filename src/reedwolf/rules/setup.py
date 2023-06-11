@@ -39,11 +39,13 @@ from .expressions import (
         IAttributeAccessorBase,
         )
 from .meta import (
+        is_model_class,
         FunctionArgumentsType,
         FunctionArgumentsTupleType,
         ModelType,
         TypeInfo,
         HookOnFinishedAllCallable,
+        LiteralType,
         )
 from .base import (
         ComponentBase,
@@ -52,6 +54,7 @@ from .base import (
         BoundModelBase,
         ReservedAttributeNames,
         SetupStackFrame,
+        UseStackFrameMixin,
         )
 from .functions import (
         FunctionsFactoryRegistry,
@@ -136,10 +139,13 @@ class RegistryBase(IRegistry):
     def items(self) -> List[Tuple[str, AttrDexpNode]]:
         return self.store.items()
 
+
     def register_instance_attr_node(self, model_class: ModelType, attr_name_prefix: Optional[str]=None) -> AttrDexpNode:
         " used for This.Instance / M.Instance to return instance itself "
+        if not is_model_class(model_class):
+            raise RuleSetupValueError(owner=self, msg=f"Expected model class (DC/PYD), got: {type(model_class)} / {model_class} ")
+
         th_field = None
-        # TODO: check that model_class is not dataclass field or pydatnic field
         type_info = TypeInfo.get_or_create_by_type(
                         py_type_hint=model_class,
                         caller=None,
@@ -157,6 +163,26 @@ class RegistryBase(IRegistry):
                         )
         self.register_attr_node(attr_node)
         return attr_node
+
+
+    def register_value_attr_node(self, attr_node: AttrDexpNode) -> AttrDexpNode:
+        " used for This.Value to return attribute value "
+        if not isinstance(attr_node, AttrDexpNode):
+            raise RuleSetupValueError(owner=self, msg=f"Expected AttrDexpNode, got: {type(attr_node)} / {attr_node} ")
+
+        type_info = attr_node.get_type_info()
+        # NOTE: original name is: attr_node.name
+        attr_name = ReservedAttributeNames.VALUE_ATTR_NAME.value
+        attr_node = AttrDexpNode(
+                        name=attr_name,
+                        data=type_info,
+                        namespace=self.NAMESPACE,
+                        type_info=type_info, 
+                        th_field=None,
+                        )
+        self.register_attr_node(attr_node)
+        return attr_node
+
 
     @classmethod
     def _create_attr_node_for_model_attr(cls, model_class: ModelType, attr_name:str) -> AttrDexpNode:
@@ -429,13 +455,24 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
 # ------------------------------------------------------------
 
 
-class UseSetupStackFrame(AbstractContextManager):
+class UseSetupStackFrame(UseStackFrameMixin, AbstractContextManager):
     " with() ... custom context manager. Very similar to UseSetupStackFrame "
 
     # ALT: from contextlib import contextmanager
     def __init__(self, setup_session: ISetupSession, frame: SetupStackFrame):
         self.setup_session = setup_session
         self.frame = frame
+
+        self.copy_from_previous_frame()
+
+    def copy_from_previous_frame(self):
+        if not self.setup_session.stack_frames:
+            return
+
+        previous_frame = self.setup_session.stack_frames[0]
+
+        self._copy_attr_from_previous_frame(previous_frame, "local_setup_session", 
+                                            if_set_must_be_same=False)
 
     def __enter__(self):
         self.setup_session.push_frame_to_stack(self.frame)

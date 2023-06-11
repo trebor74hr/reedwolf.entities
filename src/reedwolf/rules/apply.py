@@ -56,6 +56,7 @@ from .base import (
         InstanceChange,
         InstanceAttrCurrentValue,
         get_instance_key_string_attrname_pair,
+        UseStackFrameMixin, 
         )
 from .fields import (
         FieldBase,
@@ -72,9 +73,7 @@ from .containers import (
         )
 
 
-
-
-class UseApplyStackFrame(AbstractContextManager):
+class UseApplyStackFrame(UseStackFrameMixin, AbstractContextManager):
     " with() ... custom context manager. Very similar to UseSetupStackFrame "
 
     # ALT: from contextlib import contextmanager
@@ -119,41 +118,10 @@ class UseApplyStackFrame(AbstractContextManager):
                 self._copy_attr_from_previous_frame(previous_frame, "key_string", may_be_copied=False)
 
                 # NOTE: not this for now:
-                #   self._copy_attr_from_previous_frame(previous_frame, "local_setup_session")
+                self._copy_attr_from_previous_frame(previous_frame, "local_setup_session")
 
             # check / init again 
             self.frame.clean()
-
-
-    def _copy_attr_from_previous_frame(self, 
-            previous_frame: ApplyStackFrame, 
-            attr_name: str, 
-            may_be_copied: bool = True,
-            if_set_must_be_same: bool = True):
-
-        if not hasattr(self.frame, attr_name):
-            raise RuleInternalError(owner=self, msg=f"This frame {self.frame}.{attr_name} not found") 
-        if not hasattr(previous_frame, attr_name):
-            raise RuleInternalError(owner=self, msg=f"Previous frame {previous_frame}.{attr_name} not found") 
-
-        this_frame_attr_value = getattr(self.frame, attr_name)
-        prev_frame_attr_value = getattr(previous_frame, attr_name)
-
-        if this_frame_attr_value in (None, UNDEFINED):
-            if prev_frame_attr_value not in (None, UNDEFINED):
-                if not may_be_copied:
-                    raise RuleInternalError(owner=self, 
-                        msg=f"Attribute '{attr_name}' value in previous frame is non-empty and current frame has empty value:\n  {previous_frame}\n    = {prev_frame_attr_value}\n<>\n  {self.frame}\n    = {this_frame_attr_value} ") 
-                # Copy from previous frame
-                # apply_session.config.loggeer.debugf"setattr '{attr_name}' current_frame <= previous_frame := {prev_frame_attr_value} (frame={self.frame})")
-                setattr(self.frame, attr_name, prev_frame_attr_value)
-        else:
-            # in some cases id() / is should be used?
-            if if_set_must_be_same and prev_frame_attr_value != this_frame_attr_value:
-                raise RuleInternalError(owner=self, 
-                    msg=f"Attribute '{attr_name}' value in previous frame is different from current:\n  {previous_frame}\n    = {prev_frame_attr_value}\n<>\n  {self.frame}\n    = {this_frame_attr_value} ") 
-
-
 
 
     def __enter__(self):
@@ -619,8 +587,22 @@ class ApplyResult(IApplySession):
 
         process_further = True
 
+        # ------ common setup for new_frame ----------
+
         # one level deeper
         new_frame.depth = depth + 1
+
+        if getattr(component, "bind", None):
+            # similar logic in base.py :: ComponentBase.setup()
+            assert not component.is_container()
+            attr_node = component.bind._dexp_node
+            if not attr_node:
+                raise RuleInternalError(owner=component, msg=f"{attr_node.name}.bind='{component.bind}' is not setup")
+            local_setup_session = self.setup_session.create_local_setup_session(
+                                        this_ns_instance_model_class=None,
+                                        this_ns_value_attr_node = attr_node)
+            new_frame.set_local_setup_session(local_setup_session)
+
 
         # ------------------------------------------------------------
         # ----- Main processing - must use new stack frame

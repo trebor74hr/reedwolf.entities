@@ -43,6 +43,7 @@ from .meta import (
         TypeInfo,
         )
 from .base import (
+        ReservedAttributeNames,
         ComponentBase,
         IFieldBase, 
         IContainerBase,
@@ -172,7 +173,7 @@ class ModelsRegistry(RegistryBase):
 
     # ------------------------------------------------------------
 
-    def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
+    def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
         # ROOT_VALUE_NEEDS_FETCH_BY_NAME = False
         # component = apply_session.current_frame.component
         instance = apply_session.current_frame.instance
@@ -199,18 +200,7 @@ class ModelsRegistry(RegistryBase):
             if instance_to_test and not isinstance(instance_to_test, expected_type):
                 raise RuleApplyTypeError(owner=self, msg=f"Wrong type, expected '{expected_type}', got '{instance}'")
 
-        return instance
-
-        # == M.name case
-        # if not isinstance(instance_to_test, expected_type):
-        #     raise RuleApplyTypeError(owner=self, msg=f"Wrong type, expected '{expected_type}', got '{instance}'")
-
-        # # TODO: activate this when it has sense (not partial mode with Extension/FieldGroup, not Extension)
-        # # this could differ - e.g. name="address", bind=M.address_set
-        # # if name!=bound_model_root.name:
-        # #     raise RuleApplyNameError(owner=self, msg=f"Wrong name, expected '{bound_model_root.name}', got '{name}'")
-
-        # return instance
+        return instance, None
 
 
 # ------------------------------------------------------------
@@ -270,12 +260,13 @@ class FieldsRegistry(RegistryBase):
         self.register_attr_node(attr_node) # , is_list=False))
         return attr_node
 
-    def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
+
+    def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
         # container = apply_session.current_frame.component.get_container_owner(consider_self=True)
         component = apply_session.current_frame.component
         instance  = apply_session.current_frame.instance
         top_attr_accessor = ComponentAttributeAccessor(component, instance)
-        return top_attr_accessor
+        return top_attr_accessor, None
 
 
 # ------------------------------------------------------------
@@ -340,13 +331,13 @@ class ContextRegistry(RegistryBase):
             self.register_attr_node(attr_node, attr_name)
 
 
-    def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
+    def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
         context = apply_session.context
         if context in (UNDEFINED, None):
             component = apply_session.current_frame.component
             raise RuleApplyNameError(owner=self, msg=f"ContextNS attribute '{component.name}' can not be fetched since context is not set ({type(context)}).")
         # if attr_name in self.context_class.get_dexp_attrname_dict():
-        return context
+        return context, None
 
 
 # ------------------------------------------------------------
@@ -374,20 +365,30 @@ class ConfigRegistry(RegistryBase):
             attr_node = self._create_attr_node_for_model_attr(config_class, attr_name)
             self.register_attr_node(attr_node)
 
-    def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
+    def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
         # ALT: config = apply_session.rules.config
         config = self.config
         if config in (UNDEFINED, None):
             component = apply_session.current_frame.component
             raise RuleInternalError(owner=self, 
                 msg=f"ConfigNS attribute '{component.name}' can not be fetched since config is not set ({type(config)}).")
-        return config
+        return config, None
 
 
 # ------------------------------------------------------------
 
 
-class ThisRegistry(RegistryBase):
+class ThisInstanceRegistry(RegistryBase):
+    """ 
+    Applies to model instances, e.g. 
+        company <= Company(name="Cisco", city="London")
+
+        This.Instance <= company
+        This.name <= "Cisco"
+        This.city <= "London"
+
+    Uses ReservedAttributeNames.INSTANCE_ATTR_NAME == "Instance" 
+    """
 
     NAMESPACE = ThisNS
 
@@ -402,82 +403,113 @@ class ThisRegistry(RegistryBase):
             attr_node = self._create_attr_node_for_model_attr(self.model_class, attr_name)
             self.register_attr_node(attr_node)
 
-        # This.Instance
+        # This.Instance == ReservedAttributeNames.INSTANCE_ATTR_NAME 
         self.register_instance_attr_node(model_class=model_class)
 
-    def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
+
+    def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
         if not isinstance(apply_session.current_frame.instance, self.model_class):
             raise RuleInternalError(owner=self, msg=f"Type of apply session's instance expected to be '{self.model_class}, got: {apply_session.current_frame.instance}") 
-        return apply_session.current_frame.instance
+        return apply_session.current_frame.instance, None
 
+
+# ------------------------------------------------------------
+
+class ThisValueRegistry(RegistryBase):
+    """ 
+    Applies to model instance's attribute, e.g. 
+        company <= Company(name="Cisco", city="London")
+        company_name = company.name
+
+        This.Value <= company_name
+
+    Uses ReservedAttributeNames.VALUE_ATTR_NAME == "Value" 
+    """
+
+    NAMESPACE = ThisNS
+
+    def __init__(self, attr_node: AttrDexpNode):
+        # TODO: model_class: ModelType
+        super().__init__()
+
+        self.attr_node = attr_node
+        if not isinstance(self.attr_node, AttrDexpNode):
+            raise RuleSetupValueError(owner=self, msg=f"Expected AttrDexpNode, got: {type(self.attr_node)} / {self.attr_node}")
+        self.attr_name = self.attr_node.name
+
+        # TODO: consider adding this too? how to fetch Parent?
+        #   self.model_class = model_class
+        #   if not is_model_class(self.model_class):
+        #       raise RuleSetupValueError(owner=self, msg=f"Expected model class (DC/PYD), got: {type(self.model_class)} / {self.model_class}")
+        #
+        #   model_fields = get_model_fields(self.model_class)
+        #   if self.attr_name not in model_fields:
+        #       raise RuleSetupValueError(owner=self, msg=f"Attribute '{attr_name}' not found in {type(self.model_class)} / {self.model_class}")
+
+        # This.Value == ReservedAttributeNames.VALUE_ATTR_NAME.value
+        self.register_value_attr_node(attr_node=attr_node)
+
+
+    def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
+        # TODO: 
+        # if not isinstance(apply_session.current_frame.instance, self.model_class):
+        #     raise RuleInternalError(owner=self, msg=f"Type of apply session's instance expected to be '{self.model_class}, got: {apply_session.current_frame.instance}") 
+
+        if attr_name != ReservedAttributeNames.VALUE_ATTR_NAME.value:
+            raise RuleApplyNameError(owner=self, msg=f"Only '.Value' attribute is expected, got: {attr_name}") 
+
+        # instead of fetching .Value, instruct caller to fetch component's bound attribute
+        return apply_session.current_frame.instance, self.attr_name
 
 # ------------------------------------------------------------
 
 
 class SetupSession(SetupSessionBase):
 
-    def create_local_setup_session(self, this_ns_model_class: ModelType) -> SetupSession:
-        " Currently creates only local ThisNS registry, which is used for some local context, e.g. Component This. dexps "
+    def create_local_setup_session(self, 
+            this_ns_instance_model_class: Optional[ModelType],
+            this_ns_value_attr_node: Optional[AttrDexpNode] = None,
+            ) -> SetupSession:
+        """ Currently creates only local ThisNS registry, which is used for
+        some local context, e.g. Component This. dexps 
+        Args:
 
-        this_registry = ThisRegistry(
-                model_class=this_ns_model_class,
-                )
+            a) this_ns_instance_model_class -> .Instance + all-attributes logic
+
+            b) this_ns_value_attr_node -> .Value logic, no other attributes for now
+
+        TODO:??
+            this_ns_value_attr_name:
+                when None -> .Instance + all-attributes logic
+                when not None -> .Value logic, no other attributes for now
+
+        """
+        # if not this_ns_instance_model_class:
+        #     raise RuleInternalError(owner=self, msg="Expected this_ns_instance_model_class.") 
+
+        if this_ns_instance_model_class:
+            assert this_ns_value_attr_node is None
+            this_registry = ThisInstanceRegistry(
+                    model_class=this_ns_instance_model_class,
+                    )
+        elif this_ns_value_attr_node:
+            this_registry = ThisValueRegistry(
+                    # model_class=this_ns_instance_model_class,
+                    attr_node=this_ns_value_attr_node,
+                    )
+        else:
+            raise RuleInternalError(owner=self, msg="Expected this_ns_instance_model_class or this_ns_value_attr_node") 
 
         local_setup_session = SetupSessionBase(
                                 owner=self.owner,
                                 owner_setup_session=None,
                                 functions_factory_registry=self.functions_factory_registry,
                                 )
+
         local_setup_session.add_registry(this_registry)
+
         return local_setup_session
 
 # ------------------------------------------------------------
 # OBSOLETE
 # ------------------------------------------------------------
-
-# # ------------------------------------------------------------
-# 
-# # obsolete - using FunctionNS() , functions, EnumMembers instead
-# 
-# class DataRegistry(RegistryBase):
-# 
-#     NAMESPACE = DataNS
-# 
-#     def create_dexp_node(self, data_var:IData) -> IDotExpressionNode:
-#         # ------------------------------------------------------------
-#         # A.2. DATAPROVIDERS - Collect all dexp_nodes from dataproviders fieldgroup
-#         # ------------------------------------------------------------
-#         if False:
-#             ...
-#         # elif isinstance(data_var, StaticData):
-#         #     dexp_node = AttrDexpNode(
-#         #                             name=data_var.name,
-#         #                             data=data_var,
-#         #                             namespace=DataNS,
-#         #                             type_info=data_var.type_info,
-#         #                             )
-#         # elif isinstance(data_var, DynamicData):
-#         #     assert isinstance(data_var.function, CustomFunctionFactory)
-#         #     # TODO: consider storing CustomFactoryFunction instead of CustomFunction instances
-#         #     #       to allow extra arguments when referenced
-#         #     dexp_node = data_var.function.create_function(
-#         #                     setup_session=self.setup_session,
-#         #                     caller=None,
-#         #                     func_args=EmptyFunctionArguments, 
-#         #                     name=data_var.name) 
-#         else:
-#             # TODO: does Operation needs special handling?
-#             # if not isinstance(data_var, IData:
-#             raise RuleSetupError(owner=self, msg=f"Register expexted IData, got {data_var} / {type(data_var)}.")
-# 
-#         return dexp_node
-# 
-#     def register(self, data_var:IData):
-#         dexp_node = self.create_dexp_node(data_var)
-#         # can be AttrDexpNode or FunctionDexpNode
-#         # alt_dexp_node_name=data_var.name
-#         self.register_dexp_node(dexp_node)
-#         return dexp_node
-# 
-#     def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
-#         raise NotImplementedError()

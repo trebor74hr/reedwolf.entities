@@ -22,6 +22,7 @@ from typing import (
         _GenericAlias,
         get_type_hints,
         TypeVar,
+        Sequence as SequenceType,
         )
 from enum import Enum
 from decimal import Decimal
@@ -114,6 +115,16 @@ RuleDatatype            = Union[StandardType, List[StandardType,], Dict[str, Sta
 FunctionArgumentsTupleType = Tuple[List[Any], Dict[str, Any]]
 
 HookOnFinishedAllCallable = Callable[[], None]
+
+# ---
+
+KeyPairs = SequenceType[Tuple[str, Any]]
+
+InstanceId = int
+KeyString = str
+
+AttrName = str
+AttrValue = Any
 
 # ------------------------------------------------------------
 # Commonly/Internally used type symbols

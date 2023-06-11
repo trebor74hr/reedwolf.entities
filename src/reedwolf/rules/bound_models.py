@@ -85,7 +85,7 @@ class NestedBoundModelMixin:
 
         # TODO: currently validatiojn of function argument types is done only in ApplyStackFrame() in apply(), 
         #       but should be here used for check attrs in setup() phase ... Define here: 
-        #           self.local_setup_session = setup_session.create_local_setup_session(this_ns_model_class=self.model)
+        #           self.local_setup_session = setup_session.create_local_setup_session(this_ns_instance_model_class=self.model)
         #       later reuse it and use it here to check func args types.
         for child_bound_model in self.contains:
 
@@ -173,7 +173,7 @@ class NestedBoundModelMixin:
                 }
 
         local_setup_session = apply_session.setup_session.create_local_setup_session(
-                                            this_ns_model_class=self.model)
+                                            this_ns_instance_model_class=self.model)
 
         container = self.get_container_owner(consider_self=False)
 

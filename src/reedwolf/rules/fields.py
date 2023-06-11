@@ -108,6 +108,8 @@ class AutocomputedEnum(IntEnum):
 # Fields
 # ============================================================
 
+MAX_BIND_DEPTH = 4
+
 @dataclass
 class FieldBase(Component, IFieldBase, ABC):
     # abstract property:
@@ -212,9 +214,10 @@ class FieldBase(Component, IFieldBase, ABC):
 
             if self.bind.GetNamespace()!=namespace_only:
                 raise RuleSetupValueError(owner=self, msg=f"{self.bind}: 'bind' needs to be in {namespace_only} DotExpression (e.g. M.status).")
-            if len(self.bind.Path) not in (1,2,3,4):
+
+            if len(self.bind.Path) not in range(1, MAX_BIND_DEPTH+1):
                 # warn(f"{self.bind}: 'bind' needs to be 1-4 deep DotExpression (e.g. M.status, M.city.country.name ).")
-                raise RuleSetupValueError(owner=self, msg=f"'bind' needs to be 1-4 deep DotExpression (e.g. M.status, M.city.country.name ), got: {self.bind}")
+                raise RuleSetupValueError(owner=self, msg=f"'bind' needs to be 1-{MAX_BIND_DEPTH} deep DotExpression (e.g. M.status, M.city.country.name ), got: {self.bind}")
 
             self.bound_attr_node = setup_session.get_dexp_node_by_dexp(self.bind)
             if not self.bound_attr_node:
@@ -534,7 +537,7 @@ class ChoiceField(FieldBase):
                         container = self.get_container_owner(consider_self=True), 
                         component = self, 
                         local_setup_session = setup_session.create_local_setup_session(
-                                                    this_ns_model_class=model_class)
+                                                    this_ns_instance_model_class=model_class)
                     )):
                 # model_class=model_class
                 self.choice_value_attr_node = self._create_attr_node(setup_session, "choice_value", dexp=self.choice_value)
@@ -580,7 +583,7 @@ class ChoiceField(FieldBase):
             dexp: DotExpression, 
             ):
         """
-        Create choice AttrDexpNode() within local ThisRegistry
+        Create choice AttrDexpNode() within local ThisInstanceRegistry
         """
         if not (dexp and isinstance(dexp, DotExpression) and dexp.GetNamespace()==ThisNS):
             raise RuleSetupValueError(owner=self, msg=f"Argument '{aname}' is not set or has wrong type - should be DotExpression in This. namespace. Got: {dexp} / {type(dexp)}")

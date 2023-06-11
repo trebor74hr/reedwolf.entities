@@ -61,8 +61,12 @@ from .meta import (
 class IRegistry:
 
     @abstractmethod
-    def get_root_value(self, apply_session: IApplySession) -> Any: # noqa: F821
-        " used in apply phase "
+    def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]: # noqa: F821
+        """ 
+        Used in apply phase. returns instance or instance attribute value + a
+        different attribute name when different attribute needs to be retrieved
+        from instance.
+        """
         ...
 
 # ------------------------------------------------------------
@@ -484,7 +488,6 @@ class OperationDexpNode(IDotExpressionNode):
                  is_last: bool,
                  prev_node_type_info: TypeInfo,
                  ) -> ExecResult:
-        # this should be included: context.this_registry: ThisRegistry
 
         if is_last and not self.is_finished:
             raise RuleInternalError(owner=self, msg="Last dexp node is not finished.") 
@@ -563,8 +566,9 @@ class DotExpression(DynamicAttrsBase):
                            "_node", "_namespace", "_name", "_func_args", "_is_top", "_status",
                            "_is_literal",
                            "_EnsureFinished", "IsFinished",
+                           # "_is_reserved_function",
                            } # "_read_functions",  "_dexp_node_name"
-    RESERVED_FUNCTION_NAMES = ("Value",)
+    # RESERVED_FUNCTION_NAMES = ("Value",)
     # "First", "Second",
 
     def __init__(
@@ -610,7 +614,7 @@ class DotExpression(DynamicAttrsBase):
 
         # FunctionArgumentsType
         self._func_args: Optional[FunctionArgumentsTupleType] = None
-        self._is_reserved_function:bool = self._name in self.RESERVED_FUNCTION_NAMES
+        # self._is_reserved_function:bool = self._name in self.RESERVED_FUNCTION_NAMES
 
         # -- can calculate all, contains all attr_node-s, and the last one is in 
         # not defined in is_predefined mode
@@ -667,7 +671,7 @@ class DotExpression(DynamicAttrsBase):
             # if local repo not available or ns not found in it, find in container repo
             registry = setup_session.get_registry(self._namespace)
             if registry.NAMESPACE._manual_setup:
-                raise RuleInternalError(owner=self, msg=f"Registry should be passed for namespace._manual_setup cases (usually manually created ThisRegistry()), got: {registry}")
+                raise RuleInternalError(owner=self, msg=f"Registry should be passed for namespace._manual_setup cases (usually manually created ThisInstanceRegistry()), got: {registry}")
 
         assert registry
 
@@ -677,7 +681,7 @@ class DotExpression(DynamicAttrsBase):
         #         raise RuleInternalError(owner=self, msg=f"Registry should be passed only for namespace._manual_setup cases, got: {registry}")
         # else:
         #     if self._namespace._manual_setup:
-        #         raise RuleInternalError(owner=self, msg=f"Registry should be passed for namespace._manual_setup cases (usually manually created ThisRegistry()).")
+        #         raise RuleInternalError(owner=self, msg=f"Registry should be passed for namespace._manual_setup cases (usually manually created ThisInstanceRegistry()).")
         #     registry = setup_session.get_registry(self._namespace)
 
         if self._namespace != registry.NAMESPACE:
