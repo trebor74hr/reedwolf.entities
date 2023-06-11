@@ -711,8 +711,8 @@ class Extension(ContainerBase):
 
     # --- Evaluated later
     setup_session      : Optional[SetupSession] = field(init=False, repr=False, default=None)
-    components      : Optional[Dict[str, Component]]  = field(repr=False, default=None)
-    models          : Dict[str, Union[type, DotExpression]] = field(repr=False, init=False, default_factory=dict)
+    components      : Optional[Dict[str, Component]]  = field(init=False, repr=False, default=None)
+    models          : Dict[str, Union[type, DotExpression]] = field(init=False, repr=False, default_factory=dict)
     owner           : Union[ComponentBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     owner_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 

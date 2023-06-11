@@ -633,8 +633,7 @@ class DotExpression(DynamicAttrsBase):
 
     def _EnsureFinished(self):
         if self._status!=DExpStatusEnum.INITIALIZED:
-            # TODO: this should be RuleSetupValueError instead
-            raise RuleInternalError(owner=self, msg=f"Method Setup() already called, further DotExpression building/operator-building is not possible (status={self._status}).")
+            raise RuleSetupError(owner=self, msg=f"Method Setup() already called, further DotExpression building/operator-building is not possible (status={self._status}).")
 
 
     def Setup(self, setup_session:ISetupSession, owner:Any) -> Optional['IDotExpressionNode']:
