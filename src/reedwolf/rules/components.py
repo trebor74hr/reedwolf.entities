@@ -71,11 +71,19 @@ class Component(ComponentBase, ABC):
     # set in setup()
     dot_node:   Union[AttrDexpNode, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
 
+    NAME_COUNTER:   ClassVar[int] = field(default=1)
+
     def init_clean_base(self):
         # when not set then will be later defined - see set_owner()
         if self.name not in (None, "", UNDEFINED):
             if not self.name.isidentifier():
                 raise RuleSetupValueError(owner=self, msg="Attribute name needs to be valid python identifier name")
+
+    def _fill_name_when_missing(self):
+        if self.name is None:
+            self.name = f"{self.__class__.__name__.lower()}__{self.NAME_COUNTER}"
+            self.NAME_COUNTER += 1
+
 
     def __post_init__(self):
         self.init_clean_base()

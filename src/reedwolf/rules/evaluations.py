@@ -18,7 +18,10 @@ from typing import (
         Optional,
         ClassVar,
         )
-from dataclasses import dataclass
+from dataclasses import (
+        dataclass,
+        field,
+        )
 
 from .meta import (
         TransMessageType, 
@@ -54,13 +57,16 @@ class Evaluation(PresaveEvaluationBase):
     """
     # TODO: check in Setup phase if type of evaluated DotExpression has correct
     #       type - e.g.  for EnumField evaluated value must be within enum values.
-    name:           str
     value:          DotExpression
-    label:          Optional[TransMessageType] = None
-    available:      Optional[Union[bool, DotExpression]] = True
+    name:           Optional[str] = field(default=None)
+    label:          Optional[TransMessageType] = field(default=None)
+    available:      Optional[Union[bool, DotExpression]] = field(default=True)
+
+    NAME_COUNTER:   ClassVar[int] = field(default=1)
 
     def __post_init__(self):
         assert isinstance(self.value, DotExpression), self.value
+        self._fill_name_when_missing()
 
     def execute(self, apply_session: IApplySession) -> Optional[ExecResult]:
         not_available_dexp_result = execute_available_dexp(self.available, apply_session=apply_session)

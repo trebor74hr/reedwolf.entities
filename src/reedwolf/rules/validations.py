@@ -14,11 +14,14 @@ TODO: novi Validation - koja grupa korisnika smije mijenjati zapis?
 TODO: novi Validation - je li podatak lock-an do nekog datuma 
 
 """
-
 from __future__ import annotations
 
 from abc import ABC
-from typing import Union, Optional
+from typing import (
+        Union, 
+        Optional,
+        ClassVar,
+        )
 from dataclasses import (
         dataclass, 
         field,
@@ -61,16 +64,19 @@ class Validation(ValidationBase):
                         )
 
     """
-    name:           str
     ensure:         DotExpression
-    error:          TransMessageType = field(repr=False)
+    name:           Optional[str] = field(default=None)
+    error:          Optional[TransMessageType] = field(repr=False, default=None)
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
     label:          Optional[TransMessageType] = field(repr=False, default=None)
-
 
     def __post_init__(self):
         if not isinstance(self.ensure, DotExpression):
             raise RuleSetupError(owner=self, msg=f"ensure must be DotExpression, got: {type(self.ensure)} / {self.ensure}")
+        self._fill_name_when_missing()
+        if self.error is None:
+            self.error = f"Validation failed: {self.ensure}"
+
         super().__post_init__()
 
     def validate(self, apply_session: IApplySession) -> Union[NoneType, ValidationFailure]:
