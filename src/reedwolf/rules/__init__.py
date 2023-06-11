@@ -21,9 +21,6 @@ from .exceptions import (
         RuleValidationError,
         RuleNameNotFoundError,
         )
-from .base import (
-        ComponentBase,
-        )
 from .bound_models import (
         BoundModel,
         BoundModelWithHandlers,

@@ -3,7 +3,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 import inspect
 from enum import Enum
-from collections import OrderedDict
 from typing import (
         List, 
         Any, 
@@ -24,7 +23,6 @@ from dataclasses import (
 
 from .utils import (
         UNDEFINED,
-        NOT_APPLIABLE,
         NA_DEFAULTS_MODE,
         UndefinedType,
         get_available_names_example,
@@ -46,6 +44,7 @@ from .namespaces import (
         Namespace,
         )
 from .meta import (
+        MetaTree,
         ComponentNameType,
         ComponentTreeType,
         ComponentTreeWValuesType,
@@ -420,7 +419,7 @@ class ComponentBase(SetOwnerMixin, ABC):
             if not attr_field.init:
                 continue
 
-            if    attr_field.metadata \
+            if attr_field.metadata \
               and isinstance(attr_field.metadata, dict) \
               and attr_field.metadata("skip_dump", None):
                 continue
@@ -448,7 +447,7 @@ class ComponentBase(SetOwnerMixin, ABC):
 
             # -- is value supplied i.e. is it different from default
             if isinstance(attr_value, (ComponentBase, DotExpression)) \
-              or (    attr_value is not UNDEFINED 
+              or (attr_value is not UNDEFINED 
                   and attr_value is not DC_MISSING 
                   and (attr_default is DC_MISSING or attr_value!=attr_default)
                   ):
@@ -1384,7 +1383,7 @@ class IApplySession:
             if self.defaults_mode:
                 validation_failure = component.validate_type(apply_session=self, strict=strict, value=value)
                 if validation_failure:
-                    raise RuleInternalError(owner=self, msg=f"TODO: Type validation failed in defaults_mode - probably should default value to None ") 
+                    raise RuleInternalError(owner=self, msg="TODO: Type validation failed in defaults_mode - probably should default value to None ") 
                 validation_failure = None
             else:
                 validation_failure = component.validate_type(apply_session=self, strict=strict, value=value)
@@ -1552,7 +1551,7 @@ def extract_type_info(
         raise RuleSetupNameNotFoundError(msg=f"Type object {parent_object} has no attribute '{attr_node_name}'. {valid_names}")
 
     if not isinstance(type_info, TypeInfo):
-        raise RuleInternalError(owner=self, msg=f"{type_info} is not TypeInfo") 
+        raise RuleInternalError(msg=f"{type_info} is not TypeInfo") 
     return type_info, th_field # , func_node
 
 

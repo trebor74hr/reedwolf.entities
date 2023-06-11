@@ -453,7 +453,6 @@ class FunctionArguments:
 
         # ==== 2/3: VALUE ARGUMENTS - are filled at the end
 
-        value_args = []
         if caller is None:
             # direct from namespace, e.g. Fn.get_my_country()
             value_arg_implicit = None

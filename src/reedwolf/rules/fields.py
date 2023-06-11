@@ -16,7 +16,6 @@ from typing import (
         Any, 
         ClassVar, 
         Dict,
-        Tuple,
         )
 from dataclasses import dataclass, field
 import inspect
@@ -254,29 +253,28 @@ class FieldBase(Component, IFieldBase, ABC):
             raise RuleSetupError(owner=self, msg=f"'When you have at least one Evaluation cleaner, set 'autocomputed = AutocomputedEnum.ALLWAYS/SOMETIMES' (got '{self.autocomputed.name}').")
 
         if self.REQUIRED_VALIDATIONS:
-            if True:
-                validations_kls_found = set([type(cleaner) for cleaner in self.cleaners if isinstance(cleaner, ValidationBase)]) if self.cleaners else set()
-                missing_names = []
-                for validation_kls_or_list in self.REQUIRED_VALIDATIONS:
-                    validation_kls_list = validation_kls_or_list if isinstance(validation_kls_or_list, (list, tuple)) else [validation_kls_or_list]
-                    any_found = any([validation_kls for validation_kls in validation_kls_list if validation_kls in validations_kls_found])
-                    if not any_found:
-                        if len(validation_kls_list)>1:
-                            missing = "(" + f" or ".join([vk.__name__ for vk in validation_kls_list]) + ")"
-                        else:
-                            missing = vk.__name__
-                        missing_names.append(missing)
-                if missing_names:
-                    missing_names = " and ".join(missing_names)
-                    raise RuleSetupError(owner=self, msg=f"'{self.__class__.__name__}' requires following Validations (cleaners attribute): {missing_names}")
+            validations_kls_found = set([type(cleaner) for cleaner in self.cleaners if isinstance(cleaner, ValidationBase)]) if self.cleaners else set()
+            missing_names = []
+            for validation_kls_or_list in self.REQUIRED_VALIDATIONS:
+                validation_kls_list = validation_kls_or_list if isinstance(validation_kls_or_list, (list, tuple)) else [validation_kls_or_list]
+                any_found = any([validation_kls for validation_kls in validation_kls_list if validation_kls in validations_kls_found])
+                if not any_found:
+                    if len(validation_kls_list)>1:
+                        missing = "(" + " or ".join([vk.__name__ for vk in validation_kls_list]) + ")"
+                    else:
+                        missing = validation_kls_list[0].__name__
+                    missing_names.append(missing)
+            if missing_names:
+                missing_names = " and ".join(missing_names)
+                raise RuleSetupError(owner=self, msg=f"'{self.__class__.__name__}' requires following Validations (cleaners attribute): {missing_names}")
 
-            else:
-                validations_kls_required = set(self.REQUIRED_VALIDATIONS)
-                validations_kls_found = set([type(cleaner) for cleaner in self.cleaners if isinstance(cleaner, ValidationBase)]) if self.cleaners else set()
-                missing = (validations_kls_required - validations_kls_found)
-                if missing:
-                    missing_names = ", ".join([validation.__name__ for validation in missing])
-                    raise RuleSetupError(owner=self, msg=f"'{self.__class__.__name__}' requires following Validations (cleaners attribute): {missing_names}")
+            # OLD:
+            #     validations_kls_required = set(self.REQUIRED_VALIDATIONS)
+            #     validations_kls_found = set([type(cleaner) for cleaner in self.cleaners if isinstance(cleaner, ValidationBase)]) if self.cleaners else set()
+            #     missing = (validations_kls_required - validations_kls_found)
+            #     if missing:
+            #         missing_names = ", ".join([validation.__name__ for validation in missing])
+            #         raise RuleSetupError(owner=self, msg=f"'{self.__class__.__name__}' requires following Validations (cleaners attribute): {missing_names}")
 
         return self
 
@@ -332,7 +330,7 @@ class FieldBase(Component, IFieldBase, ABC):
         returns None if all ok, otherwise ValidationFailure()
         """
         component = apply_session.current_frame.component
-        
+
         if component is not self:
             raise RuleInternalError(owner=self, msg=f"Current frame component should match current objects (self), got:\n  {component}\n  !=\n  {self}") 
 

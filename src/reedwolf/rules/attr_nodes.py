@@ -5,9 +5,6 @@ from typing import (
         )
 from dataclasses import dataclass, field
 
-# fields as dc_fields
-from enum import Enum
-
 from .utils import (
         UNDEFINED,
         NA_DEFAULTS_MODE,

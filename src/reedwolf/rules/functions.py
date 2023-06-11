@@ -71,6 +71,8 @@ from .base import (
         AttrDexpNodeTypeEnum,
         ReservedArgumentNames,
         IFieldBase,
+        IApplySession,
+        ComponentBase,
         )
 
 
@@ -379,9 +381,8 @@ class IFunction(IFunctionDexpNode):
         dexp_node: IDotExpressionNode = prep_arg.caller
 
         if not (dexp_node.attr_node_type == AttrDexpNodeTypeEnum.FIELD
-            and dexp_node.namespace == FieldsNS
-            and isinstance(dexp_node.data, IFieldBase)):
-
+          and dexp_node.namespace == FieldsNS
+          and isinstance(dexp_node.data, IFieldBase)):
             raise RuleInternalError(owner=self, msg=f"INJECT_COMPONENT_TREE :: PrepArg '{prep_arg.name}' expected DExp(F.<field>) -> Field(),  got: '{dexp_node}' -> '{dexp_node.data}' ") 
 
         component: ComponentBase = dexp_node.data

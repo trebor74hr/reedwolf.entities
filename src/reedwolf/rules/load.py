@@ -1,5 +1,5 @@
 import ast
-from ast import iter_fields, iter_child_nodes
+from ast import iter_fields
 from dataclasses import dataclass, field
 from typing import (
         List,
@@ -75,7 +75,7 @@ def ast_node_repr(ast_node: ast.AST, depth: int = 0) -> str:
             if isinstance(fval, ast.AST):
                 # recursion
                 fval = ast_node_repr(fval, depth=depth+1)
-                fvale = f"({fval})"
+                fval = f"({fval})"
             fval = str(fval)[:50]
             out.append(f"{fname}={fval}")
         if not out:
@@ -213,7 +213,8 @@ class DotExpressionLoader(CallTraceMixin):
             while True:
                 nr += 1
                 if nr > 200:
-                    raise RuleInternalError(owner=call_repr, msg=f"Too many nodes to process...")  
+                    raise RuleInternalError(owner=call_repr, 
+                            msg="Too many nodes to process...")  
                 ast_node_list.append(node)
                 if type(node)==ast.Attribute:
                     node = node.value
@@ -420,4 +421,3 @@ def load(input: Union[dict, str], format: DumpFormatEnum = None) -> ComponentBas
 
     return ComponentsLoader().load_component(input_dict)
 
-    

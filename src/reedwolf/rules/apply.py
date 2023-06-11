@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from enum import Enum
 from dataclasses import dataclass
 from typing import (
+        Any,
         Dict,
         Optional,
         Tuple,
+        List,
+        Union,
         )
 from contextlib import AbstractContextManager
 from collections import OrderedDict, defaultdict
@@ -36,6 +38,7 @@ from .meta import (
         is_model_instance,
         ValuesTree,
         ComponentTreeWValuesType,
+        LiteralType,
         )
 from .base import (
         MAX_RECURSIONS,
@@ -466,7 +469,7 @@ class ApplyResult(IApplySession):
                 raise RuleInternalError(owner=component, msg=f"Componenent's container '{comp_container}' must match caller's '{self.current_frame.component.name}' container: {caller_container.name}") 
 
         if self.finished:
-            raise RuleInternalError(owner=self, msg=f"Already finished") 
+            raise RuleInternalError(owner=self, msg="Already finished") 
 
         if self.stack_frames:
             assert not entry_call
@@ -490,7 +493,7 @@ class ApplyResult(IApplySession):
             in_component_only_tree = False
 
             if self.defaults_mode:
-                if not self.instance is NA_DEFAULTS_MODE:
+                if self.instance is not NA_DEFAULTS_MODE:
                     raise RuleInternalError(owner=self, msg=f"Defaults mode - instance must be NA_DEFAULTS_MODE, got: {type(self.instance)}") 
             else:
                 if not isinstance(self.instance, comp_container_model):
@@ -516,7 +519,6 @@ class ApplyResult(IApplySession):
 
         new_frame = None
 
-        parent_values_subtree = None
         if depth==0:
             # ---- Rules case -----
 
@@ -631,8 +633,8 @@ class ApplyResult(IApplySession):
             current_value_instance = self.current_values.get(comp_key_str, UNDEFINED)
 
             if current_value_instance is NA_IN_PROGRESS:
-                 raise RuleApplyError(owner=component, 
-                            msg=f"The component is already in progress state. Probably circular dependency issue. Fix problematic references to this component and try again.") 
+                raise RuleApplyError(owner=component, 
+                            msg="The component is already in progress state. Probably circular dependency issue. Fix problematic references to this component and try again.") 
             elif current_value_instance is UNDEFINED:
                 self.current_values[comp_key_str] = NA_IN_PROGRESS
 
@@ -1013,7 +1015,7 @@ class ApplyResult(IApplySession):
             3. call cleaners - validations and evaluations in given order
             4. validate type is ok?
         """
-         
+
         if getattr(component, "available", None):
             not_available_dexp_result = execute_available_dexp(
                                                 component.available, 
@@ -1337,9 +1339,9 @@ class ApplyResult(IApplySession):
             Probaly a bit faster, only dict queries.
         """
         key_str = self.get_key_string(component)
-        if not key_str in self.current_values:
+        if key_str not in self.current_values:
             if not init_when_missing:
-                raise RuleInternalError(owner=component, msg=f"Value fetch too early") 
+                raise RuleInternalError(owner=component, msg="Value fetch too early") 
 
             # ------------------------------------------------------------
             # NOTE: apply() / mode_dexp_dependency 
@@ -1355,7 +1357,7 @@ class ApplyResult(IApplySession):
             # ------------------------------------------------------------
             self._apply(component=component, mode_dexp_dependency=True)
             # self._init_by_bind_dexp(component)
-            
+
         attr_current_value_instance = self.current_values[key_str]
         return attr_current_value_instance
 
@@ -1374,7 +1376,7 @@ class ApplyResult(IApplySession):
         #       bind_dexp._evaluator.execute()
         # key_str = component.get_key_string(apply_session=self)
         key_str = self.get_key_string(component)
-        if not key_str in self.current_values:
+        if key_str not in self.current_values:
             raise RuleInternalError(owner=component, msg=f"{key_str} not found in current values") 
         attr_current_value_instance = self.current_values[key_str]
         return attr_current_value_instance.get_value(strict=strict)
@@ -1399,7 +1401,6 @@ class ApplyResult(IApplySession):
     # ------------------------------------------------------------
 
     def get_values_tree(self, key_string: Optional[KeyString] = None) -> ComponentTreeWValuesType:
-        # component: ComponentBase
         """
         will go recursively through every children and
         fetch their "children" and collect to output structure.
@@ -1407,9 +1408,9 @@ class ApplyResult(IApplySession):
         for every node bind (M.<field>) is evaluated
         """
         if self.values_tree is None:
-            raise RuleInternalError(owner=self, msg=f"_get_values_tree() did not filled _values_tree cache") 
+            raise RuleInternalError(owner=self, msg="_get_values_tree() did not filled _values_tree cache") 
         if key_string is None:
-            component = self.rules
+            # component = self.rules
             tree = self.values_tree
         else:
             if key_string not in self.values_tree_by_key_string.keys():
@@ -1498,7 +1499,7 @@ class ApplyResult(IApplySession):
             values_dict["extension_items"] = []
             self.current_frame.set_parent_values_subtree(values_dict["extension_items"])
             if recursive:
-                raise RuleInternalError(owner=component, msg=f"Did not implement this case - extension_items + recursive") 
+                raise RuleInternalError(owner=component, msg="Did not implement this case - extension_items + recursive") 
         else:
             if is_init:
                 assert not recursive, "did not consider this case"

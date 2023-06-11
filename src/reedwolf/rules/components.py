@@ -27,7 +27,6 @@ from .base import (
         BaseOnlyArgs,
         ComponentBase,
         IApplySession,
-        GlobalConfig,
         ValidationFailure,
         )
 from .expressions import (

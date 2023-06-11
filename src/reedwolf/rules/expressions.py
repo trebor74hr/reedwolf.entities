@@ -151,7 +151,7 @@ class NotAvailableExecResult(ExecResult):
                 reason=f"Not available since expression yields: {available_dexp_result.value}", 
             else:
                 if available_dexp_result not in (None, UNDEFINED):
-                    raise RuleInternalError(owner=self, msg=f"Expected None/Undefined, got: {available_dexp_result}") 
+                    raise RuleInternalError(msg=f"Expected None/Undefined, got: {available_dexp_result}") 
                 reason="Value not available"
         instance = cls(reason=reason)
         instance.value = available_dexp_result
@@ -312,13 +312,14 @@ class Operation:
     apply_function: Callable
     load_function : Callable
 
+
 # https://florian-dahlitz.de/articles/introduction-to-pythons-operator-module
 # https://docs.python.org/3/library/operator.html#mapping-operators-to-functions
 OPCODE_TO_FUNCTION = {
     # NOTE: no need to check unary/binary vs have 1 or 2 params
     #       python parser/interpretor will ensure this
     # binary operatorsy - buultin
-      "=="  : Operation(code="==" , dexp_code="==" , ast_node_type= ast.Eq      , apply_function= operator.eq      , load_function= operator.eq)
+      "=="  : Operation(code="==" , dexp_code="==" , ast_node_type= ast.Eq      , apply_function= operator.eq      , load_function= operator.eq) # noqa: E131
     , "!="  : Operation(code="!=" , dexp_code="!=" , ast_node_type= ast.NotEq   , apply_function= operator.ne      , load_function= operator.ne)
     , ">"   : Operation(code=">"  , dexp_code=">"  , ast_node_type= ast.Gt      , apply_function= operator.gt      , load_function= operator.gt)
     , ">="  : Operation(code=">=" , dexp_code=">=" , ast_node_type= ast.GtE     , apply_function= operator.ge      , load_function= operator.ge)
@@ -341,6 +342,7 @@ OPCODE_TO_FUNCTION = {
     , "not" : Operation(code="not", dexp_code="~"  , ast_node_type= ast.Invert  , apply_function= operator.not_    , load_function= operator.invert)
     }
 
+
 # Other:
 #   ast.Dict ast.DictComp ast.List ast.ListComp
 #   ast.Pow ast.MatMult ast.Mod
@@ -351,6 +353,8 @@ AST_NODE_TYPE_TO_FUNCTION = {
     operation.ast_node_type: operation
     for operation in OPCODE_TO_FUNCTION.values()
 }
+
+
 #       ast.Eq       : operator.eq  # noqa: E131
 #     , ast.NotEq    : operator.ne   
 #     , ast.Gt       : operator.gt
@@ -617,7 +621,7 @@ class DotExpression(DynamicAttrsBase):
 
     def Clone(self) -> DotExpression:
         # NOTE: currently not used
-        return self.__class__(node=node, namespace=namespace, Path=Path)
+        return self.__class__(node=self._node, namespace=self._namespace, Path=self.Path)
 
     def GetNamespace(self) -> Namespace:
         return self._namespace
@@ -812,7 +816,7 @@ class DotExpression(DynamicAttrsBase):
 
     def __call__(self, *args, **kwargs):
         if self._func_args is not None:
-            raise RuleInternalError(owner=self, msg=f"Node already a function, duplicate call?") 
+            raise RuleInternalError(owner=self, msg="Node already a function, duplicate call?") 
         self._func_args = [args, kwargs]
         return self
 

@@ -95,7 +95,7 @@ Children = create_builtin_function_factory( # noqa: E305
 
 def single_bool_selected(children_list: List[ItemType]) -> int:
     """ for objects from datastores - e.g. rows, iterables """
-    return len([child for child in children_list if child["attr_current_value_instance"].get_value(strict=False)==True])==1
+    return len([child for child in children_list if child["attr_current_value_instance"].get_value(strict=False) is True])==1
 
 SingleBoolSelected = create_builtin_function_factory( # noqa: E305
             single_bool_selected, name="SingleBoolSelected", 

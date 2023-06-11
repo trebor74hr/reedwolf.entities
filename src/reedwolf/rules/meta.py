@@ -34,10 +34,6 @@ from dataclasses import (
         fields as dc_fields,
         )
 
-from .utils import (
-        to_repr,
-        )
-
 try:
     # ----------------------------------------
     # Pydantic found
@@ -642,8 +638,8 @@ class TypeInfo:
 
         return "".join(out)
 
-    def as_str(self) -> str:
-        return self.py_type_hint.__name__ if type(self.py_type_hint)==type else str(self.py_type_hint)
+    # def as_str(self) -> str:
+    #     return self.py_type_hint.__name__ if type(self.py_type_hint)==type else str(self.py_type_hint)
 
     # ------------------------------------------------------------
     # Classmethods
@@ -667,10 +663,10 @@ class TypeInfo:
             NOTE: Do not use 'rules.meta. get_model_fields() .type' or '__annotations__'
                   since python type hints may not be resolved.
         """
-        msg_prefix = f"{to_repr(caller)}:: " if caller else ""
+        # msg_prefix = f"{to_repr(caller)}:: " if caller else ""
 
         if isinstance(py_type_hint, str):
-            raise RuleSetupValueError(owner=cls, msg=  +
+            raise RuleSetupValueError(owner=cls, msg=
                         "{msg_prefix}Python type hint is a string, probably not resolved properly: {repr(py_type_hint)}."
                         "\nHINTS:"
                         "\n  1) if you have `from __future__ import annotations`, remove it, try to import that module, stabilize it and then try this again." 
@@ -697,7 +693,7 @@ class TypeInfo:
 
         msg_prefix = f"Function {py_function}::"
         if not py_type_hint:
-            raise RuleSetupNameError(item=py_function, msg =  msg_prefix + f"AttrDexpNode FUNCTION '{name}' is not valid, it has no return type hint (annotations).")
+            raise RuleSetupNameError(item=py_function, msg = msg_prefix + f"AttrDexpNode FUNCTION '{name}' is not valid, it has no return type hint (annotations).")
         if not allow_nonetype and py_type_hint == NoneType:
             raise RuleSetupNameError(item=py_function, msg = msg_prefix + f"SetupSession: AttrDexpNode FUNCTION '{name}' is not valid, returns None (from annotation).")
 
