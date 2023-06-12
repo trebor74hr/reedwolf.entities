@@ -1,3 +1,4 @@
+# https://docs.python.org/3.7/library/ast.html
 import ast
 from ast import iter_fields
 from dataclasses import dataclass, field
@@ -26,6 +27,7 @@ from .exceptions import (
 from .namespaces import ALL_NS_OBJECTS
 from .meta import (
         STANDARD_TYPE_W_NONE_LIST,
+        LiteralType,
         )
 from .expressions import (
         DotExpression,
@@ -38,6 +40,9 @@ from .base import (
         DEXP_PREFIX,
         )
 
+
+ConstantAstTypes = Union[ast.Constant, ast.Num, ast.Str, ast.Bytes]
+CONSTANT_AST_TYPE_LIST = [ast.Constant, ast.Num, ast.Str, ast.Bytes]
 
 
 class CallTraceMixin:
@@ -135,7 +140,7 @@ class DotExpressionLoader(CallTraceMixin):
 
                 start_node = ast_node_list[0]
 
-                if type(start_node)==ast.Constant:
+                if type(start_node) in CONSTANT_AST_TYPE_LIST:
                     if len(ast_node_list) != 1:
                         # TODO: if this happens, then do not call _ast_nodes_prepare() due reverse ...
                         raise NotImplementedError()
@@ -203,7 +208,7 @@ class DotExpressionLoader(CallTraceMixin):
                 node = start_node
             elif type(start_node)==ast.UnaryOp:
                 node = start_node
-            elif type(start_node)==ast.Constant:
+            elif type(start_node) in CONSTANT_AST_TYPE_LIST:
                 node = start_node
             else:
                 raise RuleLoadTypeError(owner=call_repr, msg=f"Expected expression/attribute for start node, got: {type(start_node)} / {ast_node_repr(start_node)}")
@@ -220,8 +225,8 @@ class DotExpressionLoader(CallTraceMixin):
                     node = node.value
                 elif type(node)==ast.Call:
                     node = node.func
-                elif type(node)==ast.Constant:
-                    node = node.value
+                elif type(node) in CONSTANT_AST_TYPE_LIST:
+                    node = self.get_constant_value(node, call_repr=call_repr)
                     if isinstance(node, STANDARD_TYPE_W_NONE_LIST):
                         break
                     # NOTE: do not terminate when Just("name").Lower()
@@ -334,20 +339,31 @@ class DotExpressionLoader(CallTraceMixin):
         if ast_node.func.id == "Just":
             if not (len(ast_node.args) == 1 and len(ast_node.keywords)==0):
                 raise RuleLoadTypeError(owner=call_repr, msg=f"Function 'Just' function can receive simple constant argument, got: {ast_node_repr(ast_node.args)} / {ast_node_repr(ast_node.keywords)}")
-            arg_node = ast_node.args[0]
-            if type(arg_node) != ast.Constant:
-                raise RuleLoadTypeError(owner=call_repr, msg=f"Function 'Just' argument must be Constant, got: {ast_node_repr(arg_node)}")
-            dexp_node = self._process_constant(node = arg_node, call_repr=call_repr)
+            dexp_node = self._process_constant(node = ast_node.args[0], call_repr=call_repr)
         else:
             raise RuleLoadTypeError(owner=call_repr, msg=f"Only 'Just' function can be a starting point, got: {ast_node.func.id}")
 
         return dexp_node
 
+    @staticmethod
+    def get_constant_value(node: ConstantAstTypes, call_repr: str) -> LiteralType:
+        if type(node)==ast.Constant:
+            value = node.value
+        elif type(node)==ast.Num:
+            value = node.n
+        elif type(node) in (ast.Str, ast.Bytes):
+            value = node.s
+        else:
+            raise RuleLoadTypeError(owner=call_repr, msg=f"Function 'Just' argument must be Constant/Num/Str, got: {ast_node_repr(node)}")
 
-    def _process_constant(self, node: ast.Constant, call_repr: str) -> Just:
-        value = node.value
         if not isinstance(value, STANDARD_TYPE_W_NONE_LIST):
             raise RuleLoadTypeError(owner=call_repr, msg=f"Function 'Just' argument must be standard type: {STANDARD_TYPE_W_NONE_LIST}, got: {ast_node_repr(node)}")
+
+        return value
+
+
+    def _process_constant(self, node: ast.AST, call_repr: str) -> Just:
+        value = self.get_constant_value(node, call_repr=call_repr)
         dexp_node = Just(value)
         return dexp_node
 
