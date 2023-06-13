@@ -56,7 +56,7 @@ from .validations import (
         ExactLength,
         MinLength,
         )
-from .valid_children import (
+from .valid_items import (
         Cardinality,
         Unique,
         )

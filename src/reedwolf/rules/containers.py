@@ -76,7 +76,7 @@ from .registries import (
         ConfigRegistry,
         )
 
-from .valid_children import (
+from .valid_items import (
         ICardinalityValidation
         )
 from .components import (
