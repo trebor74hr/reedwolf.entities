@@ -49,6 +49,7 @@ from .meta import (
         )
 from .base import (
         ComponentBase,
+        IContainerBase,
         extract_type_info,
         IApplySession,
         BoundModelBase,
@@ -487,7 +488,7 @@ class UseSetupStackFrame(UseStackFrameMixin, AbstractContextManager):
 @dataclass
 class SetupSessionBase(ISetupSession):
 
-    parent                       : Optional[Any]
+    container                    : Optional[IContainerBase]
     parent_setup_session         : Optional[ISetupSession]
 
     # custom_function_factories store 
@@ -505,24 +506,13 @@ class SetupSessionBase(ISetupSession):
     finished                    : bool = field(init=False, repr=False, default=False)
     hook_on_finished_all_list   : Optional[List[HookOnFinishedAllCallable]] = field(init=False, repr=False)
 
-    # stack of frames - first frame is current. On the end of the process the
-    # stack must be empty
+    # stack of frames - first frame is current. On the end of the process the stack must be empty
     stack_frames: List[SetupStackFrame] = field(repr=False, init=False, default_factory=list)
 
-
-    # def __init__(self, 
-    #         # usually 'ContainerBase'
-    #         parent:  Optional[Any],  # noqa: F821
-    #         parent_setup_session: Optional[ISetupSession], 
-    #         functions: Optional[List[CustomFunctionFactory]] = None, 
-    #         functions_factory_registry: Optional[FunctionsFactoryRegistry] = None,
-    #         include_builtin_functions: bool = True,
-    #         ):
-    #     # parent is usually: 'ContainerBase'
-    #     self.parent: Optional[Any] = parent  # noqa: F821
-    #     self.parent_setup_session: Optional[ISetupSession] = parent_setup_session
-
     def __post_init__(self):
+        if self.container is not None and not isinstance(self.container, IContainerBase):
+            raise RuleInternalError(owner=self, msg=f"Expecting container for parent, got: {type(self.container)} / {self.container}") 
+
         self.is_top_setup_session: bool = (self.parent_setup_session is None)
 
         if self.is_top_setup_session:
@@ -539,7 +529,7 @@ class SetupSessionBase(ISetupSession):
         # self.dexp_node_dict: Dict[str, IDotExpressionNode] = {}
         # self.finished: bool = False
 
-        self.name: str = self.parent.name if self.parent else "no-parent"
+        self.name: str = self.container.name if self.container else "no-container"
 
         if self.functions_factory_registry:
             assert not self.functions
@@ -559,7 +549,7 @@ class SetupSessionBase(ISetupSession):
         counts = ", ".join([f"{k}={v.count()}" for k, v in self._registry_dict.items() if v])
         # name={self.name},
         # cnt={self.entries_count}, 
-        return f"SetupSession(parent={self.parent}, {counts})"
+        return f"SetupSession(parent={self.container}, {counts})"
 
     def __repr__(self):
         return str(self)
@@ -632,7 +622,7 @@ class SetupSessionBase(ISetupSession):
         " ppprint == pp == pretty print "
         # recursive: bool = False, depth: int = 0, 
         # has {self.entries_count} attr_node(s), 
-        print(f"{self.parent}: SetupSession '{self.name}', finished={self.finished}. List:")
+        print(f"{self.container}: SetupSession '{self.name}', finished={self.finished}. List:")
         for ns_name, store in self._registry_dict.items():
             store.pprint()
 

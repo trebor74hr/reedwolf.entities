@@ -500,8 +500,8 @@ class SetupSession(SetupSessionBase):
         else:
             raise RuleInternalError(owner=self, msg="Expected this_ns_instance_model_class or this_ns_value_attr_node") 
 
-        local_setup_session = SetupSessionBase(
-                                parent=self.parent,
+        local_setup_session = SetupSession(
+                                container=self.container,
                                 parent_setup_session=None,
                                 functions_factory_registry=self.functions_factory_registry,
                                 )

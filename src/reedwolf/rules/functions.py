@@ -710,9 +710,9 @@ def try_create_function(
                                 first_custom=first_custom))
         names_avail_all.append(names_avail)
 
-        if not setup_session.parent.parent:
+        if not setup_session.container.parent:
             break
-        setup_session_current = setup_session.parent.parent.setup_session
+        setup_session_current = setup_session.container.parent.setup_session
 
     func_node = None
     if function_factory:

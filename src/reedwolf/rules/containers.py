@@ -97,16 +97,16 @@ from ..rules import components, fields, validations, evaluations
 # ------------------------------------------------------------
 
 def create_setup_session(
-        parent: ContainerBase,
+        container: ContainerBase,
         config: Config,
         functions: Optional[List[CustomFunctionFactory]] = None, 
         context_class: Optional[IContext] = None,
         ) -> SetupSession:
     setup_session = SetupSession(
-                    parent=parent, 
+                    container=container, 
                     functions=functions,
-                    parent_setup_session=parent.setup_session if parent.parent else None,
-                    include_builtin_functions=parent.is_top_parent())
+                    parent_setup_session=container.setup_session if container.parent else None,
+                    include_builtin_functions=container.is_top_parent())
 
     setup_session.add_registry(ModelsRegistry())
     setup_session.add_registry(FieldsRegistry())
@@ -289,7 +289,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             raise RuleSetupError(owner=self, msg="SetupSession.setup() should be called only once")
 
         self.setup_session = create_setup_session(
-                                parent=self,
+                                container=self,
                                 functions = self.functions,
                                 config = self.config,
                                 context_class = self.context_class,

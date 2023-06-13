@@ -12,7 +12,7 @@ Process:
 
         # there is OperationDexpNode() e.g. M.x + M.y
 
-    what is saved inside of (last) value expression (and parent):
+    what is saved inside of (last) value expression (and owner):
         dexp_evaluator = DotExpressionEvaluator()
             [AttrDexpNode(), AttrDexpNode(), Function(), AttrDexpNode()]
 
