@@ -3,7 +3,7 @@ validations used for children records
 e.g. in container cardinality.
 
 TODO: Check if they could be implemented in cleaners instead of cardinality ...
-        Extension(
+        SubEntityItems(
             ...
             cleeaners = [
                 Cardinality.Single()
@@ -210,7 +210,7 @@ class Unique: # namespace holder
 
     @dataclass
     class Children(IUniqueValidator):
-        " within extension records "
+        " within subentity_items records "
         name            : str
         fields          : List[str] # TODO: better field specification or dexpr?
         ignore_none     : bool = True
@@ -226,7 +226,7 @@ class Unique: # namespace holder
 #   class IterationValidator:
 #   # db terminology: scalar custom functions, table value custom functions, aggregate custom functions
 #   class AggregateValidator:
-#   class ExtensionValidator:
+#   class SubEntityItemsValidator:
 #   class ItemsValidator:
 #   class MultipleItemsValidator:
 #   class ContainerItemsValidator:

@@ -197,7 +197,7 @@ class AttrDexpNode(IDotExpressionNode):
             raise RuleInternalError(owner=self, msg="Last dexp node is not finished.") 
 
         # TODO: not nicest way - string split
-        #       for extension: [p._name for p in frame.container.bound_model.model.Path]
+        #       for subentity_items: [p._name for p in frame.container.bound_model.model.Path]
         names = self.name.split(".")
 
         attr_name = names[-1]
@@ -210,14 +210,14 @@ class AttrDexpNode(IDotExpressionNode):
             dexp_result = ExecResult()
             frame = apply_session.current_frame
 
-            if frame.container.is_extension() or frame.on_component_only:
+            if frame.container.is_subentity_items() or frame.on_component_only:
                 if not len(names)==1:
-                    raise RuleInternalError(owner=self, msg=f"Attribute node - execution initial step for extension failed, expected single name members (e.g. M), got: {self.name}\n  == Compoonent: {frame.container}")
+                    raise RuleInternalError(owner=self, msg=f"Attribute node - execution initial step for subentity_items failed, expected single name members (e.g. M), got: {self.name}\n  == Compoonent: {frame.container}")
                 # if not len(names)>1:
-                #     raise RuleInternalError(owner=self, msg=f"Initial evaluation step for extension failed, expected multiple name members (e.g. M.address_set), got: {self.name}\n  == Compoonent: {frame.container}")
+                #     raise RuleInternalError(owner=self, msg=f"Initial evaluation step for subentity_items failed, expected multiple name members (e.g. M.address_set), got: {self.name}\n  == Compoonent: {frame.container}")
             else:
                 if not len(names)==1:
-                    raise RuleInternalError(owner=self, msg=f"Initial evaluation step for non-extension failed, expected single name member (e.g. M), got: {self.name}\n  == Compoonent: {frame.container}")
+                    raise RuleInternalError(owner=self, msg=f"Initial evaluation step for non-subentity_items failed, expected single name member (e.g. M), got: {self.name}\n  == Compoonent: {frame.container}")
 
             registry = None
             if apply_session.current_frame.local_setup_session:
@@ -301,7 +301,7 @@ class AttrDexpNode(IDotExpressionNode):
 
         # TODO: check type_info match too - and put in all types of nodes - functions/operators
         if apply_session.component_name_only and apply_session.instance_new == value_new:
-            # TODO: this is workaround when single instance is passed to update single item in Extension[List]
+            # TODO: this is workaround when single instance is passed to update single item in SubEntityItems[List]
             #       not good solution
             ...
         elif isinstance(value_new, (list, tuple)):

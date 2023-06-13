@@ -102,7 +102,7 @@ class Component(ComponentBase, ABC):
     #             )
     #     return key_string
 
-    def is_extension(self):
+    def is_subentity_items(self):
         return False
 
     def is_container(self):
@@ -158,7 +158,7 @@ class FieldGroup(Component):
     name:           str
     contains:       List[Component] = field(repr=False)
     label:          Optional[TransMessageType] = field(repr=False, default=None)
-    # TODO: allow ChildrenValidation too (currently only used in Extension, e.g. Cardinality/Unique)
+    # TODO: allow ChildrenValidation too (currently only used in SubEntityItems, e.g. Cardinality/Unique)
     cleaners:       Optional[List[Union[ValidationBase, EvaluationBase]]] = None
     available:      Union[bool, DotExpression] = True
 

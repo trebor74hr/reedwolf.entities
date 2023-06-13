@@ -349,7 +349,7 @@ class ComponentBase(SetParentMixin, ABC):
         """
         will go recursively through every children and
         fetch their "children" and collect to output structure:
-        selects not-extensions, put in flat dict (i.e. children with
+        selects not-subentity_itemss, put in flat dict (i.e. children with
         model same level fields), excludes self 
         """
         key = "_children_tree_flatten_dict"
@@ -360,7 +360,7 @@ class ComponentBase(SetParentMixin, ABC):
             children_dict_traversed = {}
 
             for comp in self.get_children():
-                if not comp.is_extension():
+                if not comp.is_subentity_items():
                     # recursion
                     comp_chidren_dict = comp.get_children_tree_flatten_dict(depth=depth+1)
                     children_dict_traversed.update(comp_chidren_dict)
@@ -548,7 +548,7 @@ class ComponentBase(SetParentMixin, ABC):
             self.set_parent(parent)
         else:
             if self.parent not in (None, UNDEFINED):
-                # Extension()
+                # SubEntityItems()
                 assert not parent
             else:
                 # Entity()
@@ -566,8 +566,8 @@ class ComponentBase(SetParentMixin, ABC):
             if isinstance(component, DotExpression):
                 pass
             elif hasattr(component, "fill_components"):
-                if hasattr(component, "is_extension") and component.is_extension():
-                    # for extension container don't go deeper into tree (call fill_components)
+                if hasattr(component, "is_subentity_items") and component.is_subentity_items():
+                    # for subentity_items container don't go deeper into tree (call fill_components)
                     # it will be called later in container.setup() method
                     component.set_parent(parent=self)
                     # save only container (top) object
@@ -898,7 +898,7 @@ class ComponentBase(SetParentMixin, ABC):
 
         if parent_container in (None, UNDEFINED):
             if consider_self:
-                raise RuleSetupError(owner=self, msg="Did not found container in parents. Every component needs to be in some container object tree (Entity/Extension).")
+                raise RuleSetupError(owner=self, msg="Did not found container in parents. Every component needs to be in some container object tree (Entity/SubEntityItems).")
             return None
 
         return parent_container
@@ -952,7 +952,7 @@ class IContainerBase(ABC):
         ...
 
     @abstractmethod
-    def is_extension(self):
+    def is_subentity_items(self):
         ...
 
     @abstractmethod
@@ -1096,7 +1096,7 @@ class SetupStackFrame:
             self.bound_model = self.container.bound_model
 
         # self.bound_model_root = (self.on_component_only 
-        #                          if self.on_component_only.is_extension()
+        #                          if self.on_component_only.is_subentity_items()
         #                          else self.on_component_only.get_container_parent(consider_self=True)
         #                         ).bound_model
         # self.bound_model_root = self.container.bound_model
@@ -1263,7 +1263,7 @@ class ApplyStackFrame:
 
         if self.on_component_only:
             self.bound_model_root = (self.on_component_only 
-                                     if self.on_component_only.is_extension()
+                                     if self.on_component_only.is_subentity_items()
                                      else self.on_component_only.get_container_parent(consider_self=True)
                                     ).bound_model
             # can be list in this case

@@ -69,7 +69,7 @@ from .containers import (
         ContainerBase,
         MissingKey,
         Entity,
-        Extension,
+        SubEntityItems,
         )
 
 
@@ -154,7 +154,7 @@ class ApplyResult(IApplySession):
             # Will raise if component is not found
             self.component_only = self.entity.get_component(self.component_name_only)
             if not self.component_only.can_apply_partial():
-                raise RuleApplyError(owner=self, msg=f"Component '{self.component_only}' does not support partial apply. Use Extension, FieldGroup or similar.")
+                raise RuleApplyError(owner=self, msg=f"Component '{self.component_only}' does not support partial apply. Use SubEntityItems, FieldGroup or similar.")
 
         self.bound_model = getattr(self.entity, "bound_model")
         if not self.bound_model:
@@ -381,7 +381,7 @@ class ApplyResult(IApplySession):
                # -- RECURSION -- internal props
 
                # see dox below
-               mode_extension_list:bool = False, 
+               mode_subentity_items:bool = False, 
 
                # see dox below
                mode_dexp_dependency: bool = False,
@@ -401,9 +401,9 @@ class ApplyResult(IApplySession):
             normal_mode 
                for each child in children -> ._apply()
 
-            mode_extension_list
-               if extension and list - for each item in items -> ._apply()
-               caller is extension_list processing - NOT passed through recursion further
+            mode_subentity_items
+               if subentity_items and list - for each item in items -> ._apply()
+               caller is subentity_items processing - NOT passed through recursion further
 
             mode_dexp_dependency 
                if cleaner.DotExpression references component which is not yet
@@ -422,7 +422,7 @@ class ApplyResult(IApplySession):
 
         """
         # TODO: self.config.loger.debug(...)
-        assert not (mode_extension_list and mode_dexp_dependency)
+        assert not (mode_subentity_items and mode_dexp_dependency)
 
         comp_container = component.get_container_parent(consider_self=True)
         comp_container_model = comp_container.bound_model.get_type_info().type_
@@ -445,7 +445,7 @@ class ApplyResult(IApplySession):
             in_component_only_tree = self.current_frame.in_component_only_tree 
 
             # check if instance model is ok
-            if not component.is_extension():
+            if not component.is_subentity_items():
                 if self.defaults_mode:
                     if self.current_frame.instance is not NA_DEFAULTS_MODE:
                         raise RuleInternalError(owner=self, msg=f"Defaults mode - current frame's instance's model must be NA_DEFAULTS_MODE, got: {type(self.instance)}") 
@@ -453,7 +453,7 @@ class ApplyResult(IApplySession):
                     if not isinstance(self.current_frame.instance, comp_container_model):
                         raise RuleInternalError(owner=self, msg=f"Current frame's instance's model does not corresponds to component's container's model. Expected: {comp_container_model}, got: {type(self.instance)}") 
 
-            # TODO: for extension() any need to check this at all in this phase?
+            # TODO: for subentity_items() any need to check this at all in this phase?
         else:
             # no stack around -> initial call -> depth=0
             assert entry_call
@@ -470,7 +470,7 @@ class ApplyResult(IApplySession):
 
         if self.component_only and component == self.component_only:
             # partial apply - detected component
-            if not mode_extension_list and in_component_only_tree:
+            if not mode_subentity_items and in_component_only_tree:
                 raise RuleInternalError(owner=self, 
                         # {parent} -> 
                         msg=f"{component}: in_component_only_tree should be False, got {in_component_only_tree}")
@@ -507,16 +507,16 @@ class ApplyResult(IApplySession):
                             in_component_only_tree=in_component_only_tree,
                             )
 
-        elif not mode_extension_list and component.is_extension():
-            # ---- Extension case -> process single or iterate all items -----
+        elif not mode_subentity_items and component.is_subentity_items():
+            # ---- SubEntityItems case -> process single or iterate all items -----
 
 
-            component : Extension = component
+            component : SubEntityItems = component
             if not isinstance(component.bound_model.model, DotExpression):
-                raise RuleInternalError(owner=self, msg=f"For Extension `bound_model` needs to be DotExpression, got: {component.bound_model.model}") 
+                raise RuleInternalError(owner=self, msg=f"For SubEntityItems `bound_model` needs to be DotExpression, got: {component.bound_model.model}") 
 
             if getattr(component.bound_model, "contains", None):
-                raise RuleInternalError(owner=self, msg=f"For Extension complex `bound_model` is currently not supported (e.g. `contains`), use simple BoundModel, got: {component.bound_model}") 
+                raise RuleInternalError(owner=self, msg=f"For SubEntityItems complex `bound_model` is currently not supported (e.g. `contains`), use simple BoundModel, got: {component.bound_model}") 
 
             # original instance
             dexp_result: ExecResult = component.bound_model.model \
@@ -533,7 +533,7 @@ class ApplyResult(IApplySession):
                 # enters recursion -> _apply() -> ...
                 # parent_values_subtree = self.current_frame.parent_values_subtree
 
-                self._apply_extension_list(
+                self._apply_subentity_items(
                         component=component,
                         # parent=parent,
                         in_component_only_tree=in_component_only_tree,
@@ -549,7 +549,7 @@ class ApplyResult(IApplySession):
 
 
             # ========================================
-            # == Extension with single item ==
+            # == SubEntityItems with single item ==
             #    will be processed as any other fields
             # ========================================
             if instance is None:
@@ -719,7 +719,7 @@ class ApplyResult(IApplySession):
 
     # ------------------------------------------------------------
 
-    def _apply_extension_list(self, 
+    def _apply_subentity_items(self, 
             component: ComponentBase,
             # parent: Optional[ComponentBase], 
             in_component_only_tree:bool,
@@ -728,8 +728,8 @@ class ApplyResult(IApplySession):
             depth: int,
             ):
         """
-        Extension with item List
-        Recursion -> _apply(mode_extension_list=True) -> ...
+        SubEntityItems with item List
+        Recursion -> _apply(mode_subentity_items=True) -> ...
         """
 
         if not isinstance(instance_list, (list, tuple)):
@@ -819,7 +819,7 @@ class ApplyResult(IApplySession):
         if instances_by_key:
 
             # -- fill values dict
-            self._fill_values_dict(filler="ext_list", component=component, is_init=False, process_further=True, extension_items_mode=True)
+            self._fill_values_dict(filler="subentity_items", component=component, is_init=False, process_further=True, subentity_items_mode=True)
 
             for key, (instance, index0, item_instance_new) in instances_by_key.items():
                 # Go one level deeper 
@@ -843,10 +843,10 @@ class ApplyResult(IApplySession):
                     self._apply(
                                 # parent=parent, 
                                 component=component, 
-                                mode_extension_list=True,
+                                mode_subentity_items=True,
                                 # in_component_only_tree=in_component_only_tree,
                                 # depth=depth+1,
-                                # prevent is_extension_logic again -> infinitive recursion
+                                # prevent is_subentity_items_logic again -> infinitive recursion
                                 )
 
             # TODO: consider to reset - although should not influence since stack_frame will be disposed
@@ -936,12 +936,12 @@ class ApplyResult(IApplySession):
 
                 # if partial - then dexp must know - this value is set only in this case
                 if in_component_only_tree and component == self.component_only:
-                    # Extension or FieldGroup is root
+                    # SubEntityItems or FieldGroup is root
                     on_component_only = component
                 else:
                     on_component_only = None
 
-                # container = component.get_container_parent(consider_self=True) if not component.is_extension() else component
+                # container = component.get_container_parent(consider_self=True) if not component.is_subentity_items() else component
                 with self.use_stack_frame(
                         ApplyStackFrame(
                             container = self.current_frame.container, 
@@ -1190,16 +1190,16 @@ class ApplyResult(IApplySession):
         if depth > MAX_RECURSIONS:
             raise RuleInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
 
-        # Started to process extension, but not yet positioned on any extension instance item 
-        # the key will have no extension::<instance_id>, just parent_key_string::parent_key_string::extension_name
-        extension_no_instance_case = (component.get_container_parent(consider_self=True) 
+        # Started to process subentity_items, but not yet positioned on any subentity_items instance item 
+        # the key will have no subentity_items::<instance_id>, just parent_key_string::parent_key_string::subentity_items_name
+        subentity_items_no_instance_case = (component.get_container_parent(consider_self=True) 
                                       != 
                                       self.current_frame.component.get_container_parent(consider_self=True))
 
         # NOTE: this could be different 
         #       component == self.current_frame.component
 
-        if component.is_container() and not extension_no_instance_case:
+        if component.is_container() and not subentity_items_no_instance_case:
             instance = self.current_frame.instance
             parent_instance = self.current_frame.parent_instance
             index0 = self.current_frame.index0
@@ -1212,7 +1212,7 @@ class ApplyResult(IApplySession):
                             force=force,
                             )
         else:
-            consider_self = False if extension_no_instance_case else True
+            consider_self = False if subentity_items_no_instance_case else True
             container = component.get_container_parent(consider_self=consider_self)
 
             # Recursion
@@ -1234,7 +1234,7 @@ class ApplyResult(IApplySession):
 
         a) with keys:
             For containers which have keys defined, it is assumed that one key is
-            globally unique within Extension components, so no need to prefix key
+            globally unique within SubEntityItems components, so no need to prefix key
             with parent key_string. Example:
 
                  address_set_ext[id2=1]
@@ -1282,8 +1282,8 @@ class ApplyResult(IApplySession):
                 key_string = GlobalConfig.ID_NAME_SEPARATOR.join([parent_key_string, key_string])
             else:
                 container_parent = component.get_container_parent(consider_self=True)
-                if container_parent.is_extension():
-                    raise RuleInternalError(owner=component, msg=f"Parent container {container_parent.name} is an extension and parent_instance is empty") 
+                if container_parent.is_subentity_items():
+                    raise RuleInternalError(owner=component, msg=f"Parent container {container_parent.name} is an subentity_items and parent_instance is empty") 
 
 
             self.key_string_container_cache[instance_id] = key_string
@@ -1403,7 +1403,7 @@ class ApplyResult(IApplySession):
                 # -- fill values dict
                 assert not (self.current_frame.component==self.entity)
                 # NOTE: can trigger recursion 
-                # extension_items_mode = False, component = component, 
+                # subentity_items_mode = False, component = component, 
                 self._fill_values_dict(filler="get_values_tree", is_init=False, recursive=True)
 
             tree = self.values_tree_by_key_string[key_string]
@@ -1416,7 +1416,7 @@ class ApplyResult(IApplySession):
                           filler:str,
                           is_init:bool, 
                           process_further:bool=True,
-                          extension_items_mode: bool = False,
+                          subentity_items_mode: bool = False,
                           component: Optional[ComponentBase] = None, 
                           recursive: bool = False,
                           depth: int=0,
@@ -1433,7 +1433,7 @@ class ApplyResult(IApplySession):
 
         # process_further currently not used
         if is_init:
-            assert not extension_items_mode
+            assert not subentity_items_mode
             assert self.values_tree_by_key_string is None
             self.values_tree_by_key_string = {}
         else:
@@ -1476,12 +1476,12 @@ class ApplyResult(IApplySession):
 
         # -- add to parent object or call recursion and fill the tree completely
 
-        if extension_items_mode:
+        if subentity_items_mode:
             self.current_frame.parent_values_subtree.append(values_dict)
-            values_dict["extension_items"] = []
-            self.current_frame.set_parent_values_subtree(values_dict["extension_items"])
+            values_dict["subentity_items"] = []
+            self.current_frame.set_parent_values_subtree(values_dict["subentity_items"])
             if recursive:
-                raise RuleInternalError(owner=component, msg="Did not implement this case - extension_items + recursive") 
+                raise RuleInternalError(owner=component, msg="Did not implement this case - subentity_items + recursive") 
         else:
             if is_init:
                 assert not recursive, "did not consider this case"
@@ -1562,7 +1562,7 @@ class ApplyResult(IApplySession):
             output["value"] = tree["attr_current_value_instance"].get_value(strict=True)
 
         self._dump_values_children(tree=tree, output=output, key_name="contains", depth=depth)
-        self._dump_values_children(tree=tree, output=output, key_name="extension_items", depth=depth)
+        self._dump_values_children(tree=tree, output=output, key_name="subentity_items", depth=depth)
 
         return output
 

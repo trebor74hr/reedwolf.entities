@@ -205,7 +205,7 @@ class FieldBase(Component, IFieldBase, ABC):
         if self.bind:
             # within all parents catch first with namespace_only attribute
             # if such - check if namespace of all children are right.
-            # Used for Extension.
+            # Used for SubEntityItems.
             namespace_only = ModelsNS
             parent = self.parent
             while parent is not None:

@@ -76,7 +76,7 @@ from .config import (
 from .containers import (
         KeyFields,
         # ListIndexKey,
-        Extension,
+        SubEntityItems,
         Entity,
         )
 from .functions import (
@@ -173,7 +173,7 @@ __all__ = [
     "KeyFields",
     # "ListIndexKey",
     # Top containers
-    "Extension",
+    "SubEntityItems",
     "Entity",
 
     # functions

@@ -345,7 +345,7 @@ class BoundModelWithHandlers(NestedBoundModelMixin, BoundModelBase):
         if self.contains:
             container =self.get_container_parent(consider_self=False)
             if not container.is_top_parent():
-                # NOTE: not allowed in Extension-s for now
+                # NOTE: not allowed in SubEntityItems-s for now
                 raise RuleSetupValueError(owner=self, msg=f"BoundModel* nesting (attribute 'contains') is not supported for '{type(container)}'")
 
         self._register_nested_models(setup_session)

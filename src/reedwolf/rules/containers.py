@@ -139,9 +139,9 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
     def is_top_parent(self):
         return not bool(self.parent)
 
-    def is_extension(self):
+    def is_subentity_items(self):
         # TODO: if self.parent is not None could be used as the term, put validation somewhere
-        " if start model is value expression - that mean that the the Entity is Extension "
+        " if start model is value expression - that mean that the the Entity is SubEntityItems "
         return isinstance(self.bound_model.model, DotExpression)
 
     def is_container(self):
@@ -179,7 +179,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
     def _register_bound_model(self, bound_model:BoundModelBase):
         # ex. type_info.metadata.get("bind_to_parent_setup_session")
         is_main_model = (bound_model==self.bound_model)
-        is_extension_main_model = (self.is_extension() and is_main_model)
+        is_subentity_items_main_model = (self.is_subentity_items() and is_main_model)
 
         # is_list = False
         if not isinstance(bound_model, BoundModelBase):
@@ -188,9 +188,9 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         model = bound_model.model
 
         attr_node = None
-        if is_extension_main_model:
+        if is_subentity_items_main_model:
             if not isinstance(model, DotExpression):
-                raise RuleSetupError(owner=self, msg=f"{bound_model.name}: For Extension main bound_model needs to be DotExpression: {bound_model.model}")
+                raise RuleSetupError(owner=self, msg=f"{bound_model.name}: For SubEntityItems main bound_model needs to be DotExpression: {bound_model.model}")
 
         # alias_saved = False
         is_list = False
@@ -202,7 +202,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             if model.GetNamespace()!=ModelsNS:
                 raise RuleSetupError(owner=self, msg=f"{bound_model.name}: DotExpression should be in ModelsNS namespace, got: {model.GetNamespace()}")
 
-            if is_extension_main_model:
+            if is_subentity_items_main_model:
                 # TODO: DRY this - the only difference is setup_session - extract common logic outside / 
                 # bound attr_node
                 assert hasattr(self, "parent_setup_session")
@@ -318,9 +318,9 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         #   it will validate every component attribute
         #   if attribute is another component - it will call recursively component.setup()
         #   if component attribute is DotExpression -> will call dexp.Setup()
-        #   if component is another container i.e. is_extension() - it will
+        #   if component is another container i.e. is_subentity_items() - it will
         #       process only that component and will not go deeper. later
-        #       extension.setup() will do this within own tree dep (own .components / .setup_session)
+        #       subentity_items.setup() will do this within own tree dep (own .components / .setup_session)
 
         # iterate all subcomponents and call _setup() for each
         with self.setup_session.use_stack_frame(
@@ -478,7 +478,7 @@ class KeyFields(KeysBase):
 
 
 # class ListIndexKey(KeysBase):
-#     # Can be applied only for children - e.g. Extension with multiple items
+#     # Can be applied only for children - e.g. SubEntityItems with multiple items
 #     # parent assignes key as index of item in the list of "children").
 # 
 #     def validate(self, children_model: ModelType):
@@ -690,12 +690,12 @@ class Entity(ContainerBase):
 # ------------------------------------------------------------
 
 @dataclass
-class Extension(ContainerBase):
+class SubEntityItems(ContainerBase):
     """ can not be used individually - must be directly embedded into Other
-        Extension or top Entity """
+        SubEntityItems or top Entity """
 
     # required since if it inherit name from BoundModel then the name will not
-    # be unique in self.components (Extension and BoundModel will share the same name)
+    # be unique in self.components (SubEntityItems and BoundModel will share the same name)
     name            : str
     bound_model     : Union[BoundModel, BoundModelWithHandlers] = field(repr=False)
     # metadata={"bind_to_parent_setup_session" : True})
@@ -717,7 +717,7 @@ class Extension(ContainerBase):
     parent           : Union[ComponentBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     parent_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
-    # extension specific - is this top parent or what? what is the difference to self.parent
+    # subentity_items specific - is this top parent or what? what is the difference to self.parent
 
     # in parents' chain (including self) -> first container
     parent_container : Union[ContainerBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
