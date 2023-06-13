@@ -298,7 +298,7 @@ class ContextRegistry(RegistryBase):
             raise RuleInternalError(owner=self, msg=f"Owner needs to be Component, got: {type(owner)} / {owner}")  
 
         if not owner.get_container_parent(consider_self=True).context_class:
-            raise RuleSetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}' (referenced by '{self.NAMESPACE}.{dexp_node_name}') should not be used since 'Rules.context_class' is not set. Define 'context_class' to 'Rules()' constructor and try again.")
+            raise RuleSetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}' (referenced by '{self.NAMESPACE}.{dexp_node_name}') should not be used since 'Entity.context_class' is not set. Define 'context_class' to 'Entity()' constructor and try again.")
 
         return super().create_node(
                 dexp_node_name=dexp_node_name,
@@ -368,7 +368,7 @@ class ConfigRegistry(RegistryBase):
             self.register_attr_node(attr_node)
 
     def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
-        # ALT: config = apply_session.rules.config
+        # ALT: config = apply_session.entity.config
         config = self.config
         if config in (UNDEFINED, None):
             component = apply_session.current_frame.component

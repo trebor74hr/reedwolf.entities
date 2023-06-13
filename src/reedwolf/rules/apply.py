@@ -68,7 +68,7 @@ from .components import (
 from .containers import (
         ContainerBase,
         MissingKey,
-        Rules,
+        Entity,
         Extension,
         )
 
@@ -147,27 +147,27 @@ class ApplyResult(IApplySession):
     """
 
     def __post_init__(self):
-        if not isinstance(self.rules, Rules):
-            raise RuleApplyError(owner=self, msg=f"Component object '{self.rules}' is not top container - Rules.")
+        if not isinstance(self.entity, Entity):
+            raise RuleApplyError(owner=self, msg=f"Component object '{self.entity}' is not top container - Entity.")
 
         if self.component_name_only:
             # Will raise if component is not found
-            self.component_only = self.rules.get_component(self.component_name_only)
+            self.component_only = self.entity.get_component(self.component_name_only)
             if not self.component_only.can_apply_partial():
                 raise RuleApplyError(owner=self, msg=f"Component '{self.component_only}' does not support partial apply. Use Extension, FieldGroup or similar.")
 
-        self.bound_model = getattr(self.rules, "bound_model")
+        self.bound_model = getattr(self.entity, "bound_model")
         if not self.bound_model:
-            raise RuleApplyError(owner=self, msg=f"Component object '{self.rules}' has no bound model")
+            raise RuleApplyError(owner=self, msg=f"Component object '{self.entity}' has no bound model")
 
-        if self.rules.context_class:
+        if self.entity.context_class:
             if not self.context:
-                raise RuleApplyError(owner=self.rules, msg=f"Pass context object to .apply*(). Context should be instance of '{self.rules.context_class}'.")
-            if not isinstance(self.context, self.rules.context_class):
-                raise RuleApplyError(owner=self, msg=f"Context object '{self.context}' is not instance of context class '{self.rules.context_class}'.")
+                raise RuleApplyError(owner=self.entity, msg=f"Pass context object to .apply*(). Context should be instance of '{self.entity.context_class}'.")
+            if not isinstance(self.context, self.entity.context_class):
+                raise RuleApplyError(owner=self, msg=f"Context object '{self.context}' is not instance of context class '{self.entity.context_class}'.")
         else:
             if self.context:
-                raise RuleApplyError(owner=self, msg=f"Given context object '{self.context}', but context class in component is not setup. Provide 'context_class' to Rules object and try again.")
+                raise RuleApplyError(owner=self, msg=f"Given context object '{self.context}', but context class in component is not setup. Provide 'context_class' to Entity object and try again.")
 
         # self.model = self.bound_model.model
         # if not self.model:
@@ -182,7 +182,7 @@ class ApplyResult(IApplySession):
 
 
             if self.instance_new is not None and not self.component_name_only:
-                self._detect_instance_new_struct_type(self.rules)
+                self._detect_instance_new_struct_type(self.entity)
 
         # ----------------------------------------
         # see IApplySession for description 
@@ -207,7 +207,7 @@ class ApplyResult(IApplySession):
             raise RuleApplyError(owner=self, msg="Apply process is not finished")
 
         if self.errors:
-            raise RuleValidationError(owner=self.rules, errors=self.errors)
+            raise RuleValidationError(owner=self.entity, errors=self.errors)
 
     # ------------------------------------------------------------
 
@@ -251,7 +251,7 @@ class ApplyResult(IApplySession):
     # value: Any, 
     def execute_validation(self, component: ComponentBase, validation:ValidationBase) -> Optional[ValidationFailure]:
         """ Execute validaion - if returns False value then register error and
-            mark component and children invalid to prevent further rules execution
+            mark component and children invalid to prevent further entity execution
         """
         assert isinstance(validation, ValidationBase)
         assert component == validation.parent
@@ -465,7 +465,7 @@ class ApplyResult(IApplySession):
                     raise RuleInternalError(owner=self, msg=f"Defaults mode - instance must be NA_DEFAULTS_MODE, got: {type(self.instance)}") 
             else:
                 if not isinstance(self.instance, comp_container_model):
-                    raise RuleInternalError(owner=self, msg=f"Rules instance's model does not corresponds to component's container's model. Expected: {comp_container_model}, got: {type(self.instance)}") 
+                    raise RuleInternalError(owner=self, msg=f"Entity instance's model does not corresponds to component's container's model. Expected: {comp_container_model}, got: {type(self.instance)}") 
 
 
         if self.component_only and component == self.component_only:
@@ -488,7 +488,7 @@ class ApplyResult(IApplySession):
         new_frame = None
 
         if depth==0:
-            # ---- Rules case -----
+            # ---- Entity case -----
 
             # assert parent is None
 
@@ -874,7 +874,7 @@ class ApplyResult(IApplySession):
         """
         self._apply(
                 # parent=None, 
-                component=self.rules,
+                component=self.entity,
                 entry_call=True,
                 )
         self.finish()
@@ -1244,7 +1244,7 @@ class ApplyResult(IApplySession):
             only locally within one instance of parent, therefore parent
             key_string is required. Example:
 
-                 company_rules::address_set_ext[0]
+                 company_entity::address_set_ext[0]
 
         """
         if not component.is_container():
@@ -1368,7 +1368,7 @@ class ApplyResult(IApplySession):
     def get_attr_value_by_comp_name(self, component:ComponentBase, instance: ModelType) -> ExecResult:
         attr_name = component.name
         if not hasattr(instance, attr_name):
-            # TODO: depending of self.rules strategy or apply(strategy) 
+            # TODO: depending of self.entity strategy or apply(strategy) 
             #   - raise error
             #   - return NotAvailableExecResult() / UNDEFINED (default)
             #   - return None (default)
@@ -1392,7 +1392,7 @@ class ApplyResult(IApplySession):
         if self.values_tree is None:
             raise RuleInternalError(owner=self, msg="_get_values_tree() did not filled _values_tree cache") 
         if key_string is None:
-            # component = self.rules
+            # component = self.entity
             tree = self.values_tree
         else:
             if key_string not in self.values_tree_by_key_string.keys():
@@ -1401,7 +1401,7 @@ class ApplyResult(IApplySession):
                     raise RuleInternalError(owner=self, msg=f"Key string not found in values tree, got: {key_string}. Available: {names_avail}") 
 
                 # -- fill values dict
-                assert not (self.current_frame.component==self.rules)
+                assert not (self.current_frame.component==self.entity)
                 # NOTE: can trigger recursion 
                 # extension_items_mode = False, component = component, 
                 self._fill_values_dict(filler="get_values_tree", is_init=False, recursive=True)

@@ -164,7 +164,7 @@ class FieldBase(Component, IFieldBase, ABC):
     # NOTE: this has no relation to type hinting - this is used for html input placeholder attribute
     hint:           Optional[TransMessageType] = field(repr=False, default=None)
 
-    # for arbitrary custom values, rules system ignores the field
+    # for arbitrary custom values, entity system ignores the field
     #   e.g. "autocomplete": True ...
     meta:           Optional[Dict[str, Any]] = field(repr=False, default=None)
 

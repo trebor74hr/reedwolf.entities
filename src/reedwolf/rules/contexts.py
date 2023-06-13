@@ -20,7 +20,7 @@ from .meta import (
 @dataclass
 class IContext(ABC):
     """
-    The IContext instances will be passed to Rules evaluation 
+    The IContext instances will be passed to Entity evaluation 
     instances/or subcomponents with concrete data.
     Context will be available as ContextNS namespace (Ctx.) and beloinging
     Value expressions.

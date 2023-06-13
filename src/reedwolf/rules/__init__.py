@@ -77,7 +77,7 @@ from .containers import (
         KeyFields,
         # ListIndexKey,
         Extension,
-        Rules,
+        Entity,
         )
 from .functions import (
         Function
@@ -174,7 +174,7 @@ __all__ = [
     # "ListIndexKey",
     # Top containers
     "Extension",
-    "Rules",
+    "Entity",
 
     # functions
     "functions",

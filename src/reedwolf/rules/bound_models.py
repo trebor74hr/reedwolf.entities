@@ -73,7 +73,7 @@ class NestedBoundModelMixin:
         container_parent = self.parent.get_container_parent(consider_self=True)
 
         if not container_parent or not container_parent.is_top_parent():
-            raise RuleSetupValueError(owner=self, msg=f"Currently child bound models ('contains') supported only for top contaainers owners (i.e. Rules), got: {self.parent} / {container_parent}")
+            raise RuleSetupValueError(owner=self, msg=f"Currently child bound models ('contains') supported only for top contaainers owners (i.e. Entity), got: {self.parent} / {container_parent}")
 
         if self.models_with_handlers_dict:
             raise RuleInternalError(owner=self, msg=f"models_with_handlers_dict should be empty, got: {to_repr(self.models_with_handlers_dict)}. Have you called setup for 2nd time?") 
@@ -363,7 +363,7 @@ class BoundModelWithHandlers(NestedBoundModelMixin, BoundModelBase):
 # ------------------------------------------------------------
 
 # @dataclass
-# class BoundModelHandler(RulesHandlerFunction):
+# class BoundModelHandler(EntityHandlerFunction):
 #     pass
 
 # def save(self, *args, **kwargs):

@@ -317,7 +317,7 @@ class RegistryBase(IRegistry):
             # --------------------------------------------------
             # get() -> TOP LEVEL - only level that is stored
             # --------------------------------------------------
-            # e.g. M.company Predefined before in Rules.setup() function.
+            # e.g. M.company Predefined before in Entity.setup() function.
             if full_dexp_node_name not in self.store:
                 names_avail = get_available_names_example(full_dexp_node_name, self.store.keys())
                 valid_names = f"Valid attributes: {names_avail}" if self.store.keys() else "Namespace has no attributes at all."

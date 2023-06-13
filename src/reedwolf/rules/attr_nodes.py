@@ -313,7 +313,7 @@ class AttrDexpNode(IDotExpressionNode):
             # if not self.get_type_info().is_optional:
             #     raise RuleApplyValueError(owner=self, msg=f"Attribute '{attr_name}' has 'None' value and type is not 'Optional'.")
         elif self.islist():
-            # apply_session.rules.get_component(apply_session.component_name_only)
+            # apply_session.entity.get_component(apply_session.component_name_only)
             raise RuleApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should return list, got: '{to_repr(value_new)}' : '{type(value_new)}'")
 
         # TODO: hm, changer_name is equal to attr_name, any problem / check / fix ... 

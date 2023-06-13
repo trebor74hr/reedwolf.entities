@@ -62,9 +62,9 @@ ModelsNS = Namespace("Models")
 #           FieldGroups and their Fields, Validations etc.
 #
 #           Difference to ModelsNS:
-#             - rules struct could be diifferent from storage models (ModelsNS)
+#             - entity struct could be diifferent from storage models (ModelsNS)
 #             - Fields are more suitable for embedding - e.g. when other model could be
-#               injected into component or component to be reused in other rules-struct
+#               injected into component or component to be reused in other entity-struct
 
 # TODO: rename to ComponentsNS / C.
 FieldsNS = Namespace("Fields")
@@ -95,7 +95,7 @@ ALL_NS_OBJECTS = {
         }
 
 
-# # Context - Direct access to managed models underneath and global Rules objects like Validation/FieldGroup etc
+# # Context - Direct access to managed models underneath and global Entity objects like Validation/FieldGroup etc
 # ContextNS = Namespace("Context")
 # Ctx  = ContextNS
 

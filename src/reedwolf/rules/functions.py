@@ -398,7 +398,7 @@ class IFunction(IFunctionDexpNode):
         # prep_arg.caller.namespace / field_name = prep_arg.caller.name / prep_arg.caller.get_type_info()
         #   TypeInfo(py_type_hint=<class 'bool'>, types=[<class 'bool'>])
         # prep_arg.caller.data
-        #   BooleanField(parent_name='company_rules', bind=DExpr(Models.can_be_accessed), name='can_be_accessed')
+        #   BooleanField(parent_name='company_entity', bind=DExpr(Models.can_be_accessed), name='can_be_accessed')
 
 # ------------------------------------------------------------
 # CustomFunctions - need 2 steps and 3 layers:

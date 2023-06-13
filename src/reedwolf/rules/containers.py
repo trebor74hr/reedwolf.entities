@@ -118,7 +118,7 @@ def create_setup_session(
     return setup_session
 
 # ------------------------------------------------------------
-# Rules
+# Entity
 # ------------------------------------------------------------
 
 class ContainerBase(IContainerBase, ComponentBase, ABC):
@@ -141,7 +141,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
     def is_extension(self):
         # TODO: if self.parent is not None could be used as the term, put validation somewhere
-        " if start model is value expression - that mean that the the Rules is Extension "
+        " if start model is value expression - that mean that the the Entity is Extension "
         return isinstance(self.bound_model.model, DotExpression)
 
     def is_container(self):
@@ -168,7 +168,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         self.models = self.bound_model.fill_models()
 
         if not self.models:
-            raise RuleSetupError(owner=self, msg="Rules(models=List[models]) is required.")
+            raise RuleSetupError(owner=self, msg="Entity(models=List[models]) is required.")
 
         for bound_model_name, bound_model in self.models.items():
             assert bound_model_name.split(".")[-1] == bound_model.name
@@ -208,7 +208,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
                 assert hasattr(self, "parent_setup_session")
                 setup_session_from = self.parent_setup_session
             else:
-                # Rules - top parent container / normal case
+                # Entity - top parent container / normal case
                 setup_session_from = self.setup_session
 
             attr_node = setup_session_from.get_dexp_node_by_dexp(dexp=model)
@@ -491,7 +491,7 @@ class KeyFields(KeysBase):
 # ------------------------------------------------------------
 
 @dataclass
-class Rules(ContainerBase):
+class Entity(ContainerBase):
     name            : str
     contains        : List[Component]      = field(repr=False)
 
@@ -515,7 +515,7 @@ class Rules(ContainerBase):
     setup_session      : Optional[SetupSession]    = field(init=False, repr=False, default=None)
     components      : Optional[Dict[str, Component]]  = field(init=False, repr=False, default=None)
     models          : Dict[str, Union[type, DotExpression]] = field(repr=False, init=False, default_factory=dict)
-    # in Rules (top object) this case allway None - since it is top object
+    # in Entity (top object) this case allway None - since it is top object
     parent           : Union[None, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     parent_name      : Union[str, UndefinedType]  = field(init=False, default=UNDEFINED)
 
@@ -634,7 +634,7 @@ class Rules(ContainerBase):
 
         apply_session = \
                 ApplyResult(setup_session=container.setup_session, 
-                      rules=self, 
+                      entity=self, 
                       component_name_only=component_name_only,
                       context=context, 
                       instance=instance,
@@ -657,7 +657,7 @@ class Rules(ContainerBase):
               ) -> IApplySession:
         """
         In defaults mode:
-            - context should be applied if Rules have (same as in apply())
+            - context should be applied if Entity have (same as in apply())
             - validations are not called
         """
         from .apply import ApplyResult
@@ -667,7 +667,7 @@ class Rules(ContainerBase):
                 ApplyResult(
                     defaults_mode=True,
                     setup_session=container.setup_session, 
-                    rules=self, 
+                    entity=self, 
                     component_name_only=None,
                     context=context, 
                     instance=NA_DEFAULTS_MODE,
@@ -679,7 +679,7 @@ class Rules(ContainerBase):
             raise RuleInternalError(owner=self, msg="Apply process is not finished")
 
         if apply_session.errors:
-            validation_error = RuleValidationError(owner=apply_session.rules, errors=apply_session.errors)
+            validation_error = RuleValidationError(owner=apply_session.entity, errors=apply_session.errors)
             raise RuleInternalError(owner=self, msg=f"Internal issue, apply process should not yield validation error(s), got: {validation_error}")
 
         output = apply_session._dump_defaults()
@@ -692,7 +692,7 @@ class Rules(ContainerBase):
 @dataclass
 class Extension(ContainerBase):
     """ can not be used individually - must be directly embedded into Other
-        Extension or top Rules """
+        Extension or top Entity """
 
     # required since if it inherit name from BoundModel then the name will not
     # be unique in self.components (Extension and BoundModel will share the same name)

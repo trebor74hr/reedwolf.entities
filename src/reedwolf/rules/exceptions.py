@@ -56,7 +56,7 @@ class RuleNameNotFoundError(RuleError):
     pass
 
 # ------------------------------------------------------------
-# Rules Setup phase (boot time) validation errors
+# Entity Setup phase (boot time) validation errors
 # ------------------------------------------------------------
 class RuleSetupError(RuleError):
     pass
@@ -75,7 +75,7 @@ class RuleSetupTypeError(RuleSetupError):
 
 
 # ------------------------------------------------------------
-# Rules Apply phase validation errors
+# Entity Apply phase validation errors
 # ------------------------------------------------------------
 class RuleApplyError(RuleError):
     pass
@@ -93,7 +93,7 @@ class RuleApplyTypeError(RuleApplyError):
     pass
 
 # ------------------------------------------------------------
-# Rules Load phase validation errors
+# Entity Load phase validation errors
 # ------------------------------------------------------------
 class RuleLoadError(RuleError):
     pass

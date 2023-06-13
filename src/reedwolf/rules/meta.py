@@ -415,7 +415,7 @@ def extract_py_type_hints(inspect_object: Any, caller_name: str, strict: bool = 
             #         type hint is not possible/available: name 'OptionalBoolOrDExp' is not defined.
             raise RuleSetupValueError(item=inspect_object, msg=f"{caller_name}: Object type hint is not possible/available: {ex}."
                                  + " Please verify that object is properly type hinted class attribute, function or method,"
-                                 + " and type hint should not include not standard type Type alias (see rules/types.py comment).")
+                                 + " and type hint should not include not standard type Type alias (see entity/types.py comment).")
         return {"__exception__": ex}
 
 

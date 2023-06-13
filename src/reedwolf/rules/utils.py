@@ -67,7 +67,7 @@ class UndefinedType: # (metaclass=Singleton):
 UNDEFINED = UndefinedType(name="UNDEFINED")
 MISSING   = UndefinedType(name="MISSING")
 
-# not available while in defaults_mode - used in rules.dump_defaults()
+# not available while in defaults_mode - used in entity.dump_defaults()
 NA_DEFAULTS_MODE = UndefinedType(name="NA_DEFAULTS_MODE")
 
 # not available while in progress - detection of circular dependency detection - used in Apply()

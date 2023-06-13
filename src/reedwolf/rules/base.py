@@ -551,7 +551,7 @@ class ComponentBase(SetParentMixin, ABC):
                 # Extension()
                 assert not parent
             else:
-                # Rules()
+                # Entity()
                 assert not parent
                 self.set_parent(None)
 
@@ -619,8 +619,8 @@ class ComponentBase(SetParentMixin, ABC):
                 dexp.Setup(setup_session=setup_session, owner=self)
                 called = True
         elif isinstance(subcomponent, ComponentBase):
-            assert "Rules(" not in repr(subcomponent)
-            # assert not isinstance(subcomponent, Rules), subcomponent
+            assert "Entity(" not in repr(subcomponent)
+            # assert not isinstance(subcomponent, Entity), subcomponent
             subcomponent.setup(setup_session=setup_session)  # , parent=self)
             subcomponent.post_setup()
             called = True
@@ -898,7 +898,7 @@ class ComponentBase(SetParentMixin, ABC):
 
         if parent_container in (None, UNDEFINED):
             if consider_self:
-                raise RuleSetupError(owner=self, msg="Did not found container in parents. Every component needs to be in some container object tree (Rules/Extension).")
+                raise RuleSetupError(owner=self, msg="Did not found container in parents. Every component needs to be in some container object tree (Entity/Extension).")
             return None
 
         return parent_container
@@ -1326,7 +1326,7 @@ class ValidationFailure:
 class StructEnum(str, Enum):
     # models like - follows flat, storage/db like structure
     MODELS_LIKE = "MODELS"
-    # rules like - follows hierachical structure like defined in rules
+    # entity like - follows hierachical structure like defined in entity
     RULES_LIKE  = "RULES"
 
 # TODO: consider using classes instead, e.g.
@@ -1335,8 +1335,8 @@ class StructEnum(str, Enum):
 #       class ModelInputStruct(InputStructBase):
 #           # models like - follows flat, storage/db like structure
 #           pass
-#       class RulesInputStruct(InputStructBase):
-#           # rules like - follows hierachical structure like defined in rules
+#       class EntityInputStruct(InputStructBase):
+#           # entity like - follows hierachical structure like defined in entity
 #           pass
 
 # ------------------------------------------------------------
@@ -1345,7 +1345,7 @@ class StructEnum(str, Enum):
 class IApplySession:
     # TODO: možda bi ovo trebalo izbaciti ... - link na IRegistry u dexp node-ovima 
     setup_session: ISetupSession = field(repr=False)
-    rules: IContainerBase = field(repr=False) 
+    entity: IContainerBase = field(repr=False) 
     instance: Any = field(repr=False)
     # TODO: consider: instance_new: Union[ModelType, UndefinedType] = UNDEFINED,
     instance_new: Optional[ModelType] = field(repr=False)

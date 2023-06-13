@@ -7,7 +7,7 @@ from dataclasses  import dataclass
 @dataclass
 class Config:
     """
-    The Config instances contain general predefined Rules configuration parameters (settings).
+    The Config instances contain general predefined Entity configuration parameters (settings).
     One can add custom config params.
     Config will be available in ConfigNS namespace (Cfg.).
     For values only literal / plain callables (python functions) are accepted,
