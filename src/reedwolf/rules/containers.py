@@ -215,7 +215,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             if attr_node:
                 raise RuleInternalError(owner=self, msg=f"AttrDexpNode data already in setup_session: {model} -> {attr_node}")
 
-            attr_node = model.Setup(setup_session=setup_session_from, parent=bound_model)
+            attr_node = model.Setup(setup_session=setup_session_from, owner=bound_model)
             if not attr_node:
                 raise RuleInternalError(owner=self, msg=f"AttrDexpNode not recognized: {model}")
 

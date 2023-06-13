@@ -68,7 +68,7 @@ from .attr_nodes import (
 # ------------------------------------------------------------
 
 
-def get_dexp_node_name(parent_name: Optional[str], 
+def get_dexp_node_name(owner_name: Optional[str], 
                        dexp_node_name: str, 
                        func_args: Optional[Union[FunctionArgumentsTupleType, FunctionArgumentsType]]
                        ) -> str:
@@ -92,9 +92,9 @@ def get_dexp_node_name(parent_name: Optional[str],
         dexp_node_name = f"{dexp_node_name}({all_args_str})"
     else:
         dexp_node_name = f"{dexp_node_name}"
-    if parent_name is not None:
+    if owner_name is not None:
         # not validated at all
-        dexp_node_name = f"{parent_name}.{dexp_node_name}"
+        dexp_node_name = f"{owner_name}.{dexp_node_name}"
 
     return dexp_node_name
 
@@ -278,9 +278,9 @@ class RegistryBase(IRegistry):
     # ------------------------------------------------------------
     def create_node(self, 
                     dexp_node_name: str, 
-                    parent_dexp_node: IDotExpressionNode, 
+                    owner_dexp_node: IDotExpressionNode, 
                     # func_args: FunctionArgumentsType
-                    parent: ComponentBase,
+                    owner: ComponentBase,
                     ) -> IDotExpressionNode:
         """
         Will create a new attr_node when missing, even in the case when the var
@@ -294,25 +294,25 @@ class RegistryBase(IRegistry):
         assert isinstance(dexp_node_name, str), dexp_node_name
 
         if dexp_node_name.startswith("_"):
-            raise RuleSetupNameError(owner=parent, msg=f"Namespace '{self.NAMESPACE}': AttrDexpNode '{dexp_node_name}' is invalid, should not start with _")
+            raise RuleSetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': AttrDexpNode '{dexp_node_name}' is invalid, should not start with _")
 
         type_info = None
 
-        if parent_dexp_node:
-            assert parent_dexp_node.name!=dexp_node_name
-            if not isinstance(parent_dexp_node, IDotExpressionNode):
-                raise RuleSetupNameError(owner=parent, msg=f"Namespace '{self.NAMESPACE}': '{dexp_node_name}' -> parent_dexp_node={parent_dexp_node} :{type(parent_dexp_node)} is not IDotExpressionNode")
+        if owner_dexp_node:
+            assert owner_dexp_node.name!=dexp_node_name
+            if not isinstance(owner_dexp_node, IDotExpressionNode):
+                raise RuleSetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': '{dexp_node_name}' -> owner_dexp_node={owner_dexp_node} :{type(owner_dexp_node)} is not IDotExpressionNode")
 
         # TODO: za Sum(This.name) this is not good. Should be unique, since 
         #       This is ambigous - can evaluate to different contexts. 
-        #       should have some context @ID (parent)
+        #       should have some context @ID (owner)
         full_dexp_node_name = get_dexp_node_name(
-                                    parent_name=parent_dexp_node.name if parent_dexp_node else None, 
+                                    owner_name=owner_dexp_node.name if owner_dexp_node else None, 
                                     dexp_node_name=dexp_node_name,
                                     func_args=None # func_args
                                     )
 
-        if parent_dexp_node is None:
+        if owner_dexp_node is None:
             # --------------------------------------------------
             # get() -> TOP LEVEL - only level that is stored
             # --------------------------------------------------
@@ -320,7 +320,7 @@ class RegistryBase(IRegistry):
             if full_dexp_node_name not in self.store:
                 names_avail = get_available_names_example(full_dexp_node_name, self.store.keys())
                 valid_names = f"Valid attributes: {names_avail}" if self.store.keys() else "Namespace has no attributes at all."
-                raise RuleSetupNameNotFoundError(owner=parent, msg=f"Namespace '{self.NAMESPACE}': Invalid attribute name '{full_dexp_node_name}'. {valid_names}")
+                raise RuleSetupNameNotFoundError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': Invalid attribute name '{full_dexp_node_name}'. {valid_names}")
 
             attr_node_template = self.store.get(full_dexp_node_name)
 
@@ -334,22 +334,22 @@ class RegistryBase(IRegistry):
             # IN-DEPTH LEVEL 2+, e.g. M.company.<this-node-and-next>
             # ---------------------------------------------------------------
 
-            if isinstance(parent_dexp_node, IFunctionDexpNode):
-                inspect_object = parent_dexp_node.get_type_info()
+            if isinstance(owner_dexp_node, IFunctionDexpNode):
+                inspect_object = owner_dexp_node.get_type_info()
             else:
-                assert isinstance(parent_dexp_node, AttrDexpNode)
+                assert isinstance(owner_dexp_node, AttrDexpNode)
 
                 if False:
                     ...
-                # elif isinstance(parent_dexp_node.data, StaticData):
-                #     inspect_object = parent_dexp_node.data.value
-                # elif isinstance(parent_dexp_node.data, DynamicData):
+                # elif isinstance(owner_dexp_node.data, StaticData):
+                #     inspect_object = owner_dexp_node.data.value
+                # elif isinstance(owner_dexp_node.data, DynamicData):
                 #     raise NotImplementedError("TODO")
-                elif isinstance(parent_dexp_node.data, BoundModelBase):
-                    inspect_object = parent_dexp_node.data.model
+                elif isinstance(owner_dexp_node.data, BoundModelBase):
+                    inspect_object = owner_dexp_node.data.model
                 else:
                     # can be TypeInfo, @dataclass, Pydantic etc.
-                    inspect_object = parent_dexp_node.data
+                    inspect_object = owner_dexp_node.data
 
             try:
                 # , func_node
@@ -361,10 +361,10 @@ class RegistryBase(IRegistry):
                             # functions_factory_registry=self.functions_factory_registry
                             )
             except RuleSetupNameNotFoundError as ex:
-                ex.set_msg(f"{parent} / {self.NAMESPACE}-NS: {ex.msg}")
+                ex.set_msg(f"{owner} / {self.NAMESPACE}-NS: {ex.msg}")
                 raise 
             except RuleError as ex:
-                ex.set_msg(f"'{parent} / {self.NAMESPACE}-NS: {parent_dexp_node.full_name} -> '.{dexp_node_name}' metadata / type-hints read problem: {ex}")
+                ex.set_msg(f"'{owner} / {self.NAMESPACE}-NS: {owner_dexp_node.full_name} -> '.{dexp_node_name}' metadata / type-hints read problem: {ex}")
                 raise 
 
             # if func_node:
@@ -388,7 +388,7 @@ class RegistryBase(IRegistry):
                             ) # function=function
 
         if not isinstance(dexp_node, IDotExpressionNode):
-            raise RuleInternalError(owner=parent, msg=f"Namespace {self.NAMESPACE}: Type of found object is not IDotExpressionNode, got: {type(dexp_node)}.")
+            raise RuleInternalError(owner=owner, msg=f"Namespace {self.NAMESPACE}: Type of found object is not IDotExpressionNode, got: {type(dexp_node)}.")
 
         # NOTE: dexp_node.type_info can be None, will be filled later in finish()
 
@@ -432,8 +432,7 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
         children_dict = apply_session.get_upward_components_dict(self.component)
         if attr_name not in children_dict:
             avail_names = get_available_names_example(attr_name, children_dict.keys())
-            raise RuleApplyNameError(
-                    parent=self.component, 
+            raise RuleApplyNameError(owner=self.component, 
                     msg=f"Attribute '{attr_name}' not found in '{self.component.name}' ({type(self.component.name)}). Available: {avail_names}")
 
         component = children_dict[attr_name]
@@ -442,8 +441,7 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
         #   if is_last:
 
         if not hasattr(component, "bind"):
-            raise RuleApplyNameError(
-                    parent=self.component,
+            raise RuleApplyNameError(owner=self.component,
                     msg=f"Attribute '{attr_name}' is '{type(component)}' type which has no binding, therefore can not extract value. Use standard *Field components instead.")
         # TODO: needs some class wrapper and caching ...
         dexp_result = component.bind._evaluator.execute_dexp(apply_session)

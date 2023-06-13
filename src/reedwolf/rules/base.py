@@ -616,7 +616,7 @@ class ComponentBase(SetParentMixin, ABC):
                 # Setup() was called in container.setup() before
                 called = False
             else:
-                dexp.Setup(setup_session=setup_session, parent=self)
+                dexp.Setup(setup_session=setup_session, owner=self)
                 called = True
         elif isinstance(subcomponent, ComponentBase):
             assert "Rules(" not in repr(subcomponent)
@@ -641,7 +641,7 @@ class ComponentBase(SetParentMixin, ABC):
         if getattr(self, "bind", None):
             # similar logic in apply.py :: _apply()
             assert not self.is_container()
-            attr_node = self.bind.Setup(setup_session=setup_session, parent=self)
+            attr_node = self.bind.Setup(setup_session=setup_session, owner=self)
             if not attr_node:
                 raise RuleSetupNameError(owner=self, msg=f"{attr_node.name}.bind='{self.bind}' could not be evaluated")
             local_setup_session = setup_session.create_local_setup_session(

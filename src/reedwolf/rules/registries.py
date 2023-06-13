@@ -288,20 +288,20 @@ class ContextRegistry(RegistryBase):
 
     def create_node(self, 
                     dexp_node_name: str, 
-                    parent_dexp_node: IDotExpressionNode, 
-                    parent: ComponentBase,
+                    owner_dexp_node: IDotExpressionNode, 
+                    owner: ComponentBase,
                     ) -> IDotExpressionNode:
 
-        if not isinstance(parent, ComponentBase):
-            raise RuleInternalError(owner=self, msg=f"Parent needs to be Component, got: {type(parent)} / {parent}")  
+        if not isinstance(owner, ComponentBase):
+            raise RuleInternalError(owner=self, msg=f"Owner needs to be Component, got: {type(owner)} / {owner}")  
 
-        if not parent.get_container_parent(consider_self=True).context_class:
-            raise RuleSetupNameError(owner=parent, msg=f"Namespace '{self.NAMESPACE}' (referenced by '{self.NAMESPACE}.{dexp_node_name}') should not be used since 'Rules.context_class' is not set. Define 'context_class' to 'Rules()' constructor and try again.")
+        if not owner.get_container_parent(consider_self=True).context_class:
+            raise RuleSetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}' (referenced by '{self.NAMESPACE}.{dexp_node_name}') should not be used since 'Rules.context_class' is not set. Define 'context_class' to 'Rules()' constructor and try again.")
 
         return super().create_node(
                 dexp_node_name=dexp_node_name,
-                parent_dexp_node=parent_dexp_node,
-                parent=parent,
+                owner_dexp_node=owner_dexp_node,
+                owner=owner,
                 )
 
 

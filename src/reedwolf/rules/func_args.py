@@ -247,7 +247,7 @@ class FunctionArguments:
                         component = setup_session.current_frame.component, 
                         local_setup_session = local_setup_session,
                     )):
-                dexp_node = dexp.Setup(setup_session=setup_session, parent=setup_session.current_frame.component)
+                dexp_node = dexp.Setup(setup_session=setup_session, owner=setup_session.current_frame.component)
 
             # NOTE: pass callable since type_info for some Dexp-s are not avaialble (e.g. FieldsNS, F.name)
             type_info_or_callable = dexp_node.get_type_info()

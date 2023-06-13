@@ -120,7 +120,7 @@ class ExecResult:
     # last value, mutable
     value: Any  = field(init=False, default=UNDEFINED)
 
-    # TODO: set compoenent (parent) that triggerred value change
+    # TODO: set compoenent (owner) that triggerred value change
     #       value evaluation - can have attr_node.name
     value_history : List[Tuple[str, RawAttrValue]] = field(repr=False, init=False, default_factory=list)
 
@@ -439,9 +439,9 @@ class OperationDexpNode(IDotExpressionNode):
                    dexp_or_other: Union[DotExpression, Any], 
                    label: str,
                    setup_session: ISetupSession, # noqa: F821
-                   parent: Any) -> IDotExpressionNode:
+                   owner: Any) -> IDotExpressionNode:
         if isinstance(dexp_or_other, DotExpression):
-            dexp_node = dexp_or_other.Setup(setup_session, parent=parent)
+            dexp_node = dexp_or_other.Setup(setup_session, owner=owner)
         elif isinstance(dexp_or_other, IDotExpressionNode):
             raise NotImplementedError(f"{label}.type unhandled: '{type(dexp_or_other)}' => '{dexp_or_other}'")
             # dexp_node = dexp_or_other
@@ -454,18 +454,18 @@ class OperationDexpNode(IDotExpressionNode):
         return dexp_node
 
 
-    def Setup(self, setup_session: ISetupSession, parent: Any) -> DotExpressionEvaluator:  # noqa: F821
+    def Setup(self, setup_session: ISetupSession, owner: Any) -> DotExpressionEvaluator:  # noqa: F821
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(self)
 
         if not self._status==DExpStatusEnum.INITIALIZED:
             raise RuleSetupError(owner=setup_session, item=self, msg=f"AttrDexpNode not in INIT state, got {self._status}")
 
         # just to check if all ok
-        self._first_dexp_node = self.create_dexp_node(self.first, label="First", setup_session=setup_session, parent=parent)
+        self._first_dexp_node = self.create_dexp_node(self.first, label="First", setup_session=setup_session, owner=owner)
         setup_session.register_dexp_node(self._first_dexp_node)
 
         if self.second is not UNDEFINED:
-            self._second_dexp_node = self.create_dexp_node(self.second, label="second", setup_session=setup_session, parent=parent)
+            self._second_dexp_node = self.create_dexp_node(self.second, label="second", setup_session=setup_session, owner=owner)
             setup_session.register_dexp_node(self._second_dexp_node)
 
         self._status=DExpStatusEnum.BUILT
@@ -608,7 +608,7 @@ class DotExpression(DynamicAttrsBase):
                 raise RuleSetupValueError(owner=self, msg=f"Value expression's attribute '{self._node}' needs to be string or OperationDexpNode, got: {type(self._node)}")
 
         # -- COMPUTED VALUES
-        # copy list of parent/previous
+        # copy list of owner/previous
         self.Path = [] if self._is_top else Path[:]
         self.Path.append(self)
 
@@ -644,13 +644,13 @@ class DotExpression(DynamicAttrsBase):
             raise RuleSetupError(owner=self, msg=f"Method Setup() already called, further DotExpression building/operator-building is not possible (status={self._status}).")
 
 
-    def Setup(self, setup_session:ISetupSession, parent:Any) -> Optional['IDotExpressionNode']:
+    def Setup(self, setup_session:ISetupSession, owner:Any) -> Optional['IDotExpressionNode']:
         """
-        Parent used just for reference count.
+        Owner used just for reference count.
         """
-        # TODO: parent is "ComponentBase" - define some common protocol/interface and use it
+        # TODO: Owner is "ComponentBase" - define some common protocol/interface and use it
 
-        # TODO: consider dropping parent parameter and use setup_session.current_frame.component or parent instead?
+        # TODO: consider dropping owner parameter and use setup_session.current_frame.component or owner instead?
 
         # TODO: circular dependency - maybe to pass eval class to this method
         from .expression_evaluators import DotExpressionEvaluator
@@ -701,7 +701,7 @@ class DotExpression(DynamicAttrsBase):
 
             # last_dexp_node = (current_dexp_node
             #                if current_dexp_node is not None
-            #                else parent)
+            #                else owner)
 
             # TODO: what with: 
             #       if bit._is_literal:
@@ -712,9 +712,9 @@ class DotExpression(DynamicAttrsBase):
             if isinstance(bit._node, OperationDexpNode):
                 op_node = bit._node
                 # one level deeper
-                # parent not required, but in this case should be 
+                # owner not required, but in this case should be 
                 assert bnr == 1
-                current_dexp_node = op_node.Setup(setup_session=setup_session, parent=parent)
+                current_dexp_node = op_node.Setup(setup_session=setup_session, owner=owner)
                 dexp_node_name = bit._node
                 # _read_functions.append(op_node.apply)
 
@@ -730,12 +730,12 @@ class DotExpression(DynamicAttrsBase):
 
                 dexp_node_name = bit._node
                 if last_dexp_node:
-                    parent_arg_type_info = last_dexp_node.get_type_info()
-                    if parent_arg_type_info is None:
+                    owner_arg_type_info = last_dexp_node.get_type_info()
+                    if owner_arg_type_info is None:
                         # Postponed ... e.g. F. / FieldsNS  - will be added to hooks later
-                        parent_arg_type_info = last_dexp_node.get_type_info
+                        owner_arg_type_info = last_dexp_node.get_type_info
                 else:
-                    parent_arg_type_info = None
+                    owner_arg_type_info = None
 
                 # : IFunctionDexpNode
                 current_dexp_node = registry.create_func_node(
@@ -743,7 +743,7 @@ class DotExpression(DynamicAttrsBase):
                         caller=last_dexp_node,
                         attr_node_name=dexp_node_name,
                         func_args=func_args,
-                        value_arg_type_info=parent_arg_type_info
+                        value_arg_type_info=owner_arg_type_info
                         )
             else:
                 # ========================================
@@ -761,8 +761,8 @@ class DotExpression(DynamicAttrsBase):
                 dexp_node_name = bit._node
                 current_dexp_node = registry.create_node(
                             dexp_node_name=dexp_node_name,
-                            parent_dexp_node=last_dexp_node,
-                            parent=parent,
+                            owner_dexp_node=last_dexp_node,
+                            owner=owner,
                             # func_args=bit._func_args,
                             )
 
@@ -786,7 +786,7 @@ class DotExpression(DynamicAttrsBase):
             # can be Component or can be managed Model dataclass Field - when .denied is not appliable
             if hasattr(current_dexp_node, "denied") and current_dexp_node.denied:
                 # '{dexp_node_name}' 
-                raise RuleSetupValueError(owner=self, msg=f"DexpNode (parent={parent.name}) references '{current_dexp_node.name}' what is not allowed due: {current_dexp_node.deny_reason}.")
+                raise RuleSetupValueError(owner=self, msg=f"DexpNode (owner={owner.name}) references '{current_dexp_node.name}' what is not allowed due: {current_dexp_node.deny_reason}.")
 
         dexp_evaluator.finish()
 

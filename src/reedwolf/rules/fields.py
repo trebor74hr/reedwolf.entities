@@ -470,7 +470,7 @@ class ChoiceField(FieldBase):
             else:
                 dexp_node = setup_session.get_dexp_node_by_dexp(dexp=choices)
                 if not dexp_node:
-                    dexp_node = choices.Setup(setup_session=setup_session, parent=self)
+                    dexp_node = choices.Setup(setup_session=setup_session, owner=self)
 
         elif isinstance(choices, CustomFunctionFactory):
             custom_function_factory : CustomFunctionFactory = choices
@@ -588,7 +588,7 @@ class ChoiceField(FieldBase):
         if not (dexp and isinstance(dexp, DotExpression) and dexp.GetNamespace()==ThisNS):
             raise RuleSetupValueError(owner=self, msg=f"Argument '{aname}' is not set or has wrong type - should be DotExpression in This. namespace. Got: {dexp} / {type(dexp)}")
 
-        attr_node = dexp.Setup(setup_session=setup_session, parent=self)
+        attr_node = dexp.Setup(setup_session=setup_session, owner=self)
         if dexp._status != DExpStatusEnum.BUILT:
             raise RuleInternalError(owner=self, msg=f"Setup failed for Dexp: {dexp} -> {dexp._status}")
 
@@ -619,7 +619,7 @@ class EnumField(FieldBase):
                 # EnumField(... enum=S.CompanyTypes)
                 enum_attr_node = setup_session.get_dexp_node_by_dexp(dexp=self.enum)
                 if not enum_attr_node:
-                    enum_attr_node = self.enum.Setup(setup_session=setup_session, parent=self)
+                    enum_attr_node = self.enum.Setup(setup_session=setup_session, owner=self)
 
                 # self.enum = enum_attr_node.data.value
                 self.enum = enum_attr_node.data
