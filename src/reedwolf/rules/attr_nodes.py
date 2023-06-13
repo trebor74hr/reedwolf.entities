@@ -201,7 +201,7 @@ class AttrDexpNode(IDotExpressionNode):
         names = self.name.split(".")
 
         attr_name = names[-1]
-        attr_name_orig = attr_name
+        # attr_name_orig = attr_name
 
         assert dexp_result not in (None,)
 

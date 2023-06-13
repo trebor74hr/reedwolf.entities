@@ -26,6 +26,7 @@ from .exceptions import (
         RuleSetupNameNotFoundError,
         RuleInternalError,
         RuleApplyNameError,
+        RuleSetupValueError,
         )
 from .namespaces import (
         Namespace,
@@ -45,7 +46,6 @@ from .meta import (
         ModelType,
         TypeInfo,
         HookOnFinishedAllCallable,
-        LiteralType,
         )
 from .base import (
         ComponentBase,

@@ -20,7 +20,6 @@ from abc import ABC
 from typing import (
         Union, 
         Optional,
-        ClassVar,
         )
 from dataclasses import (
         dataclass, 

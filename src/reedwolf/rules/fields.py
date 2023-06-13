@@ -108,7 +108,9 @@ class AutocomputedEnum(IntEnum):
 # Fields
 # ============================================================
 
+
 MAX_BIND_DEPTH = 4
+
 
 @dataclass
 class FieldBase(Component, IFieldBase, ABC):

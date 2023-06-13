@@ -10,6 +10,7 @@ from typing import (
         ClassVar,
         Dict,
         Type,
+        Tuple,
         )
 from .utils import (
         UNDEFINED,
@@ -41,6 +42,7 @@ from .meta import (
         ModelType,
         get_model_fields,
         TypeInfo,
+        AttrName,
         )
 from .base import (
         ReservedAttributeNames,

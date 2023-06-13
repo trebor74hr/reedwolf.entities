@@ -36,6 +36,11 @@ from dataclasses import (
         )
 
 try:
+    from typing import Self
+except ImportError:
+    Self = Any
+
+try:
     # ----------------------------------------
     # Pydantic found
     # ----------------------------------------

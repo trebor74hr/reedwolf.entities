@@ -10,7 +10,6 @@ from typing import (
         Union, 
         Optional, 
         Tuple,
-        Sequence,
         ClassVar,
         Callable,
         )
@@ -44,6 +43,7 @@ from .namespaces import (
         Namespace,
         )
 from .meta import (
+        Self,
         MetaTree,
         ComponentNameType,
         ComponentTreeType,
@@ -1030,7 +1030,7 @@ class BoundModelBase(ComponentBase, ABC):
 class UseStackFrameMixin:
 
     def _copy_attr_from_previous_frame(self, 
-            previous_frame: "Self", 
+            previous_frame: Self, 
             attr_name: str, 
             may_be_copied: bool = True,
             if_set_must_be_same: bool = True):
