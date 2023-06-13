@@ -65,7 +65,7 @@ from .evaluations import (
         Default,
         )
 # from .evaluators import (
-#         ChildrenEvaluators,
+#         ItemsEvaluators,
 #         )
 from .contexts import (
         IContext,
@@ -167,7 +167,7 @@ __all__ = [
     "Default",
 
     # # evaluators
-    # "ChildrenEvaluators",
+    # "ItemsEvaluators",
 
     # containers
     "KeyFields",

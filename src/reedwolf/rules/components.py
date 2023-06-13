@@ -158,7 +158,7 @@ class FieldGroup(Component):
     name:           str
     contains:       List[Component] = field(repr=False)
     label:          Optional[TransMessageType] = field(repr=False, default=None)
-    # TODO: allow ChildrenValidation too (currently only used in SubEntityItems, e.g. Cardinality/Unique)
+    # TODO: allow ItemsValidation too (currently only used in SubEntityItems, e.g. Cardinality/Unique)
     cleaners:       Optional[List[Union[ValidationBase, EvaluationBase]]] = None
     available:      Union[bool, DotExpression] = True
 

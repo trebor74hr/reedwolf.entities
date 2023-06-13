@@ -45,11 +45,11 @@ from .base import (
 #         return bool(self.name)
 
 
-class IChildrenValidator(ValidationBase, ABC):
+class IItemsValidator(ValidationBase, ABC):
     label           : Optional[TransMessageType] = field(repr=False, default=None)
 
 
-class ICardinalityValidation(IChildrenValidator, ABC): # count
+class ICardinalityValidation(IItemsValidator, ABC): # count
 
     # def __post_init__(self):
     #     if self.__class__==ICardinalityValidation:
@@ -181,7 +181,7 @@ class Cardinality: # namespace holder
 # ------------------------------------------------------------
 # other validators
 # ------------------------------------------------------------
-class IUniqueValidator(IChildrenValidator, ABC):
+class IUniqueValidator(IItemsValidator, ABC):
     ...
 
     # def __post_init__(self):
@@ -209,7 +209,7 @@ class Unique: # namespace holder
             raise NotImplementedError()
 
     @dataclass
-    class Children(IUniqueValidator):
+    class Items(IUniqueValidator):
         " within subentity_items records "
         name            : str
         fields          : List[str] # TODO: better field specification or dexpr?
@@ -222,7 +222,7 @@ class Unique: # namespace holder
             raise NotImplementedError()
 
 
-# ALT: names for IChildrenValidator
+# ALT: names for IItemsValidator
 #   class IterationValidator:
 #   # db terminology: scalar custom functions, table value custom functions, aggregate custom functions
 #   class AggregateValidator:
