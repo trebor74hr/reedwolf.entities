@@ -280,7 +280,7 @@ class RegistryBase(IRegistry):
                     dexp_node_name: str, 
                     parent_dexp_node: IDotExpressionNode, 
                     # func_args: FunctionArgumentsType
-                    owner: ComponentBase,
+                    parent: ComponentBase,
                     ) -> IDotExpressionNode:
         """
         Will create a new attr_node when missing, even in the case when the var
@@ -294,14 +294,14 @@ class RegistryBase(IRegistry):
         assert isinstance(dexp_node_name, str), dexp_node_name
 
         if dexp_node_name.startswith("_"):
-            raise RuleSetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': AttrDexpNode '{dexp_node_name}' is invalid, should not start with _")
+            raise RuleSetupNameError(owner=parent, msg=f"Namespace '{self.NAMESPACE}': AttrDexpNode '{dexp_node_name}' is invalid, should not start with _")
 
         type_info = None
 
         if parent_dexp_node:
             assert parent_dexp_node.name!=dexp_node_name
             if not isinstance(parent_dexp_node, IDotExpressionNode):
-                raise RuleSetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': '{dexp_node_name}' -> parent_dexp_node={parent_dexp_node} :{type(parent_dexp_node)} is not IDotExpressionNode")
+                raise RuleSetupNameError(owner=parent, msg=f"Namespace '{self.NAMESPACE}': '{dexp_node_name}' -> parent_dexp_node={parent_dexp_node} :{type(parent_dexp_node)} is not IDotExpressionNode")
 
         # TODO: za Sum(This.name) this is not good. Should be unique, since 
         #       This is ambigous - can evaluate to different contexts. 
@@ -320,7 +320,7 @@ class RegistryBase(IRegistry):
             if full_dexp_node_name not in self.store:
                 names_avail = get_available_names_example(full_dexp_node_name, self.store.keys())
                 valid_names = f"Valid attributes: {names_avail}" if self.store.keys() else "Namespace has no attributes at all."
-                raise RuleSetupNameNotFoundError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': Invalid attribute name '{full_dexp_node_name}'. {valid_names}")
+                raise RuleSetupNameNotFoundError(owner=parent, msg=f"Namespace '{self.NAMESPACE}': Invalid attribute name '{full_dexp_node_name}'. {valid_names}")
 
             attr_node_template = self.store.get(full_dexp_node_name)
 
@@ -361,10 +361,10 @@ class RegistryBase(IRegistry):
                             # functions_factory_registry=self.functions_factory_registry
                             )
             except RuleSetupNameNotFoundError as ex:
-                ex.set_msg(f"{owner} / {self.NAMESPACE}-NS: {ex.msg}")
+                ex.set_msg(f"{parent} / {self.NAMESPACE}-NS: {ex.msg}")
                 raise 
             except RuleError as ex:
-                ex.set_msg(f"'{owner} / {self.NAMESPACE}-NS: {parent_dexp_node.full_name} -> '.{dexp_node_name}' metadata / type-hints read problem: {ex}")
+                ex.set_msg(f"'{parent} / {self.NAMESPACE}-NS: {parent_dexp_node.full_name} -> '.{dexp_node_name}' metadata / type-hints read problem: {ex}")
                 raise 
 
             # if func_node:
@@ -388,7 +388,7 @@ class RegistryBase(IRegistry):
                             ) # function=function
 
         if not isinstance(dexp_node, IDotExpressionNode):
-            raise RuleInternalError(owner=owner, msg=f"Namespace {self.NAMESPACE}: Type of found object is not IDotExpressionNode, got: {type(dexp_node)}.")
+            raise RuleInternalError(owner=parent, msg=f"Namespace {self.NAMESPACE}: Type of found object is not IDotExpressionNode, got: {type(dexp_node)}.")
 
         # NOTE: dexp_node.type_info can be None, will be filled later in finish()
 
@@ -433,7 +433,7 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
         if attr_name not in children_dict:
             avail_names = get_available_names_example(attr_name, children_dict.keys())
             raise RuleApplyNameError(
-                    owner=self.component, 
+                    parent=self.component, 
                     msg=f"Attribute '{attr_name}' not found in '{self.component.name}' ({type(self.component.name)}). Available: {avail_names}")
 
         component = children_dict[attr_name]
@@ -443,7 +443,7 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
 
         if not hasattr(component, "bind"):
             raise RuleApplyNameError(
-                    owner=self.component,
+                    parent=self.component,
                     msg=f"Attribute '{attr_name}' is '{type(component)}' type which has no binding, therefore can not extract value. Use standard *Field components instead.")
         # TODO: needs some class wrapper and caching ...
         dexp_result = component.bind._evaluator.execute_dexp(apply_session)
@@ -489,8 +489,8 @@ class UseSetupStackFrame(UseStackFrameMixin, AbstractContextManager):
 @dataclass
 class SetupSessionBase(ISetupSession):
 
-    owner                       : Optional[Any]
-    owner_setup_session         : Optional[ISetupSession]
+    parent                       : Optional[Any]
+    parent_setup_session         : Optional[ISetupSession]
 
     # custom_function_factories store 
     functions                   : Optional[List[CustomFunctionFactory]] = field(repr=False, default=None)
@@ -499,7 +499,7 @@ class SetupSessionBase(ISetupSession):
 
     # autocomputed and internals
     is_top_setup_session        : bool = field(init=False, repr=False)
-    top_owner_setup_session     : ISetupSession = field(init=False, repr=False)
+    top_parent_setup_session     : ISetupSession = field(init=False, repr=False)
 
     _registry_dict              : Dict[str, IRegistry] = field(init=False, repr=False, default_factory=dict)
     name                        : str = field(init=False, repr=False)
@@ -514,34 +514,34 @@ class SetupSessionBase(ISetupSession):
 
     # def __init__(self, 
     #         # usually 'ContainerBase'
-    #         owner:  Optional[Any],  # noqa: F821
-    #         owner_setup_session: Optional[ISetupSession], 
+    #         parent:  Optional[Any],  # noqa: F821
+    #         parent_setup_session: Optional[ISetupSession], 
     #         functions: Optional[List[CustomFunctionFactory]] = None, 
     #         functions_factory_registry: Optional[FunctionsFactoryRegistry] = None,
     #         include_builtin_functions: bool = True,
     #         ):
-    #     # owner is usually: 'ContainerBase'
-    #     self.owner: Optional[Any] = owner  # noqa: F821
-    #     self.owner_setup_session: Optional[ISetupSession] = owner_setup_session
+    #     # parent is usually: 'ContainerBase'
+    #     self.parent: Optional[Any] = parent  # noqa: F821
+    #     self.parent_setup_session: Optional[ISetupSession] = parent_setup_session
 
     def __post_init__(self):
-        self.is_top_setup_session: bool = (self.owner_setup_session is None)
+        self.is_top_setup_session: bool = (self.parent_setup_session is None)
 
         if self.is_top_setup_session:
-            self.top_owner_setup_session = self
+            self.top_parent_setup_session = self
         else:
-            self.top_owner_setup_session = self.owner_setup_session
-            while self.top_owner_setup_session.owner_setup_session:
-                self.top_owner_setup_session = self.top_owner_setup_session.owner_setup_session
+            self.top_parent_setup_session = self.parent_setup_session
+            while self.top_parent_setup_session.parent_setup_session:
+                self.top_parent_setup_session = self.top_parent_setup_session.parent_setup_session
 
-        assert self.top_owner_setup_session
+        assert self.top_parent_setup_session
 
         # compputed
         # self._registry_dict : Dict[str, IRegistry] = {}
         # self.dexp_node_dict: Dict[str, IDotExpressionNode] = {}
         # self.finished: bool = False
 
-        self.name: str = self.owner.name if self.owner else "no-owner"
+        self.name: str = self.parent.name if self.parent else "no-parent"
 
         if self.functions_factory_registry:
             assert not self.functions
@@ -561,7 +561,7 @@ class SetupSessionBase(ISetupSession):
         counts = ", ".join([f"{k}={v.count()}" for k, v in self._registry_dict.items() if v])
         # name={self.name},
         # cnt={self.entries_count}, 
-        return f"SetupSession(owner={self.owner}, {counts})"
+        return f"SetupSession(parent={self.parent}, {counts})"
 
     def __repr__(self):
         return str(self)
@@ -620,7 +620,7 @@ class SetupSessionBase(ISetupSession):
     # ------------------------------------------------------------
 
     def add_hook_on_finished_all(self, hook_function: HookOnFinishedAllCallable):
-        self.top_owner_setup_session.hook_on_finished_all_list.append(hook_function)
+        self.top_parent_setup_session.hook_on_finished_all_list.append(hook_function)
 
     def call_hooks_on_finished_all(self):
         if not self.is_top_setup_session:
@@ -634,7 +634,7 @@ class SetupSessionBase(ISetupSession):
         " ppprint == pp == pretty print "
         # recursive: bool = False, depth: int = 0, 
         # has {self.entries_count} attr_node(s), 
-        print(f"{self.owner}: SetupSession '{self.name}', finished={self.finished}. List:")
+        print(f"{self.parent}: SetupSession '{self.name}', finished={self.finished}. List:")
         for ns_name, store in self._registry_dict.items():
             store.pprint()
 

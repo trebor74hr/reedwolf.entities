@@ -70,10 +70,10 @@ class NestedBoundModelMixin:
         if not self.contains:
             return False
 
-        container_owner = self.owner.get_container_owner(consider_self=True)
+        container_parent = self.parent.get_container_parent(consider_self=True)
 
-        if not container_owner or not container_owner.is_top_owner():
-            raise RuleSetupValueError(owner=self, msg=f"Currently child bound models ('contains') supported only for top contaainers owners (i.e. Rules), got: {self.owner} / {container_owner}")
+        if not container_parent or not container_parent.is_top_parent():
+            raise RuleSetupValueError(owner=self, msg=f"Currently child bound models ('contains') supported only for top contaainers owners (i.e. Rules), got: {self.parent} / {container_parent}")
 
         if self.models_with_handlers_dict:
             raise RuleInternalError(owner=self, msg=f"models_with_handlers_dict should be empty, got: {to_repr(self.models_with_handlers_dict)}. Have you called setup for 2nd time?") 
@@ -175,7 +175,7 @@ class NestedBoundModelMixin:
         local_setup_session = apply_session.setup_session.create_local_setup_session(
                                             this_ns_instance_model_class=self.model)
 
-        container = self.get_container_owner(consider_self=False)
+        container = self.get_container_parent(consider_self=False)
 
         with apply_session.use_stack_frame(
                 ApplyStackFrame(
@@ -245,8 +245,8 @@ class BoundModel(NestedBoundModelMixin, BoundModelBase):
     contains        : Optional[List[BoundModelWithHandlers]] = field(repr=False, default_factory=list)
 
     # evaluated later
-    owner           : Union[BoundModelBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    owner_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+    parent           : Union[BoundModelBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    parent_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
     # Filled from from model
     type_info : Optional[TypeInfo] = field(init=False, default=None, repr=False)
@@ -304,8 +304,8 @@ class BoundModelWithHandlers(NestedBoundModelMixin, BoundModelBase):
     # --- evaluated later
     # Filled from from .read_hanlder -> (.type_info: TypeInfo).type_
     model        : ModelType = field(init=False, metadata={"skip_traverse": True})
-    owner        : Union[BoundModelBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    owner_name   : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+    parent        : Union[BoundModelBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    parent_name   : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
     type_info    : Union[TypeInfo, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     models_with_handlers_dict : Dict[str, ModelWithHandlers] = field(init=False, repr=False, default_factory=dict)
@@ -343,8 +343,8 @@ class BoundModelWithHandlers(NestedBoundModelMixin, BoundModelBase):
         super().setup(setup_session=setup_session)
 
         if self.contains:
-            container =self.get_container_owner(consider_self=False)
-            if not container.is_top_owner():
+            container =self.get_container_parent(consider_self=False)
+            if not container.is_top_parent():
                 # NOTE: not allowed in Extension-s for now
                 raise RuleSetupValueError(owner=self, msg=f"BoundModel* nesting (attribute 'contains') is not supported for '{type(container)}'")
 

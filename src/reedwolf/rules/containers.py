@@ -97,16 +97,16 @@ from ..rules import components, fields, validations, evaluations
 # ------------------------------------------------------------
 
 def create_setup_session(
-        owner: ContainerBase,
+        parent: ContainerBase,
         config: Config,
         functions: Optional[List[CustomFunctionFactory]] = None, 
         context_class: Optional[IContext] = None,
         ) -> SetupSession:
     setup_session = SetupSession(
-                    owner=owner, 
+                    parent=parent, 
                     functions=functions,
-                    owner_setup_session=owner.setup_session if owner.owner else None,
-                    include_builtin_functions=owner.is_top_owner())
+                    parent_setup_session=parent.setup_session if parent.parent else None,
+                    include_builtin_functions=parent.is_top_parent())
 
     setup_session.add_registry(ModelsRegistry())
     setup_session.add_registry(FieldsRegistry())
@@ -136,11 +136,11 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             raise RuleSetupError(owner=self, msg=f"FieldGroup {fieldgroup.name} is already added.")
         self.contains.append(fieldgroup)
 
-    def is_top_owner(self):
-        return not bool(self.owner)
+    def is_top_parent(self):
+        return not bool(self.parent)
 
     def is_extension(self):
-        # TODO: if self.owner is not None could be used as the term, put validation somewhere
+        # TODO: if self.parent is not None could be used as the term, put validation somewhere
         " if start model is value expression - that mean that the the Rules is Extension "
         return isinstance(self.bound_model.model, DotExpression)
 
@@ -177,7 +177,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
     # ------------------------------------------------------------
 
     def _register_bound_model(self, bound_model:BoundModelBase):
-        # ex. type_info.metadata.get("bind_to_owner_setup_session")
+        # ex. type_info.metadata.get("bind_to_parent_setup_session")
         is_main_model = (bound_model==self.bound_model)
         is_extension_main_model = (self.is_extension() and is_main_model)
 
@@ -205,17 +205,17 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             if is_extension_main_model:
                 # TODO: DRY this - the only difference is setup_session - extract common logic outside / 
                 # bound attr_node
-                assert hasattr(self, "owner_setup_session")
-                setup_session_from = self.owner_setup_session
+                assert hasattr(self, "parent_setup_session")
+                setup_session_from = self.parent_setup_session
             else:
-                # Rules - top owner container / normal case
+                # Rules - top parent container / normal case
                 setup_session_from = self.setup_session
 
             attr_node = setup_session_from.get_dexp_node_by_dexp(dexp=model)
             if attr_node:
                 raise RuleInternalError(owner=self, msg=f"AttrDexpNode data already in setup_session: {model} -> {attr_node}")
 
-            attr_node = model.Setup(setup_session=setup_session_from, owner=bound_model)
+            attr_node = model.Setup(setup_session=setup_session_from, parent=bound_model)
             if not attr_node:
                 raise RuleInternalError(owner=self, msg=f"AttrDexpNode not recognized: {model}")
 
@@ -264,7 +264,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
     def _register_fields_components_attr_nodes(self):
         """
         Traverse the whole tree (recursion) and collect all components into
-        simple flat list. It will set owner for each child component.
+        simple flat list. It will set parent for each child component.
         """
         self.components = self.fill_components()
 
@@ -289,7 +289,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             raise RuleSetupError(owner=self, msg="SetupSession.setup() should be called only once")
 
         self.setup_session = create_setup_session(
-                                owner=self,
+                                parent=self,
                                 functions = self.functions,
                                 config = self.config,
                                 context_class = self.context_class,
@@ -342,7 +342,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             # Inner BoundModel can have self.bound_model.model = DotExpression
             self.keys.validate(self.bound_model.get_type_info().type_)
 
-        if self.is_top_owner():
+        if self.is_top_parent():
             self.setup_session.call_hooks_on_finished_all()
 
         return self
@@ -516,8 +516,8 @@ class Rules(ContainerBase):
     components      : Optional[Dict[str, Component]]  = field(init=False, repr=False, default=None)
     models          : Dict[str, Union[type, DotExpression]] = field(repr=False, init=False, default_factory=dict)
     # in Rules (top object) this case allway None - since it is top object
-    owner           : Union[None, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    owner_name      : Union[str, UndefinedType]  = field(init=False, default=UNDEFINED)
+    parent           : Union[None, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    parent_name      : Union[str, UndefinedType]  = field(init=False, default=UNDEFINED)
 
     def __post_init__(self):
         # TODO: check that BoundModel.model is_model_class() and not DotExpression
@@ -630,7 +630,7 @@ class Rules(ContainerBase):
         create and config ApplyResult() and call apply_session.apply()
         """
         from .apply import ApplyResult
-        container = self.get_container_owner(consider_self=True)
+        container = self.get_container_parent(consider_self=True)
 
         apply_session = \
                 ApplyResult(setup_session=container.setup_session, 
@@ -661,7 +661,7 @@ class Rules(ContainerBase):
             - validations are not called
         """
         from .apply import ApplyResult
-        container = self.get_container_owner(consider_self=True)
+        container = self.get_container_parent(consider_self=True)
 
         apply_session = \
                 ApplyResult(
@@ -698,7 +698,7 @@ class Extension(ContainerBase):
     # be unique in self.components (Extension and BoundModel will share the same name)
     name            : str
     bound_model     : Union[BoundModel, BoundModelWithHandlers] = field(repr=False)
-    # metadata={"bind_to_owner_setup_session" : True})
+    # metadata={"bind_to_parent_setup_session" : True})
 
     cardinality     : ICardinalityValidation
     contains        : List[Component] = field(repr=False)
@@ -714,18 +714,18 @@ class Extension(ContainerBase):
     setup_session      : Optional[SetupSession] = field(init=False, repr=False, default=None)
     components      : Optional[Dict[str, Component]]  = field(init=False, repr=False, default=None)
     models          : Dict[str, Union[type, DotExpression]] = field(init=False, repr=False, default_factory=dict)
-    owner           : Union[ComponentBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    owner_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+    parent           : Union[ComponentBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    parent_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
-    # extension specific - is this top owner or what? what is the difference to self.owner
+    # extension specific - is this top parent or what? what is the difference to self.parent
 
-    # in owners' chain (including self) -> first container
-    owner_container : Union[ContainerBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    # in parents' chain (including self) -> first container
+    parent_container : Union[ContainerBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
 
-    # in owners' chain (not including self) -> first container's setup_session
-    owner_setup_session: Optional[SetupSession] = field(init=False, repr=False, default=None)
+    # in parents' chain (not including self) -> first container's setup_session
+    parent_setup_session: Optional[SetupSession] = field(init=False, repr=False, default=None)
 
-    # copy from first non-self container owner
+    # copy from first non-self container parent
     context_class   : Optional[Type[IContext]] = field(repr=False, init=False, default=None)
     config          : Optional[Type[Config]] = field(repr=False, init=False, default=None)
 
@@ -739,23 +739,23 @@ class Extension(ContainerBase):
             self.label = varname_to_title(self.name)
         super().__post_init__()
 
-    def set_owner(self, owner:ContainerBase):
-        super().set_owner(owner=owner)
+    def set_parent(self, parent:ContainerBase):
+        super().set_parent(parent=parent)
 
         # can be self
-        self.owner_container     = self.get_container_owner(consider_self=True)
+        self.parent_container     = self.get_container_parent(consider_self=True)
 
-        # take from real first container owner
-        non_self_owner_container = self.get_container_owner(consider_self=False)
-        self.context_class = non_self_owner_container.context_class
-        self.config = non_self_owner_container.config
+        # take from real first container parent
+        non_self_parent_container = self.get_container_parent(consider_self=False)
+        self.context_class = non_self_parent_container.context_class
+        self.config = non_self_parent_container.config
         if not self.config:
-            raise RuleInternalError(owner=self, msg=f"Config not set from owner: {self.owner_container}") 
+            raise RuleInternalError(owner=self, msg=f"Config not set from parent: {self.parent_container}") 
 
     def setup(self, setup_session:SetupSession):
-        # NOTE: setup_session is not used, can be reached with owner.setup_session(). left param
+        # NOTE: setup_session is not used, can be reached with parent.setup_session(). left param
         #       for same function signature as for components.
-        self.owner_setup_session = setup_session
+        self.parent_setup_session = setup_session
         super().setup()
         self.cardinality.validate_setup()
         return self

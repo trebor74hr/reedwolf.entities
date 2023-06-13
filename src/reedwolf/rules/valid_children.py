@@ -38,8 +38,8 @@ from .base import (
         )
 
 
-# class ValidatorBase(SetOwnerMixin, ABC):
-#     # name, owner, owner_name
+# class ValidatorBase(SetParentMixin, ABC):
+#     # name, parent, parent_name
 # 
 #     def is_finished(self):
 #         return bool(self.name)
@@ -74,7 +74,7 @@ class ICardinalityValidation(IChildrenValidator, ABC): # count
         raise NotImplementedError("abstract method")
 
     def _validate_setup_common(self, allow_none:Optional[bool]=None) -> 'AttrDexpNode':  # noqa: F821
-        model_attr_node = self.owner.get_bound_model_attr_node()
+        model_attr_node = self.parent.get_bound_model_attr_node()
         if allow_none is not None:
             if allow_none and not model_attr_node.isoptional():
                 raise RuleSetupTypeError(owner=self, msg="Type hint is not Optional and cardinality allows None. Add Optional or set .allow_none=False/min=1+")
@@ -91,8 +91,8 @@ class Cardinality: # namespace holder
         name            : str
         allow_none      : bool = True
 
-        owner           : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
-        owner_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+        parent           : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
+        parent_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
         def validate_setup(self):
             model_attr_node = self._validate_setup_common(self.allow_none)
@@ -123,8 +123,8 @@ class Cardinality: # namespace holder
         min             : Optional[int] = None
         max             : Optional[int] = None
 
-        owner           : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
-        owner_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+        parent           : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
+        parent_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
         def __post_init__(self):
             if self.min is None and self.max is None:
@@ -161,9 +161,9 @@ class Cardinality: # namespace holder
         name            : str
         allow_none      : bool = True
 
-        owner           : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
+        parent           : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
 
-        owner_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+        parent_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
         def validate_setup(self):
             model_attr_node = self._validate_setup_common(self.allow_none)
@@ -188,10 +188,10 @@ class IUniqueValidator(IChildrenValidator, ABC):
     #     if self.__class__==IUniqueValidator:
     #         raise RuleSetupError(owner=self, msg=" Use subclasses of IUniqueValidator")
 
-    # def set_owner(self, owner):
-    #     super().set_owner(owner)
+    # def set_parent(self, parent):
+    #     super().set_parent(parent)
     #     if not self.name:
-    #         self.name = f"{self.owner.name}__{self.__class__.__name__.lower()}"
+    #         self.name = f"{self.parent.name}__{self.__class__.__name__.lower()}"
 
 class Unique: # namespace holder
 
@@ -202,8 +202,8 @@ class Unique: # namespace holder
         fields          : List[str] # TODO: better field specification or dexpr?
         ignore_none     : bool = True
 
-        owner           : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
-        owner_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+        parent           : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
+        parent_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
         def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
             raise NotImplementedError()
@@ -215,8 +215,8 @@ class Unique: # namespace holder
         fields          : List[str] # TODO: better field specification or dexpr?
         ignore_none     : bool = True
 
-        owner           : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
-        owner_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+        parent           : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
+        parent_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
         def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
             raise NotImplementedError()

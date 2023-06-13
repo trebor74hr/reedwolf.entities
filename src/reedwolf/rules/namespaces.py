@@ -58,7 +58,7 @@ ModelsNS = Namespace("Models")
 # DataNS = Namespace("D")
 
 # Field/F - all componenents in current container - including chain
-#           from current owner to top owner, including all their children (e.g.
+#           from current parent to top parent, including all their children (e.g.
 #           FieldGroups and their Fields, Validations etc.
 #
 #           Difference to ModelsNS:

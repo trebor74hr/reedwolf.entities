@@ -205,12 +205,12 @@ class FieldBase(Component, IFieldBase, ABC):
             # if such - check if namespace of all children are right.
             # Used for Extension.
             namespace_only = ModelsNS
-            owner = self.owner
-            while owner is not None:
-                if hasattr(owner, "namespace_only"):
-                    namespace_only = owner.namespace_only
+            parent = self.parent
+            while parent is not None:
+                if hasattr(parent, "namespace_only"):
+                    namespace_only = parent.namespace_only
                     break
-                owner = owner.owner
+                parent = parent.parent
 
             if self.bind.GetNamespace()!=namespace_only:
                 raise RuleSetupValueError(owner=self, msg=f"{self.bind}: 'bind' needs to be in {namespace_only} DotExpression (e.g. M.status).")
@@ -222,11 +222,11 @@ class FieldBase(Component, IFieldBase, ABC):
             self.bound_attr_node = setup_session.get_dexp_node_by_dexp(self.bind)
             if not self.bound_attr_node:
                 # TODO: not nice :(
-                owner_container = self.get_container_owner(consider_self=True)
-                owner_setup_session = getattr(owner_container, "owner_setup_session", owner_container.setup_session)
-                if owner_setup_session!=setup_session:
+                parent_container = self.get_container_parent(consider_self=True)
+                parent_setup_session = getattr(parent_container, "parent_setup_session", parent_container.setup_session)
+                if parent_setup_session!=setup_session:
                     # TODO: does not goes deeper - should be done with while loop until the top
-                    self.bound_attr_node = owner_setup_session.get_dexp_node_by_dexp(self.bind)
+                    self.bound_attr_node = parent_setup_session.get_dexp_node_by_dexp(self.bind)
 
             # self.attr_node = setup_session.get_attr_node(FieldsNS, self.name, strict=True)
             self.attr_node = setup_session[FieldsNS].get(self.name)
@@ -470,7 +470,7 @@ class ChoiceField(FieldBase):
             else:
                 dexp_node = setup_session.get_dexp_node_by_dexp(dexp=choices)
                 if not dexp_node:
-                    dexp_node = choices.Setup(setup_session=setup_session, owner=self)
+                    dexp_node = choices.Setup(setup_session=setup_session, parent=self)
 
         elif isinstance(choices, CustomFunctionFactory):
             custom_function_factory : CustomFunctionFactory = choices
@@ -534,7 +534,7 @@ class ChoiceField(FieldBase):
 
             with setup_session.use_stack_frame(
                     SetupStackFrame(
-                        container = self.get_container_owner(consider_self=True), 
+                        container = self.get_container_parent(consider_self=True), 
                         component = self, 
                         local_setup_session = setup_session.create_local_setup_session(
                                                     this_ns_instance_model_class=model_class)
@@ -588,7 +588,7 @@ class ChoiceField(FieldBase):
         if not (dexp and isinstance(dexp, DotExpression) and dexp.GetNamespace()==ThisNS):
             raise RuleSetupValueError(owner=self, msg=f"Argument '{aname}' is not set or has wrong type - should be DotExpression in This. namespace. Got: {dexp} / {type(dexp)}")
 
-        attr_node = dexp.Setup(setup_session=setup_session, owner=self)
+        attr_node = dexp.Setup(setup_session=setup_session, parent=self)
         if dexp._status != DExpStatusEnum.BUILT:
             raise RuleInternalError(owner=self, msg=f"Setup failed for Dexp: {dexp} -> {dexp._status}")
 
@@ -619,7 +619,7 @@ class EnumField(FieldBase):
                 # EnumField(... enum=S.CompanyTypes)
                 enum_attr_node = setup_session.get_dexp_node_by_dexp(dexp=self.enum)
                 if not enum_attr_node:
-                    enum_attr_node = self.enum.Setup(setup_session=setup_session, owner=self)
+                    enum_attr_node = self.enum.Setup(setup_session=setup_session, parent=self)
 
                 # self.enum = enum_attr_node.data.value
                 self.enum = enum_attr_node.data

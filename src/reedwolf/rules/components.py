@@ -63,10 +63,10 @@ class Component(ComponentBase, ABC):
     # by default name should be defined
     # name: str = field(init=False, default=UNDEFINED)
 
-    # NOTE: I wanted to skip saving owner reference/object within component - to
+    # NOTE: I wanted to skip saving parent reference/object within component - to
     #       preserve single and one-direction references.
-    owner:      Union[ComponentBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    owner_name: Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+    parent:      Union[ComponentBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    parent_name: Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
     # set in setup()
     dot_node:   Union[AttrDexpNode, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
@@ -74,7 +74,7 @@ class Component(ComponentBase, ABC):
     NAME_COUNTER:   ClassVar[int] = field(default=1)
 
     def init_clean_base(self):
-        # when not set then will be later defined - see set_owner()
+        # when not set then will be later defined - see set_parent()
         if self.name not in (None, "", UNDEFINED):
             if not self.name.isidentifier():
                 raise RuleSetupValueError(owner=self, msg="Attribute name needs to be valid python identifier name")
@@ -95,7 +95,7 @@ class Component(ComponentBase, ABC):
     #     # TODO: consider moving to ApplySession/ApplyResult?
     #     if self.is_container():
     #         raise RuleInternalError(owner=self, msg=f"Expecting non-container, got: {self}") 
-    #     container = self.get_container_owner(consider_self=True)
+    #     container = self.get_container_parent(consider_self=True)
     #     container_key_string = container.get_key_string(apply_session)
     #     key_string = GlobalConfig.ID_NAME_SEPARATOR.join(
     #             [container_key_string, self.name] 

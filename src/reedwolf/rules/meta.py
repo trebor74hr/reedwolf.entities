@@ -290,7 +290,8 @@ def is_method_by_name(owner: Any, name:str) -> bool:
     return hasattr(owner, name) and is_function(getattr(owner, name))
 
 def is_instancemethod_by_name(owner: Any, name:str) -> bool:
-    """ NOTE: hm, this depends on  naming convention
+    """ !! CURRENTLY NOT USED !!!
+        NOTE: hm, this depends on  naming convention
               https://stackoverflow.com/questions/8408910/detecting-bound-method-in-classes-not-instances-in-python-3
         TODO: do it better: is_method and not classmethod and not staticmethod
 
@@ -306,7 +307,8 @@ def is_instancemethod_by_name(owner: Any, name:str) -> bool:
 
 
 def is_classmethod_by_name(owner: Any, name: str) -> bool:
-    """ works for Class and Instance() """
+    """ !! CURRENTLY NOT USED !!!
+        works for Class and Instance() """
     if not inspect.isclass(owner):
         owner = owner.__class__
     if not hasattr(owner, name):
@@ -321,12 +323,14 @@ def is_classmethod_by_name(owner: Any, name: str) -> bool:
 
 
 def is_classmethod(owner: Any, name: str) -> bool:
-    """ works for Class and Instance() """
+    """ !! CURRENTLY NOT USED !!!
+        works for Class and Instance() """
     return _is_method_by_name_instanceof(owner=owner, name=name, instanceof_cls=classmethod)
 
 
 def is_staticmethod_by_name(owner: Any, name: str) -> bool:
-    """ works for Class and Instance() """
+    """ !! CURRENTLY NOT USED !!!
+        works for Class and Instance() """
     return _is_method_by_name_instanceof(owner=owner, name=name, instanceof_cls=staticmethod)
 
 
@@ -342,6 +346,7 @@ def _is_method_by_name_instanceof(owner: Any, name: str, instanceof_cls: type) -
     return isinstance(method, instanceof_cls)
 
 def get_methods(owner: Any) -> Dict[str, Callable[..., Any]]:
+    """ !! CURRENTLY NOT USED !!!  """ 
     # inspect.getmembers(DemoClass(), predicate=inspect.ismethod)
     methods = inspect.getmembers(owner, predicate=is_function)
     return {mname: method for (mname, method) in methods if not mname.startswith("_")}

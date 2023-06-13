@@ -196,33 +196,33 @@ class BaseOnlyArgs:  # noqa: SIM119
 
 
 # ------------------------------------------------------------
-# SetOwnerMixin
+# SetParentMixin
 # ------------------------------------------------------------
 
-class SetOwnerMixin:
+class SetParentMixin:
     """ requires (Protocol):
 
         name
-        owner_name
-        owner
+        parent_name
+        parent
     """
 
     # ------------------------------------------------------------
 
-    def set_owner(self, owner: ComponentBase):
-        if self.owner is not UNDEFINED:
-            raise RuleInternalError(owner=self, msg=f"Owner already defined, got: {owner}")
+    def set_parent(self, parent: ComponentBase):
+        if self.parent is not UNDEFINED:
+            raise RuleInternalError(owner=self, msg=f"Parent already defined, got: {parent}")
 
-        assert owner is None or isinstance(owner, ComponentBase), owner
-        self.owner = owner
+        assert parent is None or isinstance(parent, ComponentBase), parent
+        self.parent = parent
 
-        if self.owner_name is not UNDEFINED:
-            raise RuleInternalError(owner=self, msg=f"Owner name already defined, got: {owner}")
+        if self.parent_name is not UNDEFINED:
+            raise RuleInternalError(owner=self, msg=f"Parent name already defined, got: {parent}")
 
-        self.owner_name = owner.name if owner else ""
+        self.parent_name = parent.name if parent else ""
         if self.name in (None, UNDEFINED):
             suffix = self.__class__.__name__.lower()
-            self.name = f"{self.owner_name}__{suffix}"
+            self.name = f"{self.parent_name}__{suffix}"
 
 
 # ------------------------------------------------------------
@@ -256,7 +256,7 @@ class SubcomponentWrapper:
 # ComponentBase
 # ------------------------------------------------------------
 
-class ComponentBase(SetOwnerMixin, ABC):
+class ComponentBase(SetParentMixin, ABC):
 
     def __post_init__(self):
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
@@ -526,7 +526,7 @@ class ComponentBase(SetOwnerMixin, ABC):
     # ------------------------------------------------------------
 
     def fill_components(self, components: Optional[Dict[str, ComponentBase]] = None,
-                        owner: Optional[ComponentBase] = None) \
+                        parent: Optional[ComponentBase] = None) \
                         -> Dict[str, ComponentBase]:
         """ recursive -> flat dict
         component can be ComponentBase, Dataprovider, ...
@@ -535,25 +535,25 @@ class ComponentBase(SetOwnerMixin, ABC):
         is_top = bool(components is None)
         if is_top:
             components = {}
-            # assert not owner
+            # assert not parent
 
-        # for children/contains attributes - owner is set here
+        # for children/contains attributes - parent is set here
         if not hasattr(self, "name"):
             raise RuleSetupError(owner=self, msg=f"Component should have 'name' attribute, got class: {self.__class__.__name__}")
 
         if not is_top:
             # Component
-            assert owner
-            assert owner != self
-            self.set_owner(owner)
+            assert parent
+            assert parent != self
+            self.set_parent(parent)
         else:
-            if self.owner not in (None, UNDEFINED):
+            if self.parent not in (None, UNDEFINED):
                 # Extension()
-                assert not owner
+                assert not parent
             else:
                 # Rules()
-                assert not owner
-                self.set_owner(None)
+                assert not parent
+                self.set_parent(None)
 
         self._add_component(component=self, components=components)
 
@@ -569,13 +569,13 @@ class ComponentBase(SetOwnerMixin, ABC):
                 if hasattr(component, "is_extension") and component.is_extension():
                     # for extension container don't go deeper into tree (call fill_components)
                     # it will be called later in container.setup() method
-                    component.set_owner(owner=self)
+                    component.set_parent(parent=self)
                     # save only container (top) object
                     self._add_component(component=component, components=components)
                 else:
-                    component.fill_components(components=components, owner=self)
-            elif hasattr(component, "set_owner"):
-                component.set_owner(owner=self)
+                    component.fill_components(components=components, parent=self)
+            elif hasattr(component, "set_parent"):
+                component.set_parent(parent=self)
                 self._add_component(component=component, components=components)
                 # e.g. BoundModel.model - can be any custom Class(dataclass/pydantic)
 
@@ -616,12 +616,12 @@ class ComponentBase(SetOwnerMixin, ABC):
                 # Setup() was called in container.setup() before
                 called = False
             else:
-                dexp.Setup(setup_session=setup_session, owner=self)
+                dexp.Setup(setup_session=setup_session, parent=self)
                 called = True
         elif isinstance(subcomponent, ComponentBase):
             assert "Rules(" not in repr(subcomponent)
             # assert not isinstance(subcomponent, Rules), subcomponent
-            subcomponent.setup(setup_session=setup_session)  # , owner=self)
+            subcomponent.setup(setup_session=setup_session)  # , parent=self)
             subcomponent.post_setup()
             called = True
         elif isinstance(subcomponent, (dict, list, tuple)):
@@ -636,12 +636,12 @@ class ComponentBase(SetOwnerMixin, ABC):
     def setup(self, setup_session: ISetupSession):  # noqa: F821
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(self)
 
-        container = self.get_container_owner(consider_self=True)
+        container = self.get_container_parent(consider_self=True)
 
         if getattr(self, "bind", None):
             # similar logic in apply.py :: _apply()
             assert not self.is_container()
-            attr_node = self.bind.Setup(setup_session=setup_session, owner=self)
+            attr_node = self.bind.Setup(setup_session=setup_session, parent=self)
             if not attr_node:
                 raise RuleSetupNameError(owner=self, msg=f"{attr_node.name}.bind='{self.bind}' could not be evaluated")
             local_setup_session = setup_session.create_local_setup_session(
@@ -675,7 +675,7 @@ class ComponentBase(SetOwnerMixin, ABC):
               the logic behind is to collect all attributes (recurseively) that 
               are:
                 1. component (ComponentBase)
-                2. have owner set (SetOwnerMixin)
+                2. have parent set (SetParentMixin)
                 3. DotExpression
 
               all of them have some setup method:
@@ -750,7 +750,7 @@ class ComponentBase(SetOwnerMixin, ABC):
             # -------------------------------------------------------------
             # "autocomplete", "evaluate",
             # TODO: not the smartest way how to do this ...
-            if (subcomponent_name in ("owner", "owner_name", "owner_container", "owner_setup_session",
+            if (subcomponent_name in ("parent", "parent_name", "parent_container", "parent_setup_session",
                                       "name", "label", "datatype", "components", "type", "autocomputed",
                                       "setup_session", "meta",
                                       # NOTE: maybe in the future will have value expressions too
@@ -767,7 +767,7 @@ class ComponentBase(SetOwnerMixin, ABC):
                                       )
                or subcomponent_name[0] == "_"):
                 # TODO: this should be main way how to check ...
-                if subcomponent_name not in ("owner", "owner_container") and \
+                if subcomponent_name not in ("parent", "parent_container") and \
                   (hasattr(subcomponent, "setup") or hasattr(subcomponent, "setup")):
                     raise RuleInternalError(f"ignored attribute name '{subcomponent_name}' has setup()/Setup(). Is attribute list ok or value is not proper class (got component='{subcomponent}').")
                 continue
@@ -796,7 +796,7 @@ class ComponentBase(SetOwnerMixin, ABC):
                 # TODO: Validation should be extended to test isinstance(.., ValidationBase) ... or similar to include Required(), MaxLength etc.
                 raise RuleInternalError(owner=subcomponent, msg=f"Should '{subcomponent_name}' attribute be excluded from processing." 
                         + f"\n  == {th_field})"
-                        + f"\n  == owner := {self}"
+                        + f"\n  == parent := {self}"
                         + f"\n  == {type(subcomponent)}"
                         + f"\n  == {subcomponent}")
 
@@ -835,8 +835,8 @@ class ComponentBase(SetOwnerMixin, ABC):
 
 
     def _setup(self, setup_session: ISetupSession):  # noqa: F821
-        if self.owner is UNDEFINED:
-            raise RuleInternalError(owner=self, msg="Owner not set")
+        if self.parent is UNDEFINED:
+            raise RuleInternalError(owner=self, msg="Parent not set")
 
         if self.is_finished():
             raise RuleInternalError(owner=self, msg="Setup already called")
@@ -879,29 +879,29 @@ class ComponentBase(SetOwnerMixin, ABC):
         return name
 
 
-    def get_container_owner(self, consider_self: bool) -> IContainerBase:  # noqa: F821
+    def get_container_parent(self, consider_self: bool) -> IContainerBase:  # noqa: F821
         """ 
-        traverses up the component tree up (owners) and find first container
+        traverses up the component tree up (parents) and find first container
         including self ( -> if self is container then it returns self)
         """
-        if self.owner is UNDEFINED:
-            raise RuleSetupError(owner=self, msg="Owner is not set. Call .setup() method first.")
+        if self.parent is UNDEFINED:
+            raise RuleSetupError(owner=self, msg="Parent is not set. Call .setup() method first.")
 
         if consider_self and isinstance(self, IContainerBase):
             return self
 
-        owner_container = self.owner
-        while owner_container is not None:
-            if isinstance(owner_container, IContainerBase):
+        parent_container = self.parent
+        while parent_container is not None:
+            if isinstance(parent_container, IContainerBase):
                 break
-            owner_container = owner_container.owner
+            parent_container = parent_container.parent
 
-        if owner_container in (None, UNDEFINED):
+        if parent_container in (None, UNDEFINED):
             if consider_self:
                 raise RuleSetupError(owner=self, msg="Did not found container in parents. Every component needs to be in some container object tree (Rules/Extension).")
             return None
 
-        return owner_container
+        return parent_container
 
 
     # ------------------------------------------------------------
@@ -983,26 +983,26 @@ class IContainerBase(ABC):
 
 class BoundModelBase(ComponentBase, ABC):
 
-    def is_top_owner(self):
+    def is_top_parent(self):
         return False
 
 
-    def get_full_name(self, owner: Optional[BoundModelBase] = None, depth: int = 0, init: bool = False):
+    def get_full_name(self, parent: Optional[BoundModelBase] = None, depth: int = 0, init: bool = False):
         if not hasattr(self, "_name"):
             if depth > MAX_RECURSIONS:
                 raise RuleInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
 
             assert init
             names = []
-            if owner:
+            if parent:
                 # recusion
-                names.append(owner.get_full_name(owner=self, depth=depth+1, init=init))
+                names.append(parent.get_full_name(parent=self, depth=depth+1, init=init))
             names.append(self.name)
             self._name = ".".join(names)
         return self._name
 
 
-    def fill_models(self, models: Dict[str, BoundModelBase] = None, owner : BoundModelBase = None):
+    def fill_models(self, models: Dict[str, BoundModelBase] = None, parent : BoundModelBase = None):
         """
         Recursion
         """
@@ -1011,12 +1011,12 @@ class BoundModelBase(ComponentBase, ABC):
         if self.name in models:
             raise RuleSetupNameError(owner=self, msg=f"Currently model names in tree dependency should be unique. Model name {self.name} is not, found: {models[self.name]}")
 
-        name = self.get_full_name(owner=owner, init=True)
+        name = self.get_full_name(parent=parent, init=True)
         models[name] = self
         if hasattr(self, "contains"):
             for dep_bound_model in self.contains:
                 # recursion
-                dep_bound_model.fill_models(models=models, owner=self)
+                dep_bound_model.fill_models(models=models, parent=self)
         return models
 
     # Not used:
@@ -1097,7 +1097,7 @@ class SetupStackFrame:
 
         # self.bound_model_root = (self.on_component_only 
         #                          if self.on_component_only.is_extension()
-        #                          else self.on_component_only.get_container_owner(consider_self=True)
+        #                          else self.on_component_only.get_container_parent(consider_self=True)
         #                         ).bound_model
         # self.bound_model_root = self.container.bound_model
         # assert self.bound_model_root
@@ -1148,7 +1148,7 @@ class InstanceAttrValue:
     # NOTE: value could be adapted version of dexp_result.value (can be different)
     value: LiteralType
 
-    # * first / initial record in owner list is from bind, first
+    # * first / initial record in parent list is from bind, first
     #   this .value could be unadapted value version (field.try_adapt_value())
     #   therefore value is in a special field.
     # * second+ - are from evaluation results
@@ -1156,7 +1156,7 @@ class InstanceAttrValue:
 
     # TODO: this is not filled good - allways component.name
     # just to have track who read/set this value
-    value_owner_name: str = field(repr=False, compare=False)
+    value_parent_name: str = field(repr=False, compare=False)
 
     # is from bind
     is_from_bind: bool = field(repr=False, compare=False, default=False)
@@ -1264,7 +1264,7 @@ class ApplyStackFrame:
         if self.on_component_only:
             self.bound_model_root = (self.on_component_only 
                                      if self.on_component_only.is_extension()
-                                     else self.on_component_only.get_container_owner(consider_self=True)
+                                     else self.on_component_only.get_container_parent(consider_self=True)
                                     ).bound_model
             # can be list in this case
             # TODO: check if list only: if self.bound_model_root.type_info.is_list:
@@ -1509,10 +1509,10 @@ class IApplySession:
             while curr_comp is not None:
                 if curr_comp in components_tree:
                     raise RuleInternalError(
-                            owner=component, 
+                            parent=component, 
                             msg=f"Issue with hierarchy tree - duplicate node: {curr_comp.name}")
                 components_tree.append(curr_comp)
-                curr_comp = curr_comp.owner
+                curr_comp = curr_comp.parent
 
             children_dict = {}
             # Although no name clash could happen, reverse to have local scopes

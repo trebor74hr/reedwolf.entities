@@ -215,7 +215,7 @@ class ApplyResult(IApplySession):
         """ Execute evaluation and if new value is different from existing
             value, update current instance """
         assert isinstance(evaluation, EvaluationBase)
-        assert component == evaluation.owner
+        assert component == evaluation.parent
 
         if not component == self.current_frame.component:
             raise RuleInternalError(owner=self.current_frame.component, 
@@ -254,7 +254,7 @@ class ApplyResult(IApplySession):
             mark component and children invalid to prevent further rules execution
         """
         assert isinstance(validation, ValidationBase)
-        assert component == validation.owner
+        assert component == validation.parent
         assert not self.defaults_mode
 
         if not component == self.current_frame.component:
@@ -353,10 +353,10 @@ class ApplyResult(IApplySession):
             # NOTE: bind_dexp_result last value is not changed
             #       maybe should be changed but ... 
 
-        # TODO: pass input arg value_owner_name - component.name does not have
+        # TODO: pass input arg value_parent_name - component.name does not have
         #       any purpose
         instance_attr_value = InstanceAttrValue(
-                                value_owner_name=component.name, 
+                                value_parent_name=component.name, 
                                 value=new_value,
                                 dexp_result=dexp_result,
                                 is_from_bind = is_from_init_bind,
@@ -424,7 +424,7 @@ class ApplyResult(IApplySession):
         # TODO: self.config.loger.debug(...)
         assert not (mode_extension_list and mode_dexp_dependency)
 
-        comp_container = component.get_container_owner(consider_self=True)
+        comp_container = component.get_container_parent(consider_self=True)
         comp_container_model = comp_container.bound_model.get_type_info().type_
 
         if mode_dexp_dependency:
@@ -432,7 +432,7 @@ class ApplyResult(IApplySession):
 
             # instance i.e. containers must match
             assert self.stack_frames
-            caller_container = self.current_frame.component.get_container_owner(consider_self=True)
+            caller_container = self.current_frame.component.get_container_parent(consider_self=True)
             if comp_container is not caller_container:
                 raise RuleInternalError(owner=component, msg=f"Componenent's container '{comp_container}' must match caller's '{self.current_frame.component.name}' container: {caller_container.name}") 
 
@@ -899,7 +899,7 @@ class ApplyResult(IApplySession):
         else:
             # FieldGroup supported only - partial with matched compoonent
             # raise NotImplementedError(f"TODO: currently not supported: {component}")
-            container = component.get_container_owner(consider_self=True)
+            container = component.get_container_parent(consider_self=True)
             model = container.bound_model.type_info.type_
 
         if isinstance(self.instance_new, (list, tuple)):
@@ -941,7 +941,7 @@ class ApplyResult(IApplySession):
                 else:
                     on_component_only = None
 
-                # container = component.get_container_owner(consider_self=True) if not component.is_extension() else component
+                # container = component.get_container_parent(consider_self=True) if not component.is_extension() else component
                 with self.use_stack_frame(
                         ApplyStackFrame(
                             container = self.current_frame.container, 
@@ -1191,10 +1191,10 @@ class ApplyResult(IApplySession):
             raise RuleInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
 
         # Started to process extension, but not yet positioned on any extension instance item 
-        # the key will have no extension::<instance_id>, just owner_key_string::owner_key_string::extension_name
-        extension_no_instance_case = (component.get_container_owner(consider_self=True) 
+        # the key will have no extension::<instance_id>, just parent_key_string::parent_key_string::extension_name
+        extension_no_instance_case = (component.get_container_parent(consider_self=True) 
                                       != 
-                                      self.current_frame.component.get_container_owner(consider_self=True))
+                                      self.current_frame.component.get_container_parent(consider_self=True))
 
         # NOTE: this could be different 
         #       component == self.current_frame.component
@@ -1213,7 +1213,7 @@ class ApplyResult(IApplySession):
                             )
         else:
             consider_self = False if extension_no_instance_case else True
-            container = component.get_container_owner(consider_self=consider_self)
+            container = component.get_container_parent(consider_self=consider_self)
 
             # Recursion
             container_key_string = self.get_key_string(container, depth=depth+1)
@@ -1235,13 +1235,13 @@ class ApplyResult(IApplySession):
         a) with keys:
             For containers which have keys defined, it is assumed that one key is
             globally unique within Extension components, so no need to prefix key
-            with parent/owner key_string. Example:
+            with parent key_string. Example:
 
                  address_set_ext[id2=1]
 
         b) without keys - index0 based:
             In other cases item index in list is used (index0), and then this is
-            only locally within one instance of parent/owner, therefore parent
+            only locally within one instance of parent, therefore parent
             key_string is required. Example:
 
                  company_rules::address_set_ext[0]
@@ -1281,9 +1281,9 @@ class ApplyResult(IApplySession):
                 parent_key_string = self.key_string_container_cache[parent_id]
                 key_string = GlobalConfig.ID_NAME_SEPARATOR.join([parent_key_string, key_string])
             else:
-                container_owner = component.get_container_owner(consider_self=True)
-                if container_owner.is_extension():
-                    raise RuleInternalError(owner=component, msg=f"Owner container {container_owner.name} is an extension and parent_instance is empty") 
+                container_parent = component.get_container_parent(consider_self=True)
+                if container_parent.is_extension():
+                    raise RuleInternalError(owner=component, msg=f"Parent container {container_parent.name} is an extension and parent_instance is empty") 
 
 
             self.key_string_container_cache[instance_id] = key_string

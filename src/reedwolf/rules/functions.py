@@ -206,7 +206,7 @@ class IFunction(IFunctionDexpNode):
         self.prepared_args = self.function_arguments.parse_func_args(
                 setup_session=self.setup_session,
                 caller=self.caller,
-                owner_name=f"{self.as_str()}",
+                parent_name=f"{self.as_str()}",
                 func_args=self.func_args,
                 fixed_args=self.fixed_args,
                 value_arg_type_info=self.value_arg_type_info,
@@ -398,7 +398,7 @@ class IFunction(IFunctionDexpNode):
         # prep_arg.caller.namespace / field_name = prep_arg.caller.name / prep_arg.caller.get_type_info()
         #   TypeInfo(py_type_hint=<class 'bool'>, types=[<class 'bool'>])
         # prep_arg.caller.data
-        #   BooleanField(owner_name='company_rules', bind=DExpr(Models.can_be_accessed), name='can_be_accessed')
+        #   BooleanField(parent_name='company_rules', bind=DExpr(Models.can_be_accessed), name='can_be_accessed')
 
 # ------------------------------------------------------------
 # CustomFunctions - need 2 steps and 3 layers:
@@ -710,9 +710,9 @@ def try_create_function(
                                 first_custom=first_custom))
         names_avail_all.append(names_avail)
 
-        if not setup_session.owner.owner:
+        if not setup_session.parent.parent:
             break
-        setup_session_current = setup_session.owner.owner.setup_session
+        setup_session_current = setup_session.parent.parent.setup_session
 
     func_node = None
     if function_factory:
