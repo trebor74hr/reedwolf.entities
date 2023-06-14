@@ -57,7 +57,7 @@ class Evaluation(EvaluationBase):
     #       type - e.g.  for EnumField evaluated value must be within enum values.
     value:          DotExpression
     name:           Optional[str] = field(default=None)
-    label:          Optional[TransMessageType] = field(default=None)
+    title:          Optional[TransMessageType] = field(default=None)
     available:      Optional[Union[bool, DotExpression]] = field(default=True)
 
     def __post_init__(self):
@@ -87,7 +87,7 @@ class Default(EvaluationBase):
 
     value:          Union[LiteralType, DotExpression]
     name:           Optional[str] = None
-    label:          Optional[TransMessageType] = None
+    title:          Optional[TransMessageType] = None
     available:      Optional[Union[bool, DotExpression]] = True
 
     REQUIRES_AUTOCOMPUTE: ClassVar[bool] = False

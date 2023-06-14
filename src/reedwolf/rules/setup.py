@@ -215,7 +215,7 @@ class RegistryBase(IRegistry):
         """
         Data can register IFunctionDexpNode-s instances since the
         output will be used directly as data and not as a function call.
-            function=[Function(name="Countries", label="Countries", 
+            function=[Function(name="Countries", title="Countries", 
                               py_function=CatalogManager.get_countries)],
             ...
             available=(S.Countries.name != "test"),

@@ -227,8 +227,8 @@ class SetParentMixin:
 
         if not self.name:
             self._getset_name()
-        elif hasattr(self, "label") and not self.label and self.name:
-            self.label = varname_to_title(self.name)
+        elif hasattr(self, "title") and not self.title and self.name:
+            self.title = varname_to_title(self.name)
 
         if not self.name:
             raise RuleInternalError(owner=self, msg=f"Name is not set: {self}") 
@@ -801,7 +801,7 @@ class ComponentBase(SetParentMixin, ABC):
             # "autocomplete", "evaluate",
             # TODO: not the smartest way how to do this ...
             if (subcomponent_name in ("parent", "parent_name", "parent_container", "parent_setup_session",
-                                      "name", "label", "datatype", "components", "type", "autocomputed",
+                                      "name", "title", "datatype", "components", "type", "autocomputed",
                                       "setup_session", "meta",
                                       # NOTE: maybe in the future will have value expressions too
                                       "error", "description", "hint", 
@@ -1371,7 +1371,7 @@ class ValidationFailure:
     component_key_string: str
     error: TransMessageType
     validation_name: str
-    validation_label: str
+    validation_title: str
     details: Optional[str]
 
 

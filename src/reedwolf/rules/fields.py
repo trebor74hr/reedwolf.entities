@@ -120,7 +120,7 @@ class FieldBase(Component, IFieldBase, ABC):
 
     # to Model attribute
     bind:           DotExpression
-    label:          Optional[TransMessageType] = field(repr=False, default=None)
+    title:          Optional[TransMessageType] = field(repr=False, default=None)
 
     # NOTE: required - is also Validation, i.e. Required() - just commonly used
     #       validation, nothing special that deserves special attribute.
@@ -353,7 +353,7 @@ class FieldBase(Component, IFieldBase, ABC):
                             component_key_string = apply_session.get_key_string(component),
                             error=error, 
                             validation_name=self.name,
-                            validation_label="Type validation",
+                            validation_title="Type validation",
                             details="Provide value with correct type",
                             )
         return None
@@ -405,7 +405,7 @@ class BooleanField(FieldBase):
 @dataclass
 class ChoiceOption:
     value:      DotExpression # -> some Standard or Complex type
-    label:      TransMessageType
+    title:      TransMessageType
     available:  Optional[Union[DotExpression,bool]] = True # Dexp returns bool
 
 @dataclass
@@ -424,12 +424,12 @@ class ChoiceField(FieldBase):
                             Union[List[ChoiceOption], 
                             List[Union[int,str]]]]] = None
     choice_value: Optional[DotExpression] = None
-    choice_label: Optional[DotExpression] = None
+    choice_title: Optional[DotExpression] = None
     # choice_available: Optional[DotExpression]=True # returns bool
 
     # computed later
     choice_value_attr_node: AttrDexpNode = field(init=False, default=None, repr=False)
-    choice_label_attr_node: AttrDexpNode = field(init=False, default=None, repr=False)
+    choice_title_attr_node: AttrDexpNode = field(init=False, default=None, repr=False)
 
     def __post_init__(self):
         self.init_clean()
@@ -440,13 +440,13 @@ class ChoiceField(FieldBase):
             raise RuleSetupValueError(owner=self, msg="argument 'choices' is Enum, use EnumChoices instead.")
 
         if isinstance(self.choices, (IFunctionDexpNode, CustomFunctionFactory, DotExpression)):
-            if not (self.choice_value and self.choice_label):
-                raise RuleSetupValueError(owner=self, msg="expected 'choice_label' and 'choice_value' passed.")
+            if not (self.choice_value and self.choice_title):
+                raise RuleSetupValueError(owner=self, msg="expected 'choice_title' and 'choice_value' passed.")
         elif is_function(self.choices):
             raise RuleSetupValueError(owner=self, msg="Passing functino to 'choices={self.choices}' is not allowed. Wrap it with 'Function()'.")
         else:
-            if (self.choice_value or self.choice_label):
-                raise RuleSetupValueError(owner=self, msg="'choice_label' and 'choice_value' are not expected.")
+            if (self.choice_value or self.choice_title):
+                raise RuleSetupValueError(owner=self, msg="'choice_title' and 'choice_value' are not expected.")
 
     # ------------------------------------------------------------
 
@@ -542,18 +542,18 @@ class ChoiceField(FieldBase):
                     )):
                 # model_class=model_class
                 self.choice_value_attr_node = self._create_attr_node(setup_session, "choice_value", dexp=self.choice_value)
-                self.choice_label_attr_node = self._create_attr_node(setup_session, "choice_label", dexp=self.choice_label)
+                self.choice_title_attr_node = self._create_attr_node(setup_session, "choice_title", dexp=self.choice_title)
 
-            if self.choice_label_attr_node.type_info.type_!=str:
-                raise RuleSetupValueError(owner=self, msg=f"Attribute choice_label needs to be bound to string attribute, got: {self.choice_label_attr_mode.type_info.type_}")
+            if self.choice_title_attr_node.type_info.type_!=str:
+                raise RuleSetupValueError(owner=self, msg=f"Attribute choice_title needs to be bound to string attribute, got: {self.choice_title_attr_mode.type_info.type_}")
             self.python_type = self.choice_value_attr_node.type_info.type_
 
 
         elif isinstance(choices, (list, tuple)):
             if len(choices)==0:
                 raise RuleSetupValueError(owner=self, msg="Attribute 'choices' is an empty list, Provide list of str/int/ChoiceOption.")
-            if self.choice_value or self.choice_label:
-                raise RuleSetupValueError(owner=self, msg="When 'choices' is a list, choice_value and choice_label are not permitted.")
+            if self.choice_value or self.choice_title:
+                raise RuleSetupValueError(owner=self, msg="When 'choices' is a list, choice_value and choice_title are not permitted.")
             # now supports combining - but should have the same type
             for choice in choices:
                 if not isinstance(choice, (str, int, ChoiceOption)):

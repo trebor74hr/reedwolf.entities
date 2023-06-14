@@ -507,7 +507,7 @@ class Entity(ContainerBase):
     contains        : List[Component]      = field(repr=False)
 
     # --- optional - following can be bound later with .bind_to()
-    label           : Optional[TransMessageType] = field(repr=False, default=None)
+    title           : Optional[TransMessageType] = field(repr=False, default=None)
 
     # binding interface - not dumped/exported
     bound_model     : Optional[BoundModel] = field(repr=False, default=None, metadata={"skip_dump": True})
@@ -716,7 +716,7 @@ class SubEntityBase(ContainerBase, ABC):
     # cardinality     : ICardinalityValidation
     contains        : List[Component] = field(repr=False)
 
-    label           : Optional[TransMessageType] = field(repr=False, default=None)
+    title           : Optional[TransMessageType] = field(repr=False, default=None)
     functions       : Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list)
     # --- can be index based or standard key-fields names
     keys            : Optional[KeysBase] = field(repr=False, default=None)

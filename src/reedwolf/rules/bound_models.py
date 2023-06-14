@@ -239,7 +239,7 @@ class BoundModel(NestedBoundModelMixin, BoundModelBase):
     SETUP_PRIORITY  : ClassVar[int] = 9
 
     name            : str
-    # label           : TransMessageType
+    # title           : TransMessageType
 
     model           : Union[ModelType, DotExpression] = field(repr=False)
     contains        : Optional[List[BoundModelWithHandlers]] = field(repr=False, default_factory=list)
@@ -294,7 +294,7 @@ class BoundModel(NestedBoundModelMixin, BoundModelBase):
 @dataclass
 class BoundModelWithHandlers(NestedBoundModelMixin, BoundModelBase):
     name         : str
-    label        : str # TransMsg
+    title        : str # TransMsg
     # return type is used as model
     read_handler : CustomFunctionFactory
     in_model     : bool = field(default=True)

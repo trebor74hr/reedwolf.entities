@@ -125,10 +125,10 @@ class ValidationBase(Component, ABC): # TODO: make it abstract
                 self.error = f"Validation failed: {self.ensure}"
 
         if not self.error:
-            title = getattr(self, "label", self.name)
+            title = getattr(self, "title", self.name)
             self.error = f"Validation failed ({title})"
-        elif not self.label:
-            self.label = self.error
+        elif not self.title:
+            self.title = self.error
 
         super().__post_init__()
 
@@ -151,7 +151,7 @@ class ValidationBase(Component, ABC): # TODO: make it abstract
                             component_key_string = apply_session.get_key_string(component),
                             error=error, 
                             validation_name=self.name,
-                            validation_label=self.label,
+                            validation_title=self.title,
                             details=f"The validation returned '{dexp_result.value}'"
                             )
         return None
@@ -190,7 +190,7 @@ class EvaluationBase(Component, ABC): # TODO: make it abstract
 class FieldGroup(Component):
     name:           str
     contains:       List[Component] = field(repr=False)
-    label:          Optional[TransMessageType] = field(repr=False, default=None)
+    title:          Optional[TransMessageType] = field(repr=False, default=None)
     # TODO: allow ItemsValidation too (currently only used in SubEntityItems, e.g. Cardinality/Unique)
     cleaners:       Optional[List[Union[ValidationBase, EvaluationBase]]] = None
     available:      Union[bool, DotExpression] = True
@@ -211,7 +211,7 @@ class FieldGroup(Component):
 #     name:           str
 #     # TODO: ModelField or Enum or ...
 #     value:          Any 
-#     label:          Optional[TransMessageType] = field(repr=False, default=None)
+#     title:          Optional[TransMessageType] = field(repr=False, default=None)
 #     type_info:      TypeInfo = field(init=False)
 #     # evaluate:       bool = False # TODO: describe
 # 
@@ -238,7 +238,7 @@ class FieldGroup(Component):
 #     # NOTE: the name function is exposed and Function() is used, but internally
 #     #       this will be function_factory instance
 #     function:       CustomFunctionFactory
-#     label:          Optional[TransMessageType] = field(repr=False, default=None)
+#     title:          Optional[TransMessageType] = field(repr=False, default=None)
 #     type_info:      TypeInfo = field(init=False)
 #     # evaluate:       bool = False # TODO: describe
 # 
@@ -249,7 +249,7 @@ class FieldGroup(Component):
 #         custon_function_factory: CustomFunctionFactory = self.function
 #         self.type_info = custon_function_factory.get_type_info()
 #         # TODO: check function output is Callable[..., RuleDatatype]
-#         if not self.label:
-#             self.label = varname_to_title(self.name)
+#         if not self.title:
+#             self.title = varname_to_title(self.name)
 #         super().__post_init__()
 

@@ -62,7 +62,7 @@ class ItemsValidation(ItemsValidationBase):
 
     name            : Optional[str] = field(default=None)
     error           : Optional[TransMessageType] = field(repr=False, default=None)
-    label           : Optional[TransMessageType] = field(repr=False, default=None)
+    title           : Optional[TransMessageType] = field(repr=False, default=None)
 
     def validate(self, apply_session: IApplySession) -> Union[NoneType, ValidationFailure]:
         raise NotImplementedError()
@@ -118,7 +118,7 @@ class Cardinality: # namespace holder
 
         name            : Optional[str] = field(default=None)
         error           : Optional[TransMessageType] = field(repr=False, default=None)
-        label           : Optional[TransMessageType] = field(repr=False, default=None)
+        title           : Optional[TransMessageType] = field(repr=False, default=None)
 
         # autocomputed
         parent           : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
@@ -161,7 +161,7 @@ class Cardinality: # namespace holder
 
         name            : Optional[str] = field(default=None)
         error           : Optional[TransMessageType] = field(repr=False, default=None)
-        label           : Optional[TransMessageType] = field(repr=False, default=None)
+        title           : Optional[TransMessageType] = field(repr=False, default=None)
 
         # autocomputed
         parent          : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
@@ -199,7 +199,7 @@ class Unique: # namespace holder
 
         name            : Optional[str] = field(default=None)
         error           : Optional[TransMessageType] = field(repr=False, default=None)
-        label           : Optional[TransMessageType] = field(repr=False, default=None)
+        title           : Optional[TransMessageType] = field(repr=False, default=None)
 
         # autocomputed
         parent          : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
@@ -218,7 +218,7 @@ class Unique: # namespace holder
 
         name            : Optional[str] = field(default=None)
         error           : Optional[TransMessageType] = field(repr=False, default=None)
-        label           : Optional[TransMessageType] = field(repr=False, default=None)
+        title           : Optional[TransMessageType] = field(repr=False, default=None)
 
         # autocomputed
         parent          : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
@@ -237,7 +237,7 @@ class SingleValidation(ValidationBase):
 
     name            : Optional[str] = field(default=None)
     error           : Optional[TransMessageType] = field(repr=False, default=None)
-    label           : Optional[TransMessageType] = field(repr=False, default=None)
+    title           : Optional[TransMessageType] = field(repr=False, default=None)
 
     # autocomputed
     parent          : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821

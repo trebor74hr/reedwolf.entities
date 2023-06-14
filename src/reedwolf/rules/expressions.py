@@ -437,18 +437,18 @@ class OperationDexpNode(IDotExpressionNode):
     @staticmethod
     def create_dexp_node(
                    dexp_or_other: Union[DotExpression, Any], 
-                   label: str,
+                   title: str,
                    setup_session: ISetupSession, # noqa: F821
                    owner: Any) -> IDotExpressionNode:
         if isinstance(dexp_or_other, DotExpression):
             dexp_node = dexp_or_other.Setup(setup_session, owner=owner)
         elif isinstance(dexp_or_other, IDotExpressionNode):
-            raise NotImplementedError(f"{label}.type unhandled: '{type(dexp_or_other)}' => '{dexp_or_other}'")
+            raise NotImplementedError(f"{title}.type unhandled: '{type(dexp_or_other)}' => '{dexp_or_other}'")
             # dexp_node = dexp_or_other
         else:
             # TODO: check other types - maybe some unappliable
             if not isinstance(dexp_or_other, STANDARD_TYPE_W_NONE_LIST):
-                raise NotImplementedError(f"{label}.type unhandled: '{type(dexp_or_other)}' => '{dexp_or_other}'")
+                raise NotImplementedError(f"{title}.type unhandled: '{type(dexp_or_other)}' => '{dexp_or_other}'")
             dexp_node = LiteralDexpNode(value=dexp_or_other)
 
         return dexp_node
@@ -461,11 +461,11 @@ class OperationDexpNode(IDotExpressionNode):
             raise RuleSetupError(owner=setup_session, item=self, msg=f"AttrDexpNode not in INIT state, got {self._status}")
 
         # just to check if all ok
-        self._first_dexp_node = self.create_dexp_node(self.first, label="First", setup_session=setup_session, owner=owner)
+        self._first_dexp_node = self.create_dexp_node(self.first, title="First", setup_session=setup_session, owner=owner)
         setup_session.register_dexp_node(self._first_dexp_node)
 
         if self.second is not UNDEFINED:
-            self._second_dexp_node = self.create_dexp_node(self.second, label="second", setup_session=setup_session, owner=owner)
+            self._second_dexp_node = self.create_dexp_node(self.second, title="second", setup_session=setup_session, owner=owner)
             setup_session.register_dexp_node(self._second_dexp_node)
 
         self._status=DExpStatusEnum.BUILT

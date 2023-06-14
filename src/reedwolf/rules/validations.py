@@ -17,9 +17,9 @@ new custom validations could be done like this::
 
     @dataclass
     class ValidationHourValue(Validation):
-        def __init__(self, name:str, label:TransMessageType):
+        def __init__(self, name:str, title:TransMessageType):
             super().__init__(
-                    name=name, label=label,
+                    name=name, title=title,
                     ensure=((This.value>=0) & (This.value<=23)),
                     error=_("Need valid hour value (0-23)"),
                     )
@@ -63,7 +63,7 @@ class Validation(ValidationBase):
     name:           Optional[str] = field(default=None)
     error:          Optional[TransMessageType] = field(repr=False, default=None)
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
-    label:          Optional[TransMessageType] = field(repr=False, default=None)
+    title:          Optional[TransMessageType] = field(repr=False, default=None)
 
     def validate(self, apply_session: IApplySession) -> Union[NoneType, ValidationFailure]:
         return self._validate_common_impl(apply_session=apply_session)
@@ -74,7 +74,7 @@ class Required(ValidationBase):
     name:           Optional[str] = None
     error:          Optional[TransMessageType] = field(repr=False, default=None)
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
-    label:          Optional[TransMessageType] = field(repr=False, default=None)
+    title:          Optional[TransMessageType] = field(repr=False, default=None)
 
     def __post_init__(self):
         if not self.error:
@@ -89,7 +89,7 @@ class Required(ValidationBase):
                             component_key_string = apply_session.get_key_string(component),
                             error=self.error, 
                             validation_name=self.name,
-                            validation_label=self.label,
+                            validation_title=self.title,
                             details="The value is required."
                             )
         return None
@@ -105,7 +105,7 @@ class Readonly(ValidationBase):
     name:           Optional[str] = None
     error:          Optional[TransMessageType] = field(repr=False, default=None)
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
-    label:          Optional[TransMessageType] = field(repr=False, default=None)
+    title:          Optional[TransMessageType] = field(repr=False, default=None)
 
     def __post_init__(self):
         if not isinstance(self.value, (bool, DotExpression)):
@@ -138,7 +138,7 @@ class Readonly(ValidationBase):
                                 component_key_string = key_string,
                                 error=self.error, 
                                 validation_name=self.name,
-                                validation_label=self.label,
+                                validation_title=self.title,
                                 details="Readonly value is changed" 
                                 " from '{message_truncate(initial_value, 15)}'"
                                 " to '{message_truncate(last_value, 15)}'"
@@ -152,7 +152,7 @@ class ExactLength(ValidationBase):
     name:           Optional[str] = None
     error:          Optional[TransMessageType] = field(repr=False, default=None)
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
-    label:          Optional[TransMessageType] = field(repr=False, default=None)
+    title:          Optional[TransMessageType] = field(repr=False, default=None)
 
     def __post_init__(self):
         self._check_dot_expression_or_positive_int("value", self.value)
@@ -168,7 +168,7 @@ class ExactLength(ValidationBase):
                             component_key_string = apply_session.get_key_string(component),
                             error=self.error, 
                             validation_name=self.name,
-                            validation_label=self.label,
+                            validation_title=self.title,
                             details=f"Value's length of {len(value)} must be exactly {self.value}" 
                                     f" (value is '{message_truncate(value)}')"
                             )
@@ -180,7 +180,7 @@ class MaxLength(ValidationBase):
     name:           Optional[str] = None
     error:          Optional[TransMessageType] = field(repr=False, default=None)
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
-    label:          Optional[TransMessageType] = field(repr=False, default=None)
+    title:          Optional[TransMessageType] = field(repr=False, default=None)
 
     def __post_init__(self):
         self._check_dot_expression_or_positive_int("value", self.value)
@@ -196,7 +196,7 @@ class MaxLength(ValidationBase):
                             component_key_string = apply_session.get_key_string(component),
                             error=self.error, 
                             validation_name=self.name,
-                            validation_label=self.label,
+                            validation_title=self.title,
                             details=f"Value's length of {len(value)} is greater of maximum allowed {self.value}" 
                                     f" (value is '{message_truncate(value)}')"
                             )
@@ -208,7 +208,7 @@ class MinLength(ValidationBase):
     name:           Optional[str] = None
     error:          Optional[TransMessageType] = field(repr=False, default=None)
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
-    label:          Optional[TransMessageType] = field(repr=False, default=None)
+    title:          Optional[TransMessageType] = field(repr=False, default=None)
 
     def __post_init__(self):
         self._check_dot_expression_or_positive_int("value", self.value)
@@ -225,7 +225,7 @@ class MinLength(ValidationBase):
                             component_key_string = apply_session.get_key_string(component),
                             error=self.error, 
                             validation_name=self.name,
-                            validation_label=self.label,
+                            validation_title=self.title,
                             details=f"Value's length of {len(value)} is smaller of minimum allowed {self.value}" 
                                     f"({message_truncate(value)})")
         return None
@@ -238,7 +238,7 @@ class RangeLength(ValidationBase):
     name:           Optional[str] = None
     error:          Optional[TransMessageType] = field(repr=False, default=None)
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
-    label:          Optional[TransMessageType] = field(repr=False, default=None)
+    title:          Optional[TransMessageType] = field(repr=False, default=None)
 
     def __post_init__(self):
         if self.min is None and self.max is None:
@@ -272,7 +272,7 @@ class RangeLength(ValidationBase):
                                 component_key_string = apply_session.get_key_string(component),
                                 error=self.error, 
                                 validation_name=self.name,
-                                validation_label=self.label,
+                                validation_title=self.title,
                                 details=f"Value's length of {len(value)} is smaller of minimum allowed {self.min}" 
                                         f"({message_truncate(value)})")
             elif self.max and value and len(value) > self.max:
@@ -280,7 +280,7 @@ class RangeLength(ValidationBase):
                                 component_key_string = apply_session.get_key_string(component),
                                 error=self.error, 
                                 validation_name=self.name,
-                                validation_label=self.label,
+                                validation_title=self.title,
                                 details=f"Value's length of {len(value)} is greater of maximum allowed {self.max}" 
                                         f"({message_truncate(value)})")
         return None
