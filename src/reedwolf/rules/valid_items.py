@@ -1,5 +1,5 @@
 """
-validations used for children records
+validations used for [subentity_]items records
 e.g. in container cardinality.
 
 TODO: Check if they could be implemented in cleaners instead of cardinality ...
@@ -28,6 +28,10 @@ from .utils import (
         )
 from .meta import (
         TransMessageType,
+        NoneType,
+        )
+from .expressions   import (
+        DotExpression,
         )
 from .components import (
         ValidationBase,
@@ -38,22 +42,32 @@ from .base import (
         )
 
 
-# class ValidatorBase(SetParentMixin, ABC):
-#     # name, parent, parent_name
-# 
-#     def is_finished(self):
-#         return bool(self.name)
+class ItemsValidationBase(ValidationBase, ABC):
+    ...
+
+@dataclass
+class ItemsValidation(ItemsValidationBase):
+    ensure:         DotExpression
+    name:           Optional[str] = field(default=None)
+    error:          Optional[TransMessageType] = field(repr=False, default=None)
+    available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
+    label:          Optional[TransMessageType] = field(repr=False, default=None)
+
+    def validate(self, apply_session: IApplySession) -> Union[NoneType, ValidationFailure]:
+        raise NotImplementedError()
+        # TODO: check which namespaces are used, ...
+        # TODO: items case - run on items ... 
+        # assert apply_session.current_frame.component.is_subentity_items():
+        #   output = []
+        #   for item in apply_session.current_frame.get_subentity_items():
+        #       out = self._validate_common_impl(apply_session=apply_session)
+        #       if out:
+        #           output.append(out)
+        #       return output
 
 
-class IItemsValidator(ValidationBase, ABC):
-    label           : Optional[TransMessageType] = field(repr=False, default=None)
 
-
-class ICardinalityValidation(IItemsValidator, ABC): # count
-
-    # def __post_init__(self):
-    #     if self.__class__==ICardinalityValidation:
-    #         raise RuleSetupError(owner=self, msg="Use subclasses of ICardinalityValidation")
+class ICardinalityValidation(ItemsValidationBase, ABC): # count
 
     @abstractmethod
     def validate_setup(self):
@@ -61,8 +75,8 @@ class ICardinalityValidation(IItemsValidator, ABC): # count
         if not ok,
             raises RuleSetupTypeError
         """
-        raise NotImplementedError("abstract method")
 
+    # TODO: @abstractmethod
     def validate(self, items_count:bool, raise_err:bool=True) -> bool:
         """
         takes nr. of items and validates
@@ -86,29 +100,31 @@ class ICardinalityValidation(IItemsValidator, ABC): # count
 
 class Cardinality: # namespace holder
 
-    @dataclass
-    class Single(ICardinalityValidation):
-        name            : str
-        allow_none      : bool = True
+    # @dataclass
+    # class Single(ICardinalityValidation):
+    #     name            : str
+    #     allow_none      : bool = True
+    #     label           : Optional[TransMessageType] = field(repr=False, default=None)
+    #
+    # autocomputed
+    #     parent          : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
+    #     parent_name     : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
-        parent           : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
-        parent_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+    #     def validate_setup(self):
+    #         model_attr_node = self._validate_setup_common(self.allow_none)
+    #         if model_attr_node.islist():
+    #             raise RuleSetupTypeError(owner=self, msg="Type hint is List and should be single instance. Change to Range/Multi or remove type hint List[]")
 
-        def validate_setup(self):
-            model_attr_node = self._validate_setup_common(self.allow_none)
-            if model_attr_node.islist():
-                raise RuleSetupTypeError(owner=self, msg="Type hint is List and should be single instance. Change to Range/Multi or remove type hint List[]")
-
-        def validate(self, items_count:int, raise_err:bool=True):
-            if items_count==0 and not self.allow_none:
-                if raise_err:
-                    raise RuleValidationCardinalityError(owner=self, msg="Expected exactly one item, got none.")
-                return False
-            if items_count!=1:
-                if raise_err:
-                    raise RuleValidationCardinalityError(owner=self, msg="Expected exactly one item, got {items_count}.")
-                return False
-            return True
+    #     def validate(self, items_count:int, raise_err:bool=True):
+    #         if items_count==0 and not self.allow_none:
+    #             if raise_err:
+    #                 raise RuleValidationCardinalityError(owner=self, msg="Expected exactly one item, got none.")
+    #             return False
+    #         if items_count!=1:
+    #             if raise_err:
+    #                 raise RuleValidationCardinalityError(owner=self, msg="Expected exactly one item, got {items_count}.")
+    #             return False
+    #         return True
 
     @dataclass
     class Range(ICardinalityValidation):
@@ -116,13 +132,14 @@ class Cardinality: # namespace holder
             at least one (min or max) arg is required
             min=None -> any number (<= max)
             max=None -> any number (>= min)
-            min=0    -> same as allow_none in other validators
-
+            min=0    -> same as allow_none in other validations
         """
         name            : str
         min             : Optional[int] = None
         max             : Optional[int] = None
+        label           : Optional[TransMessageType] = field(repr=False, default=None)
 
+        # autocomputed
         parent           : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
         parent_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
@@ -160,10 +177,11 @@ class Cardinality: # namespace holder
         " [0,1]:N "
         name            : str
         allow_none      : bool = True
+        label           : Optional[TransMessageType] = field(repr=False, default=None)
 
-        parent           : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
-
-        parent_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+        # autocomputed
+        parent          : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
+        parent_name     : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
         def validate_setup(self):
             model_attr_node = self._validate_setup_common(self.allow_none)
@@ -179,54 +197,42 @@ class Cardinality: # namespace holder
 
 
 # ------------------------------------------------------------
-# other validators
+# other validations
 # ------------------------------------------------------------
-class IUniqueValidator(IItemsValidator, ABC):
+class IUniqueValidation(ItemsValidationBase, ABC):
     ...
 
-    # def __post_init__(self):
-    #     if self.__class__==IUniqueValidator:
-    #         raise RuleSetupError(owner=self, msg=" Use subclasses of IUniqueValidator")
-
-    # def set_parent(self, parent):
-    #     super().set_parent(parent)
-    #     if not self.name:
-    #         self.name = f"{self.parent.name}__{self.__class__.__name__.lower()}"
 
 class Unique: # namespace holder
 
     @dataclass
-    class Global(IUniqueValidator):
+    class Global(IUniqueValidation):
         " globally - e.g. within table "
         name            : str
         fields          : List[str] # TODO: better field specification or dexpr?
         ignore_none     : bool = True
+        label           : Optional[TransMessageType] = field(repr=False, default=None)
 
-        parent           : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
-        parent_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+        # autocomputed
+        parent          : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
+        parent_name     : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
         def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
             raise NotImplementedError()
 
     @dataclass
-    class Items(IUniqueValidator):
+    class Items(IUniqueValidation):
         " within subentity_items records "
         name            : str
         fields          : List[str] # TODO: better field specification or dexpr?
         ignore_none     : bool = True
+        label           : Optional[TransMessageType] = field(repr=False, default=None)
 
-        parent           : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
-        parent_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+        # autocomputed
+        parent          : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
+        parent_name     : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
         def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
             raise NotImplementedError()
 
 
-# ALT: names for IItemsValidator
-#   class IterationValidator:
-#   # db terminology: scalar custom functions, table value custom functions, aggregate custom functions
-#   class AggregateValidator:
-#   class SubEntityItemsValidator:
-#   class ItemsValidator:
-#   class MultipleItemsValidator:
-#   class ContainerItemsValidator:

@@ -188,11 +188,10 @@ class FieldBase(Component, IFieldBase, ABC):
         # TODO: check that value is simple M. value
         if not isinstance(self.bind, DotExpression):
             raise RuleSetupValueError(owner=self, msg="'bind' needs to be DotExpression (e.g. M.status).")
+
         # ModelsNs.person.surname -> surname
         if not self.name:
-            self.name = self.get_name_from_bind(self.bind)
-        if not self.label:
-            self.label = varname_to_title(self.name)
+            self.name = self._get_name_from_bind(self.bind)
 
         self.autocomputed = AutocomputedEnum.from_value(self.autocomputed)
         self.init_clean_base()
@@ -224,7 +223,7 @@ class FieldBase(Component, IFieldBase, ABC):
             self.bound_attr_node = setup_session.get_dexp_node_by_dexp(self.bind)
             if not self.bound_attr_node:
                 # TODO: not nice :(
-                parent_container = self.get_container_parent(consider_self=True)
+                parent_container = self.get_first_parent_container(consider_self=True)
                 parent_setup_session = getattr(parent_container, "parent_setup_session", parent_container.setup_session)
                 if parent_setup_session!=setup_session:
                     # TODO: does not goes deeper - should be done with while loop until the top
@@ -536,7 +535,7 @@ class ChoiceField(FieldBase):
 
             with setup_session.use_stack_frame(
                     SetupStackFrame(
-                        container = self.get_container_parent(consider_self=True), 
+                        container = self.get_first_parent_container(consider_self=True), 
                         component = self, 
                         local_setup_session = setup_session.create_local_setup_session(
                                                     this_ns_instance_model_class=model_class)

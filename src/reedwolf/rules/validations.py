@@ -13,6 +13,16 @@ TODO: novi Validation - je li isti korisnik mijenja podatak
 TODO: novi Validation - koja grupa korisnika smije mijenjati zapis?
 TODO: novi Validation - je li podatak lock-an do nekog datuma 
 
+new custom validations could be done like this::
+
+    @dataclass
+    class ValidationHourValue(Validation):
+        def __init__(self, name:str, label:TransMessageType):
+            super().__init__(
+                    name=name, label=label,
+                    ensure=((This.value>=0) & (This.value<=23)),
+                    error=_("Need valid hour value (0-23)"),
+                    )
 """
 from __future__ import annotations
 
@@ -39,8 +49,6 @@ from .components    import (
         )
 from .expressions   import (
         DotExpression,
-        NotAvailableExecResult,
-        execute_available_dexp,
         )
 from .exceptions    import RuleSetupError
 from .utils         import (
@@ -50,64 +58,23 @@ from .utils         import (
 
 @dataclass
 class Validation(ValidationBase):
-    """
-    new custom validations could be done like this:
-
-        @dataclass
-        class ValidationHourValue(Validation):
-            def __init__(self, name:str, label:TransMessageType):
-                super().__init__(
-                        name=name, label=label,
-                        ensure=((This.value>=0) & (This.value<=23)),
-                        error=_("Need valid hour value (0-23)"),
-                        )
-
-    """
+    """ generic validation runned on field """
     ensure:         DotExpression
     name:           Optional[str] = field(default=None)
     error:          Optional[TransMessageType] = field(repr=False, default=None)
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
     label:          Optional[TransMessageType] = field(repr=False, default=None)
 
-    def __post_init__(self):
-        if not isinstance(self.ensure, DotExpression):
-            raise RuleSetupError(owner=self, msg=f"ensure must be DotExpression, got: {type(self.ensure)} / {self.ensure}")
-        self._fill_name_when_missing()
-        if self.error is None:
-            self.error = f"Validation failed: {self.ensure}"
-
-        super().__post_init__()
-
     def validate(self, apply_session: IApplySession) -> Union[NoneType, ValidationFailure]:
-        not_available_dexp_result: NotAvailableExecResult  = execute_available_dexp(self.available, apply_session=apply_session)
-        if not_available_dexp_result: 
-            # TODO: log ...
-            return None
-
-        component = apply_session.current_frame.component
-        dexp_result: ExecResult = self.ensure._evaluator.execute_dexp(apply_session)
-        if not bool(dexp_result.value):
-            error = self.error if self.error else "Validation failed"
-            return ValidationFailure(
-                            component_key_string = apply_session.get_key_string(component),
-                            error=error, 
-                            validation_name=self.name,
-                            validation_label=self.label,
-                            details=f"The validation returned '{dexp_result.value}'"
-                            )
-        return None
-
+        return self._validate_common_impl(apply_session=apply_session)
 
 
 @dataclass
-class SimpleValidationBase(ValidationBase, ABC):
+class Required(ValidationBase):
     name:           Optional[str] = None
     error:          Optional[TransMessageType] = field(repr=False, default=None)
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
     label:          Optional[TransMessageType] = field(repr=False, default=None)
-
-@dataclass
-class Required(SimpleValidationBase):
 
     def __post_init__(self):
         if not self.error:
@@ -128,14 +95,17 @@ class Required(SimpleValidationBase):
         return None
 
 @dataclass
-class Readonly(SimpleValidationBase):
-    # synonym for: Editable(False)
-    # TODO: define standard label and error message
-    # returns True, False, only-when-not-empty
-    # NOTE: Editable / Frozen
-    #   after filled with initial value can the value be cheanged
-    # TODO: if autocomputed = ALLWAYS should not be ...
-    value: Optional[Union[bool, DotExpression]] = True
+class Readonly(ValidationBase):
+    """ 
+    After filled with initial value can the value be cheanged.
+    Synonym for: Editable(False) / Frozen.
+    """
+    # TODO: check if autocomputed = ALLWAYS should not be enabled
+    value:          Optional[Union[bool, DotExpression]] = True
+    name:           Optional[str] = None
+    error:          Optional[TransMessageType] = field(repr=False, default=None)
+    available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
+    label:          Optional[TransMessageType] = field(repr=False, default=None)
 
     def __post_init__(self):
         if not isinstance(self.value, (bool, DotExpression)):
@@ -178,15 +148,14 @@ class Readonly(SimpleValidationBase):
 
 @dataclass
 class ExactLength(ValidationBase):
-    value:          int = None
+    value:          Union[int, DotExpression]
     name:           Optional[str] = None
     error:          Optional[TransMessageType] = field(repr=False, default=None)
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
     label:          Optional[TransMessageType] = field(repr=False, default=None)
 
     def __post_init__(self):
-        if not to_int(self.value, 0) > 0:
-            raise RuleSetupError(owner=self, msg="'value' must be integer > 0")
+        self._check_dot_expression_or_positive_int("value", self.value)
         if not self.error:
             self.error = f"Provide value with length at most {self.value}"
         super().__post_init__()
@@ -207,19 +176,14 @@ class ExactLength(ValidationBase):
 
 @dataclass
 class MaxLength(ValidationBase):
-    # NOTE: list all attributes, do not reuse SimpleValidationBase, due 
-    #       goal of having proper types and order: single required positional
-    #       argument 'value'
-    value:          int = None
+    value:          Union[int, DotExpression]
     name:           Optional[str] = None
     error:          Optional[TransMessageType] = field(repr=False, default=None)
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
     label:          Optional[TransMessageType] = field(repr=False, default=None)
 
     def __post_init__(self):
-        # TODO: define standard label and error message
-        if not to_int(self.value, 0) > 0:
-            raise RuleSetupError(owner=self, msg="'value' must be integer > 0")
+        self._check_dot_expression_or_positive_int("value", self.value)
         if not self.error:
             self.error = f"Provide value with length at most {self.value}"
         super().__post_init__()
@@ -240,17 +204,14 @@ class MaxLength(ValidationBase):
 
 @dataclass
 class MinLength(ValidationBase):
-    # see MaxLength NOTE:
-    value:          int
+    value:          Union[int, DotExpression]
     name:           Optional[str] = None
     error:          Optional[TransMessageType] = field(repr=False, default=None)
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
     label:          Optional[TransMessageType] = field(repr=False, default=None)
 
     def __post_init__(self):
-        # TODO: define standard label and error message
-        if not to_int(self.value, 0) > 0:
-            raise RuleSetupError(owner=self, msg="'value' must be integer > 0")
+        self._check_dot_expression_or_positive_int("value", self.value)
         if not self.error:
             self.error = f"Provide value with length at least {self.value}"
 
@@ -272,8 +233,8 @@ class MinLength(ValidationBase):
 @dataclass
 class RangeLength(ValidationBase):
     # see MaxLength NOTE:
-    min:            Optional[int] = None
-    max:            Optional[int] = None
+    min:            Union[int, DotExpression]
+    max:            Union[int, DotExpression]
     name:           Optional[str] = None
     error:          Optional[TransMessageType] = field(repr=False, default=None)
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
@@ -282,13 +243,13 @@ class RangeLength(ValidationBase):
     def __post_init__(self):
         if self.min is None and self.max is None:
             raise RuleSetupError(owner=self, msg="Please provide min and/or max")
-        if self.min is not None and (to_int(self.min) is None or to_int(self.min)<0):
-            raise RuleSetupError(owner=self, msg="Please provide integer min >=0 ")
-        if self.max is not None and (to_int(self.max) is None or to_int(self.max)<0):
-            raise RuleSetupError(owner=self, msg="Please provide integer max >=0 ")
-        if self.min is not None and self.max is not None and self.max<self.min:
-            raise RuleSetupError(owner=self, msg="Please provide min <= max")
-        # TODO: define standard label and error message
+        if self.min is not None:
+            self._check_dot_expression_or_positive_int("min", self.min)
+        if self.max is not None:
+            self._check_dot_expression_or_positive_int("max", self.max)
+            if to_int(self.min) and self.max<self.min:
+                raise RuleSetupError(owner=self, msg="Please provide min <= max")
+
         if not self.error:
             if self.min and self.max:
                 self.error = f"Provide value with length between {self.min} and {self.max}"

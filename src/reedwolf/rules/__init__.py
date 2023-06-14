@@ -57,16 +57,23 @@ from .validations import (
         MinLength,
         )
 from .valid_items import (
+        ItemsValidation,
         Cardinality,
         Unique,
+        )
+from .valid_children import (
+        ChildrenValidation,
         )
 from .evaluations import (
         Evaluation,
         Default,
         )
-# from .evaluators import (
-#         ItemsEvaluators,
-#         )
+from .eval_items import (
+        ItemsEvaluation,
+        )
+from .eval_children import (
+        ChildrenEvaluation,
+        )
 from .contexts import (
         IContext,
         )
@@ -158,13 +165,17 @@ __all__ = [
     "RangeLength",
     "Readonly",
 
-    # predefined validators for children / containers
+    "ChildrenValidation",
+    "ItemsValidation",
     "Cardinality",
     "Unique",
 
     # evaluations
     "Evaluation",
     "Default",
+
+    "ChildrenEvaluation",
+    "ItemsEvaluation",
 
     # # evaluators
     # "ItemsEvaluators",

@@ -21,6 +21,7 @@ from dataclasses import (
         )
 
 from .utils import (
+        varname_to_title,
         UNDEFINED,
         NA_DEFAULTS_MODE,
         UndefinedType,
@@ -220,9 +221,58 @@ class SetParentMixin:
             raise RuleInternalError(owner=self, msg=f"Parent name already defined, got: {parent}")
 
         self.parent_name = parent.name if parent else ""
-        if self.name in (None, UNDEFINED):
-            suffix = self.__class__.__name__.lower()
-            self.name = f"{self.parent_name}__{suffix}"
+
+        assert hasattr(self, "name")
+        assert hasattr(self, "get_path_to_first_parent_container")
+
+        if not self.name:
+            self._getset_name()
+        elif hasattr(self, "label") and not self.label and self.name:
+            self.label = varname_to_title(self.name)
+
+        if not self.name:
+            raise RuleInternalError(owner=self, msg=f"Name is not set: {self}") 
+
+
+    def _getset_name(self):
+        " recursive "
+        assert hasattr(self, "get_path_to_first_parent_container")
+
+        if not self.name:
+
+            if  self.parent is None:
+                # top container
+                parents = []
+                container = self
+            else:
+                # suffix = self.__class__.__name__.lower()
+                # self.name = f"{self.parent_name}__{suffix}"
+                parents = self.get_path_to_first_parent_container(consider_self=False)
+                assert parents
+                container = parents[-1]
+
+            keys = []
+            for parent in reversed(parents):
+                # recursion
+                parent_name = parent._getset_name()
+                keys.append(parent_name)
+
+            if getattr(self, "bind", None): 
+                # ModelsNs.person.surname -> surname
+                this_name = self._get_name_from_bind(self.bind)
+            else:
+                this_name =self.__class__.__name__.lower()
+            keys.append(this_name)
+
+            key = "__".join(keys)
+
+            if key not in container.name_counter_by_parent_name:
+                container.name_counter_by_parent_name[key] = 1
+
+            self.name = f"{key}__{container.name_counter_by_parent_name[key]}"
+            container.name_counter_by_parent_name[key] += 1
+
+        return self.name 
 
 
 # ------------------------------------------------------------
@@ -516,10 +566,10 @@ class ComponentBase(SetParentMixin, ABC):
             raise RuleSetupValueError(owner=self, item=component, msg=f"Component's name needs to be a string value, got: {component.name}': ")
         if component.name in components:
             raise RuleSetupNameError(owner=self, item=component, msg=f"Duplicate name '{component.name}': "
-                        + repr(components[component.name])[:100]
-                        + " --------- AND --------- "
-                        + repr(component)[:100]
-                        + ". Remove duplicate 'bind' or use 'name' attribute to define a distinct name.")
+                        + "\n   " + repr(components[component.name])[:100]
+                        + "\n   " + " --------- AND --------- "
+                        + "\n   " + repr(component)[:100]
+                        + "\n" + ". Remove duplicate 'bind' or use 'name' attribute to define a distinct name.")
         # Save top container too - to preserve name and for completness (if is_top)
         components[component.name] = component
 
@@ -636,7 +686,7 @@ class ComponentBase(SetParentMixin, ABC):
     def setup(self, setup_session: ISetupSession):  # noqa: F821
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(self)
 
-        container = self.get_container_parent(consider_self=True)
+        container = self.get_first_parent_container(consider_self=True)
 
         if getattr(self, "bind", None):
             # similar logic in apply.py :: _apply()
@@ -783,7 +833,6 @@ class ComponentBase(SetParentMixin, ABC):
             # ----------------------------------------------------------------------
             # TODO: this is not nice - do it better
             # TODO: models should not be dict()
-            # dropped: "Validator" "Evaluator" "Operation"
             if subcomponent_name not in ("models", "data", "functions", "enum") \
                     and th_field \
                     and "Component" not in str(th_field.type) \
@@ -866,8 +915,7 @@ class ComponentBase(SetParentMixin, ABC):
 
     # ------------------------------------------------------------
 
-    def get_name_from_bind(cls, bind: DotExpression):
-        # rename function to _get_name_from_bind
+    def _get_name_from_bind(cls, bind: DotExpression):
         if len(bind.Path) <= 2:
             # Dexpr(Person.name) -> name
             name = bind._name
@@ -879,7 +927,11 @@ class ComponentBase(SetParentMixin, ABC):
         return name
 
 
-    def get_container_parent(self, consider_self: bool) -> IContainerBase:  # noqa: F821
+    def get_first_parent_container(self, consider_self: bool) -> IContainerBase:  # noqa: F821
+        parents = self.get_path_to_first_parent_container(consider_self=consider_self)
+        return parents[-1] if parents else None
+
+    def get_path_to_first_parent_container(self, consider_self: bool) -> List[IContainerBase]:  # noqa: F821
         """ 
         traverses up the component tree up (parents) and find first container
         including self ( -> if self is container then it returns self)
@@ -888,10 +940,12 @@ class ComponentBase(SetParentMixin, ABC):
             raise RuleSetupError(owner=self, msg="Parent is not set. Call .setup() method first.")
 
         if consider_self and isinstance(self, IContainerBase):
-            return self
+            return [self]
 
+        parents = []
         parent_container = self.parent
         while parent_container is not None:
+            parents.append(parent_container)
             if isinstance(parent_container, IContainerBase):
                 break
             parent_container = parent_container.parent
@@ -901,7 +955,7 @@ class ComponentBase(SetParentMixin, ABC):
                 raise RuleSetupError(owner=self, msg="Did not found container in parents. Every component needs to be in some container object tree (Entity/SubEntityItems).")
             return None
 
-        return parent_container
+        return parents
 
 
     # ------------------------------------------------------------
@@ -1097,7 +1151,7 @@ class SetupStackFrame:
 
         # self.bound_model_root = (self.on_component_only 
         #                          if self.on_component_only.is_subentity_items()
-        #                          else self.on_component_only.get_container_parent(consider_self=True)
+        #                          else self.on_component_only.get_first_parent_container(consider_self=True)
         #                         ).bound_model
         # self.bound_model_root = self.container.bound_model
         # assert self.bound_model_root
@@ -1264,7 +1318,7 @@ class ApplyStackFrame:
         if self.on_component_only:
             self.bound_model_root = (self.on_component_only 
                                      if self.on_component_only.is_subentity_items()
-                                     else self.on_component_only.get_container_parent(consider_self=True)
+                                     else self.on_component_only.get_first_parent_container(consider_self=True)
                                     ).bound_model
             # can be list in this case
             # TODO: check if list only: if self.bound_model_root.type_info.is_list:

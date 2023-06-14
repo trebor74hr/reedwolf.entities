@@ -29,6 +29,7 @@ from .exceptions import (
         RuleSetupError,
         RuleSetupValueError,
         RuleSetupNameError,
+        RuleSetupTypeError,
         RuleInternalError,
         RuleNameNotFoundError,
         RuleSetupNameNotFoundError,
@@ -75,9 +76,17 @@ from .registries import (
         ContextRegistry,
         ConfigRegistry,
         )
-
+from .valid_children import (
+        ChildrenValidationBase,
+        )
+from .eval_children import (
+        ChildrenEvaluationBase,
+        )
 from .valid_items import (
-        ICardinalityValidation
+        ItemsValidationBase,
+        )
+from .eval_items import (
+        ItemsEvaluationBase,
         )
 from .components import (
         Component,
@@ -140,6 +149,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         return not bool(self.parent)
 
     def is_subentity_items(self):
+        # TODO: not sure if this is good way to do it. Maybe: isinstance(ISubEntity) would be safer?
         # TODO: if self.parent is not None could be used as the term, put validation somewhere
         " if start model is value expression - that mean that the the Entity is SubEntityItems "
         return isinstance(self.bound_model.model, DotExpression)
@@ -509,7 +519,7 @@ class Entity(ContainerBase):
     keys            : Optional[KeysBase] = field(repr=False, default=None)
 
     # --- validators and evaluators
-    cleaners        : Optional[List[Union[ValidationBase, EvaluationBase]]] = field(repr=False, default_factory=list)
+    cleaners        : Optional[List[Union[ItemsValidationBase, ChildrenValidationBase, ItemsEvaluationBase, ChildrenEvaluationBase]]] = field(repr=False, default_factory=list)
 
     # --- Evaluated later
     setup_session      : Optional[SetupSession]    = field(init=False, repr=False, default=None)
@@ -518,6 +528,9 @@ class Entity(ContainerBase):
     # in Entity (top object) this case allway None - since it is top object
     parent           : Union[None, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     parent_name      : Union[str, UndefinedType]  = field(init=False, default=UNDEFINED)
+
+    # used for automatic component's naming, <parent_name/class_name>__<counter>
+    name_counter_by_parent_name: Dict[str, int] = field(init=False, repr=False, default_factory=dict)
 
     def __post_init__(self):
         # TODO: check that BoundModel.model is_model_class() and not DotExpression
@@ -528,8 +541,6 @@ class Entity(ContainerBase):
             self.config = Config()
 
         self.init_clean()
-        if not self.label:
-            self.label = varname_to_title(self.name)
         super().__post_init__()
 
     def init_clean(self):
@@ -630,7 +641,7 @@ class Entity(ContainerBase):
         create and config ApplyResult() and call apply_session.apply()
         """
         from .apply import ApplyResult
-        container = self.get_container_parent(consider_self=True)
+        container = self.get_first_parent_container(consider_self=True)
 
         apply_session = \
                 ApplyResult(setup_session=container.setup_session, 
@@ -661,7 +672,7 @@ class Entity(ContainerBase):
             - validations are not called
         """
         from .apply import ApplyResult
-        container = self.get_container_parent(consider_self=True)
+        container = self.get_first_parent_container(consider_self=True)
 
         apply_session = \
                 ApplyResult(
@@ -688,9 +699,8 @@ class Entity(ContainerBase):
 
 
 # ------------------------------------------------------------
-
 @dataclass
-class SubEntityItems(ContainerBase):
+class SubEntityBase(ContainerBase, ABC):
     """ can not be used individually - must be directly embedded into Other
         SubEntityItems or top Entity """
 
@@ -700,7 +710,7 @@ class SubEntityItems(ContainerBase):
     bound_model     : Union[BoundModel, BoundModelWithHandlers] = field(repr=False)
     # metadata={"bind_to_parent_setup_session" : True})
 
-    cardinality     : ICardinalityValidation
+    # cardinality     : ICardinalityValidation
     contains        : List[Component] = field(repr=False)
 
     label           : Optional[TransMessageType] = field(repr=False, default=None)
@@ -729,24 +739,26 @@ class SubEntityItems(ContainerBase):
     context_class   : Optional[Type[IContext]] = field(repr=False, init=False, default=None)
     config          : Optional[Type[Config]] = field(repr=False, init=False, default=None)
 
+    # used for automatic component's naming, <class_name>__<counter>
+    name_counter_by_parent_name: Dict[str, int] = field(init=False, repr=False, default_factory=dict)
+
     # bound_attr_node  : Union[AttrDexpNode, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
 
     # Class attributes
     # namespace_only  : ClassVar[Namespace] = ThisNS
+
     def __post_init__(self):
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
-        if not self.label:
-            self.label = varname_to_title(self.name)
         super().__post_init__()
 
     def set_parent(self, parent:ContainerBase):
         super().set_parent(parent=parent)
 
         # can be self
-        self.parent_container     = self.get_container_parent(consider_self=True)
+        self.parent_container     = self.get_first_parent_container(consider_self=True)
 
         # take from real first container parent
-        non_self_parent_container = self.get_container_parent(consider_self=False)
+        non_self_parent_container = self.get_first_parent_container(consider_self=False)
         self.context_class = non_self_parent_container.context_class
         self.config = non_self_parent_container.config
         if not self.config:
@@ -757,10 +769,31 @@ class SubEntityItems(ContainerBase):
         #       for same function signature as for components.
         self.parent_setup_session = setup_session
         super().setup()
-        self.cardinality.validate_setup()
+        # self.cardinality.validate_setup()
         return self
 
+@dataclass
+class SubEntityItems(SubEntityBase):
+    """ one to many relations - e.g. Person -> PersonAddresses """
 
+    def __post_init__(self):
+        for cleaner in self.cleaners:
+            if not isinstance(cleaner, (ItemsValidationBase, ChildrenValidationBase, ItemsEvaluationBase, ChildrenEvaluationBase)):
+                raise RuleSetupTypeError(owner=self, msg=f"Cleaners should be instances of ItemsValidationBase, ChildrenValidationBase, ItemsEvaluationBase or ChildrenEvaluationBase, got: {type(cleaner)} / {cleaner}") 
+
+        super().__post_init__()
+
+@dataclass
+class SubEntitySingle(SubEntityBase):
+    """ one to one relations - e.g. Person -> PersonAccess """
+
+    def __post_init__(self):
+        # TODO:
+        for cleaner in self.cleaners:
+            if not isinstance(cleaner, (ChildrenValidationBase, ChildrenEvaluationBase)):
+                raise RuleSetupTypeError(owner=self, msg=f"Cleaners should be instances of ChildrenValidationBase or ChildrenEvaluationBase, got: {type(cleaner)} / {cleaner}") 
+
+        super().__post_init__()
 
 def collect_classes(componnents_registry: Dict, module: Any, klass_match: type) -> Dict:
     if module:

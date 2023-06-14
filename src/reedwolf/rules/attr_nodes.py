@@ -92,12 +92,6 @@ class AttrDexpNode(IDotExpressionNode):
         elif isinstance(self.data, IFieldBase):
             self.attr_node_type = AttrDexpNodeTypeEnum.FIELD
             self.data_supplier_name = f"{self.data.name}"
-        # elif isinstance(self.data, ValidatorBase):
-        #     self.attr_node_type = AttrDexpNodeTypeEnum.VALIDATOR
-        #     self.data_supplier_name = f"{self.data.name}"
-        # elif isinstance(self.data, EvaluatorBase):
-        #     # self.attr_node_type = AttrDexpNodeTypeEnum.EVALUATOR
-        #     self.data_supplier_name = f"{self.data.name}"
         # elif isinstance(self.data, IData):
         #     self.attr_node_type = AttrDexpNodeTypeEnum.DATA
         #     self.data_supplier_name = f"{self.data.name}"

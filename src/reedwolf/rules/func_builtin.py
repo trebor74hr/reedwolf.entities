@@ -270,7 +270,7 @@ Last = create_builtin_function_factory(
 
 
 # ----------------------------------------------------------------------------
-# ValueArgValidatorPyFuncType -> functions for value argument type validation
+# ValueArgValidatioPyFuncType -> functions for value argument type validation
 # ----------------------------------------------------------------------------
 
 #    For validation error cases should:

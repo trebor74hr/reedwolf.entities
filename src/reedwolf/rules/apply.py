@@ -424,7 +424,7 @@ class ApplyResult(IApplySession):
         # TODO: self.config.loger.debug(...)
         assert not (mode_subentity_items and mode_dexp_dependency)
 
-        comp_container = component.get_container_parent(consider_self=True)
+        comp_container = component.get_first_parent_container(consider_self=True)
         comp_container_model = comp_container.bound_model.get_type_info().type_
 
         if mode_dexp_dependency:
@@ -432,7 +432,7 @@ class ApplyResult(IApplySession):
 
             # instance i.e. containers must match
             assert self.stack_frames
-            caller_container = self.current_frame.component.get_container_parent(consider_self=True)
+            caller_container = self.current_frame.component.get_first_parent_container(consider_self=True)
             if comp_container is not caller_container:
                 raise RuleInternalError(owner=component, msg=f"Componenent's container '{comp_container}' must match caller's '{self.current_frame.component.name}' container: {caller_container.name}") 
 
@@ -899,7 +899,7 @@ class ApplyResult(IApplySession):
         else:
             # FieldGroup supported only - partial with matched compoonent
             # raise NotImplementedError(f"TODO: currently not supported: {component}")
-            container = component.get_container_parent(consider_self=True)
+            container = component.get_first_parent_container(consider_self=True)
             model = container.bound_model.type_info.type_
 
         if isinstance(self.instance_new, (list, tuple)):
@@ -941,7 +941,7 @@ class ApplyResult(IApplySession):
                 else:
                     on_component_only = None
 
-                # container = component.get_container_parent(consider_self=True) if not component.is_subentity_items() else component
+                # container = component.get_first_parent_container(consider_self=True) if not component.is_subentity_items() else component
                 with self.use_stack_frame(
                         ApplyStackFrame(
                             container = self.current_frame.container, 
@@ -1054,7 +1054,7 @@ class ApplyResult(IApplySession):
                     # --- 3.b. run evaluation
                     if not bind_dexp_result:
                         # TODO: this belongs to Setup phase
-                        raise RuleApplyError(owner=self, msg="Evaluator can be defined only for components with 'bind' defined. Remove 'Evaluation' or define 'bind'.")
+                        raise RuleApplyError(owner=self, msg="Evaluation can be defined only for components with 'bind' defined. Remove 'Evaluation' or define 'bind'.")
                     self.execute_evaluation(component=component, evaluation=cleaner)
                 else:
                     raise RuleApplyError(owner=self, msg=f"Unknown cleaner type {type(cleaner)}. Expected Evaluation or Validation.")
@@ -1192,9 +1192,9 @@ class ApplyResult(IApplySession):
 
         # Started to process subentity_items, but not yet positioned on any subentity_items instance item 
         # the key will have no subentity_items::<instance_id>, just parent_key_string::parent_key_string::subentity_items_name
-        subentity_items_no_instance_case = (component.get_container_parent(consider_self=True) 
+        subentity_items_no_instance_case = (component.get_first_parent_container(consider_self=True) 
                                       != 
-                                      self.current_frame.component.get_container_parent(consider_self=True))
+                                      self.current_frame.component.get_first_parent_container(consider_self=True))
 
         # NOTE: this could be different 
         #       component == self.current_frame.component
@@ -1213,7 +1213,7 @@ class ApplyResult(IApplySession):
                             )
         else:
             consider_self = False if subentity_items_no_instance_case else True
-            container = component.get_container_parent(consider_self=consider_self)
+            container = component.get_first_parent_container(consider_self=consider_self)
 
             # Recursion
             container_key_string = self.get_key_string(container, depth=depth+1)
@@ -1281,7 +1281,7 @@ class ApplyResult(IApplySession):
                 parent_key_string = self.key_string_container_cache[parent_id]
                 key_string = GlobalConfig.ID_NAME_SEPARATOR.join([parent_key_string, key_string])
             else:
-                container_parent = component.get_container_parent(consider_self=True)
+                container_parent = component.get_first_parent_container(consider_self=True)
                 if container_parent.is_subentity_items():
                     raise RuleInternalError(owner=component, msg=f"Parent container {container_parent.name} is an subentity_items and parent_instance is empty") 
 

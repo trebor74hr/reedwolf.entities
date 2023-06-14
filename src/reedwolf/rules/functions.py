@@ -89,7 +89,7 @@ class DatatypeBasicEnum(Enum):
 
 class DatatypeCardinalityEnum(Enum):
     SINGLE  = 301
-    LIST    = 302
+    ITEMS   = 302
 
 class FunctionEngineBase:
     pass
@@ -270,7 +270,7 @@ class IFunction(IFunctionDexpNode):
 
 
     def _set_type_info(self, type_info:TypeInfo):
-        if self.INPUT_CARDINALITY==DatatypeCardinalityEnum.LIST and not type_info.is_list:
+        if self.INPUT_CARDINALITY==DatatypeCardinalityEnum.ITEMS and not type_info.is_list:
             raise RuleSetupValueError(owner=self, msg=f"Expected 'List' type, got {type_info}.")
         elif self.INPUT_CARDINALITY==DatatypeCardinalityEnum.SINGLE and type_info.is_list:
             raise RuleSetupValueError(owner=self, msg=f"'List' type not valid: {type_info}.")

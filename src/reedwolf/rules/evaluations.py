@@ -42,16 +42,14 @@ from .expressions import (
 # ------------------------------------------------------------
 # Evaluation - generic
 # ------------------------------------------------------------
-# TODO: solve this with Flag-type Enum e.g.
-#       enum EvalType(enum.Enum):
-#           # ALL = all 1
-#           SKIP_2ND_PASS = 2
 
-class PresaveEvaluationBase(EvaluationBase, ABC):
-    pass
+# class InitEvaluationBase(EvaluationBase, ABC):
+#     """ called on object/instance creation, needs __init__ hook """
+# class PresaveEvaluationBase(EvaluationBase, ABC):
+#     """ called after update, before save """
 
 @dataclass
-class Evaluation(PresaveEvaluationBase):
+class Evaluation(EvaluationBase):
     """
     TODO: put usage - new custom evaluations could be done like this:
     """
@@ -62,11 +60,12 @@ class Evaluation(PresaveEvaluationBase):
     label:          Optional[TransMessageType] = field(default=None)
     available:      Optional[Union[bool, DotExpression]] = field(default=True)
 
-    NAME_COUNTER:   ClassVar[int] = field(default=1)
-
     def __post_init__(self):
-        assert isinstance(self.value, DotExpression), self.value
-        self._fill_name_when_missing()
+        if not isinstance(self.value, DotExpression):
+            raise RuleSetupTypeError(owner=self, msg=f"Argument 'value' needs to be DotExpression, got: {type(self.value)} / {self.value}") 
+        # self._fill_name_when_missing()
+        super().__post_init__()
+        
 
     def execute(self, apply_session: IApplySession) -> Optional[ExecResult]:
         not_available_dexp_result = execute_available_dexp(self.available, apply_session=apply_session)
@@ -77,16 +76,8 @@ class Evaluation(PresaveEvaluationBase):
 # ------------------------------------------------------------
 # Evaluations on object/instance initialization
 # ------------------------------------------------------------
-
-class InitEvaluationBase(EvaluationBase, ABC):
-    """ called on object/instance creation, needs __init__ hook
-    """
-    pass
-
-
 @dataclass
-class Default(PresaveEvaluationBase):
-    # TODO: make InitEvaluationBase version too
+class Default(EvaluationBase):
     """ used for generated classes, dynamically created objects or SQL or other
         storage generated code
         for existing bound models - needs hook to ensure good value on object creation (__init__)

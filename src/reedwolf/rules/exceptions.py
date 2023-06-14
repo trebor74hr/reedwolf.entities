@@ -140,7 +140,6 @@ class RuleValidationError(RuleError):
 # class RuleValidationValueError(RuleValidationError):
 #     pass
 
-# TODO: consider renaming Validation -> Validator ?
 class RuleValidationCardinalityError(RuleValidationError):
     pass
 

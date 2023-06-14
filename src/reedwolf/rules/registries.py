@@ -221,19 +221,19 @@ class FieldsRegistry(RegistryBase):
         # ------------------------------------------------------------
         # A.3. COMPONENTS - collect attr_nodes - previously flattened (recursive function fill_components)
         # ------------------------------------------------------------
-        if not isinstance(component, (ComponentBase, )): # ValidatorBase
+        if not isinstance(component, (ComponentBase, )):
             raise RuleSetupError(owner=self, msg=f"Register expexted ComponentBase, got {component} / {type(component)}.")
 
         component_name = component.name
 
         # TODO: to have standard types in some global list in fields.py
-        #   containers, validations, evaluations, # dropped: validators, evaluators, ValidatorBase
+        #           containers, validations, evaluations, 
         if isinstance(component, (IFieldBase, )):
             denied = False
             deny_reason = ""
             type_info = component.type_info if component.type_info else None
         # TODO: to have standard types in some global list in fields.py
-        #   containers, validations, evaluations, # dropped: validators, evaluators, ValidatorBase
+        #           containers, validations, evaluations,
         elif isinstance(component, self.DENIED_BASE_TYPES): # 
             # stored - but should not be used
             denied = True
@@ -264,7 +264,7 @@ class FieldsRegistry(RegistryBase):
 
 
     def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
-        # container = apply_session.current_frame.component.get_container_parent(consider_self=True)
+        # container = apply_session.current_frame.component.get_first_parent_container(consider_self=True)
         component = apply_session.current_frame.component
         instance  = apply_session.current_frame.instance
         top_attr_accessor = ComponentAttributeAccessor(component, instance)
@@ -297,7 +297,7 @@ class ContextRegistry(RegistryBase):
         if not isinstance(owner, ComponentBase):
             raise RuleInternalError(owner=self, msg=f"Owner needs to be Component, got: {type(owner)} / {owner}")  
 
-        if not owner.get_container_parent(consider_self=True).context_class:
+        if not owner.get_first_parent_container(consider_self=True).context_class:
             raise RuleSetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}' (referenced by '{self.NAMESPACE}.{dexp_node_name}') should not be used since 'Entity.context_class' is not set. Define 'context_class' to 'Entity()' constructor and try again.")
 
         return super().create_node(

@@ -1,10 +1,11 @@
-from __future__ import annotations
+# from __future__ import annotations
 
 from abc import (
         ABC, 
         abstractmethod,
         )
 from typing import (
+        Any,
         Union, 
         List, 
         Optional, 
@@ -16,12 +17,14 @@ from .utils import (
         UNDEFINED,
         UndefinedType,
         varname_to_title,
+        to_int,
         )
 from .exceptions import (
         RuleSetupValueError,
         )
 from .meta import (
         TransMessageType,
+        NoneType,
         )
 from .base import (
         BaseOnlyArgs,
@@ -32,6 +35,8 @@ from .base import (
 from .expressions import (
         DotExpression,
         ExecResult,
+        NotAvailableExecResult,
+        execute_available_dexp,
         )
 from .attr_nodes import (
         AttrDexpNode,
@@ -71,7 +76,9 @@ class Component(ComponentBase, ABC):
     # set in setup()
     dot_node:   Union[AttrDexpNode, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
 
-    NAME_COUNTER:   ClassVar[int] = field(default=1)
+    def __post_init__(self):
+        super().__post_init__()
+        self.init_clean_base()
 
     def init_clean_base(self):
         # when not set then will be later defined - see set_parent()
@@ -79,15 +86,7 @@ class Component(ComponentBase, ABC):
             if not self.name.isidentifier():
                 raise RuleSetupValueError(owner=self, msg="Attribute name needs to be valid python identifier name")
 
-    def _fill_name_when_missing(self):
-        if self.name is None:
-            self.name = f"{self.__class__.__name__.lower()}__{self.NAME_COUNTER}"
-            self.NAME_COUNTER += 1
 
-
-    def __post_init__(self):
-        self.init_clean_base()
-        super().__post_init__()
 
     # moved to apply_session ApplyResult
     # def get_key_string(self, apply_session: IApplySession):
@@ -95,7 +94,7 @@ class Component(ComponentBase, ABC):
     #     # TODO: consider moving to ApplySession/ApplyResult?
     #     if self.is_container():
     #         raise RuleInternalError(owner=self, msg=f"Expecting non-container, got: {self}") 
-    #     container = self.get_container_parent(consider_self=True)
+    #     container = self.get_first_parent_container(consider_self=True)
     #     container_key_string = container.get_key_string(apply_session)
     #     key_string = GlobalConfig.ID_NAME_SEPARATOR.join(
     #             [container_key_string, self.name] 
@@ -117,15 +116,45 @@ class Component(ComponentBase, ABC):
 class ValidationBase(Component, ABC): # TODO: make it abstract
     """ Executes validate() method which checks all ok
     """
-
     def __post_init__(self):
+        if hasattr(self, "ensure") and not isinstance(self.ensure, DotExpression):
+            raise RuleSetupError(owner=self, msg=f"ensure must be DotExpression, got: {type(self.ensure)} / {self.ensure}")
+        if self.error is None:
+            self.error = f"Validation failed: {self.ensure}"
+
+        # self._fill_name_when_missing()
         if not self.label:
             self.label = self.error
+
         super().__post_init__()
 
 
+    def _check_dot_expression_or_positive_int(self, attr_name:str, attr_value: Any):
+        if not isinstance(attr_value, DotExpression) and not to_int(attr_value, 0) >= 0:
+            raise RuleSetupError(owner=self, msg="Argument '{attr_name}' must be integer >= 0 or DotExpression, got: {attr_value}")
+
+    def _validate_common_impl(self, apply_session: IApplySession) -> Union[NoneType, ValidationFailure]:
+        not_available_dexp_result: NotAvailableExecResult  = execute_available_dexp(self.available, apply_session=apply_session)
+        if not_available_dexp_result: 
+            # TODO: log ...
+            return None
+
+        component = apply_session.current_frame.component
+        dexp_result: ExecResult = self.ensure._evaluator.execute_dexp(apply_session)
+        if not bool(dexp_result.value):
+            error = self.error if self.error else "Validation failed"
+            return ValidationFailure(
+                            component_key_string = apply_session.get_key_string(component),
+                            error=error, 
+                            validation_name=self.name,
+                            validation_label=self.label,
+                            details=f"The validation returned '{dexp_result.value}'"
+                            )
+        return None
+
+
     @abstractmethod
-    def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
+    def validate(self, apply_session: IApplySession) -> Union[NoneType, ValidationFailure]:
         """ if all ok returns None, else returns ValidationFailure
         containing all required information about failure(s).
         """
@@ -162,12 +191,6 @@ class FieldGroup(Component):
     cleaners:       Optional[List[Union[ValidationBase, EvaluationBase]]] = None
     available:      Union[bool, DotExpression] = True
 
-    def __post_init__(self):
-        if not self.label:
-            self.label = varname_to_title(self.name)
-        super().__post_init__()
-
-
     @staticmethod
     def can_apply_partial() -> bool:
         return True
@@ -194,8 +217,6 @@ class FieldGroup(Component):
 #             # raise RuleSetupValueError(owner=self, msg=f"{self.name} -> {type(self.value)}: {type(self.value)} - to be done a DotExpression")
 #             raise NotImplementedError(f"{self.name} -> {type(self.value)}: {type(self.value)} - to be done a DotExpression")
 #         self.type_info = TypeInfo.get_or_create_by_type(self.value)
-#         if not self.label:
-#             self.label = varname_to_title(self.name)
 #         super().__post_init__()
 
 # # ------------------------------------------------------------

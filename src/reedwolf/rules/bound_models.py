@@ -70,7 +70,7 @@ class NestedBoundModelMixin:
         if not self.contains:
             return False
 
-        container_parent = self.parent.get_container_parent(consider_self=True)
+        container_parent = self.parent.get_first_parent_container(consider_self=True)
 
         if not container_parent or not container_parent.is_top_parent():
             raise RuleSetupValueError(owner=self, msg=f"Currently child bound models ('contains') supported only for top contaainers owners (i.e. Entity), got: {self.parent} / {container_parent}")
@@ -175,7 +175,7 @@ class NestedBoundModelMixin:
         local_setup_session = apply_session.setup_session.create_local_setup_session(
                                             this_ns_instance_model_class=self.model)
 
-        container = self.get_container_parent(consider_self=False)
+        container = self.get_first_parent_container(consider_self=False)
 
         with apply_session.use_stack_frame(
                 ApplyStackFrame(
@@ -343,7 +343,7 @@ class BoundModelWithHandlers(NestedBoundModelMixin, BoundModelBase):
         super().setup(setup_session=setup_session)
 
         if self.contains:
-            container =self.get_container_parent(consider_self=False)
+            container =self.get_first_parent_container(consider_self=False)
             if not container.is_top_parent():
                 # NOTE: not allowed in SubEntityItems-s for now
                 raise RuleSetupValueError(owner=self, msg=f"BoundModel* nesting (attribute 'contains') is not supported for '{type(container)}'")
