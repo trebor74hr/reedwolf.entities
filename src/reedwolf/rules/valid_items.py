@@ -42,16 +42,27 @@ from .base import (
         )
 
 
+def _validate_setup_common(validation, allow_none:Optional[bool]=None) -> 'AttrDexpNode':  # noqa: F821
+    model_attr_node = validation.parent.get_bound_model_attr_node()
+    if allow_none is not None:
+        if allow_none and not model_attr_node.isoptional():
+            raise RuleSetupTypeError(owner=validation, msg="Type hint is not Optional and cardinality allows None. Add Optional or set .allow_none=False/min=1+")
+        if not allow_none and model_attr_node.isoptional():
+            raise RuleSetupTypeError(owner=validation, msg="Type hint is Optional and cardinality does not allow None. Remove Optional or set .allow_none=True/min=0")
+    return model_attr_node
+
+
 class ItemsValidationBase(ValidationBase, ABC):
     ...
 
 @dataclass
 class ItemsValidation(ItemsValidationBase):
-    ensure:         DotExpression
-    name:           Optional[str] = field(default=None)
-    error:          Optional[TransMessageType] = field(repr=False, default=None)
-    available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
-    label:          Optional[TransMessageType] = field(repr=False, default=None)
+    ensure          : DotExpression
+    available       : Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
+
+    name            : Optional[str] = field(default=None)
+    error           : Optional[TransMessageType] = field(repr=False, default=None)
+    label           : Optional[TransMessageType] = field(repr=False, default=None)
 
     def validate(self, apply_session: IApplySession) -> Union[NoneType, ValidationFailure]:
         raise NotImplementedError()
@@ -87,44 +98,11 @@ class ICardinalityValidation(ItemsValidationBase, ABC): # count
         """
         raise NotImplementedError("abstract method")
 
-    def _validate_setup_common(self, allow_none:Optional[bool]=None) -> 'AttrDexpNode':  # noqa: F821
-        model_attr_node = self.parent.get_bound_model_attr_node()
-        if allow_none is not None:
-            if allow_none and not model_attr_node.isoptional():
-                raise RuleSetupTypeError(owner=self, msg="Type hint is not Optional and cardinality allows None. Add Optional or set .allow_none=False/min=1+")
-            if not allow_none and model_attr_node.isoptional():
-                raise RuleSetupTypeError(owner=self, msg="Type hint is Optional and cardinality does not allow None. Remove Optional or set .allow_none=True/min=0")
-        return model_attr_node
 
 # ------------------------------------------------------------
 
 class Cardinality: # namespace holder
 
-    # @dataclass
-    # class Single(ICardinalityValidation):
-    #     name            : str
-    #     allow_none      : bool = True
-    #     label           : Optional[TransMessageType] = field(repr=False, default=None)
-    #
-    # autocomputed
-    #     parent          : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
-    #     parent_name     : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
-
-    #     def validate_setup(self):
-    #         model_attr_node = self._validate_setup_common(self.allow_none)
-    #         if model_attr_node.islist():
-    #             raise RuleSetupTypeError(owner=self, msg="Type hint is List and should be single instance. Change to Range/Multi or remove type hint List[]")
-
-    #     def validate(self, items_count:int, raise_err:bool=True):
-    #         if items_count==0 and not self.allow_none:
-    #             if raise_err:
-    #                 raise RuleValidationCardinalityError(owner=self, msg="Expected exactly one item, got none.")
-    #             return False
-    #         if items_count!=1:
-    #             if raise_err:
-    #                 raise RuleValidationCardinalityError(owner=self, msg="Expected exactly one item, got {items_count}.")
-    #             return False
-    #         return True
 
     @dataclass
     class Range(ICardinalityValidation):
@@ -134,9 +112,12 @@ class Cardinality: # namespace holder
             max=None -> any number (>= min)
             min=0    -> same as allow_none in other validations
         """
-        name            : str
-        min             : Optional[int] = None
-        max             : Optional[int] = None
+        min             : Optional[Union[int, DotExpression]] = None
+        max             : Optional[Union[int, DotExpression]] = None
+        available       : Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
+
+        name            : Optional[str] = field(default=None)
+        error           : Optional[TransMessageType] = field(repr=False, default=None)
         label           : Optional[TransMessageType] = field(repr=False, default=None)
 
         # autocomputed
@@ -157,7 +138,7 @@ class Cardinality: # namespace holder
 
         def validate_setup(self):
             # [] is allowed, and that is not same as None ( allow_none=(self.min==0)) )
-            model_attr_node = self._validate_setup_common(allow_none=False)
+            model_attr_node = _validate_setup_common(validation=self, allow_none=False)
             if not model_attr_node.islist():
                 raise RuleSetupTypeError(owner=self, msg="Type hint is not List and should be. Change to Single or add List[] type hint ")
 
@@ -175,8 +156,11 @@ class Cardinality: # namespace holder
     @dataclass
     class Multi(ICardinalityValidation):
         " [0,1]:N "
-        name            : str
-        allow_none      : bool = True
+        allow_none      : Optional[Union[bool, DotExpression]] = True
+        available       : Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
+
+        name            : Optional[str] = field(default=None)
+        error           : Optional[TransMessageType] = field(repr=False, default=None)
         label           : Optional[TransMessageType] = field(repr=False, default=None)
 
         # autocomputed
@@ -184,7 +168,7 @@ class Cardinality: # namespace holder
         parent_name     : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
         def validate_setup(self):
-            model_attr_node = self._validate_setup_common(self.allow_none)
+            model_attr_node = _validate_setup_common(validation=self, allow_none=self.allow_none)
             if not model_attr_node.islist():
                 raise RuleSetupTypeError(owner=self, msg="Type hint is not a List and should be. Change to Single or add List[] type hint")
 
@@ -208,9 +192,13 @@ class Unique: # namespace holder
     @dataclass
     class Global(IUniqueValidation):
         " globally - e.g. within table "
-        name            : str
-        fields          : List[str] # TODO: better field specification or dexpr?
-        ignore_none     : bool = True
+        # TODO: do it with M. DotExpression, e.g. fields=[M.name, M.surname]
+        fields          : List[str]
+        ignore_none     : Optional[Union[bool, DotExpression]] = field(default=True)
+        available       : Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
+
+        name            : Optional[str] = field(default=None)
+        error           : Optional[TransMessageType] = field(repr=False, default=None)
         label           : Optional[TransMessageType] = field(repr=False, default=None)
 
         # autocomputed
@@ -223,9 +211,13 @@ class Unique: # namespace holder
     @dataclass
     class Items(IUniqueValidation):
         " within subentity_items records "
-        name            : str
-        fields          : List[str] # TODO: better field specification or dexpr?
-        ignore_none     : bool = True
+        # TODO: do it with M. DotExpression, e.g. fields=[M.name, M.surname]
+        fields          : List[str]
+        ignore_none     : Optional[Union[bool, DotExpression]] = field(default=True)
+        available       : Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
+
+        name            : Optional[str] = field(default=None)
+        error           : Optional[TransMessageType] = field(repr=False, default=None)
         label           : Optional[TransMessageType] = field(repr=False, default=None)
 
         # autocomputed
@@ -235,4 +227,37 @@ class Unique: # namespace holder
         def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
             raise NotImplementedError()
 
+# ------------------------------------------------------------
 
+@dataclass
+class SingleValidation(ValidationBase):
+    " Cardinality validation for for SubEntitySingle case, does not really belong to this module "
+    allow_none      : Union[bool, DotExpression] = True
+    available       : Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
+
+    name            : Optional[str] = field(default=None)
+    error           : Optional[TransMessageType] = field(repr=False, default=None)
+    label           : Optional[TransMessageType] = field(repr=False, default=None)
+
+    # autocomputed
+    parent          : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
+    parent_name     : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+
+    def validate_setup(self):
+        model_attr_node = _validate_setup_common(validation=self, allow_none=self.allow_none)
+        if model_attr_node.islist():
+            raise RuleSetupTypeError(owner=self, msg="Type hint is List and should be single instance. Change to Range/Multi or remove type hint List[]")
+
+    def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
+        return None
+        # TODO:implement this 
+        #   raise NotImplementedError()
+        #   if items_count==0 and not self.allow_none:
+        #       if raise_err:
+        #           raise RuleValidationCardinalityError(owner=self, msg="Expected exactly one item, got none.")
+        #       return False
+        #   if items_count!=1:
+        #       if raise_err:
+        #           raise RuleValidationCardinalityError(owner=self, msg="Expected exactly one item, got {items_count}.")
+        #       return False
+        #   return True

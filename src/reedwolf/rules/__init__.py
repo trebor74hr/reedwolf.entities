@@ -60,6 +60,7 @@ from .valid_items import (
         ItemsValidation,
         Cardinality,
         Unique,
+        SingleValidation,
         )
 from .valid_children import (
         ChildrenValidation,
@@ -82,8 +83,8 @@ from .config import (
         )
 from .containers import (
         KeyFields,
-        # ListIndexKey,
         SubEntityItems,
+        SubEntitySingle,
         Entity,
         )
 from .functions import (
@@ -99,7 +100,7 @@ from .apply import ApplyResult
 from .load import load
 
 
-
+# what to import in case "reedwolf.rules import *"
 __all__ = [
     # utils
     UNDEFINED,
@@ -111,13 +112,13 @@ __all__ = [
     "ContextNS",
     "ConfigNS",
 
-    # namespace aliases
-    # "F",
-    # "S",
-    # "M",
-    # "This",
-    # "Ctx",
-    # "Cfg",
+    # NOTE: namespace aliases not in "import *" case
+    #   "F",
+    #   "S",
+    #   "M",
+    #   "This",
+    #   "Ctx",
+    #   "Cfg",
 
     # exceptions
     "RuleError",
@@ -128,7 +129,6 @@ __all__ = [
     # models
     "BoundModel",
     "BoundModelWithHandlers",
-    # "BoundModelHandler",
 
     # components
     "EnumMembers",
@@ -150,7 +150,6 @@ __all__ = [
     "TimeField",
     "DurationField",
     "EmailField",
-    # TODO: "FileField",
 
     "ChoiceOption",
 
@@ -169,6 +168,7 @@ __all__ = [
     "ItemsValidation",
     "Cardinality",
     "Unique",
+    "SingleValidation",
 
     # evaluations
     "Evaluation",
@@ -177,21 +177,19 @@ __all__ = [
     "ChildrenEvaluation",
     "ItemsEvaluation",
 
-    # # evaluators
-    # "ItemsEvaluators",
-
     # containers
     "KeyFields",
-    # "ListIndexKey",
-    # Top containers
+
+    # containers
+    "SubEntitySingle"
     "SubEntityItems",
+    # top container
     "Entity",
 
     # functions
     "functions",
     "Function",
     # "_",
-    # "msg",
 
     # contexts
     "IContext",
@@ -205,7 +203,5 @@ __all__ = [
     # load
     "load",
 
-    # this module
-    "COMPONNENTS_REGISTRY"
     ]
 

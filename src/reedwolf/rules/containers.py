@@ -84,6 +84,7 @@ from .eval_children import (
         )
 from .valid_items import (
         ItemsValidationBase,
+        SingleValidation,
         )
 from .eval_items import (
         ItemsEvaluationBase,
@@ -699,6 +700,8 @@ class Entity(ContainerBase):
 
 
 # ------------------------------------------------------------
+
+
 @dataclass
 class SubEntityBase(ContainerBase, ABC):
     """ can not be used individually - must be directly embedded into Other
@@ -772,6 +775,8 @@ class SubEntityBase(ContainerBase, ABC):
         # self.cardinality.validate_setup()
         return self
 
+# ------------------------------------------------------------
+
 @dataclass
 class SubEntityItems(SubEntityBase):
     """ one to many relations - e.g. Person -> PersonAddresses """
@@ -783,17 +788,22 @@ class SubEntityItems(SubEntityBase):
 
         super().__post_init__()
 
+# ------------------------------------------------------------
+
 @dataclass
 class SubEntitySingle(SubEntityBase):
     """ one to one relations - e.g. Person -> PersonAccess """
 
+    cleaners        : Optional[List[Union[SingleValidation, ChildrenValidationBase, ChildrenEvaluationBase]]] = field(repr=False, default_factory=list)
+
     def __post_init__(self):
-        # TODO:
         for cleaner in self.cleaners:
-            if not isinstance(cleaner, (ChildrenValidationBase, ChildrenEvaluationBase)):
-                raise RuleSetupTypeError(owner=self, msg=f"Cleaners should be instances of ChildrenValidationBase or ChildrenEvaluationBase, got: {type(cleaner)} / {cleaner}") 
+            if not isinstance(cleaner, (SingleValidation, ChildrenValidationBase, ChildrenEvaluationBase)):
+                raise RuleSetupTypeError(owner=self, msg=f"Cleaners should be instances of SingleValidation, ChildrenValidationBase or ChildrenEvaluationBase, got: {type(cleaner)} / {cleaner}") 
 
         super().__post_init__()
+
+# ------------------------------------------------------------
 
 def collect_classes(componnents_registry: Dict, module: Any, klass_match: type) -> Dict:
     if module:

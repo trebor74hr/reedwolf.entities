@@ -117,13 +117,17 @@ class ValidationBase(Component, ABC): # TODO: make it abstract
     """ Executes validate() method which checks all ok
     """
     def __post_init__(self):
-        if hasattr(self, "ensure") and not isinstance(self.ensure, DotExpression):
-            raise RuleSetupError(owner=self, msg=f"ensure must be DotExpression, got: {type(self.ensure)} / {self.ensure}")
-        if self.error is None:
-            self.error = f"Validation failed: {self.ensure}"
+        if hasattr(self, "ensure"):
+            if not isinstance(self.ensure, DotExpression):
+                raise RuleSetupError(owner=self, msg=f"ensure must be DotExpression, got: {type(self.ensure)} / {self.ensure}")
 
-        # self._fill_name_when_missing()
-        if not self.label:
+            if not self.error:
+                self.error = f"Validation failed: {self.ensure}"
+
+        if not self.error:
+            title = getattr(self, "label", self.name)
+            self.error = f"Validation failed ({title})"
+        elif not self.label:
             self.label = self.error
 
         super().__post_init__()
