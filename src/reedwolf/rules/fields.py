@@ -5,6 +5,16 @@ BUILDING BLOCKS OF RULES
 FIELDS - can read/store data from/to storage
 ------------------------------------------------------------
 check components.py too
+
+Notes:
+
+    - available attribute - available yields True(ish?) value 
+        => this is NOT processed: 
+            - field update by new instance, 
+            - cleaners for the field
+            - children tree (contains/enables)
+        Only initial value is unchanged. See also BooleanField.enables.
+
 """
 from __future__ import annotations
 
@@ -56,6 +66,7 @@ from .meta import (
 from .base import (
         warn,
         IFieldBase,
+        IFieldGroup,
         IApplySession,
         ValidationFailure,
         SetupStackFrame,
@@ -74,9 +85,19 @@ from .functions import (
 from .registries import (
         SetupSession,
         )
-from .validations   import (
+from .valid_field import (
         MaxLength,
         ExactLength,
+        FieldValidationBase
+        )
+from .eval_field import (
+        FieldEvaluationBase,
+        )
+from .valid_children import (
+        ChildrenValidationBase,
+        )
+from .eval_children import (
+        ChildrenEvaluationBase,
         )
 from .components    import (
         Component,
@@ -135,18 +156,11 @@ class FieldBase(Component, IFieldBase, ABC):
     description:    Optional[TransMessageType] = field(repr=False, default=None)
 
 
-    # NOTE: available that yields True(ish?) value 
-    #   => this is NOT processed: 
-    #       - field update by new instance, 
-    #       - cleaners for the field
-    #       - children tree (contains/enables)
-    #   Only initial value is unchanged. See also BooleanField.enables.
     available:      Union[bool, DotExpression] = field(repr=False, default=True)
-    # NOTE: replaced with Readonly(False|DotExpression...) 
-    #       editable:       Union[bool, DotExpression] = field(repr=False, default=True)
-    cleaners:       Optional[List[Union[ValidationBase, EvaluationBase]]] = field(repr=False, default=None)
-    autocomputed:   Union[bool, AutocomputedEnum] = field(repr=False, default=False)
 
+    # if enables is filled - then it Supports Children* cleaners too since it can have nested field hierarchy
+    cleaners:       Optional[List[Union[ChildrenValidationBase, ChildrenEvaluationBase, FieldValidationBase, FieldEvaluationBase]]] = field(repr=False, default_factory=list)
+    autocomputed:   Union[bool, AutocomputedEnum] = field(repr=False, default=False)
 
     # BooleanField.enables that yields False/None (value must be bool/None)
     #   => this is NOT processed:
@@ -185,15 +199,21 @@ class FieldBase(Component, IFieldBase, ABC):
 
 
     def init_clean(self):
-        # TODO: check that value is simple M. value
+        # TODO: check that value is M ns and is a simple M. value
         if not isinstance(self.bind, DotExpression):
             raise RuleSetupValueError(owner=self, msg="'bind' needs to be DotExpression (e.g. M.status).")
 
-        # ModelsNs.person.surname -> surname
         if not self.name:
+            # ModelsNs.person.surname -> surname
             self.name = self._get_name_from_bind(self.bind)
 
         self.autocomputed = AutocomputedEnum.from_value(self.autocomputed)
+
+        allowed_cleaner_base_list = [FieldValidationBase, FieldEvaluationBase]
+        if self.enables:
+            allowed_cleaner_base_list.extend([ChildrenValidationBase, ChildrenEvaluationBase])
+        self._check_cleaners(allowed_cleaner_base_list)
+
         self.init_clean_base()
 
 
@@ -248,13 +268,13 @@ class FieldBase(Component, IFieldBase, ABC):
             #     self._set_type_info()
 
         # NOTE: can have multiple Evaluation-s
-        evaluations = [cleaner for cleaner in self.cleaners if isinstance(cleaner, EvaluationBase) and cleaner.REQUIRES_AUTOCOMPUTE] \
-                      if self.cleaners else None
+        evaluations_w_autocomp = ", ".join([cleaner.name for cleaner in self.cleaners if isinstance(cleaner, EvaluationBase) and cleaner.REQUIRES_AUTOCOMPUTE]) \
+                      if self.cleaners else ""
 
-        if self.autocomputed and not evaluations:
+        if self.autocomputed and not evaluations_w_autocomp:
             raise RuleSetupError(owner=self, msg=f"When 'autocomputed' is set to '{self.autocomputed.name}', you need to have at least one Evaluation cleaner defined or set 'autocomputed' to False/AutocomputedEnum.NO")
-        elif not self.autocomputed and evaluations:
-            raise RuleSetupError(owner=self, msg=f"'When you have at least one Evaluation cleaner, set 'autocomputed = AutocomputedEnum.ALLWAYS/SOMETIMES' (got '{self.autocomputed.name}').")
+        elif not self.autocomputed and evaluations_w_autocomp:
+            raise RuleSetupError(owner=self, msg=f"'When you have at least one Evaluation cleaner (found: {evaluations_w_autocomp}), set 'autocomputed = AutocomputedEnum.ALLWAYS/SOMETIMES' (got '{self.autocomputed.name}').")
 
         if self.REQUIRED_VALIDATIONS:
             validations_kls_found = set([type(cleaner) for cleaner in self.cleaners if isinstance(cleaner, ValidationBase)]) if self.cleaners else set()
@@ -395,6 +415,7 @@ class BooleanField(FieldBase):
 
     # def __post_init__(self):
     #     self.init_clean()
+
     #     if self.default is not None and not isinstance(self.default, (bool, DotExpression)):
     #         raise RuleSetupValueError(owner=self, msg=f"'default'={self.default} needs to be bool value  (True/False).")
 
@@ -719,4 +740,26 @@ class EmailField(FieldBase):
     #       GenericIPAddressField
     #       UUIDField
     PYTHON_TYPE:ClassVar[type] = str
+
+
+# ------------------------------------------------------------------------
+# FieldGroups - logical groupihg and common functionality/dependency of other
+#            components.
+# ------------------------------------------------------------------------
+
+@dataclass
+class FieldGroup(Component, IFieldGroup):
+    contains:       List[Component] = field(repr=False)
+    name:           Optional[str] = field(default=None)
+    title:          Optional[TransMessageType] = field(repr=False, default=None)
+    cleaners:       Optional[List[Union[ChildrenValidationBase, ChildrenEvaluationBase]]] = field(repr=False, default_factory=list)
+    available:      Union[bool, DotExpression] = field(repr=False, default=True)
+
+    def __post_init__(self):
+        self._check_cleaners([ChildrenValidationBase, ChildrenEvaluationBase])
+        super().__post_init__()
+
+    @staticmethod
+    def can_apply_partial() -> bool:
+        return True
 

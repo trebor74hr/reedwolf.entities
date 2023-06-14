@@ -19,6 +19,9 @@ from dataclasses import (
         field as DcField,
         MISSING as DC_MISSING,
         )
+from types import (
+        MappingProxyType,
+        )
 
 from .utils import (
         varname_to_title,
@@ -32,6 +35,7 @@ from .utils import (
         )
 from .exceptions import (
         RuleInternalError,
+        RuleSetupTypeError,
         RuleSetupError,
         RuleSetupNameError,
         RuleSetupValueError,
@@ -312,6 +316,19 @@ class ComponentBase(SetParentMixin, ABC):
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
         ...
 
+    def init_clean_base(self):
+        # when not set then will be later defined - see set_parent()
+        if self.name not in (None, "", UNDEFINED):
+            if not self.name.isidentifier():
+                raise RuleSetupValueError(owner=self, msg="Attribute name needs to be valid python identifier name")
+
+    def _check_cleaners(self, allowed_cleaner_base_list: List[type]):
+        allowed_cleaner_base_list = tuple(allowed_cleaner_base_list)
+        for cleaner in self.cleaners:
+            if not isinstance(cleaner, allowed_cleaner_base_list):
+                cl_names = ", ".join([cl.__name__ for cl in allowed_cleaner_base_list])
+                raise RuleSetupTypeError(owner=self, msg=f"Cleaners should be instances of {cl_names}, got: {type(cleaner)} / {cleaner}") 
+
     @staticmethod
     def can_apply_partial() -> bool:
         return False
@@ -491,14 +508,11 @@ class ComponentBase(SetParentMixin, ABC):
                 continue
 
             if attr_field.metadata \
-              and isinstance(attr_field.metadata, dict) \
-              and attr_field.metadata("skip_dump", None):
+              and isinstance(attr_field.metadata, (dict, MappingProxyType)) \
+              and attr_field.metadata.get("skip_dump", None):
                 continue
 
             attr_name = attr_field.name
-
-            if attr_name in ("config", "bound_model"):
-                continue
 
             if not hasattr(component, attr_name):
                 continue 
@@ -995,6 +1009,9 @@ class IFieldBase(ABC):
     # def get_bound_attr_node(self, setup_session: ISetupSession) -> "AttrDexpNode":  # noqa: F821
     #     ...
 
+class IFieldGroup(ABC):
+    ...
+
 # ------------------------------------------------------------
 # IContainerBase
 # ------------------------------------------------------------
@@ -1002,7 +1019,7 @@ class IFieldBase(ABC):
 class IContainerBase(ABC):
 
     @abstractmethod
-    def add_fieldgroup(self, fieldgroup:"FieldGroup"):  # noqa: F821
+    def add_fieldgroup(self, fieldgroup:IFieldGroup):  # noqa: F821
         ...
 
     @abstractmethod

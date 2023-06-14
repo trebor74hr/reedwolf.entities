@@ -93,6 +93,11 @@ ALL_NS_OBJECTS = {
         for name, obj in globals().items()
         if isinstance(obj, Namespace)
         }
+ALL_NS_OBJECTS.update({
+        obj._name: obj 
+        for _, obj in globals().items()
+        if isinstance(obj, Namespace)
+        })
 
 
 # # Context - Direct access to managed models underneath and global Entity objects like Validation/FieldGroup etc

@@ -51,12 +51,12 @@ from .base import (
         IContainerBase,
         IApplySession,
         BoundModelBase,
+        IFieldGroup,
         )
 from .attr_nodes import (
         AttrDexpNode,
         )
 from .components import (
-        FieldGroup,
         ValidationBase,
         EvaluationBase,
         )
@@ -214,7 +214,7 @@ class FieldsRegistry(RegistryBase):
 
     ALLOWED_BASE_TYPES: ClassVar[List[type]] = (IFieldBase, )
 
-    DENIED_BASE_TYPES: ClassVar[List[type]] = (BoundModelBase, ValidationBase, EvaluationBase, FieldGroup, IContainerBase, )
+    DENIED_BASE_TYPES: ClassVar[List[type]] = (BoundModelBase, ValidationBase, EvaluationBase, IFieldGroup, IContainerBase, )
 
     def create_attr_node(self, component:ComponentBase):
         # TODO: put class in container and remove these local imports

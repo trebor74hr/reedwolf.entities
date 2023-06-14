@@ -10,7 +10,7 @@ from typing import (
 from contextlib import contextmanager
 from copy import deepcopy
 
-from .containers import COMPONNENTS_REGISTRY
+from .containers import COMPONENTS_REGISTRY
 
 from .utils import (
         to_str,
@@ -20,6 +20,7 @@ from .utils import (
         load_from_format,
         )
 from .exceptions import (
+        RuleLoadError,
         RuleLoadTypeError,
         RuleLoadNameError,
         RuleInternalError,
@@ -42,7 +43,7 @@ from .base import (
 
 
 ConstantAstTypes = Union[ast.Constant, ast.Num, ast.Str, ast.Bytes]
-CONSTANT_AST_TYPE_LIST = [ast.Constant, ast.Num, ast.Str, ast.Bytes]
+CONSTANT_AST_TYPE_LIST = [ast.Constant, ast.Num, ast.Str, ast.Bytes, ast.NameConstant]
 
 
 class CallTraceMixin:
@@ -124,15 +125,22 @@ class DotExpressionLoader(CallTraceMixin):
 
         with self.use_call_trace(f"parse({ast_node_repr(ast_node)})") as call_repr:
 
+            processed = False
             if type(ast_node)==ast.UnaryOp:
                 # recursion
                 dexp_node = self._process_ast_unaryop(node=ast_node, call_repr=call_repr, depth=depth+1)
-            elif type(ast_node)==ast.BinOp:
+                processed = True
+            elif type(ast_node) in (ast.BinOp, ast.Compare):
                 # recursion
                 dexp_node = self._process_ast_binop(node=ast_node, call_repr=call_repr, depth=depth+1)
+                processed = True
             elif type(ast_node)==ast.Call:
-                dexp_node = self._process_ast_start_node_call(ast_node, call_repr=call_repr)
-            else:
+                # skip case: M.name.Length() ?
+                if not (type(ast_node.func) == ast.Attribute and ast_node.func.value):
+                    dexp_node = self._process_ast_start_node_call(ast_node, call_repr=call_repr)
+                    processed = True
+
+            if not processed:
                 # Multiple items cases, M.id.test.Call, Fn(test=1).test.test, ...
                 ast_node_list: List[ast.AST] = self._ast_nodes_prepare(ast_node)
                 if not ast_node_list:
@@ -153,7 +161,7 @@ class DotExpressionLoader(CallTraceMixin):
                     # recursion
                     dexp_node = self._process_ast_unaryop(node=start_node, call_repr=call_repr, depth=depth+1)
 
-                elif type(start_node)==ast.BinOp:
+                elif type(start_node) in (ast.BinOp, ast.Compare):
                     if len(ast_node_list) != 1:
                         # TODO: if this happens, then do not call _ast_nodes_prepare() due reverse ...
                         raise NotImplementedError()
@@ -170,7 +178,7 @@ class DotExpressionLoader(CallTraceMixin):
                     else:
                         # Namespace.attrib/Func() case
                         if len(ast_node_list) <= 1:
-                            raise RuleLoadTypeError(owner=call_repr, msg=f"Expected at minimal <Namespace>.<attribute/function>, got: {ast_node_list}")
+                            raise RuleLoadTypeError(owner=call_repr, msg=f"Expected at minimal <Namespace>.<attribute/function>, got: {ast_node_repr(ast_node_list)}")
                         ns_name = start_node.id
                         if ns_name not in ALL_NS_OBJECTS:
                             ops_avail = get_available_names_example(ns_name, ALL_NS_OBJECTS.keys())
@@ -200,11 +208,13 @@ class DotExpressionLoader(CallTraceMixin):
 
     def _ast_nodes_prepare(self, start_node: Union[ast.Expr, ast.Attribute]) -> List[ast.AST]:
         with self.use_call_trace(f"prepare({ast_node_repr(start_node)})") as call_repr:
-            if type(start_node)==ast.Expr:
+            if type(start_node)==ast.Call and type(start_node.func)==ast.Attribute:
+                node = start_node.func
+            elif type(start_node)==ast.Expr:
                 node = start_node.value
             elif type(start_node)==ast.Attribute:
                 node = start_node
-            elif type(start_node)==ast.BinOp:
+            elif type(start_node) in (ast.BinOp, ast.Compare):
                 node = start_node
             elif type(start_node)==ast.UnaryOp:
                 node = start_node
@@ -233,7 +243,7 @@ class DotExpressionLoader(CallTraceMixin):
                 elif type(node)==ast.Name:
                     # terminate
                     break
-                elif type(node) in (ast.BinOp, ast.UnaryOp):
+                elif type(node) in (ast.BinOp, ast.UnaryOp, ast.Compare):
                     # terminate
                     break
                 else:
@@ -302,20 +312,31 @@ class DotExpressionLoader(CallTraceMixin):
     # ------------------------------------------------------------
 
     def _process_ast_binop(self, node: ast.BinOp, call_repr: str, depth: int) -> DotExpression:
-        assert type(node)==ast.BinOp, node
+        if type(node) == ast.BinOp:
+            left = node.left
+            right = node.right
+            node_op = node.op
+        elif type(node) == ast.Compare:
+            left = node.left
+            assert len(node.comparators)==1
+            right = node.comparators[0]
+            assert len(node.ops)==1
+            node_op = node.ops[0]
+        else:
+            raise RuleLoadTypeError(owner=call_repr, msg=f"Expected binop/compare, got: {node}")
 
-        if type(node.op) not in AST_NODE_TYPE_TO_FUNCTION:
+        if type(node_op) not in AST_NODE_TYPE_TO_FUNCTION:
             names_avail = get_available_names_example(
-                    str(type(node.op)), 
+                    str(type(node_op)), 
                     [str(nt) for nt in AST_NODE_TYPE_TO_FUNCTION.keys()]),
-            raise RuleLoadTypeError(owner=call_repr, msg=f"Operation '{ast_node_repr(node.op)}' not supported. Available: {names_avail}")
+            raise RuleLoadTypeError(owner=call_repr, msg=f"Operation '{ast_node_repr(node_op)}' not supported. Available: {names_avail}")
 
-        operation = AST_NODE_TYPE_TO_FUNCTION[type(node.op)]
+        operation = AST_NODE_TYPE_TO_FUNCTION[type(node_op)]
         function = operation.load_function
         # recursion
-        dexp_arg_left = self._parse_expression_node(ast_node=node.left, depth=depth+1)
+        dexp_arg_left = self._parse_expression_node(ast_node=left, depth=depth+1)
         # recursion
-        dexp_arg_right = self._parse_expression_node(ast_node=node.right, depth=depth+1)
+        dexp_arg_right = self._parse_expression_node(ast_node=right, depth=depth+1)
         dexp_node = function(dexp_arg_left, dexp_arg_right)
         return dexp_node
 
@@ -336,18 +357,25 @@ class DotExpressionLoader(CallTraceMixin):
         return dexp_node
 
     def _process_ast_start_node_call(self, ast_node: ast.AST, call_repr: str) -> DotExpression:
-        if ast_node.func.id == "Just":
+        if type(ast_node.func)==ast.Attribute:
+            # func_name = ast_node.func.attr
+            raise RuleLoadTypeError(owner=call_repr, msg=f"Function '{ast_node.func}' is a function with link to Attribute. This should have been processed before ...")
+
+        func_name = ast_node.func.id
+        if func_name == "Just":
             if not (len(ast_node.args) == 1 and len(ast_node.keywords)==0):
                 raise RuleLoadTypeError(owner=call_repr, msg=f"Function 'Just' function can receive simple constant argument, got: {ast_node_repr(ast_node.args)} / {ast_node_repr(ast_node.keywords)}")
             dexp_node = self._process_constant(node = ast_node.args[0], call_repr=call_repr)
         else:
-            raise RuleLoadTypeError(owner=call_repr, msg=f"Only 'Just' function can be a starting point, got: {ast_node.func.id}")
+            raise RuleLoadTypeError(owner=call_repr, msg=f"Only 'Just' function can be a starting point, got: {func_name}")
 
         return dexp_node
 
     @staticmethod
     def get_constant_value(node: ConstantAstTypes, call_repr: str) -> LiteralType:
-        if type(node)==ast.Constant:
+        if type(node)==ast.NameConstant:
+            value = node.value # e.g. None
+        elif type(node)==ast.Constant:
             value = node.value
         elif type(node)==ast.Num:
             value = node.n
@@ -380,6 +408,9 @@ class ComponentsLoader(CallTraceMixin):
         return out
 
     def _load_component(self, input_dict: dict, depth: int) -> ComponentBase:
+        if depth>MAX_RECURSIONS:
+            raise RuleInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
+
         with self.use_call_trace(f"load({to_repr(input_dict)})") as call_repr:
             if not isinstance(input_dict, dict):
                 raise RuleLoadTypeError(owner=call_repr, msg=f"Expecting dict, got: {to_repr(input_dict)}")
@@ -389,9 +420,9 @@ class ComponentsLoader(CallTraceMixin):
             if not comp_class_name:
                 raise RuleLoadTypeError(owner=call_repr, msg=f"Expecting dict key 'type', not found between: {to_repr(input_dict.keys())}")
 
-            comp_klass = COMPONNENTS_REGISTRY.get(comp_class_name, None)
+            comp_klass = COMPONENTS_REGISTRY.get(comp_class_name, None)
             if comp_klass is None:
-                klass_names_avail = get_available_names_example(comp_class_name, COMPONNENTS_REGISTRY.keys())
+                klass_names_avail = get_available_names_example(comp_class_name, COMPONENTS_REGISTRY.keys())
                 raise RuleLoadTypeError(owner=call_repr, msg=f"Class name '{comp_class_name}' is unknown. Available: {klass_names_avail}")
 
             comp_class_attrs = input_dict.pop("attrs", None)
@@ -403,22 +434,38 @@ class ComponentsLoader(CallTraceMixin):
 
             kwargs = {}
             for attr_name, attr_value in comp_class_attrs.items():
-                if isinstance(attr_value, dict) and "type" in attr_value:
-                    # recursion
-                    value: ComponentBase = self._load_component(attr_value, depth=depth+1)
-                elif isinstance(attr_value, str) and attr_value.startswith(DEXP_PREFIX):
-                    code_string = attr_value[len(DEXP_PREFIX):]
-                    value: DotExpression = load_dot_expression(code_string)
-                else:
-                    value: Any = attr_value
-
+                value = self._load_process_attr_value(attr_value=attr_value, depth=depth)
                 kwargs[attr_name] = value
 
-            # try:
-            component = comp_klass(**kwargs)
-            # except Exception as ex:
+            try:
+                component = comp_klass(**kwargs)
+            except TypeError as ex:
+                # constructor error 
+                raise RuleLoadError(owner=call_repr, msg=f"Failed to load '{comp_klass}', error: {ex}. kwargs={kwargs}")
 
         return component
+
+
+    def _load_process_attr_value(self, attr_value: Any, depth: int) -> Any:
+        if depth>MAX_RECURSIONS:
+            raise RuleInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
+
+        if isinstance(attr_value, list):
+            attr_value_new = []
+            for attr_value_item in attr_value:
+                # recursion
+                attr_value_item_new = self._load_process_attr_value(attr_value=attr_value_item, depth=depth+1)
+                attr_value_new.append(attr_value_item_new)
+            value = attr_value_new
+        elif isinstance(attr_value, dict) and "type" in attr_value:
+            # recursion
+            value: ComponentBase = self._load_component(attr_value, depth=depth+1)
+        elif isinstance(attr_value, str) and attr_value.startswith(DEXP_PREFIX):
+            code_string = attr_value[len(DEXP_PREFIX):]
+            value: DotExpression = load_dot_expression(code_string)
+        else:
+            value: Any = attr_value
+        return value
 
 # ------------------------------------------------------------
 

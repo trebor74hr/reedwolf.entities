@@ -20,6 +20,7 @@ from .utils import (
         to_int,
         )
 from .exceptions import (
+        RuleSetupTypeError,
         RuleSetupValueError,
         )
 from .meta import (
@@ -64,14 +65,10 @@ class msg(BaseOnlyArgs):
 # dataclass required?
 @dataclass
 class Component(ComponentBase, ABC):
-
-    # by default name should be defined
-    # name: str = field(init=False, default=UNDEFINED)
-
     # NOTE: I wanted to skip saving parent reference/object within component - to
     #       preserve single and one-direction references.
-    parent:      Union[ComponentBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    parent_name: Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+    parent       : Union[ComponentBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    parent_name  : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
     # set in setup()
     dot_node:   Union[AttrDexpNode, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
@@ -79,27 +76,6 @@ class Component(ComponentBase, ABC):
     def __post_init__(self):
         super().__post_init__()
         self.init_clean_base()
-
-    def init_clean_base(self):
-        # when not set then will be later defined - see set_parent()
-        if self.name not in (None, "", UNDEFINED):
-            if not self.name.isidentifier():
-                raise RuleSetupValueError(owner=self, msg="Attribute name needs to be valid python identifier name")
-
-
-
-    # moved to apply_session ApplyResult
-    # def get_key_string(self, apply_session: IApplySession):
-    #     # TODO: is caching possible? 
-    #     # TODO: consider moving to ApplySession/ApplyResult?
-    #     if self.is_container():
-    #         raise RuleInternalError(owner=self, msg=f"Expecting non-container, got: {self}") 
-    #     container = self.get_first_parent_container(consider_self=True)
-    #     container_key_string = container.get_key_string(apply_session)
-    #     key_string = GlobalConfig.ID_NAME_SEPARATOR.join(
-    #             [container_key_string, self.name] 
-    #             )
-    #     return key_string
 
     def is_subentity_items(self):
         return False
@@ -126,7 +102,10 @@ class ValidationBase(Component, ABC): # TODO: make it abstract
 
         if not self.error:
             title = getattr(self, "title", self.name)
-            self.error = f"Validation failed ({title})"
+            if title:
+                self.error = f"Validation failed ({title})"
+            else:
+                self.error = f"Validation failed"
         elif not self.title:
             self.title = self.error
 
@@ -179,25 +158,6 @@ class EvaluationBase(Component, ABC): # TODO: make it abstract
         """
         ...
 
-
-
-# ------------------------------------------------------------------------
-# FieldGroups - logical groupihg and common functionality/dependency of other
-#            components.
-# ------------------------------------------------------------------------
-
-@dataclass
-class FieldGroup(Component):
-    name:           str
-    contains:       List[Component] = field(repr=False)
-    title:          Optional[TransMessageType] = field(repr=False, default=None)
-    # TODO: allow ItemsValidation too (currently only used in SubEntityItems, e.g. Cardinality/Unique)
-    cleaners:       Optional[List[Union[ValidationBase, EvaluationBase]]] = None
-    available:      Union[bool, DotExpression] = True
-
-    @staticmethod
-    def can_apply_partial() -> bool:
-        return True
 
 # ------------------------------------------------------------
 # OBSOLETE

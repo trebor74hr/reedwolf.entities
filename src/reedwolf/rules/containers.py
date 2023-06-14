@@ -91,9 +91,11 @@ from .eval_items import (
         )
 from .components import (
         Component,
-        FieldGroup,
         ValidationBase,
         EvaluationBase,
+        )
+from .fields import (
+        FieldGroup,
         )
 from .contexts import (
         IContext,
@@ -102,7 +104,16 @@ from .config import (
         Config,
         )
 
-from ..rules import components, fields, validations, evaluations
+from ..rules import (
+        components, 
+        fields, 
+        valid_field, 
+        valid_items, 
+        valid_children, 
+        eval_field,
+        eval_items,
+        eval_children,
+        )
 
 # ------------------------------------------------------------
 
@@ -520,7 +531,7 @@ class Entity(ContainerBase):
     keys            : Optional[KeysBase] = field(repr=False, default=None)
 
     # --- validators and evaluators
-    cleaners        : Optional[List[Union[ItemsValidationBase, ChildrenValidationBase, ItemsEvaluationBase, ChildrenEvaluationBase]]] = field(repr=False, default_factory=list)
+    cleaners        : Optional[List[Union[ChildrenValidationBase, ChildrenEvaluationBase]]] = field(repr=False, default_factory=list)
 
     # --- Evaluated later
     setup_session      : Optional[SetupSession]    = field(init=False, repr=False, default=None)
@@ -534,7 +545,9 @@ class Entity(ContainerBase):
     name_counter_by_parent_name: Dict[str, int] = field(init=False, repr=False, default_factory=dict)
 
     def __post_init__(self):
-        # TODO: check that BoundModel.model is_model_class() and not DotExpression
+        if self.bound_model:
+            if not (isinstance(self.bound_model, BoundModel) and is_model_class(self.bound_model.model)):
+                raise RuleSetupTypeError(owner=self, msg=f"Attribute 'bound_model' needs to be BoundModel with model DC/PYD, got: {self.bound_model}") 
 
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
         if not self.config:
@@ -545,6 +558,8 @@ class Entity(ContainerBase):
         super().__post_init__()
 
     def init_clean(self):
+        self._check_cleaners([ChildrenValidationBase, ChildrenEvaluationBase])
+
         if not isinstance(self.config, Config):
             raise RuleSetupValueError(owner=self, msg=f"config needs Config instance, got: {type(self.config)} / {self.config}")
 
@@ -710,6 +725,8 @@ class SubEntityBase(ContainerBase, ABC):
     # required since if it inherit name from BoundModel then the name will not
     # be unique in self.components (SubEntityItems and BoundModel will share the same name)
     name            : str
+
+    # DotExpression based model -> can be dumped
     bound_model     : Union[BoundModel, BoundModelWithHandlers] = field(repr=False)
     # metadata={"bind_to_parent_setup_session" : True})
 
@@ -717,16 +734,16 @@ class SubEntityBase(ContainerBase, ABC):
     contains        : List[Component] = field(repr=False)
 
     title           : Optional[TransMessageType] = field(repr=False, default=None)
-    functions       : Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list)
+    functions       : Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True} )
     # --- can be index based or standard key-fields names
     keys            : Optional[KeysBase] = field(repr=False, default=None)
     # --- validators and evaluators
     cleaners        : Optional[List[Union[ValidationBase, EvaluationBase]]] = field(repr=False, default_factory=list)
 
     # --- Evaluated later
-    setup_session      : Optional[SetupSession] = field(init=False, repr=False, default=None)
-    components      : Optional[Dict[str, Component]]  = field(init=False, repr=False, default=None)
-    models          : Dict[str, Union[type, DotExpression]] = field(init=False, repr=False, default_factory=dict)
+    setup_session    : Optional[SetupSession] = field(init=False, repr=False, default=None)
+    components       : Optional[Dict[str, Component]]  = field(init=False, repr=False, default=None)
+    models           : Dict[str, Union[type, DotExpression]] = field(init=False, repr=False, default_factory=dict)
     parent           : Union[ComponentBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     parent_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
@@ -782,10 +799,10 @@ class SubEntityItems(SubEntityBase):
     """ one to many relations - e.g. Person -> PersonAddresses """
 
     def __post_init__(self):
-        for cleaner in self.cleaners:
-            if not isinstance(cleaner, (ItemsValidationBase, ChildrenValidationBase, ItemsEvaluationBase, ChildrenEvaluationBase)):
-                raise RuleSetupTypeError(owner=self, msg=f"Cleaners should be instances of ItemsValidationBase, ChildrenValidationBase, ItemsEvaluationBase or ChildrenEvaluationBase, got: {type(cleaner)} / {cleaner}") 
-
+        self._check_cleaners((ItemsValidationBase, ChildrenValidationBase, ItemsEvaluationBase, ChildrenEvaluationBase))
+        # for cleaner in self.cleaners:
+        #     if not isinstance(cleaner, (ItemsValidationBase, ChildrenValidationBase, ItemsEvaluationBase, ChildrenEvaluationBase)):
+        #         raise RuleSetupTypeError(owner=self, msg=f"Cleaners should be instances of ItemsValidationBase, ChildrenValidationBase, ItemsEvaluationBase or ChildrenEvaluationBase, got: {type(cleaner)} / {cleaner}") 
         super().__post_init__()
 
 # ------------------------------------------------------------
@@ -797,10 +814,10 @@ class SubEntitySingle(SubEntityBase):
     cleaners        : Optional[List[Union[SingleValidation, ChildrenValidationBase, ChildrenEvaluationBase]]] = field(repr=False, default_factory=list)
 
     def __post_init__(self):
-        for cleaner in self.cleaners:
-            if not isinstance(cleaner, (SingleValidation, ChildrenValidationBase, ChildrenEvaluationBase)):
-                raise RuleSetupTypeError(owner=self, msg=f"Cleaners should be instances of SingleValidation, ChildrenValidationBase or ChildrenEvaluationBase, got: {type(cleaner)} / {cleaner}") 
-
+        self._check_cleaners((SingleValidation, ChildrenValidationBase, ChildrenEvaluationBase))
+        # for cleaner in self.cleaners:
+        #     if not isinstance(cleaner, (SingleValidation, ChildrenValidationBase, ChildrenEvaluationBase)):
+        #         raise RuleSetupTypeError(owner=self, msg=f"Cleaners should be instances of SingleValidation, ChildrenValidationBase or ChildrenEvaluationBase, got: {type(cleaner)} / {cleaner}") 
         super().__post_init__()
 
 # ------------------------------------------------------------
@@ -828,9 +845,13 @@ def collect_classes(componnents_registry: Dict, module: Any, klass_match: type) 
 
 
 # TODO: not the best way + move function to some utils
-COMPONNENTS_REGISTRY = {}
-collect_classes(COMPONNENTS_REGISTRY, components, ComponentBase)
-collect_classes(COMPONNENTS_REGISTRY, fields, ComponentBase)
-collect_classes(COMPONNENTS_REGISTRY, validations, ComponentBase)
-collect_classes(COMPONNENTS_REGISTRY, evaluations, ComponentBase)
-collect_classes(COMPONNENTS_REGISTRY, None, ComponentBase)
+COMPONENTS_REGISTRY = {}
+collect_classes(COMPONENTS_REGISTRY, components, ComponentBase)
+collect_classes(COMPONENTS_REGISTRY, fields, ComponentBase)
+collect_classes(COMPONENTS_REGISTRY, valid_field, ComponentBase)
+collect_classes(COMPONENTS_REGISTRY, valid_items, ComponentBase)
+collect_classes(COMPONENTS_REGISTRY, valid_children, ComponentBase)
+collect_classes(COMPONENTS_REGISTRY, eval_field, ComponentBase)
+collect_classes(COMPONENTS_REGISTRY, eval_items, ComponentBase)
+collect_classes(COMPONENTS_REGISTRY, eval_children, ComponentBase)
+collect_classes(COMPONENTS_REGISTRY, None, ComponentBase)

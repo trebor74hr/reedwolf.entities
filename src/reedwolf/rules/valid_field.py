@@ -56,8 +56,11 @@ from .utils         import (
         message_truncate,
         )
 
+class FieldValidationBase(ValidationBase, ABC):
+    ...
+
 @dataclass
-class Validation(ValidationBase):
+class Validation(FieldValidationBase):
     """ generic validation runned on field """
     ensure:         DotExpression
     name:           Optional[str] = field(default=None)
@@ -70,7 +73,7 @@ class Validation(ValidationBase):
 
 
 @dataclass
-class Required(ValidationBase):
+class Required(FieldValidationBase):
     name:           Optional[str] = None
     error:          Optional[TransMessageType] = field(repr=False, default=None)
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
@@ -95,7 +98,7 @@ class Required(ValidationBase):
         return None
 
 @dataclass
-class Readonly(ValidationBase):
+class Readonly(FieldValidationBase):
     """ 
     After filled with initial value can the value be cheanged.
     Synonym for: Editable(False) / Frozen.
@@ -147,7 +150,7 @@ class Readonly(ValidationBase):
 
 
 @dataclass
-class ExactLength(ValidationBase):
+class ExactLength(FieldValidationBase):
     value:          Union[int, DotExpression]
     name:           Optional[str] = None
     error:          Optional[TransMessageType] = field(repr=False, default=None)
@@ -175,7 +178,7 @@ class ExactLength(ValidationBase):
         return None
 
 @dataclass
-class MaxLength(ValidationBase):
+class MaxLength(FieldValidationBase):
     value:          Union[int, DotExpression]
     name:           Optional[str] = None
     error:          Optional[TransMessageType] = field(repr=False, default=None)
@@ -203,7 +206,7 @@ class MaxLength(ValidationBase):
         return None
 
 @dataclass
-class MinLength(ValidationBase):
+class MinLength(FieldValidationBase):
     value:          Union[int, DotExpression]
     name:           Optional[str] = None
     error:          Optional[TransMessageType] = field(repr=False, default=None)
@@ -231,7 +234,7 @@ class MinLength(ValidationBase):
         return None
 
 @dataclass
-class RangeLength(ValidationBase):
+class RangeLength(FieldValidationBase):
     # see MaxLength NOTE:
     min:            Union[int, DotExpression]
     max:            Union[int, DotExpression]

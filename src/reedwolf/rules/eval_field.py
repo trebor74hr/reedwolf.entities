@@ -43,13 +43,17 @@ from .expressions import (
 # Evaluation - generic
 # ------------------------------------------------------------
 
-# class InitEvaluationBase(EvaluationBase, ABC):
+# class InitEvaluationBase(FieldEvaluationBase, ABC):
 #     """ called on object/instance creation, needs __init__ hook """
-# class PresaveEvaluationBase(EvaluationBase, ABC):
+# class PresaveEvaluationBase(FieldEvaluationBase, ABC):
 #     """ called after update, before save """
 
+class FieldEvaluationBase(EvaluationBase, ABC):
+    ...
+
+
 @dataclass
-class Evaluation(EvaluationBase):
+class Evaluation(FieldEvaluationBase):
     """
     TODO: put usage - new custom evaluations could be done like this:
     """
@@ -77,7 +81,7 @@ class Evaluation(EvaluationBase):
 # Evaluations on object/instance initialization
 # ------------------------------------------------------------
 @dataclass
-class Default(EvaluationBase):
+class Default(FieldEvaluationBase):
     """ used for generated classes, dynamically created objects or SQL or other
         storage generated code
         for existing bound models - needs hook to ensure good value on object creation (__init__)
