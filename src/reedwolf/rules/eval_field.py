@@ -39,9 +39,6 @@ from .expressions import (
         execute_available_dexp,
         )
 
-# ------------------------------------------------------------
-# Evaluation - generic
-# ------------------------------------------------------------
 
 # class InitEvaluationBase(FieldEvaluationBase, ABC):
 #     """ called on object/instance creation, needs __init__ hook """
@@ -52,8 +49,12 @@ class FieldEvaluationBase(EvaluationBase, ABC):
     ...
 
 
+# ------------------------------------------------------------
+# FieldEvaluation - generic
+# ------------------------------------------------------------
+
 @dataclass
-class Evaluation(FieldEvaluationBase):
+class FieldEvaluation(FieldEvaluationBase):
     """
     TODO: put usage - new custom evaluations could be done like this:
     """
@@ -78,8 +79,7 @@ class Evaluation(FieldEvaluationBase):
         return self.value._evaluator.execute_dexp(apply_session=apply_session)
 
 # ------------------------------------------------------------
-# Evaluations on object/instance initialization
-# ------------------------------------------------------------
+
 @dataclass
 class Default(FieldEvaluationBase):
     """ used for generated classes, dynamically created objects or SQL or other

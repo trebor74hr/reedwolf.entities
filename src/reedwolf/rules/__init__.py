@@ -66,7 +66,7 @@ from .valid_children import (
         ChildrenValidation,
         )
 from .eval_field import (
-        Evaluation,
+        FieldEvaluation,
         Default,
         )
 from .eval_items import (
@@ -171,7 +171,7 @@ __all__ = [
     "SingleValidation",
 
     # evaluations
-    "Evaluation",
+    "FieldEvaluation",
     "Default",
 
     "ChildrenEvaluation",
