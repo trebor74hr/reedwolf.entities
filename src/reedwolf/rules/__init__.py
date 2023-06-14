@@ -49,7 +49,7 @@ from .fields import (
         FieldGroup,
         )
 from .valid_field import (
-        Validation,
+        FieldValidation,
         Required,
         Readonly,
         MaxLength,
@@ -154,7 +154,7 @@ __all__ = [
     "ChoiceOption",
 
     # validations
-    "Validation",
+    "FieldValidation",
 
     # validations
     "Required",

@@ -1057,7 +1057,7 @@ class ApplyResult(IApplySession):
                         raise RuleApplyError(owner=self, msg="Evaluation can be defined only for components with 'bind' defined. Remove 'Evaluation' or define 'bind'.")
                     self.execute_evaluation(component=component, evaluation=cleaner)
                 else:
-                    raise RuleApplyError(owner=self, msg=f"Unknown cleaner type {type(cleaner)}. Expected Evaluation or Validation.")
+                    raise RuleApplyError(owner=self, msg=f"Unknown cleaner type {type(cleaner)}. Expected *Evaluation or *Validation.")
 
         if self.defaults_mode and isinstance(component, FieldBase):
             # NOTE: change NA_DEFAULTS_MODE to most reasonable and

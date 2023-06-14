@@ -16,7 +16,7 @@ TODO: novi Validation - je li podatak lock-an do nekog datuma
 new custom validations could be done like this::
 
     @dataclass
-    class ValidationHourValue(Validation):
+    class ValidationHourValue(FieldValidation):
         def __init__(self, name:str, title:TransMessageType):
             super().__init__(
                     name=name, title=title,
@@ -60,7 +60,7 @@ class FieldValidationBase(ValidationBase, ABC):
     ...
 
 @dataclass
-class Validation(FieldValidationBase):
+class FieldValidation(FieldValidationBase):
     """ generic validation runned on field """
     ensure:         DotExpression
     name:           Optional[str] = field(default=None)
