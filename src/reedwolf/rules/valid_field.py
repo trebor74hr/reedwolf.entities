@@ -42,7 +42,6 @@ from .meta import (
 from .base import (
         IApplySession,
         ValidationFailure,
-        ExecResult,
         )
 from .components    import (
         ValidationBase, 

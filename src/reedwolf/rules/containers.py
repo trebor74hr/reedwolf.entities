@@ -23,7 +23,6 @@ from .utils import (
         UNDEFINED,
         NA_DEFAULTS_MODE,
         UndefinedType,
-        varname_to_title,
         )
 from .exceptions import (
         RuleSetupError,
@@ -734,7 +733,7 @@ class SubEntityBase(ContainerBase, ABC):
     contains        : List[Component] = field(repr=False)
 
     title           : Optional[TransMessageType] = field(repr=False, default=None)
-    functions       : Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True} )
+    functions       : Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
     # --- can be index based or standard key-fields names
     keys            : Optional[KeysBase] = field(repr=False, default=None)
     # --- validators and evaluators

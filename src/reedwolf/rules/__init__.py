@@ -81,7 +81,7 @@ from .contexts import (
 from .config import (
         Config,
         )
-from .containers import (
+from .containers import (  # noqa: F401
         KeyFields,
         SubEntityItems,
         SubEntitySingle,

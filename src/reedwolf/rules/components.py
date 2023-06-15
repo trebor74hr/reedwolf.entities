@@ -7,7 +7,6 @@ from abc import (
 from typing import (
         Any,
         Union, 
-        List, 
         Optional, 
         ClassVar,
         )
@@ -16,12 +15,10 @@ from dataclasses import dataclass, field
 from .utils import (
         UNDEFINED,
         UndefinedType,
-        varname_to_title,
         to_int,
         )
 from .exceptions import (
-        RuleSetupTypeError,
-        RuleSetupValueError,
+        RuleSetupError,
         )
 from .meta import (
         TransMessageType,
@@ -105,7 +102,7 @@ class ValidationBase(Component, ABC): # TODO: make it abstract
             if title:
                 self.error = f"Validation failed ({title})"
             else:
-                self.error = f"Validation failed"
+                self.error = "Validation failed"
         elif not self.title:
             self.title = self.error
 

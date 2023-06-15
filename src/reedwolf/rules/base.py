@@ -244,7 +244,7 @@ class SetParentMixin:
 
         if not self.name:
 
-            if  self.parent is None:
+            if self.parent is None:
                 # top container
                 parents = []
                 container = self

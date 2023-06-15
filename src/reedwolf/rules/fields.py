@@ -40,7 +40,6 @@ from .utils import (
         NA_DEFAULTS_MODE,
         UndefinedType,
         message_truncate,
-        varname_to_title,
         )
 from .exceptions import (
         RuleSetupValueError,

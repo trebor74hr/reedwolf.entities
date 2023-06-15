@@ -23,6 +23,9 @@ from dataclasses import (
         field,
         )
 
+from .exceptions import (
+        RuleSetupTypeError,
+        )
 from .meta import (
         TransMessageType, 
         LiteralType,
@@ -67,10 +70,10 @@ class FieldEvaluation(FieldEvaluationBase):
 
     def __post_init__(self):
         if not isinstance(self.value, DotExpression):
-            raise RuleSetupTypeError(owner=self, msg=f"Argument 'value' needs to be DotExpression, got: {type(self.value)} / {self.value}") 
+            raise RuleSetupTypeError(owner=self, msg=f"Argument 'value' needs to be DotExpression, got: {type(self.value)} / {self.value}")
         # self._fill_name_when_missing()
         super().__post_init__()
-        
+
 
     def execute(self, apply_session: IApplySession) -> Optional[ExecResult]:
         not_available_dexp_result = execute_available_dexp(self.available, apply_session=apply_session)
