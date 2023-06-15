@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 import inspect
 from collections import OrderedDict
@@ -546,7 +544,7 @@ def check_prepared_arguments(
 
 
 def create_function_arguments(
-        py_function: Callable[[...], Any]
+        py_function: Callable
         ) -> FunctionArguments:
 
     type_info_dict = TypeInfo.extract_function_arguments_type_info_dict(py_function)

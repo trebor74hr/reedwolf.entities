@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from abc import abstractmethod
 from dataclasses import dataclass, field
 from contextlib import AbstractContextManager
@@ -40,6 +38,7 @@ from .expressions import (
         IAttributeAccessorBase,
         )
 from .meta import (
+        Self,
         is_model_class,
         FunctionArgumentsType,
         FunctionArgumentsTupleType,
@@ -429,7 +428,7 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
     def __post_init__(self):
         ...
 
-    def get_attribute(self, apply_session:IApplySession, attr_name: str, is_last:bool) -> ComponentAttributeAccessor:
+    def get_attribute(self, apply_session:IApplySession, attr_name: str, is_last:bool) -> Self:
         children_dict = apply_session.get_upward_components_dict(self.component)
         if attr_name not in children_dict:
             avail_names = get_available_names_example(attr_name, children_dict.keys())

@@ -227,6 +227,66 @@ class NestedBoundModelMixin:
 
 
 # ------------------------------------------------------------
+# BoundModel
+# ------------------------------------------------------------
+
+@dataclass
+class BoundModel(NestedBoundModelMixin, BoundModelBase):
+
+    # setup must be called first for this component, and later for others
+    # bigger comes first, 0 is DotExpression default, 1 is for other copmonents default
+    SETUP_PRIORITY  : ClassVar[int] = 9
+
+    name            : str
+    # title           : TransMessageType
+
+    model           : Union[ModelType, DotExpression] = field(repr=False)
+    contains        : Optional[List["BoundModelWithHandlers"]] = field(repr=False, default_factory=list)
+
+    # evaluated later
+    parent           : Union[BoundModelBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    parent_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+
+    # Filled from from model
+    type_info : Optional[TypeInfo] = field(init=False, default=None, repr=False)
+    models_with_handlers_dict : Dict[str, ModelWithHandlers] = field(init=False, repr=False, default_factory=dict)
+
+
+    def get_type_info(self):
+        if not self.type_info:
+            self._set_type_info()
+        return self.type_info
+
+
+    def _set_type_info(self):
+        # NOTE: model: DotExpression - would be hard to fill automatically
+        #           when DotExpression, dexp is evaluated setup() what is a bit late in
+        #           container.setup().
+        assert not self.type_info
+        if not (is_model_class(self.model) or isinstance(self.model, DotExpression)):
+            raise RuleSetupValueError(f"Model should be Model class (DC/PYD) or DotExpression, got: {self.model}")
+
+        if isinstance(self.model, DotExpression):
+            self.type_info = self.model._evaluator.last_node().type_info
+        else:
+            self.type_info = TypeInfo.get_or_create_by_type(
+                                    py_type_hint=self.model,
+                                    caller=self,
+                                    )
+
+    def setup(self, setup_session:ISetupSession):
+        super().setup(setup_session=setup_session)
+        if not self.type_info:
+            self._set_type_info()
+
+        self._register_nested_models(setup_session)
+
+        self._finished = True
+
+
+
+
+# ------------------------------------------------------------
 # BoundModelWithHandlers
 # ------------------------------------------------------------
 
@@ -295,65 +355,6 @@ class BoundModelWithHandlers(NestedBoundModelMixin, BoundModelBase):
     def get_type_info(self):
         assert self.type_info
         return self.type_info
-
-# ------------------------------------------------------------
-# BoundModel
-# ------------------------------------------------------------
-
-@dataclass
-class BoundModel(NestedBoundModelMixin, BoundModelBase):
-
-    # setup must be called first for this component, and later for others
-    # bigger comes first, 0 is DotExpression default, 1 is for other copmonents default
-    SETUP_PRIORITY  : ClassVar[int] = 9
-
-    name            : str
-    # title           : TransMessageType
-
-    model           : Union[ModelType, DotExpression] = field(repr=False)
-    contains        : Optional[List[BoundModelWithHandlers]] = field(repr=False, default_factory=list)
-
-    # evaluated later
-    parent           : Union[BoundModelBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    parent_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
-
-    # Filled from from model
-    type_info : Optional[TypeInfo] = field(init=False, default=None, repr=False)
-    models_with_handlers_dict : Dict[str, ModelWithHandlers] = field(init=False, repr=False, default_factory=dict)
-
-
-    def get_type_info(self):
-        if not self.type_info:
-            self._set_type_info()
-        return self.type_info
-
-
-    def _set_type_info(self):
-        # NOTE: model: DotExpression - would be hard to fill automatically
-        #           when DotExpression, dexp is evaluated setup() what is a bit late in
-        #           container.setup().
-        assert not self.type_info
-        if not (is_model_class(self.model) or isinstance(self.model, DotExpression)):
-            raise RuleSetupValueError(f"Model should be Model class (DC/PYD) or DotExpression, got: {self.model}")
-
-        if isinstance(self.model, DotExpression):
-            self.type_info = self.model._evaluator.last_node().type_info
-        else:
-            self.type_info = TypeInfo.get_or_create_by_type(
-                                    py_type_hint=self.model,
-                                    caller=self,
-                                    )
-
-    def setup(self, setup_session:ISetupSession):
-        super().setup(setup_session=setup_session)
-        if not self.type_info:
-            self._set_type_info()
-
-        self._register_nested_models(setup_session)
-
-        self._finished = True
-
-
 
 
 # ------------------------------------------------------------

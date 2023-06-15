@@ -3,14 +3,13 @@ TypeInfo - the most interesting class
 extract_* - the most interesting functions 
 
 """
-from __future__ import annotations
-
 import inspect
 from collections.abc import Sequence
 from functools import partial
 from collections.abc import Sized
 from typing import (
         Any,
+        NewType,
         ClassVar,
         Callable,
         Dict,
@@ -38,8 +37,7 @@ from dataclasses import (
 try:
     from typing import Self
 except ImportError:
-    Self = Any
-
+    Self = NewType("Self", Any)
 try:
     # ----------------------------------------
     # Pydantic found
@@ -481,7 +479,7 @@ class TypeInfo:
 
     # ------------------------------------------------------------
 
-    TYPE_INFO_REGISTRY: ClassVar[Dict[type, TypeInfo]] = {}
+    TYPE_INFO_REGISTRY: ClassVar[Dict[type, Self]] = {}
 
 
     def __post_init__(self):
@@ -580,7 +578,7 @@ class TypeInfo:
                     raise RuleSetupValueError(item=self, msg=f"Unsupported type hint, got: {self.py_type_hint}. {ERR_MSG_SUPPORTED}")
 
 
-    def check_compatible(self, other: TypeInfo) -> Optional[str]:
+    def check_compatible(self, other: Self) -> Optional[str]:
         """
         returns error message when input type is not compatible with given type
         """
@@ -667,7 +665,7 @@ class TypeInfo:
     # ------------------------------------------------------------
 
     @classmethod
-    def get_or_create_by_type(cls, py_type_hint: PyTypeHint, caller: Optional[Any] = None) -> TypeInfo:
+    def get_or_create_by_type(cls, py_type_hint: PyTypeHint, caller: Optional[Any] = None) -> Self:
         """
         When 'from future import annotations + __annotations__' is used then python hints are strings. 
         Use 'typing.get_type_hints()' to resolve hints properly.
@@ -706,7 +704,7 @@ class TypeInfo:
     def extract_function_return_type_info(
             cls,
             py_function: Callable[..., Any], 
-            allow_nonetype:bool=False) -> TypeInfo:
+            allow_nonetype:bool=False) -> Self:
 
         py_type_hint_dict = extract_function_py_type_hint_dict(function=py_function)
         py_type_hint = py_type_hint_dict.get("return", None)
@@ -729,7 +727,7 @@ class TypeInfo:
     @classmethod
     def extract_function_arguments_type_info_dict(
             cls,
-            py_function: Callable[..., Any]) -> Dict[str, TypeInfo]:
+            py_function: Callable[..., Any]) -> Dict[str, Self]:
         """
         From annotations, but argument defaults could be fetched from
         inspect.getfullargspec(), see: extract_function_arguments_default_dict

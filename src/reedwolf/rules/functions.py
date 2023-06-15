@@ -14,8 +14,6 @@ function is registereed and can be used in
 
 extra args could be passed and must be called as function.
 """
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 from enum import Enum
 from abc import ABC
@@ -492,6 +490,19 @@ class IFunctionFactory(ABC):
 
 # ------------------------------------------------------------
 
+@dataclass
+class CustomFunctionFactory(IFunctionFactory):
+    FUNCTION_CLASS : ClassVar[Type[IFunction]] = CustomFunction
+
+# ------------------------------------------------------------
+
+@dataclass
+class BuiltinFunctionFactory(IFunctionFactory):
+    FUNCTION_CLASS : ClassVar[Type[IFunction]] = BuiltinFunction
+
+
+# ------------------------------------------------------------
+
 def Function(py_function : Callable[..., Any], 
              name: Optional[str] = None,
              value_arg_name:Optional[str]=None,
@@ -554,18 +565,6 @@ def create_builtin_function_factory(
                 arg_validators=arg_validators,
                 )
 
-# ------------------------------------------------------------
-
-@dataclass
-class CustomFunctionFactory(IFunctionFactory):
-    FUNCTION_CLASS : ClassVar[Type[IFunction]] = CustomFunction
-
-# ------------------------------------------------------------
-
-@dataclass
-class BuiltinFunctionFactory(IFunctionFactory):
-    FUNCTION_CLASS : ClassVar[Type[IFunction]] = BuiltinFunction
-
 
 # =====================================================================
 # FunctionsFactoryRegistry
@@ -583,7 +582,7 @@ class FunctionsFactoryRegistry:
         """
         # TODO: typing is not good
         #       Union[type(IFunction), CustomFunctionFactory]
-        self.store: Dict[str, Type(IFunction)]= {}
+        self.store: Dict[str, Type[IFunction]]= {}
         self.include_builtin:bool = include_builtin
 
         if self.include_builtin:
@@ -599,7 +598,7 @@ class FunctionsFactoryRegistry:
         return f"{self.__class__.__name__}(functions={', '.join(self.store.keys())}, include_builtin={self.include_builtin})"
     __repr__ = __str__
 
-    def items(self) -> List[Tuple[str, Type(IFunction)]]:
+    def items(self) -> List[Tuple[str, Type[IFunction]]]:
         return self.store.items()
 
     # @staticmethod

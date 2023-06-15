@@ -16,8 +16,6 @@ Notes:
         Only initial value is unchanged. See also BooleanField.enables.
 
 """
-from __future__ import annotations
-
 from abc import ABC
 from typing import (
         Union, 
@@ -61,6 +59,7 @@ from .meta import (
         get_enum_member_py_type,
         EmptyFunctionArguments,
         STANDARD_TYPE_LIST,
+        Self,
         )
 from .base import (
         warn,
@@ -117,7 +116,7 @@ class AutocomputedEnum(IntEnum):
     SOMETIMES= 2  # must be set manually
 
     @classmethod
-    def from_value(cls, value: Union[bool, AutocomputedEnum]) -> AutocomputedEnum:
+    def from_value(cls, value: Union[bool, Self]) -> Self:
         if value is True:
             value = cls.ALLWAYS
         elif value is False:
@@ -621,7 +620,7 @@ class ChoiceField(FieldBase):
 class EnumField(FieldBase):
     PYTHON_TYPE:ClassVar[type] = UNDEFINED
 
-    enum: Optional[Enum, DotExpression] = None
+    enum: Optional[Union[Enum, DotExpression]] = None
 
     enum_value_py_type: Optional[type] = field(init=False, default=None)
 

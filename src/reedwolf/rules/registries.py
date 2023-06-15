@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import inspect
 
 from typing import (
@@ -38,6 +36,7 @@ from .expressions import (
         IDotExpressionNode,
         )
 from .meta import (
+        Self,
         is_model_class,
         ModelType,
         get_model_fields,
@@ -471,7 +470,7 @@ class SetupSession(SetupSessionBase):
     def create_local_setup_session(self, 
             this_ns_instance_model_class: Optional[ModelType],
             this_ns_value_attr_node: Optional[AttrDexpNode] = None,
-            ) -> SetupSession:
+            ) -> Self:
         """ Currently creates only local ThisNS registry, which is used for
         some local context, e.g. Component This. dexps 
         Args:

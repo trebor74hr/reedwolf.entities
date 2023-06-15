@@ -847,6 +847,7 @@ class ComponentBase(SetParentMixin, ABC):
             # ----------------------------------------------------------------------
             # TODO: this is not nice - do it better
             # TODO: models should not be dict()
+            # TODO: added Self for BoundModelWithHandlers
             if subcomponent_name not in ("models", "data", "functions", "enum") \
                     and th_field \
                     and "Component" not in str(th_field.type) \
@@ -855,7 +856,9 @@ class ComponentBase(SetParentMixin, ABC):
                     and "Validation" not in str(th_field.type) \
                     and "Evaluation" not in str(th_field.type) \
                     and "BoundModel" not in str(th_field.type) \
+                    and "[Self]" not in str(th_field.type) \
                     :
+                import pdb;pdb.set_trace() 
                 # TODO: Validation should be extended to test isinstance(.., ValidationBase) ... or similar to include Required(), MaxLength etc.
                 raise RuleInternalError(owner=subcomponent, msg=f"Should '{subcomponent_name}' attribute be excluded from processing." 
                         + f"\n  == {th_field})"
