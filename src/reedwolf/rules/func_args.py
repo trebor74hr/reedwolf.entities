@@ -1,4 +1,3 @@
-# Copied and adapted from Reedwolf project (project by robert.lujo@gmail.com - git@bitbucket.org:trebor74hr/reedwolf.git)
 from __future__ import annotations
 
 from dataclasses import dataclass, field

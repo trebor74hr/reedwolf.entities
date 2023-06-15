@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import (
         Any,
@@ -32,6 +30,7 @@ from .utils import (
         NOT_APPLIABLE,
         )
 from .meta import (
+        Self,
         NoneType,
         ModelType,
         is_model_class,
@@ -41,6 +40,7 @@ from .meta import (
         LiteralType,
         )
 from .base import (
+        UndefinedType,
         MAX_RECURSIONS,
         AttrValue,
         AttrName,
@@ -724,7 +724,7 @@ class ApplyResult(IApplySession):
             # parent: Optional[ComponentBase], 
             in_component_only_tree:bool,
             instance_list: List[ModelType],
-            current_instance_list_new: Union[NoneType, UNDEFINED, ModelType],
+            current_instance_list_new: Union[NoneType, UndefinedType, ModelType],
             depth: int,
             ):
         """
@@ -864,7 +864,7 @@ class ApplyResult(IApplySession):
 
     # ------------------------------------------------------------
 
-    def apply(self) -> ApplyResult:
+    def apply(self) -> Self:
         """
         Main function for parsing, validating and evaluating input instance.
         Returns ApplyResult object.

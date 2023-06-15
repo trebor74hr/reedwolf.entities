@@ -2,8 +2,6 @@
 ItemsEvaluations - used to automatically create/update/delete Items used in
 SubEntityItems
 """
-from __future__ import annotations
-
 from abc import ABC
 from typing import (
         Optional,

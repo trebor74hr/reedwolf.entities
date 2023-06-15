@@ -2,8 +2,6 @@
 ChildrenEvaluations - used to automatically update some of Children fields
 In SubEntityItems case, this will be runned against every SubEntity in list.
 """
-# from __future__ import annotations
-
 from abc import ABC
 from typing import (
         Optional,

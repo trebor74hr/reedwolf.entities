@@ -1,6 +1,3 @@
-# Copied and adapted from Reedwolf project (project by robert.lujo@gmail.com - git@bitbucket.org:trebor74hr/reedwolf.git)
-from __future__ import annotations
-
 from abc import (
         ABC, 
         abstractmethod,
@@ -46,67 +43,13 @@ from .meta import (
         STANDARD_TYPE_W_NONE_LIST,
         HookOnFinishedAllCallable,
         LiteralType,
+        AttrName,
+        Self,
         )
-
-
-# CallerType = Union[Namespace, IDotExpressionNode]
-
-
 # ------------------------------------------------------------
-# interfaces / base classes
+# interfaces / base classes / internal structs
 # ------------------------------------------------------------
 
-# TODO: Inheriting ABC triggers:
-#   TypeError: Can't instantiate abstract class ModelsRegistry with abstract methods NAMESPACE, ...
-class IRegistry:
-
-    @abstractmethod
-    def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]: # noqa: F821
-        """ 
-        Used in apply phase. returns instance or instance attribute value + a
-        different attribute name when different attribute needs to be retrieved
-        from instance.
-        """
-        ...
-
-# ------------------------------------------------------------
-
-class ISetupSession(ABC):
-
-    @abstractmethod
-    def get_registry(self, namespace: Namespace, strict:bool= True) -> IRegistry:
-        ...
-
-    @abstractmethod
-    def __getitem__(self, namespace: Namespace) -> IRegistry:
-        ...
-
-    @abstractmethod
-    def register_dexp_node(self, dexp_node: IDotExpressionNode):
-        " TODO: can be done here "
-        ...
-
-    @abstractmethod
-    def add_hook_on_finished_all(self, hook_function: HookOnFinishedAllCallable):
-        " TODO: can be done here "
-        ...
-
-
-# ------------------------------------------------------------
-
-class IAttributeAccessorBase(ABC):
-    " used in registry "
-
-    @abstractmethod
-    def get_attribute(self, apply_session: 'IApplySession', attr_name:str, is_last:bool) -> IAttributeAccessorBase: # noqa: F821
-        """ 
-        is_last -> True - need to get final literal value from object
-        (usually primitive type like int/str/date ...) 
-        """
-        ...
-
-# ------------------------------------------------------------
-# internal structs
 # ------------------------------------------------------------
 
 @dataclass
@@ -114,6 +57,8 @@ class RawAttrValue:
     value: Any
     attr_name: str
     changer_name: str
+
+# ------------------------------------------------------------
 
 @dataclass
 class ExecResult:
@@ -136,46 +81,8 @@ class ExecResult:
                 )
         self.value = value
 
-    def is_not_available(self):
+    def is_not_available(self) -> bool:
         return isinstance(self, NotAvailableExecResult)
-
-
-@dataclass
-class NotAvailableExecResult(ExecResult):
-    " used when available yields False - value contains "
-    reason: str = field(default=None)
-
-    @classmethod
-    def create(cls, 
-            available_dexp_result: Union[ExecResult, UndefinedType]=UNDEFINED, 
-            reason: Optional[str] = None) -> NotAvailableExecResult:
-        if not reason:
-            if available_dexp_result:
-                assert not isinstance(ExecResult, NotAvailableExecResult)
-                reason=f"Not available since expression yields: {available_dexp_result.value}", 
-            else:
-                if available_dexp_result not in (None, UNDEFINED):
-                    raise RuleInternalError(msg=f"Expected None/Undefined, got: {available_dexp_result}") 
-                reason="Value not available"
-        instance = cls(reason=reason)
-        instance.value = available_dexp_result
-        return instance
-
-
-def execute_available_dexp(
-        available_dexp: Optional[Union[bool, DotExpression]], 
-        apply_session: IApplySession) \
-                -> Optional[NotAvailableExecResult]: # noqa: F821
-    " returns NotAvailableExecResult when not available with details in instance, if all ok -> returns None "
-    if isinstance(available_dexp, DotExpression):
-        available_dexp_result = available_dexp._evaluator.execute_dexp(apply_session=apply_session)
-        if not bool(available_dexp_result.value):
-            return NotAvailableExecResult.create(available_dexp_result=available_dexp_result)
-    elif isinstance(available_dexp, bool):
-        if available_dexp is False:
-            return NotAvailableExecResult.create(available_dexp_result=None)
-    # all ok
-    return None
 
 
 # ------------------------------------------------------------
@@ -212,336 +119,54 @@ class IDotExpressionNode(ABC):
 
 
 # ------------------------------------------------------------
-# execute_dexp_or_node
-# ------------------------------------------------------------
-
-def execute_dexp_or_node(
-        dexp_or_value: Union[DotExpression, Any],
-        # Union[OperationDexpNode, IFunctionDexpNode, LiteralDexpNode]
-        dexp_node: Union[IDotExpressionNode, Any], 
-        prev_node_type_info: TypeInfo,
-        dexp_result: ExecResult,
-        apply_session: "IApplySession" # noqa: F821
-        ) -> ExecResult:
-
-    # TODO: this function has ugly interface - solve this better
-
-    if isinstance(dexp_or_value, DotExpression):
-        dexp_result = dexp_or_value._evaluator.execute_dexp(
-                            apply_session=apply_session,
-                            )
-    # AttrDexpNode, OperationDexpNode, IFunctionDexpNode, LiteralDexpNode,
-    elif isinstance(dexp_node, (
-            IDotExpressionNode,
-            )):
-        dexp_result = dexp_node.execute_node(
-                            apply_session=apply_session, 
-                            dexp_result=dexp_result,
-                            prev_node_type_info=prev_node_type_info,
-                            is_last=True,
-                            )
-    else:
-        raise RuleInternalError(
-                f"Expected Dexp, OpDexp or FuncDexp, got: {type(dexp_or_value)} -> {dexp_or_value} / {type(dexp_node)} -> {dexp_node}")
-
-    return dexp_result
 
 
+class IRegistry:
 
-# ------------------------------------------------------------
-# IFunctionDexpNode - name used in-between just to emphasize that this is Dexp
-#                     Node
-# ------------------------------------------------------------
-
-class IFunctionDexpNode(IDotExpressionNode):
-    """
-    a bit an overhead -> just to have better naming for base class
-    """
-    pass
-
-
-@dataclass
-class LiteralDexpNode(IDotExpressionNode):
-
-    value : Any
-    dexp_result: ExecResult = field(repr=False, init=False)
-    type_info: TypeInfo = field(repr=False, init=False)
-
-    # later evaluated
-    is_finished: bool = field(init=False, repr=False, default=False)
-
-    def __post_init__(self):
-        self.dexp_result = ExecResult()
-        self.dexp_result.set_value(self.value, attr_name="", changer_name="")
-        self.type_info = TypeInfo.get_or_create_by_type(type(self.value), caller=self)
-
-    def get_type_info(self) -> TypeInfo:
-        return self.type_info
-
-    def execute_node(self, 
-                 apply_session: "IApplySession", # noqa: F821
-                 dexp_result: ExecResult,
-                 is_last: bool,
-                 prev_node_type_info: TypeInfo,
-                 ) -> ExecResult:
-        assert not dexp_result
-        return self.dexp_result
+    @abstractmethod
+    def get_root_value(self, apply_session: "IApplySession", attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]: # noqa: F821
+        """ 
+        Used in apply phase. returns instance or instance attribute value + a
+        different attribute name when different attribute needs to be retrieved
+        from instance.
+        """
+        ...
 
 # ------------------------------------------------------------
 
-class DExpStatusEnum(str, Enum):
-    INITIALIZED      = "INIT"
-    ERR_NOT_FOUND    = "ERR_NOT_FOUND"
-    ERR_TO_IMPLEMENT = "ERR_TO_IMPLEMENT"
-    BUILT            = "BUILT" # OK
+class ISetupSession(ABC):
+
+    @abstractmethod
+    def get_registry(self, namespace: Namespace, strict:bool= True) -> IRegistry:
+        ...
+
+    @abstractmethod
+    def __getitem__(self, namespace: Namespace) -> IRegistry:
+        ...
+
+    @abstractmethod
+    def register_dexp_node(self, dexp_node: IDotExpressionNode):
+        " TODO: can be done here "
+        ...
+
+    @abstractmethod
+    def add_hook_on_finished_all(self, hook_function: HookOnFinishedAllCallable):
+        " TODO: can be done here "
+        ...
+
 
 # ------------------------------------------------------------
-# Operations
-# ------------------------------------------------------------
 
-# Custom implementation - no operator function, needs custom
-# logic
+class IAttributeAccessorBase(ABC):
+    " used in registry "
 
-def _op_apply_and(first, second):
-    return bool(first) and bool(second)
-
-def _op_apply_or(first, second):
-    return bool(first) or bool(second)
-
-@dataclass
-class Operation:
-    code: str
-    dexp_code: str
-    ast_node_type : ast.AST
-    apply_function: Callable
-    load_function : Callable
-
-
-# https://florian-dahlitz.de/articles/introduction-to-pythons-operator-module
-# https://docs.python.org/3/library/operator.html#mapping-operators-to-functions
-OPCODE_TO_FUNCTION = {
-    # NOTE: no need to check unary/binary vs have 1 or 2 params
-    #       python parser/interpretor will ensure this
-    # binary operatorsy - buultin
-      "=="  : Operation(code="==" , dexp_code="==" , ast_node_type= ast.Eq      , apply_function= operator.eq      , load_function= operator.eq) # noqa: E131
-    , "!="  : Operation(code="!=" , dexp_code="!=" , ast_node_type= ast.NotEq   , apply_function= operator.ne      , load_function= operator.ne)
-    , ">"   : Operation(code=">"  , dexp_code=">"  , ast_node_type= ast.Gt      , apply_function= operator.gt      , load_function= operator.gt)
-    , ">="  : Operation(code=">=" , dexp_code=">=" , ast_node_type= ast.GtE     , apply_function= operator.ge      , load_function= operator.ge)
-    , "<"   : Operation(code="<"  , dexp_code="<"  , ast_node_type= ast.Lt      , apply_function= operator.lt      , load_function= operator.lt)
-    , "<="  : Operation(code="<=" , dexp_code="<=" , ast_node_type= ast.LtE     , apply_function= operator.le      , load_function= operator.le)
-
-    , "+"   : Operation(code="+"  , dexp_code="+"  , ast_node_type= ast.Add     , apply_function= operator.add     , load_function= operator.add)
-    , "-"   : Operation(code="-"  , dexp_code="-"  , ast_node_type= ast.Sub     , apply_function= operator.sub     , load_function= operator.sub)
-    , "*"   : Operation(code="*"  , dexp_code="*"  , ast_node_type= ast.Mult    , apply_function= operator.mul     , load_function= operator.mul)
-    , "/"   : Operation(code="/"  , dexp_code="/"  , ast_node_type= ast.Div     , apply_function= operator.truediv , load_function= operator.truediv)
-    , "//"  : Operation(code="//" , dexp_code="//" , ast_node_type= ast.FloorDiv, apply_function= operator.floordiv, load_function= operator.floordiv)
-
-    , "in"  : Operation(code="in" , dexp_code="in" , ast_node_type= ast.In      , apply_function= operator.contains, load_function= operator.contains)
-
-    # binary operatorsy                            
-    , "and" : Operation(code="and", dexp_code="&"  , ast_node_type= ast.BitAnd  , apply_function= _op_apply_and    , load_function= operator.iand)
-    , "or"  : Operation(code="or" , dexp_code="|"  , ast_node_type= ast.BitOr   , apply_function= _op_apply_or     , load_function= operator.ior)
-
-    # unary operators                              
-    , "not" : Operation(code="not", dexp_code="~"  , ast_node_type= ast.Invert  , apply_function= operator.not_    , load_function= operator.invert)
-    }
-
-
-# Other:
-#   ast.Dict ast.DictComp ast.List ast.ListComp
-#   ast.Pow ast.MatMult ast.Mod
-#   ast.BitXor ast.RShift ast.LShift
-#   ast.BoolOp ast.Compare ast.Constant ast.ExtSlice ast.Index ast.Is ast.IsNot ast.Slice
-
-AST_NODE_TYPE_TO_FUNCTION = {
-    operation.ast_node_type: operation
-    for operation in OPCODE_TO_FUNCTION.values()
-}
-
-
-#       ast.Eq       : operator.eq  # noqa: E131
-#     , ast.NotEq    : operator.ne   
-#     , ast.Gt       : operator.gt
-#     , ast.GtE      : operator.ge
-#     , ast.Lt       : operator.lt
-#     , ast.LtE      : operator.le
-# 
-#     , ast.Add      : operator.add
-#     , ast.Sub      : operator.sub
-#     , ast.Mult     : operator.mul
-#     , ast.Div      : operator.truediv
-#     , ast.FloorDiv : operator.floordiv
-# 
-#     , ast.In       : operator.contains
-# 
-#     # binary ops
-#     , ast.BitAnd   : operator.iand # &
-#     , ast.BitOr    : operator.ior  #  |
-# 
-#     # unary operators:
-#     , ast.Invert   : operator.invert  # ~
-# 
-# 
-# }
-
-
-@dataclass
-class OperationDexpNode(IDotExpressionNode):
-    """
-    Binary or Unary operators that handles
-    basically will do following:
-
-        op_function(first[, second]) -> value
-
-    """
-    op: str  # OPCODE_TO_FUNCTION.keys()
-    first: Any
-    second: Union[Any, UNDEFINED] = UNDEFINED
-
-    # later evaluated
-    op_function: Callable[[...], Any] = field(repr=False, init=False)
-    operation: Operation = field(repr=False, init=False)
-    _status : DExpStatusEnum = field(repr=False, init=False, default=DExpStatusEnum.INITIALIZED)
-    _all_ok : Optional[bool] = field(repr=False, init=False, default=None)
-
-    _first_dexp_node : Optional[IDotExpressionNode] = field(repr=False, init=False, default=None)
-    _second_dexp_node : Optional[IDotExpressionNode] = field(repr=False, init=False, default=None)
-
-    is_finished: bool = field(init=False, repr=False, default=False)
-
-    def __post_init__(self):
-        self.operation = self._get_operation(self.op)
-        self.op_function = self.operation.apply_function
-
-        self._status : DExpStatusEnum = DExpStatusEnum.INITIALIZED
-        self._all_ok : Optional[bool] = None
-        self._output_type_info: Union[TypeInfo, UNDEFINED] = UNDEFINED 
-        # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
-
-
-    def _get_operation(self, op: str) -> Operation:
-        operation = OPCODE_TO_FUNCTION.get(op, None)
-        if operation is None:
-            raise RuleSetupValueError(owner=self, msg="Invalid operation code, {self.op} not one of: {', '.join(self.OP_TO_CODE.keys())}")
-        return operation
-
-    def get_type_info(self) -> TypeInfo:
-        " type_info from first node "
-        # Assumption - for all operations type_info of first operation
-        #       argumnent will persist to result
-        # TODO: consider also last node if available
-        if self._output_type_info is UNDEFINED:
-            self._output_type_info = self._first_dexp_node.get_type_info()
-        return self._output_type_info
-
-    @staticmethod
-    def create_dexp_node(
-                   dexp_or_other: Union[DotExpression, Any], 
-                   title: str,
-                   setup_session: ISetupSession, # noqa: F821
-                   owner: Any) -> IDotExpressionNode:
-        if isinstance(dexp_or_other, DotExpression):
-            dexp_node = dexp_or_other.Setup(setup_session, owner=owner)
-        elif isinstance(dexp_or_other, IDotExpressionNode):
-            raise NotImplementedError(f"{title}.type unhandled: '{type(dexp_or_other)}' => '{dexp_or_other}'")
-            # dexp_node = dexp_or_other
-        else:
-            # TODO: check other types - maybe some unappliable
-            if not isinstance(dexp_or_other, STANDARD_TYPE_W_NONE_LIST):
-                raise NotImplementedError(f"{title}.type unhandled: '{type(dexp_or_other)}' => '{dexp_or_other}'")
-            dexp_node = LiteralDexpNode(value=dexp_or_other)
-
-        return dexp_node
-
-
-    def Setup(self, setup_session: ISetupSession, owner: Any) -> DotExpressionEvaluator:  # noqa: F821
-        # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(self)
-
-        if not self._status==DExpStatusEnum.INITIALIZED:
-            raise RuleSetupError(owner=setup_session, item=self, msg=f"AttrDexpNode not in INIT state, got {self._status}")
-
-        # just to check if all ok
-        self._first_dexp_node = self.create_dexp_node(self.first, title="First", setup_session=setup_session, owner=owner)
-        setup_session.register_dexp_node(self._first_dexp_node)
-
-        if self.second is not UNDEFINED:
-            self._second_dexp_node = self.create_dexp_node(self.second, title="second", setup_session=setup_session, owner=owner)
-            setup_session.register_dexp_node(self._second_dexp_node)
-
-        self._status=DExpStatusEnum.BUILT
-
-        return self
-
-    def __str__(self):
-        if self.second is not UNDEFINED:
-            return f"({self.first} {self.operation.dexp_code} {self.second})"
-        else:
-            return f"({self.operation.dexp_code} {self.first})"
-
-    def __repr__(self):
-        return f"Op{self}"
-
-
-    def execute_node(self, 
-                 apply_session: "IApplySession", # noqa: F821
-                 dexp_result: ExecResult,
-                 is_last: bool,
-                 prev_node_type_info: TypeInfo,
-                 ) -> ExecResult:
-
-        if is_last and not self.is_finished:
-            raise RuleInternalError(owner=self, msg="Last dexp node is not finished.") 
-
-        if dexp_result:
-            raise NotImplementedError("TODO:")
-
-        first_dexp_result = execute_dexp_or_node(
-                                self.first, 
-                                self._first_dexp_node, 
-                                prev_node_type_info=prev_node_type_info,
-                                dexp_result=dexp_result,
-                                apply_session=apply_session)
-
-        # if self.second is not in (UNDEFINED, None):
-        if self._second_dexp_node is not None:
-            second_dexp_result = execute_dexp_or_node(
-                                    self.second, 
-                                    self._second_dexp_node, 
-                                    prev_node_type_info=prev_node_type_info,
-                                    dexp_result=dexp_result,
-                                    apply_session=apply_session)
-            # binary operation second argument adaption?
-            #   string + number -> string + str(int)
-            first_value = first_dexp_result.value
-            second_value = second_dexp_result.value
-            type_adapter = apply_session\
-                    .binary_operations_type_adapters\
-                    .get((type(first_value), type(second_value)), None)
-
-            if type_adapter:
-                second_value = type_adapter(second_value)
-
-            try:
-                new_value = self.op_function(first_value, second_value)
-            except Exception as ex:
-                raise RuleApplyError(owner=apply_session, msg=f"{self} := {self.op_function}({first_dexp_result.value}, {second_dexp_result.value}) raised error: {ex}")
-        else:
-            # unary operation
-            try:
-                new_value = self.op_function(first_dexp_result.value)
-            except Exception as ex:
-                # raise
-                raise RuleApplyError(owner=apply_session, msg=f"{self} := {self.op_function}({first_dexp_result.value}) raised error: {ex}")
-
-        op_dexp_result = ExecResult()
-
-        # TODO: we are loosing: first_dexp_result / second_dexp_result
-        #       to store it in result somehow?
-        op_dexp_result.set_value(new_value, "", f"Op[{self.op}]")
-
-        return op_dexp_result
-
-
+    @abstractmethod
+    def get_attribute(self, apply_session: 'IApplySession', attr_name:str, is_last:bool) -> Self: # noqa: F821
+        """ 
+        is_last -> True - need to get final literal value from object
+        (usually primitive type like int/str/date ...) 
+        """
+        ...
 
 # ------------------------------------------------------------
 # DotExpression
@@ -573,9 +198,9 @@ class DotExpression(DynamicAttrsBase):
 
     def __init__(
         self,
-        node: Union[str, LiteralType, OperationDexpNode],
+        node: Union[str, IDotExpressionNode],
         namespace: Namespace,
-        Path: Optional[List[DotExpression]] = None,
+        Path: Optional[List[Self]] = None,
         is_literal: bool = False,
     ):
         " NOTE: when adding new params, add to Clone() too "
@@ -623,7 +248,7 @@ class DotExpression(DynamicAttrsBase):
         self._dexp_node = UNDEFINED
 
 
-    def Clone(self) -> DotExpression:
+    def Clone(self) -> Self:
         # NOTE: currently not used
         return self.__class__(node=self._node, namespace=self._namespace, Path=self.Path)
 
@@ -931,5 +556,381 @@ class Just(DotExpression):
             namespace=OperationsNS,
             is_literal=True,
             )
+
+# ------------------------------------------------------------
+
+
+@dataclass
+class NotAvailableExecResult(ExecResult):
+    " used when available yields False - value contains "
+    reason: str = field(default=None)
+
+    @classmethod
+    def create(cls, 
+            available_dexp_result: Union[ExecResult, UndefinedType]=UNDEFINED, 
+            reason: Optional[str] = None) -> Self:
+        if not reason:
+            if available_dexp_result:
+                assert not isinstance(ExecResult, NotAvailableExecResult)
+                reason=f"Not available since expression yields: {available_dexp_result.value}", 
+            else:
+                if available_dexp_result not in (None, UNDEFINED):
+                    raise RuleInternalError(msg=f"Expected None/Undefined, got: {available_dexp_result}") 
+                reason="Value not available"
+        instance = cls(reason=reason)
+        instance.value = available_dexp_result
+        return instance
+
+
+
+
+# ------------------------------------------------------------
+# IFunctionDexpNode - name used in-between just to emphasize that this is Dexp
+#                     Node
+# ------------------------------------------------------------
+
+class IFunctionDexpNode(IDotExpressionNode):
+    """
+    a bit an overhead -> just to have better naming for base class
+    """
+    pass
+
+
+@dataclass
+class LiteralDexpNode(IDotExpressionNode):
+
+    value : Any
+    dexp_result: ExecResult = field(repr=False, init=False)
+    type_info: TypeInfo = field(repr=False, init=False)
+
+    # later evaluated
+    is_finished: bool = field(init=False, repr=False, default=False)
+
+    def __post_init__(self):
+        self.dexp_result = ExecResult()
+        self.dexp_result.set_value(self.value, attr_name="", changer_name="")
+        self.type_info = TypeInfo.get_or_create_by_type(type(self.value), caller=self)
+
+    def get_type_info(self) -> TypeInfo:
+        return self.type_info
+
+    def execute_node(self, 
+                 apply_session: "IApplySession", # noqa: F821
+                 dexp_result: ExecResult,
+                 is_last: bool,
+                 prev_node_type_info: TypeInfo,
+                 ) -> ExecResult:
+        assert not dexp_result
+        return self.dexp_result
+
+# ------------------------------------------------------------
+
+class DExpStatusEnum(str, Enum):
+    INITIALIZED      = "INIT"
+    ERR_NOT_FOUND    = "ERR_NOT_FOUND"
+    ERR_TO_IMPLEMENT = "ERR_TO_IMPLEMENT"
+    BUILT            = "BUILT" # OK
+
+# ------------------------------------------------------------
+# Operations
+# ------------------------------------------------------------
+
+# Custom implementation - no operator function, needs custom
+# logic
+
+def _op_apply_and(first, second):
+    return bool(first) and bool(second)
+
+def _op_apply_or(first, second):
+    return bool(first) or bool(second)
+
+@dataclass
+class Operation:
+    code: str
+    dexp_code: str
+    ast_node_type : ast.AST
+    apply_function: Callable
+    load_function : Callable
+
+
+# https://florian-dahlitz.de/articles/introduction-to-pythons-operator-module
+# https://docs.python.org/3/library/operator.html#mapping-operators-to-functions
+OPCODE_TO_FUNCTION = {
+    # NOTE: no need to check unary/binary vs have 1 or 2 params
+    #       python parser/interpretor will ensure this
+    # binary operatorsy - buultin
+      "=="  : Operation(code="==" , dexp_code="==" , ast_node_type= ast.Eq      , apply_function= operator.eq      , load_function= operator.eq) # noqa: E131
+    , "!="  : Operation(code="!=" , dexp_code="!=" , ast_node_type= ast.NotEq   , apply_function= operator.ne      , load_function= operator.ne)
+    , ">"   : Operation(code=">"  , dexp_code=">"  , ast_node_type= ast.Gt      , apply_function= operator.gt      , load_function= operator.gt)
+    , ">="  : Operation(code=">=" , dexp_code=">=" , ast_node_type= ast.GtE     , apply_function= operator.ge      , load_function= operator.ge)
+    , "<"   : Operation(code="<"  , dexp_code="<"  , ast_node_type= ast.Lt      , apply_function= operator.lt      , load_function= operator.lt)
+    , "<="  : Operation(code="<=" , dexp_code="<=" , ast_node_type= ast.LtE     , apply_function= operator.le      , load_function= operator.le)
+
+    , "+"   : Operation(code="+"  , dexp_code="+"  , ast_node_type= ast.Add     , apply_function= operator.add     , load_function= operator.add)
+    , "-"   : Operation(code="-"  , dexp_code="-"  , ast_node_type= ast.Sub     , apply_function= operator.sub     , load_function= operator.sub)
+    , "*"   : Operation(code="*"  , dexp_code="*"  , ast_node_type= ast.Mult    , apply_function= operator.mul     , load_function= operator.mul)
+    , "/"   : Operation(code="/"  , dexp_code="/"  , ast_node_type= ast.Div     , apply_function= operator.truediv , load_function= operator.truediv)
+    , "//"  : Operation(code="//" , dexp_code="//" , ast_node_type= ast.FloorDiv, apply_function= operator.floordiv, load_function= operator.floordiv)
+
+    , "in"  : Operation(code="in" , dexp_code="in" , ast_node_type= ast.In      , apply_function= operator.contains, load_function= operator.contains)
+
+    # binary operatorsy                            
+    , "and" : Operation(code="and", dexp_code="&"  , ast_node_type= ast.BitAnd  , apply_function= _op_apply_and    , load_function= operator.iand)
+    , "or"  : Operation(code="or" , dexp_code="|"  , ast_node_type= ast.BitOr   , apply_function= _op_apply_or     , load_function= operator.ior)
+
+    # unary operators                              
+    , "not" : Operation(code="not", dexp_code="~"  , ast_node_type= ast.Invert  , apply_function= operator.not_    , load_function= operator.invert)
+    }
+
+
+# Other:
+#   ast.Dict ast.DictComp ast.List ast.ListComp
+#   ast.Pow ast.MatMult ast.Mod
+#   ast.BitXor ast.RShift ast.LShift
+#   ast.BoolOp ast.Compare ast.Constant ast.ExtSlice ast.Index ast.Is ast.IsNot ast.Slice
+
+AST_NODE_TYPE_TO_FUNCTION = {
+    operation.ast_node_type: operation
+    for operation in OPCODE_TO_FUNCTION.values()
+}
+
+
+#       ast.Eq       : operator.eq  # noqa: E131
+#     , ast.NotEq    : operator.ne   
+#     , ast.Gt       : operator.gt
+#     , ast.GtE      : operator.ge
+#     , ast.Lt       : operator.lt
+#     , ast.LtE      : operator.le
+# 
+#     , ast.Add      : operator.add
+#     , ast.Sub      : operator.sub
+#     , ast.Mult     : operator.mul
+#     , ast.Div      : operator.truediv
+#     , ast.FloorDiv : operator.floordiv
+# 
+#     , ast.In       : operator.contains
+# 
+#     # binary ops
+#     , ast.BitAnd   : operator.iand # &
+#     , ast.BitOr    : operator.ior  #  |
+# 
+#     # unary operators:
+#     , ast.Invert   : operator.invert  # ~
+# 
+# 
+# }
+
+
+@dataclass
+class OperationDexpNode(IDotExpressionNode):
+    """
+    Binary or Unary operators that handles
+    basically will do following:
+
+        op_function(first[, second]) -> value
+
+    """
+    op: str  # OPCODE_TO_FUNCTION.keys()
+    first: Any
+    second: Union[Any, UndefinedType] = UNDEFINED
+
+    # later evaluated
+    op_function: Callable = field(repr=False, init=False)
+    operation: Operation = field(repr=False, init=False)
+    _status : DExpStatusEnum = field(repr=False, init=False, default=DExpStatusEnum.INITIALIZED)
+    _all_ok : Optional[bool] = field(repr=False, init=False, default=None)
+
+    _first_dexp_node : Optional[IDotExpressionNode] = field(repr=False, init=False, default=None)
+    _second_dexp_node : Optional[IDotExpressionNode] = field(repr=False, init=False, default=None)
+
+    is_finished: bool = field(init=False, repr=False, default=False)
+
+    def __post_init__(self):
+        self.operation = self._get_operation(self.op)
+        self.op_function = self.operation.apply_function
+
+        self._status : DExpStatusEnum = DExpStatusEnum.INITIALIZED
+        self._all_ok : Optional[bool] = None
+        self._output_type_info: Union[TypeInfo, UNDEFINED] = UNDEFINED 
+        # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
+
+
+    def _get_operation(self, op: str) -> Operation:
+        operation = OPCODE_TO_FUNCTION.get(op, None)
+        if operation is None:
+            raise RuleSetupValueError(owner=self, msg="Invalid operation code, {self.op} not one of: {', '.join(self.OP_TO_CODE.keys())}")
+        return operation
+
+    def get_type_info(self) -> TypeInfo:
+        " type_info from first node "
+        # Assumption - for all operations type_info of first operation
+        #       argumnent will persist to result
+        # TODO: consider also last node if available
+        if self._output_type_info is UNDEFINED:
+            self._output_type_info = self._first_dexp_node.get_type_info()
+        return self._output_type_info
+
+    @staticmethod
+    def create_dexp_node(
+                   dexp_or_other: Union[DotExpression, Any], 
+                   title: str,
+                   setup_session: ISetupSession, # noqa: F821
+                   owner: Any) -> IDotExpressionNode:
+        if isinstance(dexp_or_other, DotExpression):
+            dexp_node = dexp_or_other.Setup(setup_session, owner=owner)
+        elif isinstance(dexp_or_other, IDotExpressionNode):
+            raise NotImplementedError(f"{title}.type unhandled: '{type(dexp_or_other)}' => '{dexp_or_other}'")
+            # dexp_node = dexp_or_other
+        else:
+            # TODO: check other types - maybe some unappliable
+            if not isinstance(dexp_or_other, STANDARD_TYPE_W_NONE_LIST):
+                raise NotImplementedError(f"{title}.type unhandled: '{type(dexp_or_other)}' => '{dexp_or_other}'")
+            dexp_node = LiteralDexpNode(value=dexp_or_other)
+
+        return dexp_node
+
+
+    def Setup(self, setup_session: ISetupSession, owner: Any) -> "DotExpressionEvaluator":  # noqa: F821
+        # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(self)
+
+        if not self._status==DExpStatusEnum.INITIALIZED:
+            raise RuleSetupError(owner=setup_session, item=self, msg=f"AttrDexpNode not in INIT state, got {self._status}")
+
+        # just to check if all ok
+        self._first_dexp_node = self.create_dexp_node(self.first, title="First", setup_session=setup_session, owner=owner)
+        setup_session.register_dexp_node(self._first_dexp_node)
+
+        if self.second is not UNDEFINED:
+            self._second_dexp_node = self.create_dexp_node(self.second, title="second", setup_session=setup_session, owner=owner)
+            setup_session.register_dexp_node(self._second_dexp_node)
+
+        self._status=DExpStatusEnum.BUILT
+
+        return self
+
+    def __str__(self):
+        if self.second is not UNDEFINED:
+            return f"({self.first} {self.operation.dexp_code} {self.second})"
+        else:
+            return f"({self.operation.dexp_code} {self.first})"
+
+    def __repr__(self):
+        return f"Op{self}"
+
+
+    def execute_node(self, 
+                 apply_session: "IApplySession", # noqa: F821
+                 dexp_result: ExecResult,
+                 is_last: bool,
+                 prev_node_type_info: TypeInfo,
+                 ) -> ExecResult:
+
+        if is_last and not self.is_finished:
+            raise RuleInternalError(owner=self, msg="Last dexp node is not finished.") 
+
+        if dexp_result:
+            raise NotImplementedError("TODO:")
+
+        first_dexp_result = execute_dexp_or_node(
+                                self.first, 
+                                self._first_dexp_node, 
+                                prev_node_type_info=prev_node_type_info,
+                                dexp_result=dexp_result,
+                                apply_session=apply_session)
+
+        # if self.second is not in (UNDEFINED, None):
+        if self._second_dexp_node is not None:
+            second_dexp_result = execute_dexp_or_node(
+                                    self.second, 
+                                    self._second_dexp_node, 
+                                    prev_node_type_info=prev_node_type_info,
+                                    dexp_result=dexp_result,
+                                    apply_session=apply_session)
+            # binary operation second argument adaption?
+            #   string + number -> string + str(int)
+            first_value = first_dexp_result.value
+            second_value = second_dexp_result.value
+            type_adapter = apply_session\
+                    .binary_operations_type_adapters\
+                    .get((type(first_value), type(second_value)), None)
+
+            if type_adapter:
+                second_value = type_adapter(second_value)
+
+            try:
+                new_value = self.op_function(first_value, second_value)
+            except Exception as ex:
+                raise RuleApplyError(owner=apply_session, msg=f"{self} := {self.op_function}({first_dexp_result.value}, {second_dexp_result.value}) raised error: {ex}")
+        else:
+            # unary operation
+            try:
+                new_value = self.op_function(first_dexp_result.value)
+            except Exception as ex:
+                # raise
+                raise RuleApplyError(owner=apply_session, msg=f"{self} := {self.op_function}({first_dexp_result.value}) raised error: {ex}")
+
+        op_dexp_result = ExecResult()
+
+        # TODO: we are loosing: first_dexp_result / second_dexp_result
+        #       to store it in result somehow?
+        op_dexp_result.set_value(new_value, "", f"Op[{self.op}]")
+
+        return op_dexp_result
+
+
+
+# ------------------------------------------------------------
+# Helper functions
+# ------------------------------------------------------------
+
+def execute_available_dexp(
+        available_dexp: Optional[Union[bool, DotExpression]], 
+        apply_session: "IApplySession") \
+                -> Optional[NotAvailableExecResult]: # noqa: F821
+    " returns NotAvailableExecResult when not available with details in instance, if all ok -> returns None "
+    if isinstance(available_dexp, DotExpression):
+        available_dexp_result = available_dexp._evaluator.execute_dexp(apply_session=apply_session)
+        if not bool(available_dexp_result.value):
+            return NotAvailableExecResult.create(available_dexp_result=available_dexp_result)
+    elif isinstance(available_dexp, bool):
+        if available_dexp is False:
+            return NotAvailableExecResult.create(available_dexp_result=None)
+    # all ok
+    return None
+
+
+# ------------------------------------------------------------
+
+
+def execute_dexp_or_node(
+        dexp_or_value: Union[DotExpression, Any],
+        # Union[OperationDexpNode, IFunctionDexpNode, LiteralDexpNode]
+        dexp_node: Union[IDotExpressionNode, Any], 
+        prev_node_type_info: TypeInfo,
+        dexp_result: ExecResult,
+        apply_session: "IApplySession" # noqa: F821
+        ) -> ExecResult:
+
+    # TODO: this function has ugly interface - solve this better
+
+    if isinstance(dexp_or_value, DotExpression):
+        dexp_result = dexp_or_value._evaluator.execute_dexp(
+                            apply_session=apply_session,
+                            )
+    # AttrDexpNode, OperationDexpNode, IFunctionDexpNode, LiteralDexpNode,
+    elif isinstance(dexp_node, (
+            IDotExpressionNode,
+            )):
+        dexp_result = dexp_node.execute_node(
+                            apply_session=apply_session, 
+                            dexp_result=dexp_result,
+                            prev_node_type_info=prev_node_type_info,
+                            is_last=True,
+                            )
+    else:
+        raise RuleInternalError(
+                f"Expected Dexp, OpDexp or FuncDexp, got: {type(dexp_or_value)} -> {dexp_or_value} / {type(dexp_node)} -> {dexp_node}")
+
+    return dexp_result
 
 

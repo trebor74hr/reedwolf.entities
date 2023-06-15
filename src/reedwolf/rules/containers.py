@@ -1,5 +1,3 @@
-# https://stackoverflow.com/questions/58986031/type-hinting-child-class-returning-self/74545764#74545764
-from __future__ import annotations
 import inspect
 from abc import (
         ABC, 
@@ -47,6 +45,7 @@ from .meta import (
         get_model_fields,
         ModelType,
         DataclassType,
+        Self,
         )
 from .base import (
         ComponentBase,
@@ -113,29 +112,6 @@ from ..rules import (
         eval_items,
         eval_children,
         )
-
-# ------------------------------------------------------------
-
-def create_setup_session(
-        container: ContainerBase,
-        config: Config,
-        functions: Optional[List[CustomFunctionFactory]] = None, 
-        context_class: Optional[IContext] = None,
-        ) -> SetupSession:
-    setup_session = SetupSession(
-                    container=container, 
-                    functions=functions,
-                    parent_setup_session=container.setup_session if container.parent else None,
-                    include_builtin_functions=container.is_top_parent())
-
-    setup_session.add_registry(ModelsRegistry())
-    setup_session.add_registry(FieldsRegistry())
-    setup_session.add_registry(FunctionsRegistry())
-    setup_session.add_registry(OperationsRegistry())
-    setup_session.add_registry(ContextRegistry(context_class=context_class))
-    setup_session.add_registry(ConfigRegistry(config=config))
-
-    return setup_session
 
 # ------------------------------------------------------------
 # Entity
@@ -295,7 +271,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
     # ------------------------------------------------------------
 
-    def setup(self) -> ContainerBase:
+    def setup(self) -> Self:
         # components are flat list, no recursion/hierarchy browsing needed
         if self.bound_model is None:
             raise RuleSetupError(owner=self, msg="bound_model not set. Initialize in constructor or call bind_to() first.")
@@ -398,7 +374,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
     def get_key_pairs_or_index0(self, 
                                 instance: ModelType, 
                                 index0: int, 
-                                ) -> Union[List[(str, Any)], int]:
+                                ) -> Union[Tuple[(str, Any)], int]:
         " index0 is 0 based index of item in the list"
         # TODO: move to ApplyResult:IApplySession?
         if self.keys:
@@ -408,11 +384,36 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         return ret
 
 
-    def get_key_pairs(self, instance: ModelType) -> List[(str, Any)]:
+    def get_key_pairs(self, instance: ModelType) -> Tuple[(str, Any)]:
         if not self.keys:
             raise RuleInternalError(msg="get_key_pairs() should be called only when 'keys' are defined")
         key_pairs = self.keys.get_key_pairs(instance)
         return key_pairs
+
+
+# ------------------------------------------------------------
+
+
+def create_setup_session(
+        container: ContainerBase,
+        config: Config,
+        functions: Optional[List[CustomFunctionFactory]] = None, 
+        context_class: Optional[IContext] = None,
+        ) -> SetupSession:
+    setup_session = SetupSession(
+                    container=container, 
+                    functions=functions,
+                    parent_setup_session=container.setup_session if container.parent else None,
+                    include_builtin_functions=container.is_top_parent())
+
+    setup_session.add_registry(ModelsRegistry())
+    setup_session.add_registry(FieldsRegistry())
+    setup_session.add_registry(FunctionsRegistry())
+    setup_session.add_registry(OperationsRegistry())
+    setup_session.add_registry(ContextRegistry(context_class=context_class))
+    setup_session.add_registry(ConfigRegistry(config=config))
+
+    return setup_session
 
 
 # ------------------------------------------------------------

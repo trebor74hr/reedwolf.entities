@@ -1,4 +1,8 @@
 """
+------------------------------------------------------------
+Evaluations - used to automatically calculate
+------------------------------------------------------------
+
 Evaluation-s are used in cleaners.
 Base is value:DotExpression which shuuld return value compatible with
 Field type.
@@ -7,10 +11,6 @@ TODO: demo Evaluation - created/updated by/at: current user, timestamp
 
 """
 
-# ------------------------------------------------------------
-# Evaluations - used to automatically calculate
-# ------------------------------------------------------------
-from __future__ import annotations
 
 from abc import ABC
 from typing import (

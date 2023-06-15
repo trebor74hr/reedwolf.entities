@@ -24,8 +24,6 @@ new custom validations could be done like this::
                     error=_("Need valid hour value (0-23)"),
                     )
 """
-from __future__ import annotations
-
 from abc import ABC
 from typing import (
         Union, 
