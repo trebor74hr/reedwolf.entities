@@ -21,6 +21,7 @@ from .utils import (
         UNDEFINED,
         NA_DEFAULTS_MODE,
         UndefinedType,
+        camel_case_to_snake,
         )
 from .exceptions import (
         RuleSetupError,
@@ -518,10 +519,10 @@ class KeyFields(KeysBase):
 
 @dataclass
 class Entity(ContainerBase):
-    name            : str
     contains        : List[ComponentBase] = field(repr=False)
 
     # --- optional - following can be bound later with .bind_to()
+    name            : Optional[str] = field(default=None)
     title           : Optional[TransMessageType] = field(repr=False, default=None)
 
     # binding interface - not dumped/exported
@@ -552,6 +553,12 @@ class Entity(ContainerBase):
         if self.bound_model:
             if not (isinstance(self.bound_model, BoundModel) and is_model_class(self.bound_model.model)):
                 raise RuleSetupTypeError(owner=self, msg=f"Attribute 'bound_model' needs to be BoundModel with model DC/PYD, got: {self.bound_model}") 
+
+        if not self.name:
+            self.name = "__".join([
+                camel_case_to_snake(self.__class__.__name__),
+                camel_case_to_snake(self.bound_model.model.__name__),
+                ])
 
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
         if not self.config:
@@ -735,9 +742,7 @@ class SubEntityBase(ContainerBase, ABC):
 
     # required since if it inherit name from BoundModel then the name will not
     # be unique in self.components (SubEntityItems and BoundModel will share the same name)
-    name            : Optional[str] = None
-
-
+    name            : Optional[str] = field(default=None)
     title           : Optional[TransMessageType] = field(repr=False, default=None)
     functions       : Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
     # --- can be index based or standard key-fields names
