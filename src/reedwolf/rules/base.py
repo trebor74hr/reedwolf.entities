@@ -29,7 +29,7 @@ from .utils import (
         NA_DEFAULTS_MODE,
         UndefinedType,
         get_available_names_example,
-        ThreadSafeCounter,
+        # ThreadSafeCounter,
         DumpFormatEnum,
         dump_to_format,
         )
@@ -270,13 +270,17 @@ class SetParentMixin:
 
             key = "__".join(keys)
 
-            if key not in container.name_counter_by_parent_name:
-                container.name_counter_by_parent_name[key] = 1
-
-            self.name = f"{key}__{container.name_counter_by_parent_name[key]}"
-            container.name_counter_by_parent_name[key] += 1
+            name_id = container._get_new_id_by_parent_name(key)
+            self.name = f"{key}__{name_id}"
 
         return self.name 
+
+    def _get_new_id_by_parent_name(self, key: str) -> int:
+        if key not in self.name_counter_by_parent_name:
+            self.name_counter_by_parent_name[key] = 1
+        out = self.name_counter_by_parent_name[key] 
+        self.name_counter_by_parent_name[key] += 1
+        return out
 
 
 # ------------------------------------------------------------
@@ -333,6 +337,7 @@ class ComponentBase(SetParentMixin, ABC):
     def can_apply_partial() -> bool:
         return False
 
+
     def as_str(self):
         return "\n".join(self.to_strlist())
 
@@ -379,6 +384,24 @@ class ComponentBase(SetParentMixin, ABC):
                         out.append(f"{YAML_INDENT}{v2}")
         out.append(")")
         return add_indent_to_strlist(out)
+
+    # ------------------------------------------------------------
+
+    def is_container(self) -> bool:
+        return False
+
+    def is_bound_model(self) -> bool:
+        # currently not used
+        return False
+
+    def is_subentity_items(self) -> bool:
+        return False
+
+    def is_subentity_single(self) -> bool:
+        return False
+
+    def is_subentity(self) -> bool:
+        return self.is_subentity_items() or self.is_subentity_single()
 
     # ------------------------------------------------------------
 
@@ -630,7 +653,7 @@ class ComponentBase(SetParentMixin, ABC):
             if isinstance(component, DotExpression):
                 pass
             elif hasattr(component, "fill_components"):
-                if hasattr(component, "is_subentity_items") and component.is_subentity_items():
+                if component.is_subentity():
                     # for subentity_items container don't go deeper into tree (call fill_components)
                     # it will be called later in container.setup() method
                     component.set_parent(parent=self)
@@ -858,7 +881,6 @@ class ComponentBase(SetParentMixin, ABC):
                     and "BoundModel" not in str(th_field.type) \
                     and "[Self]" not in str(th_field.type) \
                     :
-                import pdb;pdb.set_trace() 
                 # TODO: Validation should be extended to test isinstance(.., ValidationBase) ... or similar to include Required(), MaxLength etc.
                 raise RuleInternalError(owner=subcomponent, msg=f"Should '{subcomponent_name}' attribute be excluded from processing." 
                         + f"\n  == {th_field})"
@@ -1026,11 +1048,11 @@ class IContainerBase(ABC):
         ...
 
     @abstractmethod
-    def is_subentity_items(self):
+    def __getitem__(self, name: str) -> ComponentBase:
         ...
 
     @abstractmethod
-    def __getitem__(self, name):
+    def get_component(self, name: str) -> ComponentBase:
         ...
 
     @abstractmethod
@@ -1041,9 +1063,6 @@ class IContainerBase(ABC):
     def get_bound_model_attr_node(self) -> "AttrDexpNode":  # noqa: F821
         ...
 
-    @abstractmethod
-    def get_component(self, name:str) -> ComponentBase:
-        ...
 
     @abstractmethod
     def pprint(self):
@@ -1056,6 +1075,10 @@ class IContainerBase(ABC):
 # ------------------------------------------------------------
 
 class BoundModelBase(ComponentBase, ABC):
+
+    def is_bound_model(self) -> bool:
+        # currently not used
+        return True
 
     def is_top_parent(self):
         return False
@@ -1158,23 +1181,15 @@ class SetupStackFrame:
     def __post_init__(self):
         assert isinstance(self.container, IContainerBase)
         assert isinstance(self.component, ComponentBase)
+
         if self.local_setup_session:
             assert isinstance(self.local_setup_session, ISetupSession)
 
-        # if self.bound_model:
-        #     # set in BoundModelWithHandlers cases (read_handlers())
-        #     assert isinstance(self.bound_model, BoundModelBase)
         if isinstance(self.component, BoundModelBase):
             self.bound_model = self.component
         else:
             self.bound_model = self.container.bound_model
 
-        # self.bound_model_root = (self.on_component_only 
-        #                          if self.on_component_only.is_subentity_items()
-        #                          else self.on_component_only.get_first_parent_container(consider_self=True)
-        #                         ).bound_model
-        # self.bound_model_root = self.container.bound_model
-        # assert self.bound_model_root
 
 # ------------------------------------------------------------
 
@@ -1186,7 +1201,7 @@ class GlobalConfig:
     # ID_PREFIX_WHEN_INTERNAL: ClassVar[str] = "_IID_"
 
     # ID_KEY_COUNTER: ClassVar[int] = 0 # field(repr=False, init=False, default=0)
-    ID_KEY_COUNTER: ClassVar[ThreadSafeCounter] = ThreadSafeCounter()
+    # ID_KEY_COUNTER: ClassVar[ThreadSafeCounter] = ThreadSafeCounter()
     ID_KEY_PREFIX_FOR_MISSING: ClassVar[str] = "_MK_"
 
 

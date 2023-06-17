@@ -63,8 +63,13 @@ from .bound_models import (
         BoundModel,
         BoundModelWithHandlers,
         )
-from .attr_nodes import AttrDexpNode
-from .functions import CustomFunctionFactory
+from .attr_nodes import (
+        AttrDexpNode,
+        )
+from .functions import (
+        CustomFunctionFactory,
+        IFunction,
+        )
 from .registries import (
         SetupSession,
         ModelsRegistry,
@@ -119,7 +124,16 @@ from ..rules import (
 
 class ContainerBase(IContainerBase, ComponentBase, ABC):
 
-    def _get_function(self, name: str, strict:bool=True):
+    def is_container(self) -> bool:
+        return True
+
+    # def is_subentity(self):
+    #     # TODO: not sure if this is good way to do it. Maybe: isinstance(ISubEntity) would be safer?
+    #     # TODO: if self.parent is not None could be used as the term, put validation somewhere
+    #     " if start model is value expression - that mean that the the Entity is SubEntityItems "
+    #     return isinstance(self.bound_model.model, DotExpression)
+
+    def _get_function(self, name: str, strict:bool=True) -> Optional[IFunction]:
         if not self.functions:
             raise KeyError(f"{self.name}: Function '{name}' not found, no functions available.")
         return self.setup_session.functions_factory_registry.get(name, strict=strict)
@@ -135,14 +149,6 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
     def is_top_parent(self):
         return not bool(self.parent)
 
-    def is_subentity_items(self):
-        # TODO: not sure if this is good way to do it. Maybe: isinstance(ISubEntity) would be safer?
-        # TODO: if self.parent is not None could be used as the term, put validation somewhere
-        " if start model is value expression - that mean that the the Entity is SubEntityItems "
-        return isinstance(self.bound_model.model, DotExpression)
-
-    def is_container(self):
-        return True
 
     @staticmethod
     def can_apply_partial() -> bool:
@@ -175,8 +181,14 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
     def _register_bound_model(self, bound_model:BoundModelBase):
         # ex. type_info.metadata.get("bind_to_parent_setup_session")
+
+        # Entity can have one main bound_model and optionally some dependent
+        # models nested in tree structure
         is_main_model = (bound_model==self.bound_model)
-        is_subentity_items_main_model = (self.is_subentity_items() and is_main_model)
+
+        is_subentity_main_model = (self.is_subentity() and is_main_model)
+
+        # if self.name == "address_set_ext": import pdb;pdb.set_trace() 
 
         # is_list = False
         if not isinstance(bound_model, BoundModelBase):
@@ -185,21 +197,23 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         model = bound_model.model
 
         attr_node = None
-        if is_subentity_items_main_model:
+        if is_subentity_main_model:
             if not isinstance(model, DotExpression):
-                raise RuleSetupError(owner=self, msg=f"{bound_model.name}: For SubEntityItems main bound_model needs to be DotExpression: {bound_model.model}")
+                raise RuleSetupError(owner=self, msg=f"{bound_model.name}: For SubEntityItems/SubEntitySingle main bound_model needs to be DotExpression: {bound_model.model}")
 
         # alias_saved = False
         is_list = False
 
-
         if isinstance(model, DotExpression):
             # TODO: for functions value expressions need to be stored
             #       with all parameters (func_args)
-            if model.GetNamespace()!=ModelsNS:
-                raise RuleSetupError(owner=self, msg=f"{bound_model.name}: DotExpression should be in ModelsNS namespace, got: {model.GetNamespace()}")
+            if not (self.is_subentity() or not is_main_model):
+                raise RuleSetupTypeError(owner=self, msg=f"{bound_model.name}: DotExpression should be used only in SubEntity containers and nested BoundModels")
 
-            if is_subentity_items_main_model:
+            if model.GetNamespace()!=ModelsNS:
+                raise RuleSetupTypeError(owner=self, msg=f"{bound_model.name}: DotExpression should be in ModelsNS namespace, got: {model.GetNamespace()}")
+
+            if is_subentity_main_model:
                 # TODO: DRY this - the only difference is setup_session - extract common logic outside / 
                 # bound attr_node
                 assert hasattr(self, "parent_setup_session")
@@ -221,29 +235,26 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
             model   = attr_node.data.type_
             is_list = attr_node.data.is_list
+            py_type_hint = attr_node.data.py_type_hint
+
+            if self.is_subentity_single() and is_list :
+                raise RuleSetupTypeError(owner=self, msg=f"{bound_model.name}: For SubEntitySingle did not expect List model type, got: {py_type_hint}")
+            elif self.is_subentity_items() and not is_list:
+                raise RuleSetupTypeError(owner=self, msg=f"{bound_model.name}: For SubEntityItems expected List model type, got: {py_type_hint}")
+
+            # TODO: check bound_model cases - list, not list, etc.
+            # elif self.is_bound_model() and ...
+
+        else:
+            if self.is_subentity():
+                raise RuleSetupTypeError(owner=self, msg=f"{bound_model.name}: For SubEntity use DotExpression as model, got: {model}")
+            # TODO: maybe check model type_info is_list ...
 
         if not is_model_class(model) and not (is_list and model in STANDARD_TYPE_LIST):
             raise RuleSetupError(owner=self, msg=f"Managed model {bound_model.name} needs to be a @dataclass, pydantic.BaseModel or List[{STANDARD_TYPE_LIST}], got: {type(model)}")
 
-
         # == M.name version
         self.setup_session[ModelsNS].register_all_nodes(root_attr_node=attr_node, bound_model=bound_model, model=model)
-
-        # if not isinstance(model, DotExpression) and isinstance(bound_model, BoundModel):
-        #     bound_model._register_nested_models(self.setup_session)
-
-
-        # == M.company.name version
-        # if not attr_node:
-        #     attr_node = self.setup_session[ModelsNS].create_root_attr_node(bound_model=bound_model) -> _create_root_attr_node()
-        # # self.setup_session.register(attr_node, alt_attr_node_name=bound_model.name if attr_node.name!=bound_model.name else None)
-        # self.setup_session[ModelsNS].register_attr_node(
-        #                             attr_node, 
-        #                             alt_attr_node_name=(
-        #                                 bound_model.name 
-        #                                 if attr_node.name!=bound_model.name 
-        #                                 else None))
-
 
         return attr_node
 
@@ -387,7 +398,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
     def get_key_pairs(self, instance: ModelType) -> Tuple[(str, Any)]:
         if not self.keys:
             raise RuleInternalError(msg="get_key_pairs() should be called only when 'keys' are defined")
-        key_pairs = self.keys.get_key_pairs(instance)
+        key_pairs = self.keys.get_key_pairs(instance, container=self)
         return key_pairs
 
 
@@ -426,7 +437,7 @@ class KeysBase(ABC):
         ...
 
     @abstractmethod
-    def get_key_pairs(self, instance: ModelType) -> List[Tuple[str, Any]]:
+    def get_key_pairs(self, instance: ModelType, container: IContainerBase) -> List[Tuple[str, Any]]:
         """ returns list of (key-name, key-value) """
         ...
 
@@ -434,12 +445,13 @@ class KeysBase(ABC):
     #     return [key for name,key in self.get_keys_tuple(apply_session)]
 
 
-def get_new_unique_id() -> int:
-    return GlobalConfig.ID_KEY_COUNTER.get_new()
+# def get_new_unique_id() -> int:
+#     return GlobalConfig.ID_KEY_COUNTER.get_new()
 
 
 class MissingKey:
-    def __init__(self, id=None):
+    def __init__(self, id):
+        # old: self.id = id if id else get_new_unique_id()
         self.id = id if id else get_new_unique_id()
 
     def __str__(self):
@@ -478,7 +490,7 @@ class KeyFields(KeysBase):
                 raise RuleSetupNameNotFoundError(f"Field name '{field_name}' not found in list of attributes of '{model}'. Available names: {available_names}")
 
 
-    def get_key_pairs(self, instance: ModelType) -> KeyPairs:
+    def get_key_pairs(self, instance: ModelType, container: IContainerBase) -> KeyPairs:
         # apply_session:IApplySession
         # frame = apply_session.current_frame
         # instance = frame.instance
@@ -491,26 +503,16 @@ class KeyFields(KeysBase):
             key = getattr(instance, field_name)
             if key is None:
                 # if missing then setup temp unique id
-                key = MissingKey()
+                missing_key_id = container._get_new_id_by_parent_name(GlobalConfig.ID_KEY_PREFIX_FOR_MISSING)
+                key = MissingKey(id=missing_key_id)
             else:
                 assert not str(key).startswith(GlobalConfig.ID_KEY_PREFIX_FOR_MISSING), key
             keys.append((field_name, key))
         return tuple(keys)
 
 
-
-# class ListIndexKey(KeysBase):
-#     # Can be applied only for children - e.g. SubEntityItems with multiple items
-#     # parent assignes key as index of item in the list of "children").
-# 
-#     def validate(self, children_model: ModelType):
-#         # children_model - check if get_type_info().is_list
-#         raise NotImplementedError()
-# 
-#     def get_key_pairs(instance: ModelType) -> List[Tuple[str, Any]]:
-#         raise NotImplementedError()
-
 # ------------------------------------------------------------
+
 
 @dataclass
 class Entity(ContainerBase):
@@ -744,6 +746,8 @@ class SubEntityBase(ContainerBase, ABC):
     setup_session    : Optional[SetupSession] = field(init=False, repr=False, default=None)
     components       : Optional[Dict[str, Component]]  = field(init=False, repr=False, default=None)
     models           : Dict[str, Union[type, DotExpression]] = field(init=False, repr=False, default_factory=dict)
+
+    # --- ComponentBase common attrs
     parent           : Union[ComponentBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     parent_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
@@ -805,6 +809,9 @@ class SubEntityItems(SubEntityBase):
         #         raise RuleSetupTypeError(owner=self, msg=f"Cleaners should be instances of ItemsValidationBase, ChildrenValidationBase, ItemsEvaluationBase or ChildrenEvaluationBase, got: {type(cleaner)} / {cleaner}") 
         super().__post_init__()
 
+    def is_subentity_items(self):
+        return True
+
 # ------------------------------------------------------------
 
 @dataclass
@@ -819,6 +826,9 @@ class SubEntitySingle(SubEntityBase):
         #     if not isinstance(cleaner, (SingleValidation, ChildrenValidationBase, ChildrenEvaluationBase)):
         #         raise RuleSetupTypeError(owner=self, msg=f"Cleaners should be instances of SingleValidation, ChildrenValidationBase or ChildrenEvaluationBase, got: {type(cleaner)} / {cleaner}") 
         super().__post_init__()
+
+    def is_subentity_single(self):
+        return True
 
 # ------------------------------------------------------------
 

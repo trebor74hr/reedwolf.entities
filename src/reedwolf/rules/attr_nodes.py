@@ -204,9 +204,9 @@ class AttrDexpNode(IDotExpressionNode):
             dexp_result = ExecResult()
             frame = apply_session.current_frame
 
-            if frame.container.is_subentity_items() or frame.on_component_only:
+            if frame.container.is_subentity() or frame.on_component_only:
                 if not len(names)==1:
-                    raise RuleInternalError(owner=self, msg=f"Attribute node - execution initial step for subentity_items failed, expected single name members (e.g. M), got: {self.name}\n  == Compoonent: {frame.container}")
+                    raise RuleInternalError(owner=self, msg=f"Attribute node - execution initial step for SubEntityItems/SubEntitySingle failed, expected single name members (e.g. M), got: {self.name}\n  == Compoonent: {frame.container}")
                 # if not len(names)>1:
                 #     raise RuleInternalError(owner=self, msg=f"Initial evaluation step for subentity_items failed, expected multiple name members (e.g. M.address_set), got: {self.name}\n  == Compoonent: {frame.container}")
             else:
@@ -300,7 +300,7 @@ class AttrDexpNode(IDotExpressionNode):
             ...
         elif isinstance(value_new, (list, tuple)):
             if not self.islist():
-                raise RuleApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should not return list, got: '{to_repr(value_new)}' : '{type(value_new)}'")
+                raise RuleApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should not be a list, got: '{to_repr(value_new)}' : '{type(value_new)}'")
         elif value_new is None:
             pass
             # NOTE: value not checked - can be evaluated to something not-None later
@@ -308,7 +308,7 @@ class AttrDexpNode(IDotExpressionNode):
             #     raise RuleApplyValueError(owner=self, msg=f"Attribute '{attr_name}' has 'None' value and type is not 'Optional'.")
         elif self.islist():
             # apply_session.entity.get_component(apply_session.component_name_only)
-            raise RuleApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should return list, got: '{to_repr(value_new)}' : '{type(value_new)}'")
+            raise RuleApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should be a list, got: '{to_repr(value_new)}' : '{type(value_new)}'")
 
         # TODO: hm, changer_name is equal to attr_name, any problem / check / fix ... 
         dexp_result.set_value(attr_name=attr_name, changer_name=attr_name, value=value_new)

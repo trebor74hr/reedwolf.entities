@@ -68,16 +68,12 @@ class Component(ComponentBase, ABC):
     # set in setup()
     dot_node:   Union[AttrDexpNode, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
 
+    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    # TODO: i ovo možda treba u base
+    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     def __post_init__(self):
         super().__post_init__()
         self.init_clean_base()
-
-    def is_subentity_items(self):
-        return False
-
-    def is_container(self):
-        return False
-
 
 # ------------------------------------------------------------
 # Clenaers (cleaners) == Validations OR Evaluations

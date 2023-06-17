@@ -28,6 +28,7 @@ from .utils import (
         NA_DEFAULTS_MODE,
         NA_IN_PROGRESS,
         NOT_APPLIABLE,
+        to_repr,
         )
 from .meta import (
         Self,
@@ -445,7 +446,7 @@ class ApplyResult(IApplySession):
             in_component_only_tree = self.current_frame.in_component_only_tree 
 
             # check if instance model is ok
-            if not component.is_subentity_items():
+            if not component.is_subentity():
                 if self.defaults_mode:
                     if self.current_frame.instance is not NA_DEFAULTS_MODE:
                         raise RuleInternalError(owner=self, msg=f"Defaults mode - current frame's instance's model must be NA_DEFAULTS_MODE, got: {type(self.instance)}") 
@@ -453,7 +454,7 @@ class ApplyResult(IApplySession):
                     if not isinstance(self.current_frame.instance, comp_container_model):
                         raise RuleInternalError(owner=self, msg=f"Current frame's instance's model does not corresponds to component's container's model. Expected: {comp_container_model}, got: {type(self.instance)}") 
 
-            # TODO: for subentity_items() any need to check this at all in this phase?
+            # TODO: for subentity() any need to check this at all in this phase?
         else:
             # no stack around -> initial call -> depth=0
             assert entry_call
@@ -507,7 +508,7 @@ class ApplyResult(IApplySession):
                             in_component_only_tree=in_component_only_tree,
                             )
 
-        elif not mode_subentity_items and component.is_subentity_items():
+        elif not mode_subentity_items and component.is_subentity():
             # ---- SubEntityItems case -> process single or iterate all items -----
 
 
@@ -530,6 +531,9 @@ class ApplyResult(IApplySession):
 
 
             if isinstance(instance, (list, tuple)):
+                # ---- SubEntityItems case
+                if not component.is_subentity_items():
+                    raise RuleApplyValueError(owner=component, msg=f"Did not expect list of instances: {to_repr(instance)}") 
                 # enters recursion -> _apply() -> ...
                 # parent_values_subtree = self.current_frame.parent_values_subtree
 
@@ -547,6 +551,9 @@ class ApplyResult(IApplySession):
                 return
                 # ========================================
 
+            # ---- SubEntitySingle case
+            if not component.is_subentity_single():
+                raise RuleApplyValueError(owner=component, msg=f"Did not expect single instance: {to_repr(instance)}") 
 
             # ========================================
             # == SubEntityItems with single item ==
@@ -941,7 +948,7 @@ class ApplyResult(IApplySession):
                 else:
                     on_component_only = None
 
-                # container = component.get_first_parent_container(consider_self=True) if not component.is_subentity_items() else component
+                # container = component.get_first_parent_container(consider_self=True) if not component.is_subentity() else component
                 with self.use_stack_frame(
                         ApplyStackFrame(
                             container = self.current_frame.container, 
@@ -1255,6 +1262,7 @@ class ApplyResult(IApplySession):
         if key_string is None or force:
 
             if component.keys:
+                assert component.is_container()
                 key_pairs = component.get_key_pairs(instance)
                 assert key_pairs
                 key_string = "{}[{}]".format(
@@ -1282,8 +1290,8 @@ class ApplyResult(IApplySession):
                 key_string = GlobalConfig.ID_NAME_SEPARATOR.join([parent_key_string, key_string])
             else:
                 container_parent = component.get_first_parent_container(consider_self=True)
-                if container_parent.is_subentity_items():
-                    raise RuleInternalError(owner=component, msg=f"Parent container {container_parent.name} is an subentity_items and parent_instance is empty") 
+                if container_parent.is_subentity():
+                    raise RuleInternalError(owner=component, msg=f"Parent container {container_parent.name} is an SubEntitySingle/SubEntityItems and parent_instance is empty") 
 
 
             self.key_string_container_cache[instance_id] = key_string
