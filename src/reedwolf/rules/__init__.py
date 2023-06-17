@@ -25,8 +25,9 @@ from .bound_models import (
         BoundModel,
         BoundModelWithHandlers,
         )
-# not in all, just for direct import 
-from .components import (  # noqa: F401
+from .base import (  # noqa: F401
+        # Not for __all__ case (from <> import *), just for direct import:
+        #   from <> import _, msg
         _,
         msg,
         )
@@ -130,10 +131,6 @@ __all__ = [
     "BoundModel",
     "BoundModelWithHandlers",
 
-    # components
-    "EnumMembers",
-
-    "FieldGroup",
 
     # fields
     "AutocomputedEnum",
@@ -152,6 +149,8 @@ __all__ = [
     "EmailField",
 
     "ChoiceOption",
+
+    "FieldGroup",
 
     # validations
     "FieldValidation",
@@ -190,6 +189,9 @@ __all__ = [
     "functions",
     "Function",
     # "_",
+
+    # func_builtin
+    "EnumMembers",
 
     # contexts
     "IContext",

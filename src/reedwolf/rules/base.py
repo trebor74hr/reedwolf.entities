@@ -1,4 +1,4 @@
-from __future__ import annotations
+# from __future__ import annotations
 
 from abc import ABC, abstractmethod
 import inspect
@@ -191,6 +191,21 @@ class BaseOnlyArgs:  # noqa: SIM119
 
 
 # ------------------------------------------------------------
+# Message functions
+# ------------------------------------------------------------
+
+def _(message: str) -> TransMessageType:
+    return message
+
+# TODO: add type hint: TransMessageType -> TranslatedMessageType
+# TODO: accept "{dot_node}" - can be a security issue, attr_nodes() should not make any logic
+#       use .format() ... (not f"", btw. should not be possible anyway)
+
+class msg(BaseOnlyArgs):
+    pass
+
+
+# ------------------------------------------------------------
 # SetParentMixin
 # ------------------------------------------------------------
 
@@ -204,7 +219,7 @@ class SetParentMixin:
 
     # ------------------------------------------------------------
 
-    def set_parent(self, parent: ComponentBase):
+    def set_parent(self, parent: "ComponentBase"):
         if self.parent is not UNDEFINED:
             raise RuleInternalError(owner=self, msg=f"Parent already defined, got: {parent}")
 
@@ -282,7 +297,7 @@ class SubcomponentWrapper:
     name        : str # orig: dexp_node_name
     path        : str # orig: var_path
     # TODO: can be some other types too
-    subcomponent: Union[ComponentBase, DotExpression]
+    subcomponent: Union["ComponentBase", DotExpression]
     th_field    : Optional[ModelField]
 
 
@@ -309,7 +324,7 @@ class ComponentBase(SetParentMixin, ABC):
 
     # NOTE: I wanted to skip saving parent reference/object within component - to
     #       preserve single and one-direction references.
-    parent       : Union[ComponentBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    parent       : Union[Self, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     parent_name  : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
     def __post_init__(self):
@@ -401,7 +416,7 @@ class ComponentBase(SetParentMixin, ABC):
 
     # ------------------------------------------------------------
 
-    def get_children(self) -> List[ComponentBase]:
+    def get_children(self) -> List[Self]:
         """
         CACHED
         Get only children components. Used in apply() (+unit tests).
@@ -421,7 +436,7 @@ class ComponentBase(SetParentMixin, ABC):
 
     # ------------------------------------------------------------
 
-    def get_children_dict(self) -> Dict[ComponentNameType, ComponentBase]:
+    def get_children_dict(self) -> Dict[ComponentNameType, Self]:
         """
         only direct children in flat dict
         """
@@ -431,7 +446,7 @@ class ComponentBase(SetParentMixin, ABC):
 
     # ------------------------------------------------------------
 
-    def get_children_tree_flatten_dict(self, depth:int=0) -> Dict[ComponentNameType, ComponentBase]:
+    def get_children_tree_flatten_dict(self, depth:int=0) -> Dict[ComponentNameType, Self]:
         """
         will go recursively through every children and
         fetch their "children" and collect to output structure:
@@ -470,7 +485,7 @@ class ComponentBase(SetParentMixin, ABC):
         return self._get_children_tree(key="_children_tree")
 
 
-    def _get_children_tree(self, key: str, depth:int=0) -> Dict[ComponentNameType, ComponentBase]:
+    def _get_children_tree(self, key: str, depth:int=0) -> Dict[ComponentNameType, Self]:
         if not hasattr(self, key):
             if depth > MAX_RECURSIONS:
                 raise RuleInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
@@ -592,7 +607,7 @@ class ComponentBase(SetParentMixin, ABC):
 
     # ------------------------------------------------------------
 
-    def _add_component(self, component: ComponentBase, components: Dict[str, ComponentBase]):
+    def _add_component(self, component: Self, components: Dict[str, Self]):
         if component.name in (None, UNDEFINED):
             raise RuleSetupValueError(owner=self, item=component, msg="Component's name is required.")
         if not (component.name and isinstance(component.name, str)):
@@ -608,9 +623,9 @@ class ComponentBase(SetParentMixin, ABC):
 
     # ------------------------------------------------------------
 
-    def fill_components(self, components: Optional[Dict[str, ComponentBase]] = None,
-                        parent: Optional[ComponentBase] = None) \
-                        -> Dict[str, ComponentBase]:
+    def fill_components(self, components: Optional[Dict[str, Self]] = None,
+                        parent: Optional[Self] = None) \
+                        -> Dict[str, Self]:
         """ recursive -> flat dict
         component can be ComponentBase, Dataprovider, ...
         """
@@ -679,7 +694,7 @@ class ComponentBase(SetParentMixin, ABC):
 
     def _invoke_component_setup(self, 
                     subcomponent_name: str, 
-                    subcomponent: Union[ComponentBase, DotExpression], 
+                    subcomponent: Union[Self, DotExpression], 
                     setup_session: ISetupSession):  # noqa: F821
         called = False
 
@@ -962,11 +977,11 @@ class ComponentBase(SetParentMixin, ABC):
         return name
 
 
-    def get_first_parent_container(self, consider_self: bool) -> IContainerBase:  # noqa: F821
+    def get_first_parent_container(self, consider_self: bool) -> "IContainerBase":  # noqa: F821
         parents = self.get_path_to_first_parent_container(consider_self=consider_self)
         return parents[-1] if parents else None
 
-    def get_path_to_first_parent_container(self, consider_self: bool) -> List[IContainerBase]:  # noqa: F821
+    def get_path_to_first_parent_container(self, consider_self: bool) -> List["IContainerBase"]:  # noqa: F821
         """ 
         traverses up the component tree up (parents) and find first container
         including self ( -> if self is container then it returns self)
@@ -995,7 +1010,7 @@ class ComponentBase(SetParentMixin, ABC):
 
     # ------------------------------------------------------------
 
-    def get_dexp_result_from_instance(self, apply_session:IApplySession, strict:bool = True) -> ExecResult:
+    def get_dexp_result_from_instance(self, apply_session: "IApplySession", strict:bool = True) -> ExecResult:
         """ Fetch ExecResult from component.bind from INSTANCE (storage)
             by executing bind._evaluator.execute() fetch value process
             Work on stored fields only.
@@ -1052,7 +1067,7 @@ class IContainerBase(ABC):
         ...
 
     @abstractmethod
-    def setup(self) -> IContainerBase:
+    def setup(self) -> Self:
         ...
 
     @abstractmethod
@@ -1080,7 +1095,7 @@ class BoundModelBase(ComponentBase, ABC):
         return False
 
 
-    def get_full_name(self, parent: Optional[BoundModelBase] = None, depth: int = 0, init: bool = False):
+    def get_full_name(self, parent: Optional[Self] = None, depth: int = 0, init: bool = False):
         if not hasattr(self, "_name"):
             if depth > MAX_RECURSIONS:
                 raise RuleInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
@@ -1095,7 +1110,7 @@ class BoundModelBase(ComponentBase, ABC):
         return self._name
 
 
-    def fill_models(self, models: Dict[str, BoundModelBase] = None, parent : BoundModelBase = None):
+    def fill_models(self, models: Dict[str, Self] = None, parent : Self = None):
         """
         Recursion
         """
@@ -1518,7 +1533,7 @@ class IApplySession:
     values_tree_by_key_string: Optional[Dict[KeyString, ComponentTreeWValuesType]] = field(init=False, repr=False, default=None)
 
     @abstractmethod
-    def apply(self) -> IApplySession:
+    def apply(self) -> Self:
         ...
 
     @abstractmethod

@@ -12,7 +12,7 @@ from typing import (
         Union,
         )
 from functools import reduce
-from threading import Lock
+# from threading import Lock
 
 try:
     import yaml

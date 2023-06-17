@@ -451,7 +451,8 @@ class KeysBase(ABC):
 class MissingKey:
     def __init__(self, id):
         # old: self.id = id if id else get_new_unique_id()
-        self.id = id if id else get_new_unique_id()
+        assert id
+        self.id = id
 
     def __str__(self):
         return f"{GlobalConfig.ID_KEY_PREFIX_FOR_MISSING}{self.id}"

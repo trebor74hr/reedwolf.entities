@@ -11,19 +11,15 @@ from typing import (
 from dataclasses import dataclass, field
 
 from .utils import (
-        UNDEFINED,
-        UndefinedType,
         to_int,
         )
 from .exceptions import (
         RuleSetupError,
         )
 from .meta import (
-        TransMessageType,
         NoneType,
         )
 from .base import (
-        BaseOnlyArgs,
         ComponentBase,
         IApplySession,
         ValidationFailure,
@@ -34,23 +30,6 @@ from .expressions import (
         NotAvailableExecResult,
         execute_available_dexp,
         )
-from .attr_nodes import (
-        AttrDexpNode,
-        )
-
-# ------------------------------------------------------------
-# Functions
-# ------------------------------------------------------------
-
-def _(message: str) -> TransMessageType:
-    return message
-
-# TODO: add type hint: TransMessageType -> TranslatedMessageType
-# TODO: accept "{dot_node}" - can be a security issue, attr_nodes() should not make any logic
-#       use .format() ... (not f"", btw. should not be possible anyway)
-
-class msg(BaseOnlyArgs):
-    pass
 
 
 
@@ -59,9 +38,11 @@ class msg(BaseOnlyArgs):
 # ------------------------------------------------------------
 
 
+@dataclass
 class ValidationBase(ComponentBase, ABC): # TODO: make it abstract
     """ Executes validate() method which checks all ok
     """
+
     def __post_init__(self):
         if hasattr(self, "ensure"):
             if not isinstance(self.ensure, DotExpression):
@@ -114,11 +95,12 @@ class ValidationBase(ComponentBase, ABC): # TODO: make it abstract
         ...
 
 
+@dataclass
 class EvaluationBase(ComponentBase, ABC): # TODO: make it abstract
     """ Auto-compute logic - executes 'value' expression, stores into field of
         current instance/object. The execution should not fail.
     """
-    REQUIRES_AUTOCOMPUTE: ClassVar[bool] = True
+    REQUIRES_AUTOCOMPUTE: ClassVar[bool] = field(default=True)
 
     @abstractmethod
     def execute(self, apply_session: IApplySession) -> Optional[ExecResult]:
