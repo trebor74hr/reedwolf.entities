@@ -30,6 +30,7 @@ from .meta import (
         is_function,
         ModelField,
         )
+# TODO: remove this dependency
 from .base import (
         UndefinedType,
         ComponentBase,

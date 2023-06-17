@@ -9,8 +9,9 @@ from dataclasses import (
         field,
         replace as dataclasses_replace,
         )
-from enum import Enum
-
+from enum import (
+        Enum
+        )
 from typing import (
         List,
         Optional,
@@ -19,6 +20,7 @@ from typing import (
         Callable,
         Tuple,
         )
+
 from .utils import (
         UNDEFINED,
         UndefinedType,

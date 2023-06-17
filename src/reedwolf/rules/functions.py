@@ -17,7 +17,6 @@ extra args could be passed and must be called as function.
 from dataclasses import dataclass, field
 from enum import Enum
 from abc import ABC
-
 from typing import (
         Dict,
         Optional,
@@ -29,6 +28,7 @@ from typing import (
         Type,
         Tuple,
         )
+
 from .utils import (
         UNDEFINED,
         get_available_names_example,
