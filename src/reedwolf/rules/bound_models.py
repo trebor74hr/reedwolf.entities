@@ -11,6 +11,7 @@ from dataclasses  import (
         )
 
 from .utils import (
+        camel_case_to_snake,
         UNDEFINED,
         UndefinedType,
         to_repr,
@@ -45,6 +46,7 @@ from .functions import (
         IFunction,
         )
 from .base import (
+        get_name_from_bind,
         BoundModelBase,
         SetupStackFrame,
         IApplySession,
@@ -232,21 +234,21 @@ class NestedBoundModelMixin:
 
 @dataclass
 class BoundModelWithHandlers(NestedBoundModelMixin, BoundModelBase):
-    name         : str
-    title        : str # TransMsg
-    # return type is used as model
+    # return type of this function is used as model
     read_handler : CustomFunctionFactory
-    in_model     : bool = field(default=True)
 
-    contains        : Optional[List[Self]] = field(repr=False, default_factory=list)
+    name         : Optional[str] = field(default=None)
+    title        : Optional[str] = field(default=None, repr=False)
+    in_model     : bool = field(default=True)
+    contains     : Optional[List[Self]] = field(repr=False, default_factory=list)
 
     # --- evaluated later
     # Filled from from .read_hanlder -> (.type_info: TypeInfo).type_
-    model        : ModelType = field(init=False, metadata={"skip_traverse": True})
+    model         : ModelType = field(init=False, metadata={"skip_traverse": True})
     parent        : Union[BoundModelBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     parent_name   : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
-    type_info    : Union[TypeInfo, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    type_info     : Union[TypeInfo, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     models_with_handlers_dict : Dict[str, ModelWithHandlers] = field(init=False, repr=False, default_factory=dict)
 
     def __post_init__(self):
@@ -264,6 +266,12 @@ class BoundModelWithHandlers(NestedBoundModelMixin, BoundModelBase):
 
         if not is_model_class(self.model):
             raise RuleSetupValueError(f"Model got from read_handler output type - should not be Model class (DC/PYD), got: {self.model}")
+
+        if not self.name:
+            self.name = "__".join([
+                camel_case_to_snake(self.__class__.__name__),
+                get_name_from_bind(self.model)
+                ])
 
         super().__post_init__()
 
@@ -307,19 +315,39 @@ class BoundModel(NestedBoundModelMixin, BoundModelBase):
     # bigger comes first, 0 is DotExpression default, 1 is for other copmonents default
     SETUP_PRIORITY  : ClassVar[int] = 9
 
-    name            : str
-    # title           : TransMessageType
-
     model           : Union[ModelType, DotExpression] = field(repr=False)
+
+    name            : Optional[str] = field(default=None)
     contains        : Optional[List[BoundModelWithHandlers]] = field(repr=False, default_factory=list)
 
+    # title           : TransMessageType
+
     # evaluated later
-    parent           : Union[BoundModelBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    parent_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+    parent          : Union[BoundModelBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    parent_name     : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
     # Filled from from model
     type_info : Optional[TypeInfo] = field(init=False, default=None, repr=False)
     models_with_handlers_dict : Dict[str, ModelWithHandlers] = field(init=False, repr=False, default_factory=dict)
+
+
+    def __post_init__(self):
+        if isinstance(self.model, DotExpression):
+            if not self.name:
+                self.name = "__".join([
+                    camel_case_to_snake(self.__class__.__name__),
+                    get_name_from_bind(self.model)
+                    ])
+        elif is_model_class(self.model):
+            if not self.name:
+                self.name = "__".join([
+                        camel_case_to_snake(self.__class__.__name__),
+                        camel_case_to_snake(self.model.__name__),
+                        ])
+        else:
+            # Similar check is done later in container too
+            raise RuleSetupValueError(owner=self, 
+                    msg=f"For 'model' argument expected model class or DotExpression, got: {self.model}")
 
 
     def get_type_info(self):

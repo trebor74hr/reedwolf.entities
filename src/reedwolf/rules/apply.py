@@ -470,8 +470,9 @@ class ApplyResult(IApplySession):
                 if not isinstance(self.instance, comp_container_model):
                     raise RuleInternalError(owner=self, msg=f"Entity instance's model does not corresponds to component's container's model. Expected: {comp_container_model}, got: {type(self.instance)}") 
 
-
-        if self.component_only and component == self.component_only:
+        # TODO: in partial mode this raises RecursionError:
+        #       component == self.component_only
+        if self.component_only and component is self.component_only:
             # partial apply - detected component
             if not mode_subentity_items and in_component_only_tree:
                 raise RuleInternalError(owner=self, 
@@ -944,7 +945,7 @@ class ApplyResult(IApplySession):
             if self.current_frame.instance_new not in (None, UNDEFINED):
 
                 # if partial - then dexp must know - this value is set only in this case
-                if in_component_only_tree and component == self.component_only:
+                if in_component_only_tree and component is self.component_only:
                     # SubEntityItems or FieldGroup is root
                     on_component_only = component
                 else:
@@ -1401,6 +1402,7 @@ class ApplyResult(IApplySession):
         """
         if self.values_tree is None:
             raise RuleInternalError(owner=self, msg="_get_values_tree() did not filled _values_tree cache") 
+
         if key_string is None:
             # component = self.entity
             tree = self.values_tree
@@ -1431,7 +1433,7 @@ class ApplyResult(IApplySession):
                           recursive: bool = False,
                           depth: int=0,
                           ) -> ComponentTreeWValuesType:
-        " see unit test for example - test_dump.py "
+        " recursive - see unit test for example - test_dump.py "
         if depth > MAX_RECURSIONS:
             raise RuleInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
 
@@ -1588,19 +1590,3 @@ class ApplyResult(IApplySession):
                 child_out = self._dump_values(child, depth+1)
                 output[key_name].append(child_out)
 
-# ------------------------------------------------------------
-# OBSOLETE
-# ------------------------------------------------------------
-
-    # def get_current_value(self, apply_session:iapplysession) -> any:
-    #     """ Fetch ExecResult from component.bind from APPLY_SESSION.UPDATE_HISTORY
-    #         last record.
-    #         !!! ExecResult.value could be unadapted :( !!!
-    #         Could work on non-stored fields.
-    #         Probaly a bit faster, only dict queries.
-    #     """
-    #     key_str = self.get_key_string(apply_session=apply_session)
-    #     if not key_str in apply_session.update_history:
-    #         raise RuleInternalError(owner=self, msg=f"{key_str} not found in current values") 
-    #     instance_attr_value = apply_session.update_history[key_str][-1]
-    #     return instance_attr_value.value

@@ -126,6 +126,20 @@ def list_to_strlist(args, before, after):
         out.append(after)
     return out
 
+
+def get_name_from_bind(bind: DotExpression):
+    if len(bind.Path) <= 2:
+        # Dexpr(Person.name) -> name
+        name = bind._name
+    else:
+        # Dexpr(Person.address.street) -> address.street
+        # TODO: this is messy :( - should be one simple logic ...
+        name = "__".join([bit._name for bit in bind.Path][1:])
+    assert name
+    return name
+
+
+
 # ------------------------------------------------------------
 
 class AttrDexpNodeTypeEnum(str, Enum):
@@ -268,7 +282,7 @@ class SetParentMixin:
 
             if getattr(self, "bind", None): 
                 # ModelsNs.person.surname -> surname
-                this_name = self._get_name_from_bind(self.bind)
+                this_name = get_name_from_bind(self.bind)
             else:
                 this_name =self.__class__.__name__.lower()
             keys.append(this_name)
@@ -964,18 +978,6 @@ class ComponentBase(SetParentMixin, ABC):
         return getattr(self, "_finished", False)
 
     # ------------------------------------------------------------
-
-    def _get_name_from_bind(cls, bind: DotExpression):
-        if len(bind.Path) <= 2:
-            # Dexpr(Person.name) -> name
-            name = bind._name
-        else:
-            # Dexpr(Person.address.street) -> address.street
-            # TODO: this is messy :( - should be one simple logic ...
-            name = "__".join([bit._name for bit in bind.Path][1:])
-        assert name
-        return name
-
 
     def get_first_parent_container(self, consider_self: bool) -> "IContainerBase":  # noqa: F821
         parents = self.get_path_to_first_parent_container(consider_self=consider_self)

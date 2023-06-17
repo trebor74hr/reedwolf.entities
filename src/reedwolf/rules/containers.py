@@ -48,6 +48,7 @@ from .meta import (
         Self,
         )
 from .base import (
+        get_name_from_bind,
         ComponentBase,
         IContainerBase,
         BoundModelBase,
@@ -725,16 +726,17 @@ class SubEntityBase(ContainerBase, ABC):
     """ can not be used individually - must be directly embedded into Other
         SubEntityItems or top Entity """
 
-    # required since if it inherit name from BoundModel then the name will not
-    # be unique in self.components (SubEntityItems and BoundModel will share the same name)
-    name            : str
-
     # DotExpression based model -> can be dumped
     bound_model     : Union[BoundModel, BoundModelWithHandlers] = field(repr=False)
     # metadata={"bind_to_parent_setup_session" : True})
 
     # cardinality     : ICardinalityValidation
     contains        : List[ComponentBase] = field(repr=False)
+
+    # required since if it inherit name from BoundModel then the name will not
+    # be unique in self.components (SubEntityItems and BoundModel will share the same name)
+    name            : Optional[str] = None
+
 
     title           : Optional[TransMessageType] = field(repr=False, default=None)
     functions       : Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
@@ -774,6 +776,11 @@ class SubEntityBase(ContainerBase, ABC):
 
     def __post_init__(self):
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
+        if not self.name:
+            if not (self.bound_model.name and isinstance(self.bound_model.model, DotExpression)):
+                raise RuleInternalError(owner=self, msg="Bound model has not automatically set its name OR model is not DotExpression") 
+            self.name = get_name_from_bind(self.bound_model.model)
+
         super().__post_init__()
 
     def set_parent(self, parent:ContainerBase):

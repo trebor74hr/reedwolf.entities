@@ -199,6 +199,19 @@ def snake_case_to_camel(name: str) -> str:
     return ".".join(out)
 
 
+def camel_case_to_snake(name: str) -> str:
+    out = []
+    for name_bit in name.split("."):
+        class_name = []
+        for ch in name_bit:
+            if ch.isupper():
+                ch = f"_{ch}"
+            class_name.append(ch)
+        class_name = "".join(class_name)
+        class_name = class_name.lower().strip("_")
+        out.append(class_name)
+    return ".".join(out)
+
 _RE_SPACES = re.compile(" +")
 def varname_to_title(varname:str) -> str:
     out = varname.replace("_", " ")

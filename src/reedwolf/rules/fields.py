@@ -62,6 +62,7 @@ from .meta import (
         Self,
         )
 from .base import (
+        get_name_from_bind,
         warn,
         IFieldBase,
         IFieldGroup,
@@ -205,7 +206,7 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
 
         if not self.name:
             # ModelsNs.person.surname -> surname
-            self.name = self._get_name_from_bind(self.bind)
+            self.name = get_name_from_bind(self.bind)
 
         self.autocomputed = AutocomputedEnum.from_value(self.autocomputed)
 

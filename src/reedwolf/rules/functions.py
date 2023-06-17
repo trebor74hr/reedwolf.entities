@@ -387,6 +387,7 @@ class IFunction(IFunctionDexpNode):
         assert component == apply_session.current_frame.component
 
         key_string = apply_session.get_key_string(component)
+
         # get complete tree with values
         output = apply_session.get_values_tree(key_string=key_string)
 
