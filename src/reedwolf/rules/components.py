@@ -53,34 +53,13 @@ class msg(BaseOnlyArgs):
     pass
 
 
-# ------------------------------------------------------------
-# COMPONENTS
-# ------------------------------------------------------------
-
-# dataclass required?
-@dataclass
-class Component(ComponentBase, ABC):
-    # NOTE: I wanted to skip saving parent reference/object within component - to
-    #       preserve single and one-direction references.
-    parent       : Union[ComponentBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    parent_name  : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
-
-    # set in setup()
-    dot_node:   Union[AttrDexpNode, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-
-    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    # TODO: i ovo možda treba u base
-    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    def __post_init__(self):
-        super().__post_init__()
-        self.init_clean_base()
 
 # ------------------------------------------------------------
 # Clenaers (cleaners) == Validations OR Evaluations
 # ------------------------------------------------------------
 
 
-class ValidationBase(Component, ABC): # TODO: make it abstract
+class ValidationBase(ComponentBase, ABC): # TODO: make it abstract
     """ Executes validate() method which checks all ok
     """
     def __post_init__(self):
@@ -135,7 +114,7 @@ class ValidationBase(Component, ABC): # TODO: make it abstract
         ...
 
 
-class EvaluationBase(Component, ABC): # TODO: make it abstract
+class EvaluationBase(ComponentBase, ABC): # TODO: make it abstract
     """ Auto-compute logic - executes 'value' expression, stores into field of
         current instance/object. The execution should not fail.
     """
@@ -149,58 +128,4 @@ class EvaluationBase(Component, ABC): # TODO: make it abstract
         """
         ...
 
-
-# ------------------------------------------------------------
-# OBSOLETE
-# ------------------------------------------------------------
-#
-# NOTE: obsolete - it was used for enums only - replaced with special functiohn factory function: functions=[EnumMembers()]
-# 
-# @dataclass
-# class StaticData(IData, Component):
-#     # TODO: Data - maybe should not be component at all?
-#     name:           str
-#     # TODO: ModelField or Enum or ...
-#     value:          Any 
-#     title:          Optional[TransMessageType] = field(repr=False, default=None)
-#     type_info:      TypeInfo = field(init=False)
-#     # evaluate:       bool = False # TODO: describe
-# 
-#     def __post_init__(self):
-#         if isinstance(self.value, DotExpression):
-#             # TODO: should be model or enum
-#             # raise RuleSetupValueError(owner=self, msg=f"{self.name} -> {type(self.value)}: {type(self.value)} - to be done a DotExpression")
-#             raise NotImplementedError(f"{self.name} -> {type(self.value)}: {type(self.value)} - to be done a DotExpression")
-#         self.type_info = TypeInfo.get_or_create_by_type(self.value)
-#         super().__post_init__()
-
-# # ------------------------------------------------------------
-#
-# NOTE: obsolete - replaced with simple functions=[Function()]
-# 
-# @dataclass
-# class DynamicData(IData, Component):
-#     # TODO: Data - maybe should not be component at all?
-#     """
-#     Function is invoked which returns data.
-#     See functions.py for details.
-#     """
-#     name:           str
-#     # NOTE: the name function is exposed and Function() is used, but internally
-#     #       this will be function_factory instance
-#     function:       CustomFunctionFactory
-#     title:          Optional[TransMessageType] = field(repr=False, default=None)
-#     type_info:      TypeInfo = field(init=False)
-#     # evaluate:       bool = False # TODO: describe
-# 
-#     def __post_init__(self):
-#         if not isinstance(self.function, CustomFunctionFactory):
-#             raise RuleSetupValueError(owner=self, msg=f"{self.function}: {type(self.function)} - not DotExpression|Function()")
-#         # self.type_info = TypeInfo.extract_function_return_type_info(self.function)
-#         custon_function_factory: CustomFunctionFactory = self.function
-#         self.type_info = custon_function_factory.get_type_info()
-#         # TODO: check function output is Callable[..., RuleDatatype]
-#         if not self.title:
-#             self.title = varname_to_title(self.name)
-#         super().__post_init__()
 

@@ -93,7 +93,6 @@ from .eval_items import (
         ItemsEvaluationBase,
         )
 from .components import (
-        Component,
         ValidationBase,
         EvaluationBase,
         )
@@ -517,7 +516,7 @@ class KeyFields(KeysBase):
 @dataclass
 class Entity(ContainerBase):
     name            : str
-    contains        : List[Component]      = field(repr=False)
+    contains        : List[ComponentBase] = field(repr=False)
 
     # --- optional - following can be bound later with .bind_to()
     title           : Optional[TransMessageType] = field(repr=False, default=None)
@@ -537,7 +536,7 @@ class Entity(ContainerBase):
 
     # --- Evaluated later
     setup_session      : Optional[SetupSession]    = field(init=False, repr=False, default=None)
-    components      : Optional[Dict[str, Component]]  = field(init=False, repr=False, default=None)
+    components      : Optional[Dict[str, ComponentBase]]  = field(init=False, repr=False, default=None)
     models          : Dict[str, Union[type, DotExpression]] = field(repr=False, init=False, default_factory=dict)
     # in Entity (top object) this case allway None - since it is top object
     parent           : Union[None, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
@@ -733,7 +732,7 @@ class SubEntityBase(ContainerBase, ABC):
     # metadata={"bind_to_parent_setup_session" : True})
 
     # cardinality     : ICardinalityValidation
-    contains        : List[Component] = field(repr=False)
+    contains        : List[ComponentBase] = field(repr=False)
 
     title           : Optional[TransMessageType] = field(repr=False, default=None)
     functions       : Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
@@ -744,7 +743,7 @@ class SubEntityBase(ContainerBase, ABC):
 
     # --- Evaluated later
     setup_session    : Optional[SetupSession] = field(init=False, repr=False, default=None)
-    components       : Optional[Dict[str, Component]]  = field(init=False, repr=False, default=None)
+    components       : Optional[Dict[str, ComponentBase]]  = field(init=False, repr=False, default=None)
     models           : Dict[str, Union[type, DotExpression]] = field(init=False, repr=False, default_factory=dict)
 
     # --- ComponentBase common attrs

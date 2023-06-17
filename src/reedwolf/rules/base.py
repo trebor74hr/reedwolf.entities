@@ -88,16 +88,6 @@ from .contexts import (
 
 # ------------------------------------------------------------
 
-# TODO: hard to define, it is recursive:
-#   key         value
-#   ----------- ----------------
-#   name:       str
-#   component:  ComponentBase
-#   value:      LiteralType
-#   children:   List[Self]
-#   
-
-
 YAML_INDENT :str = "  "
 PY_INDENT : str  = "    "
 MAX_RECURSIONS: int = 30
@@ -314,11 +304,17 @@ class SubcomponentWrapper:
 # ComponentBase
 # ------------------------------------------------------------
 
+@dataclass
 class ComponentBase(SetParentMixin, ABC):
 
+    # NOTE: I wanted to skip saving parent reference/object within component - to
+    #       preserve single and one-direction references.
+    parent       : Union[ComponentBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    parent_name  : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+
     def __post_init__(self):
+        self.init_clean_base()
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
-        ...
 
     def init_clean_base(self):
         # when not set then will be later defined - see set_parent()

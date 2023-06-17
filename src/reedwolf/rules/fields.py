@@ -68,6 +68,7 @@ from .base import (
         IApplySession,
         ValidationFailure,
         SetupStackFrame,
+        ComponentBase,
         )
 from .expressions   import (
         DotExpression,
@@ -98,7 +99,6 @@ from .eval_children import (
         ChildrenEvaluationBase,
         )
 from .components    import (
-        Component,
         ValidationBase,
         EvaluationBase,
         )
@@ -132,7 +132,7 @@ MAX_BIND_DEPTH = 4
 
 
 @dataclass
-class FieldBase(Component, IFieldBase, ABC):
+class FieldBase(ComponentBase, IFieldBase, ABC):
     # abstract property:
     PYTHON_TYPE:ClassVar[type(UNDEFINED)] = UNDEFINED
     REQUIRED_VALIDATIONS:ClassVar[Optional[RequiredValidationsType]] = None
@@ -171,7 +171,7 @@ class FieldBase(Component, IFieldBase, ABC):
 
     # TODO: možda složiti da radi i za Choice/Enum -> structural pattern
     #       matching like, samo nisam još našao zgodnu sintaksu.
-    enables:        Optional[List[Component]] = field(repr=False, default=None)
+    enables:        Optional[List[ComponentBase]] = field(repr=False, default=None)
 
     # NOTE: this has no relation to type hinting - this is used for html input placeholder attribute
     hint:           Optional[TransMessageType] = field(repr=False, default=None)
@@ -746,8 +746,8 @@ class EmailField(FieldBase):
 # ------------------------------------------------------------------------
 
 @dataclass
-class FieldGroup(Component, IFieldGroup):
-    contains:       List[Component] = field(repr=False)
+class FieldGroup(ComponentBase, IFieldGroup):
+    contains:       List[ComponentBase] = field(repr=False)
     name:           Optional[str] = field(default=None)
     title:          Optional[TransMessageType] = field(repr=False, default=None)
     cleaners:       Optional[List[Union[ChildrenValidationBase, ChildrenEvaluationBase]]] = field(repr=False, default_factory=list)
