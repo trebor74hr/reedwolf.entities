@@ -41,8 +41,8 @@ from .base import (
         IApplySession,
         ValidationFailure,
         )
-from .components    import (
-        ValidationBase, 
+from .valid_base import (
+        ValidationBase,
         )
 from .expressions   import (
         DotExpression,

@@ -98,8 +98,10 @@ from .valid_children import (
 from .eval_children import (
         ChildrenEvaluationBase,
         )
-from .components    import (
+from .valid_base import (
         ValidationBase,
+        )
+from .eval_base import (
         EvaluationBase,
         )
 

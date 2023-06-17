@@ -22,7 +22,7 @@ from .base import (
         IApplySession,
         ExecResult,
         )
-from .components  import (
+from .eval_base import (
         EvaluationBase,
         )
 

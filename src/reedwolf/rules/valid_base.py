@@ -5,10 +5,8 @@ from abc import (
 from typing import (
         Any,
         Union, 
-        Optional, 
-        ClassVar,
         )
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from .utils import (
         to_int,
@@ -93,21 +91,3 @@ class ValidationBase(ComponentBase, ABC): # TODO: make it abstract
         containing all required information about failure(s).
         """
         ...
-
-
-@dataclass
-class EvaluationBase(ComponentBase, ABC): # TODO: make it abstract
-    """ Auto-compute logic - executes 'value' expression, stores into field of
-        current instance/object. The execution should not fail.
-    """
-    REQUIRES_AUTOCOMPUTE: ClassVar[bool] = field(default=True)
-
-    @abstractmethod
-    def execute(self, apply_session: IApplySession) -> Optional[ExecResult]:
-        """
-        returns value wrapped in ExecResult which will be used to update instance.attribute
-        if returns None, update won't be done
-        """
-        ...
-
-

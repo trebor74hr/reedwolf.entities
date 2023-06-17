@@ -62,9 +62,11 @@ from .base import (
 from .fields import (
         FieldBase,
         )
-from .components import (
-        EvaluationBase,
+from .valid_base import (
         ValidationBase,
+        )
+from .eval_base import (
+        EvaluationBase,
         )
 from .containers import (
         ContainerBase,

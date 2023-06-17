@@ -55,8 +55,10 @@ from .base import (
 from .attr_nodes import (
         AttrDexpNode,
         )
-from .components import (
+from .valid_base import (
         ValidationBase,
+        )
+from .eval_base import (
         EvaluationBase,
         )
 from .contexts import (

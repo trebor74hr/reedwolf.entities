@@ -33,7 +33,7 @@ from .meta import (
 from .base import (
         IApplySession,
         )
-from .components  import (
+from .eval_base import (
         EvaluationBase,
         )
 from .expressions import (

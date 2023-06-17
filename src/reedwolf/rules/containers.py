@@ -92,8 +92,10 @@ from .valid_items import (
 from .eval_items import (
         ItemsEvaluationBase,
         )
-from .components import (
+from .valid_base import (
         ValidationBase,
+        )
+from .eval_base import (
         EvaluationBase,
         )
 from .fields import (
@@ -107,7 +109,6 @@ from .config import (
         )
 
 from ..rules import (
-        components, 
         fields, 
         valid_field, 
         valid_items, 
@@ -856,7 +857,6 @@ def collect_classes(componnents_registry: Dict, module: Any, klass_match: type) 
 
 # TODO: not the best way + move function to some utils
 COMPONENTS_REGISTRY = {}
-collect_classes(COMPONENTS_REGISTRY, components, ComponentBase)
 collect_classes(COMPONENTS_REGISTRY, fields, ComponentBase)
 collect_classes(COMPONENTS_REGISTRY, valid_field, ComponentBase)
 collect_classes(COMPONENTS_REGISTRY, valid_items, ComponentBase)

@@ -33,7 +33,7 @@ from .meta import (
 from .expressions   import (
         DotExpression,
         )
-from .components import (
+from .valid_base import (
         ValidationBase,
         )
 from .base import (
