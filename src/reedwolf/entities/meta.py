@@ -202,7 +202,7 @@ EmptyFunctionArguments  = FunctionArgumentsType([], {})
 
 # NOTE: when custom type with DotExpression alias are defined, then
 #       get_type_hints falls into problems producing NameError-s
-#         Object <class 'type'> / '<class 'reedwolf.rules.components.BooleanField'>'
+#         Object <class 'type'> / '<class 'reedwolf.entities.components.BooleanField'>'
 #         type hint is not possible/available: name 'OptionalBoolOrDExp' is not defined.
 #
 #   from .expressions import DotExpression
@@ -409,7 +409,7 @@ def extract_py_type_hints(inspect_object: Any, caller_name: str, strict: bool = 
             # NOTE: sometimes there is NameError because some referenced types are not available in this place???
             #       when custom type with DotExpression alias are defined, then
             #       get_type_hints falls into problems producing NameError-s
-            #         Object <class 'type'> / '<class 'reedwolf.rules.components.BooleanField'>'
+            #         Object <class 'type'> / '<class 'reedwolf.entities.components.BooleanField'>'
             #         type hint is not possible/available: name 'OptionalBoolOrDExp' is not defined.
             raise RuleSetupValueError(item=inspect_object, msg=f"{caller_name}: Object type hint is not possible/available: {ex}."
                                  + " Please verify that object is properly type hinted class attribute, function or method,"
@@ -674,12 +674,12 @@ class TypeInfo:
 
             1) 'extract_py_type_hints() + get_or_create_by_type()' - low level preffered
 
-            2) 'rules.base. extract_type_info()' - high level PREFFERED - internally uses
+            2) 'entities.base. extract_type_info()' - high level PREFFERED - internally uses
                'extract_py_type_hints()->get_type_hints()', but requires parent object.
 
             2)  When you have classes/types then 'get_or_create_by_type()'
 
-            NOTE: Do not use 'rules.meta. get_model_fields() .type' or '__annotations__'
+            NOTE: Do not use 'entities.meta. get_model_fields() .type' or '__annotations__'
                   since python type hints may not be resolved.
         """
         # msg_prefix = f"{to_repr(caller)}:: " if caller else ""

@@ -1,25 +1,25 @@
-# Reedwolf.rules project
+# Reedwolf.Entities project
 
-Reedwolf.rules is a [Python](https://www.python.org/) library that extends
+Reedwolf.Entities is a [Python](https://www.python.org/) library that extends
 and enrich existing structured and unstructured data model with declarative
 constraints and automatic evaluation logic.
 
 **This is currently unfinished project.** First feature complete and stable
 release will include verbose explanation and documentation with examples.
 
-Reedwolf.rules is first published part of larger **Reedwolf** project which
+Reedwolf.entities is first published part of larger **Reedwolf** project which
 aims solving common software design and implementation tasks in more-or-less
 unique way.
 
 
-# Rules Components
+# Components
 
-## Building blocks of rules
+## Building blocks
 
-Building blocks of rules are:
+Building blocks are:
 
  * CONTAINERS  - are top-level objecs, can contain components or same/lower
-               level containers. Rules is top object.
+               level containers. **Entity** is top object.
  * EXTENSIONS  - specialized components used for one/many to one/many inner
                data structures.
  * COMPONENTS  - can be embedded into Container (contains)

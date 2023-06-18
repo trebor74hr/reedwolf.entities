@@ -9,7 +9,7 @@ like this::
     # 2. if ok then install on pypi 
     py -m twine upload dist/* --verbose
 
-    # 3. check on: https://pypi.org/project/reedwolf.rules/0.0.1/
+    # 3. check on: https://pypi.org/project/reedwolf.entities.0.1/
 
     # TODO: git tag with release number?
 
@@ -20,17 +20,17 @@ like this::
 ### Additional
 
 url:
-    https://pypi.org/project/reedwolf.rules/0.0.1/
+    https://pypi.org/project/reedwolf.entities.0.1/
 
 testing::
 
     export PYTHONPATH=
-    pip install reedwolf.rules
-    python -c "from reedwolf.rules import *; print(dir())"
-    python -c "from reedwolf.rules import Rules; print(dir())"
-    python -c "from reedwolf import rules; print(rules.__file__)"
+    pip install reedwolf.entities
+    python -c "from reedwolf.entities import *; print(dir())"
+    python -c "from reedwolf.entities import Entity; print(dir())"
+    python -c "from reedwolf import entities; print(entities.__file__)"
     cd tests/
     python test_basic.py
     cd ..
-    pip uninstall reedwolf.rules
+    pip uninstall reedwolf.entities
 

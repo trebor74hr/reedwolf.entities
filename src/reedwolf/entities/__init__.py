@@ -101,7 +101,7 @@ from .apply import ApplyResult
 from .load import load
 
 
-# what to import in case "reedwolf.rules import *"
+# what to import in case "reedwolf.entities import *"
 __all__ = [
     # utils
     UNDEFINED,

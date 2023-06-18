@@ -136,7 +136,7 @@ class AttrDexpNode(IDotExpressionNode):
             if is_function(self.data):
                 # self.attr_node_type = AttrDexpNodeTypeEnum.FUNCTION
                 # self.data_supplier_name = f"{self.data.__name__}"
-                raise RuleSetupValueError(owner=self, msg=f"Node '.{self.name}' is a function. Maybe you forgot to wrap it with 'reedwolf.rules.Function()'?")
+                raise RuleSetupValueError(owner=self, msg=f"Node '.{self.name}' is a function. Maybe you forgot to wrap it with 'reedwolf.entities.Function()'?")
             raise RuleSetupValueError(owner=self, msg=f"AttrDexpNode {self.name} should be based on PYD/DC class, got: {self.data}")
 
 

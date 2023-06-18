@@ -1,6 +1,6 @@
 # Adaptation to reuse Reedwolf project (project by robert.lujo@gmail.com - git@bitbucket.org:trebor74hr/reedwolf.git)
 """
-Yaml rules to python source code
+Yaml entities to python source code
 TODO: generated code is obsolete
 TODO: missing yaml example(s) and unit-tests
 """
@@ -12,7 +12,7 @@ import yaml
 
 INDENT = "  "
 
-raise NotImplementedError("The module from_yaml is not up-to-date with current Rules object system")
+raise NotImplementedError("The module from_yaml is not up-to-date with current Entity object system")
 
 class ParseException(Exception):
     pass
@@ -656,13 +656,13 @@ def main(filename):
 
         # DataSource,
         outputs["py"].append(
-            "from reedwolf.rules.base import _, RulesSetup, FieldGroup, Field, SelectOptions, DynamicOutput, "
+            "from reedwolf.entities.base import _, Entity, FieldGroup, Field, SelectOptions, DynamicOutput, "
             + "Validation, Evaluation, FieldsGenerator, FieldGroupForm, msg, "
             + "StaticData, option, This, F, D, M, Context, Utils"
         )
         outputs["py"].append("")
         name = "TODO:"  # noqa: F841
-        outputs["py"].append("rules_setup = RulesSetup(name='{name}',")
+        outputs["py"].append("entity = Entity(name='{name}',")
         outputs["py"].append(f"{INDENT*2}models = ['TODO'],")
         outputs["py"].append(f"{INDENT*2}contains = [")
         for nr, item in enumerate(spec, 1):

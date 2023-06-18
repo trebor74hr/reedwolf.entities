@@ -110,7 +110,7 @@ from .config import (
         Config,
         )
 
-from ..rules import (
+from . import (
         fields, 
         valid_field, 
         valid_items, 
