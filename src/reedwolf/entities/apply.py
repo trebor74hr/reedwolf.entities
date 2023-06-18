@@ -6,6 +6,7 @@ from typing import (
         Tuple,
         List,
         Union,
+        Type,
         )
 from contextlib import AbstractContextManager
 from collections import OrderedDict, defaultdict
@@ -62,12 +63,16 @@ from .base import (
 from .fields import (
         FieldBase,
         )
-from .valid_base import (
-        ValidationBase,
-        )
-from .eval_base import (
-        EvaluationBase,
-        )
+
+from .valid_base     import ValidationBase
+from .eval_base      import EvaluationBase
+from .valid_field    import FieldValidationBase
+from .eval_field     import FieldEvaluationBase
+from .valid_children import ChildrenValidationBase
+from .eval_children  import ChildrenEvaluationBase
+from .valid_items    import ItemsValidationBase
+from .eval_items     import ItemsEvaluationBase
+
 from .containers import (
         ContainerBase,
         MissingKey,
@@ -214,7 +219,53 @@ class ApplyResult(IApplySession):
 
     # ------------------------------------------------------------
 
-    def execute_evaluation(self, component: ComponentBase, evaluation:EvaluationBase) -> ExecResult:
+    def _execute_cleaners(self, 
+            component: ComponentBase, 
+            validation_class: Type[ValidationBase],
+            evaluation_class: Type[EvaluationBase],
+        ) -> ExecResult:
+
+        assert issubclass(validation_class, ValidationBase)
+        assert issubclass(evaluation_class, EvaluationBase)
+
+        # TODO: provide last value to all evaluations and validations 
+        #       but be careful with dexp_result.value - it coluld be unadapted
+        #       see: field.try_adapt_value(eval_value)
+        all_ok = True
+        if component.cleaners:
+            for cleaner in component.cleaners:
+                # TODO: if something is wrong - cleaner is not known. maybe
+                #       something like this:
+                #   with self.use_stack_frame(
+                #           ApplyStackFrame(
+                #               container = self.current_frame.container,
+                #               instance = self.current_frame.instance,
+                #               component = self.current_frame.component,
+                #               cleaner = cleaner, 
+                #               )):
+
+                # TODO: self.config.logger.warning(f"{'  ' * self.current_frame.depth} clean : {component.name} -> {cleaner.name}")
+                if isinstance(cleaner, validation_class):
+                    # --- 3.a. run validations
+                    # returns validation_failure
+                    if not self.defaults_mode:
+                        if self._execute_validation(component=component, validation=cleaner):
+                            all_ok = False
+                elif isinstance(cleaner, evaluation_class):
+                    # --- 3.b. run evaluation
+                    # if not bind_dexp_result:
+                    #     # TODO: this belongs to Setup phase
+                    #     raise EntityApplyError(owner=self, msg="Evaluation can be defined only for components with 'bind' defined. Remove 'Evaluation' or define 'bind'.")
+                    self._execute_evaluation(component=component, evaluation=cleaner)
+                elif  not (isinstance(cleaner, ValidationBase) or  
+                           isinstance(cleaner, EvaluationBase)):
+                    raise EntityApplyError(owner=self, msg=f"Unknown cleaner type {type(cleaner)}. Expected *Evaluation or *Validation.")
+
+        return all_ok
+
+    # ------------------------------------------------------------
+
+    def _execute_evaluation(self, component: ComponentBase, evaluation:EvaluationBase) -> ExecResult:
         """ Execute evaluation and if new value is different from existing
             value, update current instance """
         assert isinstance(evaluation, EvaluationBase)
@@ -252,7 +303,7 @@ class ApplyResult(IApplySession):
     # ------------------------------------------------------------
 
     # value: Any, 
-    def execute_validation(self, component: ComponentBase, validation:ValidationBase) -> Optional[ValidationFailure]:
+    def _execute_validation(self, component: ComponentBase, validation:ValidationBase) -> Optional[ValidationFailure]:
         """ Execute validaion - if returns False value then register error and
             mark component and children invalid to prevent further entity execution
         """
@@ -548,6 +599,12 @@ class ApplyResult(IApplySession):
                         current_instance_list_new=current_instance_new,
                         depth=depth,
                         )
+
+                all_ok = self._execute_cleaners(component,
+                        validation_class=ItemsValidationBase,
+                        evaluation_class=ItemsEvaluationBase,
+                        )
+
                 # ========================================
                 # Finished, processed all children items
                 # ========================================
@@ -640,7 +697,8 @@ class ApplyResult(IApplySession):
                     # ============================================================
                     # Update, validate, evaluate
                     # ============================================================
-                    process_further, current_value_instance_new = self._update_and_clean(component=component, key_string=comp_key_str)
+                    all_ok, current_value_instance_new = self._update_and_clean(component=component, key_string=comp_key_str)
+                    process_further = all_ok
                     # ============================================================
                     if current_value_instance_new is not None:
                         current_value_instance = current_value_instance_new
@@ -678,6 +736,7 @@ class ApplyResult(IApplySession):
                 # --- Recursive walk down - for each child call _apply
                 # ------------------------------------------------------------
                 for child in component.get_children():
+                    # TODO: self.config.logger.warning(f"{'  ' * self.current_frame.depth} _apply: {component.name} -> {child.name}")
                     self._apply(
                                 # parent=component, 
                                 # in_component_only_tree=in_component_only_tree,
@@ -686,6 +745,13 @@ class ApplyResult(IApplySession):
                                 )
                 # TODO: consider to reset - although should not influence since stack_frame will be disposed
                 # self.current_frame.set_parent_values_subtree(parent_values_subtree)
+                # NOTE: bind_dexp_result not used
+
+                all_ok = self._execute_cleaners(component,
+                        validation_class=ChildrenValidationBase,
+                        evaluation_class=ChildrenEvaluationBase,
+                        )
+                process_further = all_ok
 
             # if self.current_frame.component.is_container():
             # Fill internal cache for possible later use by some `dump_` functions
@@ -1035,39 +1101,15 @@ class ApplyResult(IApplySession):
             bind_dexp_result, _ = self._try_update_by_instance(
                                         component=component, 
                                         init_bind_dexp_result=init_bind_dexp_result)
+            # TODO: self.config.logger.warning(f"{'  ' * self.current_frame.depth} update: {component.name}")
         else:
             bind_dexp_result = None
 
-
-        # TODO: provide last value to all evaluations and validations 
-        #       but be careful with dexp_result.value - it coluld be unadapted
-        #       see: field.try_adapt_value(eval_value)
-        all_ok = True
-        if component.cleaners:
-            for cleaner in component.cleaners:
-                # TODO: if something is wrong - cleaner is not known. maybe
-                #       something like this:
-                #   with self.use_stack_frame(
-                #           ApplyStackFrame(
-                #               container = self.current_frame.container,
-                #               instance = self.current_frame.instance,
-                #               component = self.current_frame.component,
-                #               cleaner = cleaner, 
-                #               )):
-                if isinstance(cleaner, ValidationBase):
-                    # --- 3.a. run validations
-                    # returns validation_failure
-                    if not self.defaults_mode:
-                        if self.execute_validation(component=component, validation=cleaner):
-                            all_ok = False
-                elif isinstance(cleaner, EvaluationBase):
-                    # --- 3.b. run evaluation
-                    if not bind_dexp_result:
-                        # TODO: this belongs to Setup phase
-                        raise EntityApplyError(owner=self, msg="Evaluation can be defined only for components with 'bind' defined. Remove 'Evaluation' or define 'bind'.")
-                    self.execute_evaluation(component=component, evaluation=cleaner)
-                else:
-                    raise EntityApplyError(owner=self, msg=f"Unknown cleaner type {type(cleaner)}. Expected *Evaluation or *Validation.")
+        # NOTE: bind_dexp_result not used
+        all_ok = self._execute_cleaners(component,
+                validation_class=FieldValidationBase,
+                evaluation_class=FieldEvaluationBase,
+                )
 
         if self.defaults_mode and isinstance(component, FieldBase):
             # NOTE: change NA_DEFAULTS_MODE to most reasonable and
@@ -1352,6 +1394,7 @@ class ApplyResult(IApplySession):
             # self._init_by_bind_dexp(component)
 
         attr_current_value_instance = self.current_values[key_str]
+        # TODO: self.config.logger.warning(f"{'  ' * self.current_frame.depth} value: {component.name}")
         return attr_current_value_instance
 
     # ------------------------------------------------------------
