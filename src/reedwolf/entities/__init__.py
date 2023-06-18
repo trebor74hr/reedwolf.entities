@@ -34,7 +34,7 @@ from .base import (  # noqa: F401
 from .fields import (
         AutocomputedEnum,
         StringField,
-        UnsizedStringField,
+        SizedStringField,
         BooleanField,
         IntegerField,
         FloatField,
@@ -135,7 +135,7 @@ __all__ = [
     # fields
     "AutocomputedEnum",
     "StringField",
-    "UnsizedStringField",
+    "TextField",
     "BooleanField",
     "IntegerField",
     "FloatField",

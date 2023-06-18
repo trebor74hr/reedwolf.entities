@@ -379,14 +379,12 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
 
 
 # ------------------------------------------------------------
-# StringField
+# SizedStringField
 # ------------------------------------------------------------
 
-@dataclass
-class StringField(FieldBase):
-    # django: CharField
+class StringFieldBase(FieldBase, ABC):
+
     PYTHON_TYPE:ClassVar[type] = str
-    REQUIRED_VALIDATIONS:ClassVar[List[RequiredValidationsType]] = [(MaxLength, ExactLength)]
 
     def try_adapt_value(self, value: Any) -> Any:
         " apply phase: if not string and is standard type, convert to string "
@@ -394,14 +392,22 @@ class StringField(FieldBase):
             value = str(value)
         return value
 
+@dataclass
+class SizedStringField(StringFieldBase):
+    """ sized / limited string field """
+
+    REQUIRED_VALIDATIONS:ClassVar[List[RequiredValidationsType]] = [(MaxLength, ExactLength)]
+
 # ------------------------------------------------------------
-# UnsizedStringField
+# TextField
 # ------------------------------------------------------------
 
 @dataclass
-class UnsizedStringField(FieldBase):
-    # NOTE: Django TextField -> MaxLength=Neki valiki, render nešto drugačiji, rows/columns
-    PYTHON_TYPE:ClassVar[type] = str
+class StringField(StringFieldBase):
+    """ unsized / unlimited string field """
+    # ALT: name: UnsizedStringField
+    ...
+
 
 # ------------------------------------------------------------
 # BooleanField
