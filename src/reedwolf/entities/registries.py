@@ -13,6 +13,7 @@ from typing import (
 from .utils import (
         UNDEFINED,
         UndefinedType,
+        to_repr,
         )
 from .exceptions import (
         EntitySetupError,
@@ -246,7 +247,7 @@ class FieldsRegistry(RegistryBase):
         else:
             # TODO: this should be automatic, a new registry for field types
             valid_types = ', '.join([t.__name__ for t in self.ALLOWED_BASE_TYPES])
-            raise EntitySetupError(owner=self, msg=f"RuleSetup does not support type {type(component)}: {repr(component)[:100]}. Valid type of objects or objects inherited from: {valid_types}")
+            raise EntitySetupError(owner=self, msg=f"Valid type of objects or objects inherited from: {valid_types}. Got: {type(component)} / {to_repr(component)}. ")
 
         attr_node = AttrDexpNode(
                         name=component_name,

@@ -1429,7 +1429,7 @@ class StructEnum(str, Enum):
     # models like - follows flat, storage/db like structure
     MODELS_LIKE = "MODELS"
     # entity like - follows hierachical structure like defined in entity
-    ENTITY_LIKE  = "RULES"
+    ENTITY_LIKE  = "ENTITY"
 
 # TODO: consider using classes instead, e.g.
 #       class InputStructBase:
