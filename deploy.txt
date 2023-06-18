@@ -20,7 +20,7 @@ like this::
 ### Additional
 
 url:
-    https://pypi.org/project/reedwolf.entities.0.1/
+    https://pypi.org/project/reedwolf.entities.0.7.0/
 
 testing::
 
