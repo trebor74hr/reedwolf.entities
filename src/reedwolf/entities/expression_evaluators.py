@@ -32,8 +32,8 @@ from .utils import (
         UNDEFINED,
         )
 from .exceptions import (
-        RuleInternalError,
-        RuleApplyError,
+        EntityInternalError,
+        EntityApplyError,
         )
 from .expressions import (
         IDotExpressionNode,
@@ -56,9 +56,9 @@ class DotExpressionEvaluator:
 
     def add(self, node:IDotExpressionNode):
         if self.finished:
-            raise RuleInternalError(owner=self, msg="Already finished.")
+            raise EntityInternalError(owner=self, msg="Already finished.")
         if not isinstance(node, IDotExpressionNode):
-            raise RuleInternalError(owner=self, msg=f"node not 'IDotExpressionNode', got: {node}")
+            raise EntityInternalError(owner=self, msg=f"node not 'IDotExpressionNode', got: {node}")
         self.attr_node_list.append(node)
 
     def is_all_ok(self) -> bool:
@@ -66,29 +66,29 @@ class DotExpressionEvaluator:
 
     def last_node(self) -> IDotExpressionNode:
         if not self.finished:
-            raise RuleInternalError(owner=self, msg="Not finished.")
+            raise EntityInternalError(owner=self, msg="Not finished.")
         return self.attr_node_list[-1]
 
     def failed(self, reason:str):
         if self.finished:
-            raise RuleInternalError(owner=self, msg="Already finished.")
+            raise EntityInternalError(owner=self, msg="Already finished.")
         self.failed_reasons.append(reason)
 
     def finish(self):
         if self.finished:
-            raise RuleInternalError(owner=self, msg="Already finished.")
+            raise EntityInternalError(owner=self, msg="Already finished.")
         if not self.attr_node_list:
-            raise RuleInternalError(owner=self, msg=f"attr_node_list is empty, failed reasons: {self.failed_reasons}")
+            raise EntityInternalError(owner=self, msg=f"attr_node_list is empty, failed reasons: {self.failed_reasons}")
 
         # TODO: if not self.attr_node_list:
-        # TODO:     raise RuleInternalError(owner=self, msg=f"Empty attr_node_list.")
+        # TODO:     raise EntityInternalError(owner=self, msg=f"Empty attr_node_list.")
         self.finished = True
 
     def execute_dexp(self, apply_session: "IApplySession") -> ExecResult: # noqa: F821
         if not self.finished:
-            raise RuleInternalError(owner=self, msg="Not yet finished.")
+            raise EntityInternalError(owner=self, msg="Not yet finished.")
         if self.failed_reasons:
-            raise RuleApplyError(owner=self, msg=f"Failed in creation: {'; '.join(self.failed_reasons)}.")
+            raise EntityApplyError(owner=self, msg=f"Failed in creation: {'; '.join(self.failed_reasons)}.")
 
         dexp_result = UNDEFINED
         if apply_session.current_frame.on_component_only:

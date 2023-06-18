@@ -11,10 +11,10 @@ from .utils import (
         to_repr,
         )
 from .exceptions import (
-        RuleSetupValueError,
-        RuleInternalError,
-        RuleApplyNameError,
-        RuleApplyValueError,
+        EntitySetupValueError,
+        EntityInternalError,
+        EntityApplyNameError,
+        EntityApplyValueError,
         )
 from .namespaces import (
         Namespace,
@@ -79,13 +79,13 @@ class AttrDexpNode(IDotExpressionNode):
         self.full_name = f"{self.namespace._name}.{self.name}"
 
         if not isinstance(self.name, str) or self.name in (None, UNDEFINED):
-            raise RuleInternalError(owner=self, msg=f"AttrDexpNode should have string name, got: {self.name}")
+            raise EntityInternalError(owner=self, msg=f"AttrDexpNode should have string name, got: {self.name}")
 
         # ---------------------------------------------
         # CASES: COMPONENTS
         # ---------------------------------------------
         if self.data is None:
-            raise RuleInternalError(owner=self, msg=f"Data is not set for {self}")
+            raise EntityInternalError(owner=self, msg=f"Data is not set for {self}")
 
         if isinstance(self.data, IContainerBase):
             self.attr_node_type = AttrDexpNodeTypeEnum.CONTAINER
@@ -127,7 +127,7 @@ class AttrDexpNode(IDotExpressionNode):
         elif isinstance(self.data, TypeInfo):
             # TODO: For Context - th_field is a method() for AttrNode, solve this more clever
             if self.th_field is UNDEFINED:
-                raise RuleInternalError(owner=self, msg="TypeInfo case - expected th_field (ModelField or py_function).")
+                raise EntityInternalError(owner=self, msg="TypeInfo case - expected th_field (ModelField or py_function).")
 
             self.attr_node_type = AttrDexpNodeTypeEnum.TH_FIELD
             # self.data_supplier_name = f"TH[{type_info.var_type.name}: {type_info.type_.__name__}]"
@@ -136,8 +136,8 @@ class AttrDexpNode(IDotExpressionNode):
             if is_function(self.data):
                 # self.attr_node_type = AttrDexpNodeTypeEnum.FUNCTION
                 # self.data_supplier_name = f"{self.data.__name__}"
-                raise RuleSetupValueError(owner=self, msg=f"Node '.{self.name}' is a function. Maybe you forgot to wrap it with 'reedwolf.entities.Function()'?")
-            raise RuleSetupValueError(owner=self, msg=f"AttrDexpNode {self.name} should be based on PYD/DC class, got: {self.data}")
+                raise EntitySetupValueError(owner=self, msg=f"Node '.{self.name}' is a function. Maybe you forgot to wrap it with 'reedwolf.entities.Function()'?")
+            raise EntitySetupValueError(owner=self, msg=f"AttrDexpNode {self.name} should be based on PYD/DC class, got: {self.data}")
 
 
         # NOTE: .type_info could be calculated later in finish() method
@@ -154,11 +154,11 @@ class AttrDexpNode(IDotExpressionNode):
 
                 type_info = self.data
                 if not type_info.bound_attr_node:
-                    raise RuleInternalError(owner=self, msg=f"AttrDexpNode {self.data} .bound_attr_node not set.")
+                    raise EntityInternalError(owner=self, msg=f"AttrDexpNode {self.data} .bound_attr_node not set.")
 
                 bound_type_info = type_info.bound_attr_node.get_type_info()
                 if not bound_type_info:
-                    raise RuleInternalError(owner=self, msg=f"AttrDexpNode data.bound_attr_node={self.data} -> {self.data.bound_attr_node} .type_info not set.")
+                    raise EntityInternalError(owner=self, msg=f"AttrDexpNode data.bound_attr_node={self.data} -> {self.data.bound_attr_node} .type_info not set.")
 
                 # transfer type_info from type_info.bound attr_node
                 self.type_info = bound_type_info
@@ -170,10 +170,10 @@ class AttrDexpNode(IDotExpressionNode):
                     AttrDexpNodeTypeEnum.COMPONENT,
                     ):
                 # all other require type_info
-                raise RuleInternalError(owner=self, msg=f"For attr_node {self.attr_node_type} .type_info not set (type={type(self.data)}).")
+                raise EntityInternalError(owner=self, msg=f"For attr_node {self.attr_node_type} .type_info not set (type={type(self.data)}).")
 
             if not self.denied and not self.type_info:
-                raise RuleInternalError(owner=self, msg=f"For attr_node {self.attr_node_type} .type_info could not not set (type={type(self.data)}).")
+                raise EntityInternalError(owner=self, msg=f"For attr_node {self.attr_node_type} .type_info could not not set (type={type(self.data)}).")
 
 
     def get_type_info(self) -> TypeInfo:
@@ -189,7 +189,7 @@ class AttrDexpNode(IDotExpressionNode):
                  ) -> ExecResult:
 
         if is_last and not self.is_finished:
-            raise RuleInternalError(owner=self, msg="Last dexp node is not finished.") 
+            raise EntityInternalError(owner=self, msg="Last dexp node is not finished.") 
 
         # TODO: not nicest way - string split
         #       for subentity_items: [p._name for p in frame.container.bound_model.model.Path]
@@ -207,12 +207,12 @@ class AttrDexpNode(IDotExpressionNode):
 
             if frame.container.is_subentity() or frame.on_component_only:
                 if not len(names)==1:
-                    raise RuleInternalError(owner=self, msg=f"Attribute node - execution initial step for SubEntityItems/SubEntitySingle failed, expected single name members (e.g. M), got: {self.name}\n  == Compoonent: {frame.container}")
+                    raise EntityInternalError(owner=self, msg=f"Attribute node - execution initial step for SubEntityItems/SubEntitySingle failed, expected single name members (e.g. M), got: {self.name}\n  == Compoonent: {frame.container}")
                 # if not len(names)>1:
-                #     raise RuleInternalError(owner=self, msg=f"Initial evaluation step for subentity_items failed, expected multiple name members (e.g. M.address_set), got: {self.name}\n  == Compoonent: {frame.container}")
+                #     raise EntityInternalError(owner=self, msg=f"Initial evaluation step for subentity_items failed, expected multiple name members (e.g. M.address_set), got: {self.name}\n  == Compoonent: {frame.container}")
             else:
                 if not len(names)==1:
-                    raise RuleInternalError(owner=self, msg=f"Initial evaluation step for non-subentity_items failed, expected single name member (e.g. M), got: {self.name}\n  == Compoonent: {frame.container}")
+                    raise EntityInternalError(owner=self, msg=f"Initial evaluation step for non-subentity_items failed, expected single name member (e.g. M), got: {self.name}\n  == Compoonent: {frame.container}")
 
             registry = None
             if apply_session.current_frame.local_setup_session:
@@ -242,7 +242,7 @@ class AttrDexpNode(IDotExpressionNode):
             # ==== 2+ value - based on previous result and evolved one step further
 
             if not len(names)>1:
-                raise RuleInternalError(owner=self, msg=f"Names need to be list of at least 2 members: {names}") 
+                raise EntityInternalError(owner=self, msg=f"Names need to be list of at least 2 members: {names}") 
             value_previous = dexp_result.value
             do_fetch_by_name = True
 
@@ -255,11 +255,11 @@ class AttrDexpNode(IDotExpressionNode):
             if not result_is_list:
                 # TODO: handle None, UNDEFINED?
                 if prev_node_type_info and prev_node_type_info.is_list:
-                    raise RuleApplyNameError(owner=self, msg=f"Fetching attribute '{attr_name}' expected list and got: '{to_repr(value_previous)}' : '{type(value_previous)}'")
+                    raise EntityApplyNameError(owner=self, msg=f"Fetching attribute '{attr_name}' expected list and got: '{to_repr(value_previous)}' : '{type(value_previous)}'")
                 value_prev_as_list = [value_previous]
             else:
                 if prev_node_type_info and not prev_node_type_info.is_list:
-                    raise RuleApplyNameError(owner=self, msg=f"Fetching attribute '{attr_name}' got list what is not expected, got: '{to_repr(value_previous)}' : '{type(value_previous)}'")
+                    raise EntityApplyNameError(owner=self, msg=f"Fetching attribute '{attr_name}' got list what is not expected, got: '{to_repr(value_previous)}' : '{type(value_previous)}'")
                 value_prev_as_list = value_previous
 
             # ------------------------------------------------------------
@@ -285,7 +285,7 @@ class AttrDexpNode(IDotExpressionNode):
                             if not hasattr(val_prev, attr_name):
                                 # TODO: list which fields are available
                                 # if all types match - could be internal problem?
-                                raise RuleApplyNameError(owner=self, msg=f"Attribute '{attr_name}' not found in '{to_repr(val_prev)}' : '{type(val_prev)}'")
+                                raise EntityApplyNameError(owner=self, msg=f"Attribute '{attr_name}' not found in '{to_repr(val_prev)}' : '{type(val_prev)}'")
                             value_new = getattr(val_prev, attr_name)
 
                 value_new_as_list.append(value_new)
@@ -301,15 +301,15 @@ class AttrDexpNode(IDotExpressionNode):
             ...
         elif isinstance(value_new, (list, tuple)):
             if not self.islist():
-                raise RuleApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should not be a list, got: '{to_repr(value_new)}' : '{type(value_new)}'")
+                raise EntityApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should not be a list, got: '{to_repr(value_new)}' : '{type(value_new)}'")
         elif value_new is None:
             pass
             # NOTE: value not checked - can be evaluated to something not-None later
             # if not self.get_type_info().is_optional:
-            #     raise RuleApplyValueError(owner=self, msg=f"Attribute '{attr_name}' has 'None' value and type is not 'Optional'.")
+            #     raise EntityApplyValueError(owner=self, msg=f"Attribute '{attr_name}' has 'None' value and type is not 'Optional'.")
         elif self.islist():
             # apply_session.entity.get_component(apply_session.component_name_only)
-            raise RuleApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should be a list, got: '{to_repr(value_new)}' : '{type(value_new)}'")
+            raise EntityApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should be a list, got: '{to_repr(value_new)}' : '{type(value_new)}'")
 
         # TODO: hm, changer_name is equal to attr_name, any problem / check / fix ... 
         dexp_result.set_value(attr_name=attr_name, changer_name=attr_name, value=value_new)

@@ -34,13 +34,13 @@ from .utils import (
         dump_to_format,
         )
 from .exceptions import (
-        RuleInternalError,
-        RuleSetupTypeError,
-        RuleSetupError,
-        RuleSetupNameError,
-        RuleSetupValueError,
-        RuleSetupNameNotFoundError,
-        RuleApplyError,
+        EntityInternalError,
+        EntitySetupTypeError,
+        EntitySetupError,
+        EntitySetupNameError,
+        EntitySetupValueError,
+        EntitySetupNameNotFoundError,
+        EntityApplyError,
         )
 from .namespaces import (
         DynamicAttrsBase,
@@ -235,13 +235,13 @@ class SetParentMixin:
 
     def set_parent(self, parent: "ComponentBase"):
         if self.parent is not UNDEFINED:
-            raise RuleInternalError(owner=self, msg=f"Parent already defined, got: {parent}")
+            raise EntityInternalError(owner=self, msg=f"Parent already defined, got: {parent}")
 
         assert parent is None or isinstance(parent, ComponentBase), parent
         self.parent = parent
 
         if self.parent_name is not UNDEFINED:
-            raise RuleInternalError(owner=self, msg=f"Parent name already defined, got: {parent}")
+            raise EntityInternalError(owner=self, msg=f"Parent name already defined, got: {parent}")
 
         self.parent_name = parent.name if parent else ""
 
@@ -254,7 +254,7 @@ class SetParentMixin:
             self.title = varname_to_title(self.name)
 
         if not self.name:
-            raise RuleInternalError(owner=self, msg=f"Name is not set: {self}") 
+            raise EntityInternalError(owner=self, msg=f"Name is not set: {self}") 
 
 
     def _getset_name(self):
@@ -318,15 +318,15 @@ class SubcomponentWrapper:
     def __post_init__(self):
         # subcomponent can have LiteralType
         if not (self.name and self.path and self.th_field):
-            raise RuleInternalError(owner=self, msg=f"name={self.name}, path={self.path}, subcomp={self.subcomponent}, th_field={self.th_field}")
+            raise EntityInternalError(owner=self, msg=f"name={self.name}, path={self.path}, subcomp={self.subcomponent}, th_field={self.th_field}")
 
         # TODO: strange - DotExpression in (None, UNDEFINED) returns True??
         if not bool(self.subcomponent) and self.subcomponent in (None, UNDEFINED):
-            raise RuleInternalError(owner=self, msg=f"name={self.name}, path={self.path}, subcomp={self.subcomponent}, th_field={self.th_field}")
+            raise EntityInternalError(owner=self, msg=f"name={self.name}, path={self.path}, subcomp={self.subcomponent}, th_field={self.th_field}")
 
         # TODO: list all types available and include this check
         # if not isinstance(self.subcomponent, (ComponentBase, DotExpression)):
-        #     raise RuleInternalError(owner=self, msg=f"wrong type of subcomponent {type(self.subcomponent)} / {self.subcomponent}")
+        #     raise EntityInternalError(owner=self, msg=f"wrong type of subcomponent {type(self.subcomponent)} / {self.subcomponent}")
 
 
 # ------------------------------------------------------------
@@ -349,14 +349,14 @@ class ComponentBase(SetParentMixin, ABC):
         # when not set then will be later defined - see set_parent()
         if self.name not in (None, "", UNDEFINED):
             if not self.name.isidentifier():
-                raise RuleSetupValueError(owner=self, msg="Attribute name needs to be valid python identifier name")
+                raise EntitySetupValueError(owner=self, msg="Attribute name needs to be valid python identifier name")
 
     def _check_cleaners(self, allowed_cleaner_base_list: List[type]):
         allowed_cleaner_base_list = tuple(allowed_cleaner_base_list)
         for cleaner in self.cleaners:
             if not isinstance(cleaner, allowed_cleaner_base_list):
                 cl_names = ", ".join([cl.__name__ for cl in allowed_cleaner_base_list])
-                raise RuleSetupTypeError(owner=self, msg=f"Cleaners should be instances of {cl_names}, got: {type(cleaner)} / {cleaner}") 
+                raise EntitySetupTypeError(owner=self, msg=f"Cleaners should be instances of {cl_names}, got: {type(cleaner)} / {cleaner}") 
 
     @staticmethod
     def can_apply_partial() -> bool:
@@ -379,7 +379,7 @@ class ComponentBase(SetParentMixin, ABC):
         out.append(f"{self.__class__.__name__}(")
         # vars(self.kwargs).items():
         if len(path) > MAX_RECURSIONS:
-            raise RuleSetupError(f"Maximum object tree depth reached, not allowed depth more than {MAX_RECURSIONS}.")
+            raise EntitySetupError(f"Maximum object tree depth reached, not allowed depth more than {MAX_RECURSIONS}.")
         for name, field in self.__dataclass_fields__.items():  # noqa: F402
             # if name.startswith("_") or callable(k):
             #     continue
@@ -470,7 +470,7 @@ class ComponentBase(SetParentMixin, ABC):
         key = "_children_tree_flatten_dict"
         if not hasattr(self, key):
             if depth > MAX_RECURSIONS:
-                raise RuleInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
+                raise EntityInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
 
             children_dict_traversed = {}
 
@@ -502,7 +502,7 @@ class ComponentBase(SetParentMixin, ABC):
     def _get_children_tree(self, key: str, depth:int=0) -> Dict[ComponentNameType, Self]:
         if not hasattr(self, key):
             if depth > MAX_RECURSIONS:
-                raise RuleInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
+                raise EntityInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
 
             children_dict_traversed = {}
             children_dict_traversed["name"] = self.name
@@ -538,7 +538,7 @@ class ComponentBase(SetParentMixin, ABC):
     def _dump_meta(self, depth: int=0) -> MetaTree:
         # tree: ComponentTreeType
         if depth > MAX_RECURSIONS:
-            raise RuleInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
+            raise EntityInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
 
         output = {} # OrderedDict()
         component = self
@@ -623,11 +623,11 @@ class ComponentBase(SetParentMixin, ABC):
 
     def _add_component(self, component: Self, components: Dict[str, Self]):
         if component.name in (None, UNDEFINED):
-            raise RuleSetupValueError(owner=self, item=component, msg="Component's name is required.")
+            raise EntitySetupValueError(owner=self, item=component, msg="Component's name is required.")
         if not (component.name and isinstance(component.name, str)):
-            raise RuleSetupValueError(owner=self, item=component, msg=f"Component's name needs to be a string value, got: {component.name}': ")
+            raise EntitySetupValueError(owner=self, item=component, msg=f"Component's name needs to be a string value, got: {component.name}': ")
         if component.name in components:
-            raise RuleSetupNameError(owner=self, item=component, msg=f"Duplicate name '{component.name}': "
+            raise EntitySetupNameError(owner=self, item=component, msg=f"Duplicate name '{component.name}': "
                         + "\n   " + repr(components[component.name])[:100]
                         + "\n   " + " --------- AND --------- "
                         + "\n   " + repr(component)[:100]
@@ -651,7 +651,7 @@ class ComponentBase(SetParentMixin, ABC):
 
         # for children/contains attributes - parent is set here
         if not hasattr(self, "name"):
-            raise RuleSetupError(owner=self, msg=f"Component should have 'name' attribute, got class: {self.__class__.__name__}")
+            raise EntitySetupError(owner=self, msg=f"Component should have 'name' attribute, got class: {self.__class__.__name__}")
 
         if not is_top:
             # Component
@@ -673,7 +673,7 @@ class ComponentBase(SetParentMixin, ABC):
         for subcomponent_wrapper in self._get_subcomponents_list():
             component = subcomponent_wrapper.subcomponent
             if isinstance(component, Namespace):
-                raise RuleSetupValueError(owner=self, msg=f"Subcomponents should not be Namespace instances, got: {subcomponent_wrapper.name} = {subcomponent_wrapper.subcomponent}")
+                raise EntitySetupValueError(owner=self, msg=f"Subcomponents should not be Namespace instances, got: {subcomponent_wrapper.name} = {subcomponent_wrapper.subcomponent}")
 
             if isinstance(component, DotExpression):
                 pass
@@ -737,7 +737,7 @@ class ComponentBase(SetParentMixin, ABC):
             subcomponent.post_setup()
             called = True
         elif isinstance(subcomponent, (dict, list, tuple)):
-            raise RuleSetupValueError(owner=self, msg=f"Subcomponents should not be dictionaries, lists or tuples, got: {type(subcomponent)} / {subcomponent}")
+            raise EntitySetupValueError(owner=self, msg=f"Subcomponents should not be dictionaries, lists or tuples, got: {type(subcomponent)} / {subcomponent}")
         else:
             assert not hasattr(subcomponent, "Setup"), f"{self.name}.{subcomponent_name} has attribute that is not DotExpression: {type(subcomponent)}"
             assert not hasattr(subcomponent, "setup"), f"{self.name}.{subcomponent_name} has attribute that is not Component: {type(subcomponent)}"
@@ -755,7 +755,7 @@ class ComponentBase(SetParentMixin, ABC):
             assert not self.is_container()
             attr_node = self.bind.Setup(setup_session=setup_session, owner=self)
             if not attr_node:
-                raise RuleSetupNameError(owner=self, msg=f"{attr_node.name}.bind='{self.bind}' could not be evaluated")
+                raise EntitySetupNameError(owner=self, msg=f"{attr_node.name}.bind='{self.bind}' could not be evaluated")
             local_setup_session = setup_session.create_local_setup_session(
                                         this_ns_instance_model_class=None,
                                         this_ns_value_attr_node = attr_node,
@@ -854,7 +854,7 @@ class ComponentBase(SetParentMixin, ABC):
 
             if is_function(subcomponent):
                 # TODO: check that this is not class too
-                raise RuleSetupValueError(owner=subcomponent, msg=f"Functions/callables could not be used directly - wrap with Function() and try again. Details: ({subcomponent_name}: {th_field})")
+                raise EntitySetupValueError(owner=subcomponent, msg=f"Functions/callables could not be used directly - wrap with Function() and try again. Details: ({subcomponent_name}: {th_field})")
 
             # -------------------------------------------------------------
             # Attribute names that are not included in a subcomponents list
@@ -881,12 +881,12 @@ class ComponentBase(SetParentMixin, ABC):
                 # TODO: this should be main way how to check ...
                 if subcomponent_name not in ("parent", "parent_container") and \
                   (hasattr(subcomponent, "setup") or hasattr(subcomponent, "setup")):
-                    raise RuleInternalError(f"ignored attribute name '{subcomponent_name}' has setup()/Setup(). Is attribute list ok or value is not proper class (got component='{subcomponent}').")
+                    raise EntityInternalError(f"ignored attribute name '{subcomponent_name}' has setup()/Setup(). Is attribute list ok or value is not proper class (got component='{subcomponent}').")
                 continue
 
             if not th_field or getattr(th_field, "init", True) is False:
                 # warn(f"TODO: _get_subcomponents_list: {self} -> {subcomponent_name} -> {th_field}")
-                raise RuleInternalError(owner=subcomponent, msg=f"Should '{subcomponent_name}' field be excluded from processing: {th_field}")
+                raise EntityInternalError(owner=subcomponent, msg=f"Should '{subcomponent_name}' field be excluded from processing: {th_field}")
 
             # ----------------------------------------------------------------------
             # Classes of attribute members that are included in a subcomponents list 
@@ -907,7 +907,7 @@ class ComponentBase(SetParentMixin, ABC):
                     and "[Self]" not in str(th_field.type) \
                     :
                 # TODO: Validation should be extended to test isinstance(.., ValidationBase) ... or similar to include Required(), MaxLength etc.
-                raise RuleInternalError(owner=subcomponent, msg=f"Should '{subcomponent_name}' attribute be excluded from processing." 
+                raise EntityInternalError(owner=subcomponent, msg=f"Should '{subcomponent_name}' attribute be excluded from processing." 
                         + f"\n  == {th_field})"
                         + f"\n  == parent := {self}"
                         + f"\n  == {type(subcomponent)}"
@@ -949,10 +949,10 @@ class ComponentBase(SetParentMixin, ABC):
 
     def _setup(self, setup_session: ISetupSession):  # noqa: F821
         if self.parent is UNDEFINED:
-            raise RuleInternalError(owner=self, msg="Parent not set")
+            raise EntityInternalError(owner=self, msg="Parent not set")
 
         if self.is_finished():
-            raise RuleInternalError(owner=self, msg="Setup already called")
+            raise EntityInternalError(owner=self, msg="Setup already called")
 
         for subcomponent_wrapper in self._get_subcomponents_list():
             self._invoke_component_setup(
@@ -969,7 +969,7 @@ class ComponentBase(SetParentMixin, ABC):
 
     def finish(self):
         if self.is_finished():
-            raise RuleSetupError(owner=self, msg="finish() should be called only once.")
+            raise EntitySetupError(owner=self, msg="finish() should be called only once.")
         self._finished = True
 
     # ------------------------------------------------------------
@@ -989,7 +989,7 @@ class ComponentBase(SetParentMixin, ABC):
         including self ( -> if self is container then it returns self)
         """
         if self.parent is UNDEFINED:
-            raise RuleSetupError(owner=self, msg="Parent is not set. Call .setup() method first.")
+            raise EntitySetupError(owner=self, msg="Parent is not set. Call .setup() method first.")
 
         if consider_self and isinstance(self, IContainerBase):
             return [self]
@@ -1004,7 +1004,7 @@ class ComponentBase(SetParentMixin, ABC):
 
         if parent_container in (None, UNDEFINED):
             if consider_self:
-                raise RuleSetupError(owner=self, msg="Did not found container in parents. Every component needs to be in some container object tree (Entity/SubEntityItems).")
+                raise EntitySetupError(owner=self, msg="Did not found container in parents. Every component needs to be in some container object tree (Entity/SubEntityItems).")
             return None
 
         return parents
@@ -1025,7 +1025,7 @@ class ComponentBase(SetParentMixin, ABC):
         if not bind_dexp:
             if strict:
                 # TODO: move this to Setup phase
-                raise RuleApplyError(owner=self, msg=f"Component '{self.name}' has no bind")
+                raise EntityApplyError(owner=self, msg=f"Component '{self.name}' has no bind")
             return None
         bind_dexp_result = bind_dexp._evaluator.execute_dexp(apply_session=apply_session)
         return bind_dexp_result
@@ -1100,7 +1100,7 @@ class BoundModelBase(ComponentBase, ABC):
     def get_full_name(self, parent: Optional[Self] = None, depth: int = 0, init: bool = False):
         if not hasattr(self, "_name"):
             if depth > MAX_RECURSIONS:
-                raise RuleInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
+                raise EntityInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
 
             assert init
             names = []
@@ -1119,7 +1119,7 @@ class BoundModelBase(ComponentBase, ABC):
         if models is None:
             models = {}
         if self.name in models:
-            raise RuleSetupNameError(owner=self, msg=f"Currently model names in tree dependency should be unique. Model name {self.name} is not, found: {models[self.name]}")
+            raise EntitySetupNameError(owner=self, msg=f"Currently model names in tree dependency should be unique. Model name {self.name} is not, found: {models[self.name]}")
 
         name = self.get_full_name(parent=parent, init=True)
         models[name] = self
@@ -1146,9 +1146,9 @@ class UseStackFrameMixin:
             if_set_must_be_same: bool = True):
 
         if not hasattr(self.frame, attr_name):
-            raise RuleInternalError(owner=self, msg=f"This frame {self.frame}.{attr_name} not found") 
+            raise EntityInternalError(owner=self, msg=f"This frame {self.frame}.{attr_name} not found") 
         if not hasattr(previous_frame, attr_name):
-            raise RuleInternalError(owner=self, msg=f"Previous frame {previous_frame}.{attr_name} not found") 
+            raise EntityInternalError(owner=self, msg=f"Previous frame {previous_frame}.{attr_name} not found") 
 
         this_frame_attr_value = getattr(self.frame, attr_name)
         prev_frame_attr_value = getattr(previous_frame, attr_name)
@@ -1156,7 +1156,7 @@ class UseStackFrameMixin:
         if this_frame_attr_value in (None, UNDEFINED):
             if prev_frame_attr_value not in (None, UNDEFINED):
                 if not may_be_copied:
-                    raise RuleInternalError(owner=self, 
+                    raise EntityInternalError(owner=self, 
                         msg=f"Attribute '{attr_name}' value in previous frame is non-empty and current frame has empty value:\n  {previous_frame}\n    = {prev_frame_attr_value}\n<>\n  {self.frame}\n    = {this_frame_attr_value} ") 
                 # Copy from previous frame
                 # apply_session.config.loggeer.debugf"setattr '{attr_name}' current_frame <= previous_frame := {prev_frame_attr_value} (frame={self.frame})")
@@ -1164,7 +1164,7 @@ class UseStackFrameMixin:
         else:
             # in some cases id() / is should be used?
             if if_set_must_be_same and prev_frame_attr_value != this_frame_attr_value:
-                raise RuleInternalError(owner=self, 
+                raise EntityInternalError(owner=self, 
                     msg=f"Attribute '{attr_name}' value in previous frame is different from current:\n  {previous_frame}\n    = {prev_frame_attr_value}\n<>\n  {self.frame}\n    = {this_frame_attr_value} ") 
 
 
@@ -1221,7 +1221,7 @@ class GlobalConfig:
 def get_instance_key_string_attrname_pair(key_string: str) -> Tuple[str, str]:
     idx = key_string.rfind(GlobalConfig.ID_NAME_SEPARATOR)
     if idx < 0:
-        raise RuleInternalError(f"Invalid key_string='{key_string}'")
+        raise EntityInternalError(f"Invalid key_string='{key_string}'")
     instance_key_string = key_string[:idx]
     attrname = key_string[idx + len(GlobalConfig.ID_NAME_SEPARATOR):]
     return instance_key_string, attrname, 
@@ -1273,7 +1273,7 @@ class InstanceAttrCurrentValue:
 
     def set_value(self, value: LiteralType) -> "InstanceAttrCurrentValue":
         if self.finished:
-            raise RuleInternalError(owner=self, msg=f"Current value already finished, last value: {self._value}") 
+            raise EntityInternalError(owner=self, msg=f"Current value already finished, last value: {self._value}") 
         self._value = value
         # if self._value is NA_DEFAULTS_MODE:
         #     # TODO: check if finish immediatelly
@@ -1283,12 +1283,12 @@ class InstanceAttrCurrentValue:
     def get_value(self, strict:bool) -> LiteralType:
         if strict and not self.finished:
             # print("TODO: riješi ovu iznimku")
-            raise RuleInternalError(owner=self, msg=f"Current value is not finished, last value: {self._value}") 
+            raise EntityInternalError(owner=self, msg=f"Current value is not finished, last value: {self._value}") 
         return self._value
 
     def mark_finished(self):
         if self.finished: # and self._value is not NA_DEFAULTS_MODE:
-            raise RuleInternalError(owner=self, msg=f"Current value already finished, last value: {self._value}") 
+            raise EntityInternalError(owner=self, msg=f"Current value already finished, last value: {self._value}") 
         self.finished = True
 
 # ------------------------------------------------------------
@@ -1384,7 +1384,7 @@ class ApplyStackFrame:
             # TODO: explain when this happens ...
             pass
         elif not is_model_class(instance_to_test.__class__):
-            raise RuleInternalError(owner=self, msg=f"Expected model instance or list[instances], got: {self.instance}")
+            raise EntityInternalError(owner=self, msg=f"Expected model instance or list[instances], got: {self.instance}")
 
         if self.local_setup_session:
             assert isinstance(self.local_setup_session, ISetupSession)
@@ -1402,7 +1402,7 @@ class ApplyStackFrame:
 
     def set_local_setup_session(self, local_setup_session: ISetupSession):
         if self.local_setup_session:
-            raise RuleInternalError(owner=self, msg=f"local_setup_session alread set to '{self.local_setup_session}', got: '{local_setup_session}'") 
+            raise EntityInternalError(owner=self, msg=f"local_setup_session alread set to '{self.local_setup_session}', got: '{local_setup_session}'") 
         self.local_setup_session = local_setup_session
 
 
@@ -1556,7 +1556,7 @@ class IApplySession:
             if self.defaults_mode:
                 validation_failure = component.validate_type(apply_session=self, strict=strict, value=value)
                 if validation_failure:
-                    raise RuleInternalError(owner=self, msg="TODO: Type validation failed in defaults_mode - probably should default value to None ") 
+                    raise EntityInternalError(owner=self, msg="TODO: Type validation failed in defaults_mode - probably should default value to None ") 
                 validation_failure = None
             else:
                 validation_failure = component.validate_type(apply_session=self, strict=strict, value=value)
@@ -1588,10 +1588,10 @@ class IApplySession:
 
     def finish(self):
         if self.finished:
-            raise RuleSetupError(owner=self, msg="Method finish() already called.")
+            raise EntitySetupError(owner=self, msg="Method finish() already called.")
 
         if not len(self.stack_frames) == 0:
-            raise RuleInternalError(owner=self, msg=f"Stack frames not released: {self.stack_frames}") 
+            raise EntityInternalError(owner=self, msg=f"Stack frames not released: {self.stack_frames}") 
 
         self.finished = True
 
@@ -1610,7 +1610,7 @@ class IApplySession:
             curr_comp = component
             while curr_comp is not None:
                 if curr_comp in components_tree:
-                    raise RuleInternalError(
+                    raise EntityInternalError(
                             parent=component, 
                             msg=f"Issue with hierarchy tree - duplicate node: {curr_comp.name}")
                 components_tree.append(curr_comp)
@@ -1668,10 +1668,10 @@ def extract_type_info(
         # go one level deeper
         parent_type_info = parent_object
         if not isinstance(parent_object.type_, type):
-            raise RuleSetupValueError(item=inspect_object, msg=f"Inspected object's type hint is not a class object/type: {parent_object.type_} : {parent_object.type_}, got: {type(parent_object.type_)} ('.{attr_node_name}' process)")
+            raise EntitySetupValueError(item=inspect_object, msg=f"Inspected object's type hint is not a class object/type: {parent_object.type_} : {parent_object.type_}, got: {type(parent_object.type_)} ('.{attr_node_name}' process)")
         # Can be method call, so not pydantic / dataclass are allowed too
         # if not is_model_class(parent_object.type_):
-        #     raise RuleSetupValueError(item=inspect_object, msg=f"Inspected object's type hint type is not 'dataclass'/'Pydantic.BaseModel' type: {parent_object.type_}, got: {parent_object.type_} ('.{attr_node_name}' process)")
+        #     raise EntitySetupValueError(item=inspect_object, msg=f"Inspected object's type hint type is not 'dataclass'/'Pydantic.BaseModel' type: {parent_object.type_}, got: {parent_object.type_} ('.{attr_node_name}' process)")
         parent_object = parent_object.type_
 
 
@@ -1683,23 +1683,23 @@ def extract_type_info(
 
     is_dexp = isinstance(parent_object, DotExpression)
     if is_dexp:
-        raise RuleSetupNameNotFoundError(item=inspect_object, msg=f"Attribute '{attr_node_name}' is not member of expression '{parent_object}'.")
+        raise EntitySetupNameNotFoundError(item=inspect_object, msg=f"Attribute '{attr_node_name}' is not member of expression '{parent_object}'.")
 
     # when parent virtual expression is not assigned to data-type/data-attr_node, 
     # then it is sent directly what will later raise error "attribute not found" 
     if not is_dexp:
         if is_method_by_name(parent_object, attr_node_name):
             # parent_object, attr_node_name
-            raise RuleSetupNameError(item=inspect_object,
+            raise EntitySetupNameError(item=inspect_object,
                         msg=f"Inspected object's is a method: {parent_object}.{attr_node_name}. "
                         "Calling methods on instances are not allowed.")
 
         if is_model_class(parent_object):
-            # raise RuleInternalError(item=inspect_object, msg=f"'Parent is not DC/PYD class -> {parent_object} : {type(parent_object)}'.")
+            # raise EntityInternalError(item=inspect_object, msg=f"'Parent is not DC/PYD class -> {parent_object} : {type(parent_object)}'.")
 
             if not hasattr(parent_object, "__annotations__"):
                 # TODO: what about pydantic?
-                raise RuleInternalError(item=inspect_object, msg=f"'DC/PYD class {parent_object}' has no metadata (__annotations__ / type hints), can't read '{attr_node_name}'. Add type-hints or check names.")
+                raise EntityInternalError(item=inspect_object, msg=f"'DC/PYD class {parent_object}' has no metadata (__annotations__ / type hints), can't read '{attr_node_name}'. Add type-hints or check names.")
 
             model_class: ModelType = parent_object
 
@@ -1721,10 +1721,10 @@ def extract_type_info(
             fields = get_model_fields(parent_object, strict=False)
         field_names = list(fields.keys())
         valid_names = f"Valid attributes: {get_available_names_example(attr_node_name, field_names)}" if field_names else "Type has no attributes at all."
-        raise RuleSetupNameNotFoundError(msg=f"Type object {parent_object} has no attribute '{attr_node_name}'. {valid_names}")
+        raise EntitySetupNameNotFoundError(msg=f"Type object {parent_object} has no attribute '{attr_node_name}'. {valid_names}")
 
     if not isinstance(type_info, TypeInfo):
-        raise RuleInternalError(msg=f"{type_info} is not TypeInfo") 
+        raise EntityInternalError(msg=f"{type_info} is not TypeInfo") 
     return type_info, th_field # , func_node
 
 

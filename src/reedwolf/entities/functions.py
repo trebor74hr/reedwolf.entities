@@ -34,13 +34,13 @@ from .utils import (
         get_available_names_example,
         )
 from .exceptions import (
-        RuleSetupValueError,
-        RuleSetupNameError,
-        RuleSetupNameNotFoundError,
-        RuleInternalError,
-        RuleSetupTypeError,
-        RuleSetupError,
-        RuleApplyError,
+        EntitySetupValueError,
+        EntitySetupNameError,
+        EntitySetupNameNotFoundError,
+        EntityInternalError,
+        EntitySetupTypeError,
+        EntitySetupError,
+        EntityApplyError,
         )
 from .namespaces import (
         FieldsNS,
@@ -152,7 +152,7 @@ class IFunction(IFunctionDexpNode):
     #    receives argument name and argument type. 
     #    For validation error cases should:
     #       * return string error message, or
-    #       * raise RuleSetupError based error
+    #       * raise EntitySetupError based error
     arg_validators      : Optional[ValueArgValidatorPyFuncDictType] = field(repr=False, default=None)
 
     # 11. SetupSession are required for validation and type *data* of function
@@ -176,9 +176,9 @@ class IFunction(IFunctionDexpNode):
 
     def __post_init__(self):
         if not self.py_function:
-            raise RuleInternalError(owner=self, msg="py_function input parameter is obligatory")
+            raise EntityInternalError(owner=self, msg="py_function input parameter is obligatory")
         if not is_function(self.py_function):
-            raise RuleSetupValueError(owenr=self, msg=f"py_function is not a function, got: {self.py_function}")
+            raise EntitySetupValueError(owenr=self, msg=f"py_function is not a function, got: {self.py_function}")
 
         self.func_name = self.py_function.__name__
 
@@ -231,13 +231,13 @@ class IFunction(IFunctionDexpNode):
         assert self.arg_validators
 
         if not isinstance(self.arg_validators, dict):
-            raise RuleSetupValueError(f"Parementer 'arg_validators' should be dictionary, got: {type(self.arg_validators)} / {self.arg_validators}")
+            raise EntitySetupValueError(f"Parementer 'arg_validators' should be dictionary, got: {type(self.arg_validators)} / {self.arg_validators}")
 
-        exception_list : List[RuleSetupTypeError] = []
+        exception_list : List[EntitySetupTypeError] = []
 
         for arg_name, validators in self.arg_validators.items():
             if arg_name not in self.function_arguments:
-                raise RuleSetupValueError(owner=self, msg=f"Argument 'arg_validators' has invalid argument name '{arg_name}'")
+                raise EntitySetupValueError(owner=self, msg=f"Argument 'arg_validators' has invalid argument name '{arg_name}'")
 
             prep_arg = self.prepared_args.get(arg_name)
             if not prep_arg:
@@ -248,17 +248,17 @@ class IFunction(IFunctionDexpNode):
 
             for validator_func in validators:
                 if not is_function(validator_func):
-                    raise RuleSetupValueError(f"Parementer 'arg_validators[{arg_name}]' is not function, got: {type(validator_func)} / {validator_func}")
+                    raise EntitySetupValueError(f"Parementer 'arg_validators[{arg_name}]' is not function, got: {type(validator_func)} / {validator_func}")
                 try:
                     err_msg = validator_func(arg_name, prep_arg.type_info)
                     if err_msg:
-                        exception_list.append(RuleSetupValueError(f"[{arg_name}] -> {err_msg}"))
-                except RuleSetupError as ex:
+                        exception_list.append(EntitySetupValueError(f"[{arg_name}] -> {err_msg}"))
+                except EntitySetupError as ex:
                     exception_list.append(ex.__class__(f"[{arg_name}] -> {ex.msg}"))
 
         if exception_list:
             err_msgs = ', '.join([ex.msg for ex in exception_list])
-            raise RuleSetupValueError(owner=self, msg=f"{self.as_str()}: Validation(s) failed ({len(exception_list)}): {err_msgs}")
+            raise EntitySetupValueError(owner=self, msg=f"{self.as_str()}: Validation(s) failed ({len(exception_list)}): {err_msgs}")
 
     def as_str(self):
         args_str = "()"
@@ -269,9 +269,9 @@ class IFunction(IFunctionDexpNode):
 
     def _set_type_info(self, type_info:TypeInfo):
         if self.INPUT_CARDINALITY==DatatypeCardinalityEnum.ITEMS and not type_info.is_list:
-            raise RuleSetupValueError(owner=self, msg=f"Expected 'List' type, got {type_info}.")
+            raise EntitySetupValueError(owner=self, msg=f"Expected 'List' type, got {type_info}.")
         elif self.INPUT_CARDINALITY==DatatypeCardinalityEnum.SINGLE and type_info.is_list:
-            raise RuleSetupValueError(owner=self, msg=f"'List' type not valid: {type_info}.")
+            raise EntitySetupValueError(owner=self, msg=f"'List' type not valid: {type_info}.")
 
 
     # def get_output_type_info(self) -> TypeInfo: return TypeInfo.extract_function_return_type_info(self.py_function)
@@ -313,7 +313,7 @@ class IFunction(IFunctionDexpNode):
         #       check output type that matches output_type_info
         """
         if is_last and not self.is_finished:
-            raise RuleInternalError(owner=self, msg="Last dexp-node is not finished")  # , {id(self)} / {type(self)}
+            raise EntityInternalError(owner=self, msg="Last dexp-node is not finished")  # , {id(self)} / {type(self)}
 
         args = []
         kwargs = {}
@@ -325,7 +325,7 @@ class IFunction(IFunctionDexpNode):
         else:
             # top_level_call = False
             if not isinstance(dexp_result, ExecResult):
-                raise RuleInternalError(owner=self, msg=f"dexp_result is not ExecResult, got: {dexp_result}") 
+                raise EntityInternalError(owner=self, msg=f"dexp_result is not ExecResult, got: {dexp_result}") 
 
             if dexp_result.value is not UNDEFINED:
                 input_value = dexp_result.value
@@ -359,7 +359,7 @@ class IFunction(IFunctionDexpNode):
         try:
             ouptut_value = self.py_function(*args, **kwargs)
         except Exception as ex:
-            raise RuleApplyError(owner=self, msg=f"failed in calling '{self.name}({args}, {kwargs})' => {ex}")
+            raise EntityApplyError(owner=self, msg=f"failed in calling '{self.name}({args}, {kwargs})' => {ex}")
 
         dexp_result.set_value(ouptut_value, attr_name="", changer_name=f"{self.name}")
 
@@ -374,14 +374,14 @@ class IFunction(IFunctionDexpNode):
             return 
 
         if not isinstance(prep_arg.caller, IDotExpressionNode):
-            raise RuleInternalError(owner=self, msg=f"Expected IDotExpressionNode, got: {type(prep_arg.caller)} / {prep_arg.caller}") 
+            raise EntityInternalError(owner=self, msg=f"Expected IDotExpressionNode, got: {type(prep_arg.caller)} / {prep_arg.caller}") 
 
         dexp_node: IDotExpressionNode = prep_arg.caller
 
         if not (dexp_node.attr_node_type == AttrDexpNodeTypeEnum.FIELD
           and dexp_node.namespace == FieldsNS
           and isinstance(dexp_node.data, IFieldBase)):
-            raise RuleInternalError(owner=self, msg=f"INJECT_COMPONENT_TREE :: PrepArg '{prep_arg.name}' expected DExp(F.<field>) -> Field(),  got: '{dexp_node}' -> '{dexp_node.data}' ") 
+            raise EntityInternalError(owner=self, msg=f"INJECT_COMPONENT_TREE :: PrepArg '{prep_arg.name}' expected DExp(F.<field>) -> Field(),  got: '{dexp_node}' -> '{dexp_node.data}' ") 
 
         component: ComponentBase = dexp_node.data
         assert component == apply_session.current_frame.component
@@ -454,7 +454,7 @@ class IFunctionFactory(ABC):
 
     def __post_init__(self):
         if not is_function(self.py_function):
-            raise RuleSetupValueError(owner=self, msg=f"py_function is not a function, got: {type(self.py_function)} / {self.py_function}")
+            raise EntitySetupValueError(owner=self, msg=f"py_function is not a function, got: {type(self.py_function)} / {self.py_function}")
 
         if not self.name:
             self.name = self.py_function.__name__
@@ -592,7 +592,7 @@ class FunctionsFactoryRegistry:
         if functions:
             for function_factory in functions:
                 if not isinstance(function_factory, CustomFunctionFactory):
-                    raise RuleSetupNameError(owner=self, msg=f"Function '{function_factory}' should be CustomFunctionFactory instance. Maybe you need to wrap it with Function()?")
+                    raise EntitySetupNameError(owner=self, msg=f"Function '{function_factory}' should be CustomFunctionFactory instance. Maybe you need to wrap it with Function()?")
                 self.add(function_factory)
 
     def __str__(self):
@@ -618,7 +618,7 @@ class FunctionsFactoryRegistry:
     def add(self, function_factory: IFunctionFactory, func_name: Optional[str]=None):
         # IFunction
         if not isinstance(function_factory, IFunctionFactory):
-            raise RuleInternalError(f"Exepected function factory, got: {type(function_factory)} -> {function_factory}")
+            raise EntityInternalError(f"Exepected function factory, got: {type(function_factory)} -> {function_factory}")
 
         if not func_name:
             func_name = function_factory.name
@@ -626,14 +626,14 @@ class FunctionsFactoryRegistry:
         assert isinstance(func_name, str) and func_name, func_name
 
         if func_name in self.store:
-            raise RuleSetupNameError(owner=self, msg=f"Function '{func_name}' already in registry: {self.store[func_name]}.")
+            raise EntitySetupNameError(owner=self, msg=f"Function '{func_name}' already in registry: {self.store[func_name]}.")
         self.store[func_name] = function_factory
 
 
     def get(self, name:str, strict:bool=False) -> Optional[IFunction]:
         if strict and name not in self.store:
             funcs_avail = get_available_names_example(name, self.store.keys())
-            raise RuleSetupNameNotFoundError(owner=self, msg=f"Function '{name}' is not valid. Valid are: {funcs_avail}")
+            raise EntitySetupNameNotFoundError(owner=self, msg=f"Function '{name}' is not valid. Valid are: {funcs_avail}")
         function = self.store.get(name, None)
         return function
 
@@ -681,11 +681,11 @@ def try_create_function(
     if value_arg_type_info \
             and not isinstance(value_arg_type_info, TypeInfo) \
             and not is_function(value_arg_type_info):
-        raise RuleInternalError(f"{value_arg_type_info} should be TypeInfo or function, got '{type(value_arg_type_info)}'")
+        raise EntityInternalError(f"{value_arg_type_info} should be TypeInfo or function, got '{type(value_arg_type_info)}'")
 
     functions_factory_registry: IFunctionFactory = setup_session.functions_factory_registry
     if not functions_factory_registry:
-        raise RuleSetupNameNotFoundError(item=setup_session, msg=f"Functions not available, '{attr_node_name}' function could not be found.")
+        raise EntitySetupNameNotFoundError(item=setup_session, msg=f"Functions not available, '{attr_node_name}' function could not be found.")
 
     function_factory = None
     setup_session_current = setup_session
@@ -696,7 +696,7 @@ def try_create_function(
     while True:
         if id(setup_session_current) in registry_ids:
             # prevent infinitive loop
-            raise RuleInternalError("Registry already processed")
+            raise EntityInternalError("Registry already processed")
         registry_ids.add(id(setup_session_current))
 
         function_factory = setup_session_current.functions_factory_registry.get(attr_node_name)
@@ -725,6 +725,6 @@ def try_create_function(
 
     if not func_node:
         names_avail_all = " ; ".join(names_avail_all)
-        raise RuleSetupNameNotFoundError(f"Function name '{attr_node_name}' not found. Valid are: {names_avail_all}")
+        raise EntitySetupNameNotFoundError(f"Function name '{attr_node_name}' not found. Valid are: {names_avail_all}")
 
     return func_node

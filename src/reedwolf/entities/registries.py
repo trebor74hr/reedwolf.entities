@@ -15,12 +15,12 @@ from .utils import (
         UndefinedType,
         )
 from .exceptions import (
-        RuleSetupError,
-        RuleSetupNameError,
-        RuleSetupValueError,
-        RuleInternalError,
-        RuleApplyTypeError,
-        RuleApplyNameError,
+        EntitySetupError,
+        EntitySetupNameError,
+        EntitySetupValueError,
+        EntityInternalError,
+        EntityApplyTypeError,
+        EntityApplyNameError,
         )
 from .namespaces import (
         ModelsNS,
@@ -130,7 +130,7 @@ class ModelsRegistry(RegistryBase):
         name = bound_model.get_full_name()
         is_root = "." not in name # TODO: hack
         if name in self.root_attr_nodes:
-            raise RuleInternalError(owner=self, msg=f"Duplicate {name} -> {self.root_attr_nodes[name]}, already set, failed to set: {root_attr_node}")
+            raise EntityInternalError(owner=self, msg=f"Duplicate {name} -> {self.root_attr_nodes[name]}, already set, failed to set: {root_attr_node}")
 
         self.root_attr_nodes[name] = root_attr_node
 
@@ -164,7 +164,7 @@ class ModelsRegistry(RegistryBase):
         name_for_reg = name.replace(".", "__")
 
         if name_for_reg not in self.root_attr_nodes:
-            raise RuleInternalError(owner=self, msg=f"Name not found {name_for_reg} in {self.root_attr_nodes.keys()}")
+            raise EntityInternalError(owner=self, msg=f"Name not found {name_for_reg} in {self.root_attr_nodes.keys()}")
         return self.root_attr_nodes[name_for_reg] 
 
         # == M.company mode
@@ -190,10 +190,10 @@ class ModelsRegistry(RegistryBase):
 
         if instance is None:
             if not bound_model_root.type_info.is_optional:
-                raise RuleInternalError(owner=bound_model_root, msg="Got None and type is not 'Optional'")
+                raise EntityInternalError(owner=bound_model_root, msg="Got None and type is not 'Optional'")
         else:
             if bound_model_root.type_info.is_list and isinstance(instance, (list, tuple)):
-                # raise RuleApplyTypeError(owner=self, msg=f"Wrong type, expected list/tuple, got '{instance}'")
+                # raise EntityApplyTypeError(owner=self, msg=f"Wrong type, expected list/tuple, got '{instance}'")
                 # check only first
                 instance_to_test = instance[0] if instance else None
             else:
@@ -201,7 +201,7 @@ class ModelsRegistry(RegistryBase):
 
             # == M.name case
             if instance_to_test and not isinstance(instance_to_test, expected_type):
-                raise RuleApplyTypeError(owner=self, msg=f"Wrong type, expected '{expected_type}', got '{instance}'")
+                raise EntityApplyTypeError(owner=self, msg=f"Wrong type, expected '{expected_type}', got '{instance}'")
 
         return instance, None
 
@@ -223,7 +223,7 @@ class FieldsRegistry(RegistryBase):
         # A.3. COMPONENTS - collect attr_nodes - previously flattened (recursive function fill_components)
         # ------------------------------------------------------------
         if not isinstance(component, (ComponentBase, )):
-            raise RuleSetupError(owner=self, msg=f"Register expexted ComponentBase, got {component} / {type(component)}.")
+            raise EntitySetupError(owner=self, msg=f"Register expexted ComponentBase, got {component} / {type(component)}.")
 
         component_name = component.name
 
@@ -246,7 +246,7 @@ class FieldsRegistry(RegistryBase):
         else:
             # TODO: this should be automatic, a new registry for field types
             valid_types = ', '.join([t.__name__ for t in self.ALLOWED_BASE_TYPES])
-            raise RuleSetupError(owner=self, msg=f"RuleSetup does not support type {type(component)}: {repr(component)[:100]}. Valid type of objects or objects inherited from: {valid_types}")
+            raise EntitySetupError(owner=self, msg=f"RuleSetup does not support type {type(component)}: {repr(component)[:100]}. Valid type of objects or objects inherited from: {valid_types}")
 
         attr_node = AttrDexpNode(
                         name=component_name,
@@ -296,10 +296,10 @@ class ContextRegistry(RegistryBase):
                     ) -> IDotExpressionNode:
 
         if not isinstance(owner, ComponentBase):
-            raise RuleInternalError(owner=self, msg=f"Owner needs to be Component, got: {type(owner)} / {owner}")  
+            raise EntityInternalError(owner=self, msg=f"Owner needs to be Component, got: {type(owner)} / {owner}")  
 
         if not owner.get_first_parent_container(consider_self=True).context_class:
-            raise RuleSetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}' (referenced by '{self.NAMESPACE}.{dexp_node_name}') should not be used since 'Entity.context_class' is not set. Define 'context_class' to 'Entity()' constructor and try again.")
+            raise EntitySetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}' (referenced by '{self.NAMESPACE}.{dexp_node_name}') should not be used since 'Entity.context_class' is not set. Define 'context_class' to 'Entity()' constructor and try again.")
 
         return super().create_node(
                 dexp_node_name=dexp_node_name,
@@ -310,7 +310,7 @@ class ContextRegistry(RegistryBase):
 
     def register_all_nodes(self):
         if IContext not in inspect.getmro(self.context_class):
-            raise RuleSetupValueError(owner=self, msg=f"Context should inherit IContext, got: {self.context_class}")
+            raise EntitySetupValueError(owner=self, msg=f"Context should inherit IContext, got: {self.context_class}")
 
         for attr_name in get_model_fields(self.context_class):
             attr_node = self._create_attr_node_for_model_attr(self.context_class, attr_name)
@@ -322,7 +322,7 @@ class ContextRegistry(RegistryBase):
                             py_function,
                             allow_nonetype=True)
             if attr_name in self.store:
-                raise RuleSetupNameError(f"Attribute name '{attr_name}' is reserved. Rename class attribute in '{self.context_class}'")
+                raise EntitySetupNameError(f"Attribute name '{attr_name}' is reserved. Rename class attribute in '{self.context_class}'")
             attr_node = AttrDexpNode(
                             name=attr_name,
                             data=type_info,
@@ -338,7 +338,7 @@ class ContextRegistry(RegistryBase):
         context = apply_session.context
         if context in (UNDEFINED, None):
             component = apply_session.current_frame.component
-            raise RuleApplyNameError(owner=self, msg=f"ContextNS attribute '{component.name}' can not be fetched since context is not set ({type(context)}).")
+            raise EntityApplyNameError(owner=self, msg=f"ContextNS attribute '{component.name}' can not be fetched since context is not set ({type(context)}).")
         # if attr_name in self.context_class.get_dexp_attrname_dict():
         return context, None
 
@@ -355,13 +355,13 @@ class ConfigRegistry(RegistryBase):
 
         self.config = config
         if not self.config:
-            raise RuleInternalError(owner=self, msg="Config is required")
+            raise EntityInternalError(owner=self, msg="Config is required")
 
         self.register_all_nodes()
 
     def register_all_nodes(self):
         if not isinstance(self.config, Config):
-            raise RuleInternalError(owner=self, msg=f".config is not Config instance, got: {type(self.config)} / {self.config}")
+            raise EntityInternalError(owner=self, msg=f".config is not Config instance, got: {type(self.config)} / {self.config}")
 
         config_class = self.config.__class__
         for attr_name in get_model_fields(config_class):
@@ -373,7 +373,7 @@ class ConfigRegistry(RegistryBase):
         config = self.config
         if config in (UNDEFINED, None):
             component = apply_session.current_frame.component
-            raise RuleInternalError(owner=self, 
+            raise EntityInternalError(owner=self, 
                 msg=f"ConfigNS attribute '{component.name}' can not be fetched since config is not set ({type(config)}).")
         return config, None
 
@@ -399,7 +399,7 @@ class ThisInstanceRegistry(RegistryBase):
         super().__init__() # functions_factory_registry=functions_factory_registry)
         self.model_class = model_class
         if not is_model_class(self.model_class):
-            raise RuleSetupValueError(owner=self, msg=f"Expected model class (DC/PYD), got: {type(self.model_class)} / {self.model_class} ")
+            raise EntitySetupValueError(owner=self, msg=f"Expected model class (DC/PYD), got: {type(self.model_class)} / {self.model_class} ")
 
         for attr_name in get_model_fields(self.model_class):
             # th_field: ModelField in .values()
@@ -412,7 +412,7 @@ class ThisInstanceRegistry(RegistryBase):
 
     def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
         if not isinstance(apply_session.current_frame.instance, self.model_class):
-            raise RuleInternalError(owner=self, msg=f"Type of apply session's instance expected to be '{self.model_class}, got: {apply_session.current_frame.instance}") 
+            raise EntityInternalError(owner=self, msg=f"Type of apply session's instance expected to be '{self.model_class}, got: {apply_session.current_frame.instance}") 
         return apply_session.current_frame.instance, None
 
 
@@ -437,17 +437,17 @@ class ThisValueRegistry(RegistryBase):
 
         self.attr_node = attr_node
         if not isinstance(self.attr_node, AttrDexpNode):
-            raise RuleSetupValueError(owner=self, msg=f"Expected AttrDexpNode, got: {type(self.attr_node)} / {self.attr_node}")
+            raise EntitySetupValueError(owner=self, msg=f"Expected AttrDexpNode, got: {type(self.attr_node)} / {self.attr_node}")
         self.attr_name = self.attr_node.name
 
         # TODO: consider adding this too? how to fetch Parent?
         #   self.model_class = model_class
         #   if not is_model_class(self.model_class):
-        #       raise RuleSetupValueError(owner=self, msg=f"Expected model class (DC/PYD), got: {type(self.model_class)} / {self.model_class}")
+        #       raise EntitySetupValueError(owner=self, msg=f"Expected model class (DC/PYD), got: {type(self.model_class)} / {self.model_class}")
         #
         #   model_fields = get_model_fields(self.model_class)
         #   if self.attr_name not in model_fields:
-        #       raise RuleSetupValueError(owner=self, msg=f"Attribute '{attr_name}' not found in {type(self.model_class)} / {self.model_class}")
+        #       raise EntitySetupValueError(owner=self, msg=f"Attribute '{attr_name}' not found in {type(self.model_class)} / {self.model_class}")
 
         # This.Value == ReservedAttributeNames.VALUE_ATTR_NAME.value
         self.register_value_attr_node(attr_node=attr_node)
@@ -456,10 +456,10 @@ class ThisValueRegistry(RegistryBase):
     def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
         # TODO: 
         # if not isinstance(apply_session.current_frame.instance, self.model_class):
-        #     raise RuleInternalError(owner=self, msg=f"Type of apply session's instance expected to be '{self.model_class}, got: {apply_session.current_frame.instance}") 
+        #     raise EntityInternalError(owner=self, msg=f"Type of apply session's instance expected to be '{self.model_class}, got: {apply_session.current_frame.instance}") 
 
         if attr_name != ReservedAttributeNames.VALUE_ATTR_NAME.value:
-            raise RuleApplyNameError(owner=self, msg=f"Only '.Value' attribute is expected, got: {attr_name}") 
+            raise EntityApplyNameError(owner=self, msg=f"Only '.Value' attribute is expected, got: {attr_name}") 
 
         # instead of fetching .Value, instruct caller to fetch component's bound attribute
         return apply_session.current_frame.instance, self.attr_name
@@ -488,7 +488,7 @@ class SetupSession(SetupSessionBase):
 
         """
         # if not this_ns_instance_model_class:
-        #     raise RuleInternalError(owner=self, msg="Expected this_ns_instance_model_class.") 
+        #     raise EntityInternalError(owner=self, msg="Expected this_ns_instance_model_class.") 
 
         if this_ns_instance_model_class:
             assert this_ns_value_attr_node is None
@@ -501,7 +501,7 @@ class SetupSession(SetupSessionBase):
                     attr_node=this_ns_value_attr_node,
                     )
         else:
-            raise RuleInternalError(owner=self, msg="Expected this_ns_instance_model_class or this_ns_value_attr_node") 
+            raise EntityInternalError(owner=self, msg="Expected this_ns_instance_model_class or this_ns_value_attr_node") 
 
         local_setup_session = SetupSession(
                                 container=self.container,

@@ -280,19 +280,19 @@ _RE_ID_NAME_1, _RE_ID_NAME_2 = "a-zA-Z", "a-zA-Z0-9_" # noqa: E305
 def check_identificator_name(dexp_node_name: str):
     """ When attr_node/paremeter/argument name is valid 
         it returns the same value. """
-    from .exceptions import RuleSetupNameError
+    from .exceptions import EntitySetupNameError
 
     if not dexp_node_name:
-        raise RuleSetupNameError(owner=None, msg=f"Invalid identificator name '{dexp_node_name}'. Empty name not allowed.")
+        raise EntitySetupNameError(owner=None, msg=f"Invalid identificator name '{dexp_node_name}'. Empty name not allowed.")
 
     # NOTE: profiling showed that re.match (sre_parse._parse) is a bit slow, so used 
     #       https://stackoverflow.com/questions/12700893/how-to-check-if-a-string-is-a-valid-python-identifier-including-keyword-check
     # ALT: if not _RE_ID_NAME.match(dexp_node_name):
     if not dexp_node_name.isidentifier():
-        raise RuleSetupNameError(owner=None, msg=f"Name '{dexp_node_name}' is not valid identifier. HINT: Identifiers should begin with: {_RE_ID_NAME_1} and continue with one or more: {_RE_ID_NAME_2}.")
+        raise EntitySetupNameError(owner=None, msg=f"Name '{dexp_node_name}' is not valid identifier. HINT: Identifiers should begin with: {_RE_ID_NAME_1} and continue with one or more: {_RE_ID_NAME_2}.")
 
     if keyword.iskeyword(dexp_node_name):
-        raise RuleSetupNameError(owner=None, msg=f"Name '{dexp_node_name}' is python keyword. Use another name.")
+        raise EntitySetupNameError(owner=None, msg=f"Name '{dexp_node_name}' is python keyword. Use another name.")
 
     # return dexp_node_name
 

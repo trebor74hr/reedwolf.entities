@@ -16,10 +16,10 @@ from .namespaces import (  # noqa: F401
         Cfg,
         )
 from .exceptions import (
-        RuleError,
-        RuleSetupError,
-        RuleValidationError,
-        RuleNameNotFoundError,
+        EntityError,
+        EntitySetupError,
+        EntityValidationError,
+        EntityNameNotFoundError,
         )
 from .bound_models import (
         BoundModel,
@@ -122,10 +122,10 @@ __all__ = [
     #   "Cfg",
 
     # exceptions
-    "RuleError",
-    "RuleSetupError",
-    "RuleValidationError",
-    "RuleNameNotFoundError",
+    "EntityError",
+    "EntitySetupError",
+    "EntityValidationError",
+    "EntityNameNotFoundError",
 
     # models
     "BoundModel",

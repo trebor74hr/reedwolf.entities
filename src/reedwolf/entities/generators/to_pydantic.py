@@ -19,7 +19,7 @@ from ..meta import (
         is_enum,
         )
 from ..components import Field, FieldGroup, ChoiceField
-from ..containers import Extension, Entity
+from ..containers import SubEntityItems, Entity
 
 # ------------------------------------------------------------
 
@@ -124,7 +124,7 @@ def dump_pydantic_models_to_str(
 
     children = self.get_children()
 
-    if isinstance(self, (FieldGroup, Entity, Extension)):
+    if isinstance(self, (FieldGroup, Entity, SubEntityItems)):
         py_name = f"{snake_case_to_camel(self.name)}DTO"
         py_type = py_name
         # make copy
@@ -133,7 +133,7 @@ def dump_pydantic_models_to_str(
         # vars_declarations will be consumed in owner, so
         # only for top object it won't be consumed
 
-        if isinstance(self, Extension):
+        if isinstance(self, SubEntityItems):
             assert isinstance(self.bound_attr_node.data, TypeInfo), self.bound_attr_node.data
             if self.bound_attr_node.data.is_list:
                 py_type_ext = f"List[{py_type_ext}]"

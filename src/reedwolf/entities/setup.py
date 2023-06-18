@@ -18,13 +18,13 @@ from .utils import (
         check_identificator_name,
         )
 from .exceptions import (
-        RuleError,
-        RuleSetupError,
-        RuleSetupNameError,
-        RuleSetupNameNotFoundError,
-        RuleInternalError,
-        RuleApplyNameError,
-        RuleSetupValueError,
+        EntityError,
+        EntitySetupError,
+        EntitySetupNameError,
+        EntitySetupNameNotFoundError,
+        EntityInternalError,
+        EntityApplyNameError,
+        EntitySetupValueError,
         )
 from .namespaces import (
         Namespace,
@@ -120,14 +120,14 @@ class RegistryBase(IRegistry):
 
     def set_setup_session(self, setup_session: ISetupSession):
         if self.setup_session:
-            raise RuleInternalError(owner=self, msg=f"setup_session already set: {self.setup_session}") 
+            raise EntityInternalError(owner=self, msg=f"setup_session already set: {self.setup_session}") 
         self.setup_session = setup_session
 
     def finish(self):
         if self.finished:
-            raise RuleInternalError(owner=self, msg="already finished") 
+            raise EntityInternalError(owner=self, msg="already finished") 
         if not self.setup_session:
-            raise RuleInternalError(owner=self, msg="setup_session not set, function set_setup_session() not called") 
+            raise EntityInternalError(owner=self, msg="setup_session not set, function set_setup_session() not called") 
         self.finished = True
 
     def count(self) -> int:
@@ -143,7 +143,7 @@ class RegistryBase(IRegistry):
     def register_instance_attr_node(self, model_class: ModelType, attr_name_prefix: Optional[str]=None) -> AttrDexpNode:
         " used for This.Instance / M.Instance to return instance itself "
         if not is_model_class(model_class):
-            raise RuleSetupValueError(owner=self, msg=f"Expected model class (DC/PYD), got: {type(model_class)} / {model_class} ")
+            raise EntitySetupValueError(owner=self, msg=f"Expected model class (DC/PYD), got: {type(model_class)} / {model_class} ")
 
         th_field = None
         type_info = TypeInfo.get_or_create_by_type(
@@ -168,7 +168,7 @@ class RegistryBase(IRegistry):
     def register_value_attr_node(self, attr_node: AttrDexpNode) -> AttrDexpNode:
         " used for This.Value to return attribute value "
         if not isinstance(attr_node, AttrDexpNode):
-            raise RuleSetupValueError(owner=self, msg=f"Expected AttrDexpNode, got: {type(attr_node)} / {attr_node} ")
+            raise EntitySetupValueError(owner=self, msg=f"Expected AttrDexpNode, got: {type(attr_node)} / {attr_node} ")
 
         type_info = attr_node.get_type_info()
         # NOTE: original name is: attr_node.name
@@ -191,7 +191,7 @@ class RegistryBase(IRegistry):
         #           type_info: TypeInfo = TypeInfo.get_or_create_by_type(th_field)
 
         if attr_name in (ReservedAttributeNames.INSTANCE_ATTR_NAME,):
-            raise RuleSetupNameError(msg=f"Sorry but model attribute name {attr_name} is reserved. Rename it and try again (model={model_class.__name__}).")
+            raise EntitySetupNameError(msg=f"Sorry but model attribute name {attr_name} is reserved. Rename it and try again (model={model_class.__name__}).")
 
         # This one should not fail
         # , func_node
@@ -220,25 +220,25 @@ class RegistryBase(IRegistry):
             available=(S.Countries.name != "test"),
         """
         if self.finished:
-            raise RuleInternalError(owner=self, msg=f"Register({dexp_node}) - already finished, adding not possible.")
+            raise EntityInternalError(owner=self, msg=f"Register({dexp_node}) - already finished, adding not possible.")
 
         if not isinstance(dexp_node, IDotExpressionNode):
-            raise RuleInternalError(f"{type(dexp_node)}->{dexp_node}")
+            raise EntityInternalError(f"{type(dexp_node)}->{dexp_node}")
         dexp_node_name = alt_dexp_node_name if alt_dexp_node_name else dexp_node.name
 
         if not dexp_node_name.count(".") == 0:
-            raise RuleInternalError(owner=self, msg=f"Node {dexp_node_name} should not contain . - only first level vars allowed")
+            raise EntityInternalError(owner=self, msg=f"Node {dexp_node_name} should not contain . - only first level vars allowed")
 
         if dexp_node_name in self.store:
-            raise RuleSetupNameError(owner=self, msg=f"AttrDexpNode {dexp_node} does not have unique name within this registry, found: {self.store[dexp_node_name]}")
+            raise EntitySetupNameError(owner=self, msg=f"AttrDexpNode {dexp_node} does not have unique name within this registry, found: {self.store[dexp_node_name]}")
         self.store[dexp_node_name] = dexp_node
 
 
     def register_attr_node(self, attr_node:AttrDexpNode, alt_attr_node_name=None):
         if not isinstance(attr_node, AttrDexpNode):
-            raise RuleInternalError(f"{type(attr_node)}->{attr_node}")
+            raise EntityInternalError(f"{type(attr_node)}->{attr_node}")
         if not self.NAMESPACE == attr_node.namespace:
-            raise RuleInternalError(owner=self, msg=f"Method register({attr_node}) - namespace mismatch: {self.NAMESPACE} != {attr_node.namespace}")
+            raise EntityInternalError(owner=self, msg=f"Method register({attr_node}) - namespace mismatch: {self.NAMESPACE} != {attr_node.namespace}")
         return self.register_dexp_node(dexp_node=attr_node, alt_dexp_node_name=alt_attr_node_name)
 
     def pprint(self):
@@ -294,14 +294,14 @@ class RegistryBase(IRegistry):
         assert isinstance(dexp_node_name, str), dexp_node_name
 
         if dexp_node_name.startswith("_"):
-            raise RuleSetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': AttrDexpNode '{dexp_node_name}' is invalid, should not start with _")
+            raise EntitySetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': AttrDexpNode '{dexp_node_name}' is invalid, should not start with _")
 
         type_info = None
 
         if owner_dexp_node:
             assert owner_dexp_node.name!=dexp_node_name
             if not isinstance(owner_dexp_node, IDotExpressionNode):
-                raise RuleSetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': '{dexp_node_name}' -> owner_dexp_node={owner_dexp_node} :{type(owner_dexp_node)} is not IDotExpressionNode")
+                raise EntitySetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': '{dexp_node_name}' -> owner_dexp_node={owner_dexp_node} :{type(owner_dexp_node)} is not IDotExpressionNode")
 
         # TODO: za Sum(This.name) this is not good. Should be unique, since 
         #       This is ambigous - can evaluate to different contexts. 
@@ -321,7 +321,7 @@ class RegistryBase(IRegistry):
                 names_avail = get_available_names_example(full_dexp_node_name, self.store.keys())
                 valid_names = f"Valid attributes: {names_avail}" if self.store.keys() else "Namespace has no attributes at all."
                 # import pdb;pdb.set_trace() 
-                raise RuleSetupNameNotFoundError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': Invalid attribute name '{full_dexp_node_name}'. {valid_names}")
+                raise EntitySetupNameNotFoundError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': Invalid attribute name '{full_dexp_node_name}'. {valid_names}")
 
             attr_node_template = self.store.get(full_dexp_node_name)
 
@@ -361,10 +361,10 @@ class RegistryBase(IRegistry):
                             # func_args=func_args,
                             # functions_factory_registry=self.functions_factory_registry
                             )
-            except RuleSetupNameNotFoundError as ex:
+            except EntitySetupNameNotFoundError as ex:
                 ex.set_msg(f"{owner} / {self.NAMESPACE}-NS: {ex.msg}")
                 raise 
-            except RuleError as ex:
+            except EntityError as ex:
                 ex.set_msg(f"'{owner} / {self.NAMESPACE}-NS: {owner_dexp_node.full_name} -> '.{dexp_node_name}' metadata / type-hints read problem: {ex}")
                 raise 
 
@@ -389,7 +389,7 @@ class RegistryBase(IRegistry):
                             ) # function=function
 
         if not isinstance(dexp_node, IDotExpressionNode):
-            raise RuleInternalError(owner=owner, msg=f"Namespace {self.NAMESPACE}: Type of found object is not IDotExpressionNode, got: {type(dexp_node)}.")
+            raise EntityInternalError(owner=owner, msg=f"Namespace {self.NAMESPACE}: Type of found object is not IDotExpressionNode, got: {type(dexp_node)}.")
 
         # NOTE: dexp_node.type_info can be None, will be filled later in finish()
 
@@ -414,7 +414,7 @@ class RegistryBase(IRegistry):
 class RegistryUseDenied(RegistryBase):
 
     def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
-        raise RuleInternalError(owner=self, msg="Registry should not be used to get root value.")
+        raise EntityInternalError(owner=self, msg="Registry should not be used to get root value.")
 
 
 # ------------------------------------------------------------
@@ -433,7 +433,7 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
         children_dict = apply_session.get_upward_components_dict(self.component)
         if attr_name not in children_dict:
             avail_names = get_available_names_example(attr_name, children_dict.keys())
-            raise RuleApplyNameError(owner=self.component, 
+            raise EntityApplyNameError(owner=self.component, 
                     msg=f"Attribute '{attr_name}' not found in '{self.component.name}' ({type(self.component.name)}). Available: {avail_names}")
 
         component = children_dict[attr_name]
@@ -442,7 +442,7 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
         #   if is_last:
 
         if not hasattr(component, "bind"):
-            raise RuleApplyNameError(owner=self.component,
+            raise EntityApplyNameError(owner=self.component,
                     msg=f"Attribute '{attr_name}' is '{type(component)}' type which has no binding, therefore can not extract value. Use standard *Field components instead.")
         # TODO: needs some class wrapper and caching ...
         dexp_result = component.bind._evaluator.execute_dexp(apply_session)
@@ -480,7 +480,7 @@ class UseSetupStackFrame(UseStackFrameMixin, AbstractContextManager):
     def __exit__(self, exc_type, exc_value, exc_tb):
         frame_popped = self.setup_session.pop_frame_from_stack()
         if not exc_type and frame_popped != self.frame:
-            raise RuleInternalError(owner=self, msg=f"Something wrong with frame stack, got {frame_popped}, expected {self.frame}")
+            raise EntityInternalError(owner=self, msg=f"Something wrong with frame stack, got {frame_popped}, expected {self.frame}")
 
 
 # ------------------------------------------------------------
@@ -511,7 +511,7 @@ class SetupSessionBase(ISetupSession):
 
     def __post_init__(self):
         if self.container is not None and not isinstance(self.container, IContainerBase):
-            raise RuleInternalError(owner=self, msg=f"Expecting container for parent, got: {type(self.container)} / {self.container}") 
+            raise EntityInternalError(owner=self, msg=f"Expecting container for parent, got: {type(self.container)} / {self.container}") 
 
         self.is_top_setup_session: bool = (self.parent_setup_session is None)
 
@@ -559,10 +559,10 @@ class SetupSessionBase(ISetupSession):
 
     def add_registry(self, registry: IRegistry):
         if self.finished:
-            raise RuleInternalError(owner=self, msg=f"Registry already in finished satte, adding '{registry}' not possible.")
+            raise EntityInternalError(owner=self, msg=f"Registry already in finished satte, adding '{registry}' not possible.")
         ns_name = registry.NAMESPACE._name
         if ns_name in self._registry_dict:
-            raise RuleInternalError(owner=self, msg=f"Registry {registry} already in registry")
+            raise EntityInternalError(owner=self, msg=f"Registry {registry} already in registry")
         self._registry_dict[ns_name] = registry
         registry.set_setup_session(self)
 
@@ -571,7 +571,7 @@ class SetupSessionBase(ISetupSession):
 
     def use_stack_frame(self, frame: SetupStackFrame) -> UseSetupStackFrame:
         if not isinstance(frame, SetupStackFrame):
-            raise RuleInternalError(owner=self, msg=f"Expected SetupStackFrame, got frame: {frame}") 
+            raise EntityInternalError(owner=self, msg=f"Expected SetupStackFrame, got frame: {frame}") 
 
         return UseSetupStackFrame(setup_session=self, frame=frame)
 
@@ -587,7 +587,7 @@ class SetupSessionBase(ISetupSession):
     @property
     def current_frame(self) -> Optional[SetupStackFrame]:
         if not self.stack_frames:
-            # raise RuleInternalError(owner=self, msg=f"current_frame not available, stack frame is empty")
+            # raise EntityInternalError(owner=self, msg=f"current_frame not available, stack frame is empty")
             return None
         return self.stack_frames[0]
 
@@ -597,7 +597,7 @@ class SetupSessionBase(ISetupSession):
     def get_registry(self, namespace: Namespace, strict:bool= True) -> IRegistry:
         if namespace._name not in self._registry_dict:
             if strict:
-                raise RuleInternalError(owner=self, msg=f"Registry '{namespace._name}' not found, available are: {self._registry_dict.keys()}")
+                raise EntityInternalError(owner=self, msg=f"Registry '{namespace._name}' not found, available are: {self._registry_dict.keys()}")
             return UNDEFINED
         return self._registry_dict[namespace._name]
 
@@ -612,7 +612,7 @@ class SetupSessionBase(ISetupSession):
 
     def call_hooks_on_finished_all(self):
         if not self.is_top_setup_session:
-            raise RuleInternalError(owner=self, msg="call_hooks_on_finished_all() can be called on top setup_session") 
+            raise EntityInternalError(owner=self, msg="call_hooks_on_finished_all() can be called on top setup_session") 
         for hook_function in self.hook_on_finished_all_list:
             hook_function()
 
@@ -639,7 +639,7 @@ class SetupSessionBase(ISetupSession):
         assert not self.finished
         ns_name = attr_node.namespace._name
         if ns_name not in self._registry_dict:
-            raise RuleInternalError(f"{ns_name} not in .setup_session, available: {self._registry_dict.keys()}")
+            raise EntityInternalError(f"{ns_name} not in .setup_session, available: {self._registry_dict.keys()}")
         self._registry_dict[ns_name].register_attr_node(attr_node, alt_attr_node_name=alt_attr_node_name)
 
     # ------------------------------------------------------------
@@ -650,7 +650,7 @@ class SetupSessionBase(ISetupSession):
                         strict:bool=False
                         ) -> Union[IDotExpressionNode, None, UndefinedType]:
         if not isinstance(dexp,  DotExpression):
-            raise RuleInternalError(owner=self, msg=f"Dexp not DotExpression, got {dexp} / {type(dexp)}")
+            raise EntityInternalError(owner=self, msg=f"Dexp not DotExpression, got {dexp} / {type(dexp)}")
         return dexp._dexp_node
 
     # ------------------------------------------------------------
@@ -663,7 +663,7 @@ class SetupSessionBase(ISetupSession):
         key = id(dexp_node)
         if key in self.dexp_node_dict:
             if self.dexp_node_dict[key] != dexp_node:
-                raise RuleInternalError(owner=self, msg=f"dexp key {key}: dexp_node already registered with different object: \n  == {self.dexp_node_dict[key]} / {id(self.dexp_node_dict[key])}\n  got:\n  == {dexp_node} / {id(dexp_node)}")  
+                raise EntityInternalError(owner=self, msg=f"dexp key {key}: dexp_node already registered with different object: \n  == {self.dexp_node_dict[key]} / {id(self.dexp_node_dict[key])}\n  got:\n  == {dexp_node} / {id(dexp_node)}")  
         else:
             self.dexp_node_dict[key] = dexp_node
 
@@ -671,10 +671,10 @@ class SetupSessionBase(ISetupSession):
 
     def finish(self):
         if self.finished:
-            raise RuleSetupError(owner=self, msg="Method finish() already called.")
+            raise EntitySetupError(owner=self, msg="Method finish() already called.")
 
         if not len(self.stack_frames) == 0:
-            raise RuleInternalError(owner=self, msg=f"Stack frames not released: {self.stack_frames}") 
+            raise EntityInternalError(owner=self, msg=f"Stack frames not released: {self.stack_frames}") 
 
         for ns, registry in self._registry_dict.items():
             for vname, dexp_node in registry.items():
@@ -688,7 +688,7 @@ class SetupSessionBase(ISetupSession):
             if not dexp_node.is_finished:
                 dexp_node.finish()
             if not dexp_node.is_finished:
-                raise RuleInternalError(owner=self, msg=f"DexpNode {dexp_node} still not finished, finish() moethod did not set is_finished")  
+                raise EntityInternalError(owner=self, msg=f"DexpNode {dexp_node} still not finished, finish() moethod did not set is_finished")  
 
         self.finished = True
 
@@ -702,7 +702,7 @@ class SetupSessionBase(ISetupSession):
 # if vname!=dexp_node.name:
 #     found = [dexp_node_name for setup_session_name, ns, dexp_node_name in dexp_node.bound_list if vname==dexp_node_name]
 #     if not found:
-#         raise RuleInternalError(owner=self, msg=f"Attribute name not the same as stored in setup_session {dexp_node.name}!={vname} or bound list: {dexp_node.bound_list}")
+#         raise EntityInternalError(owner=self, msg=f"Attribute name not the same as stored in setup_session {dexp_node.name}!={vname} or bound list: {dexp_node.bound_list}")
 
 
 
@@ -739,7 +739,7 @@ class SetupSessionBase(ISetupSession):
 #         else:
 #             # TODO: does Operation needs special handling?
 #             # if not isinstance(data_var, IData:
-#             raise RuleSetupError(owner=self, msg=f"Register expexted IData, got {data_var} / {type(data_var)}.")
+#             raise EntitySetupError(owner=self, msg=f"Register expexted IData, got {data_var} / {type(data_var)}.")
 # 
 #         return dexp_node
 # 

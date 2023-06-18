@@ -9,7 +9,7 @@ from ..base import (
         ComponentBase,
         )
 from ..components import Field, FieldGroup, FieldTypeEnum, ValidationBase, EvaluationBase
-from ..containers import Extension, Rules
+from ..containers import SubEntityItems, Entitiy
 
 
 HTML_INDENT = "  "
@@ -81,16 +81,16 @@ def dump_html_models_to_str(
         lines_children[child_comp.name] = dump_html_models_to_str(child_comp, path=path[:],
                                                 depth=depth+1,
                                                 component_dict=component_dict,
-                                                inline=isinstance(component, Extension),
+                                                inline=isinstance(component, SubEntityItems),
                                                 )
 
     # guard
     if depth==1 and not isinstance(component, (FieldGroup,)):
-        raise Exception(f"TODO: no supported, currenly only structure Rules+FieldGroups supported, got {component}")
+        raise Exception(f"TODO: no supported, currenly only structure Entitiy+FieldGroups supported, got {component}")
 
     # py_name = None
     if depth==0:
-        assert isinstance(component, (Rules,)), component
+        assert isinstance(component, (Entitiy,)), component
         lines.append(f"<h1 id='{component.name}'>{component.label}</h1>")
         lines.append('<nav>')
         lines.append('  <div class="nav nav-tabs" id="nav-tab" role="tablist">')
@@ -121,7 +121,7 @@ def dump_html_models_to_str(
             lines.append('  </div>')
         lines.append('</div>')
 
-    elif isinstance(component, (Extension,)):
+    elif isinstance(component, (SubEntityItems,)):
         nr_examples = 3
 
         common_attrs = {}
@@ -155,7 +155,7 @@ def dump_html_models_to_str(
         lines.append('</ul>')
 
 
-    elif isinstance(component, (FieldGroup, Rules)):
+    elif isinstance(component, (FieldGroup, Entitiy)):
         assert lines_children
         lines.append('<ul class="my-list-unstyled">')
         title = f"<h3>{component.label}</h3>" if depth<=1 else f"<strong>{component.label}</strong>"

@@ -11,10 +11,10 @@ from contextlib import AbstractContextManager
 from collections import OrderedDict, defaultdict
 
 from .exceptions import (
-        RuleApplyError,
-        RuleValidationError,
-        RuleInternalError,
-        RuleApplyValueError,
+        EntityApplyError,
+        EntityValidationError,
+        EntityInternalError,
+        EntityApplyValueError,
         )
 from .expressions import (
         ExecResult,
@@ -134,7 +134,7 @@ class UseApplyStackFrame(UseStackFrameMixin, AbstractContextManager):
     def __exit__(self, exc_type, exc_value, exc_tb):
         frame_popped = self.apply_session.pop_frame_from_stack()
         if not exc_type and frame_popped != self.frame:
-            raise RuleInternalError(owner=self, msg=f"Something wrong with frame stack, got {frame_popped}, expected {self.frame}")
+            raise EntityInternalError(owner=self, msg=f"Something wrong with frame stack, got {frame_popped}, expected {self.frame}")
 
 
 # ============================================================
@@ -151,37 +151,37 @@ class ApplyResult(IApplySession):
 
     def __post_init__(self):
         if not isinstance(self.entity, Entity):
-            raise RuleApplyError(owner=self, msg=f"Component object '{self.entity}' is not top container - Entity.")
+            raise EntityApplyError(owner=self, msg=f"Component object '{self.entity}' is not top container - Entity.")
 
         if self.component_name_only:
             # Will raise if component is not found
             self.component_only = self.entity.get_component(self.component_name_only)
             if not self.component_only.can_apply_partial():
-                raise RuleApplyError(owner=self, msg=f"Component '{self.component_only}' does not support partial apply. Use SubEntityItems, FieldGroup or similar.")
+                raise EntityApplyError(owner=self, msg=f"Component '{self.component_only}' does not support partial apply. Use SubEntityItems, FieldGroup or similar.")
 
         self.bound_model = getattr(self.entity, "bound_model")
         if not self.bound_model:
-            raise RuleApplyError(owner=self, msg=f"Component object '{self.entity}' has no bound model")
+            raise EntityApplyError(owner=self, msg=f"Component object '{self.entity}' has no bound model")
 
         if self.entity.context_class:
             if not self.context:
-                raise RuleApplyError(owner=self.entity, msg=f"Pass context object to .apply*(). Context should be instance of '{self.entity.context_class}'.")
+                raise EntityApplyError(owner=self.entity, msg=f"Pass context object to .apply*(). Context should be instance of '{self.entity.context_class}'.")
             if not isinstance(self.context, self.entity.context_class):
-                raise RuleApplyError(owner=self, msg=f"Context object '{self.context}' is not instance of context class '{self.entity.context_class}'.")
+                raise EntityApplyError(owner=self, msg=f"Context object '{self.context}' is not instance of context class '{self.entity.context_class}'.")
         else:
             if self.context:
-                raise RuleApplyError(owner=self, msg=f"Given context object '{self.context}', but context class in component is not setup. Provide 'context_class' to Entity object and try again.")
+                raise EntityApplyError(owner=self, msg=f"Given context object '{self.context}', but context class in component is not setup. Provide 'context_class' to Entity object and try again.")
 
         # self.model = self.bound_model.model
         # if not self.model:
-        #     raise RuleInternalError(owner=self, item=component, msg=f"Bound model '{self.bound_model}' has empty model.")
+        #     raise EntityInternalError(owner=self, item=component, msg=f"Bound model '{self.bound_model}' has empty model.")
 
         if self.defaults_mode:
             if not (self.instance is NA_DEFAULTS_MODE and self.instance_new is None and not self.component_name_only):
-                raise RuleInternalError(owner=self, msg=f"Defaults mode does not expect instance or instance_new or component_name_only, got: {self.instance} / {self.instance_new} / {self.component_name_only}") 
+                raise EntityInternalError(owner=self, msg=f"Defaults mode does not expect instance or instance_new or component_name_only, got: {self.instance} / {self.instance_new} / {self.component_name_only}") 
         else:
             if not isinstance(self.instance, self.bound_model.model):
-                raise RuleApplyError(owner=self, msg=f"Object '{self.instance}' is not instance of bound model '{self.bound_model.model}'.")
+                raise EntityApplyError(owner=self, msg=f"Object '{self.instance}' is not instance of bound model '{self.bound_model.model}'.")
 
 
             if self.instance_new is not None and not self.component_name_only:
@@ -199,7 +199,7 @@ class ApplyResult(IApplySession):
 
     def use_stack_frame(self, frame: ApplyStackFrame) -> UseApplyStackFrame:
         if not isinstance(frame, ApplyStackFrame):
-            raise RuleInternalError(owner=self, msg=f"Expected ApplyStackFrame, got frame: {frame}") 
+            raise EntityInternalError(owner=self, msg=f"Expected ApplyStackFrame, got frame: {frame}") 
 
         return UseApplyStackFrame(apply_session=self, frame=frame)
 
@@ -207,10 +207,10 @@ class ApplyResult(IApplySession):
 
     def raise_if_failed(self):
         if not self.finished:
-            raise RuleApplyError(owner=self, msg="Apply process is not finished")
+            raise EntityApplyError(owner=self, msg="Apply process is not finished")
 
         if self.errors:
-            raise RuleValidationError(owner=self.entity, errors=self.errors)
+            raise EntityValidationError(owner=self.entity, errors=self.errors)
 
     # ------------------------------------------------------------
 
@@ -221,7 +221,7 @@ class ApplyResult(IApplySession):
         assert component == evaluation.parent
 
         if not component == self.current_frame.component:
-            raise RuleInternalError(owner=self.current_frame.component, 
+            raise EntityInternalError(owner=self.current_frame.component, 
                     msg=f"Component in frame {self.current_frame.component} must match component: {component}") 
 
         # evaluation_dexp = evaluation.value
@@ -261,7 +261,7 @@ class ApplyResult(IApplySession):
         assert not self.defaults_mode
 
         if not component == self.current_frame.component:
-            raise RuleInternalError(owner=self.current_frame.component, 
+            raise EntityInternalError(owner=self.current_frame.component, 
                     msg=f"Component in frame {self.current_frame.component} must match component: {component}") 
 
         # value=value, 
@@ -283,20 +283,20 @@ class ApplyResult(IApplySession):
         #       could be unadapted (see field.try_adapt_value()
 
         if new_value is UNDEFINED:
-            raise RuleInternalError(owner=component, msg="New value should not be UNDEFINED, fix the caller")
+            raise EntityInternalError(owner=component, msg="New value should not be UNDEFINED, fix the caller")
 
         # key_str = component.get_key_string(apply_session=self)
         key_str = self.get_key_string(component)
 
         if self.update_history.get(key_str, UNDEFINED) == UNDEFINED:
             if not is_from_init_bind:
-                raise RuleInternalError(owner=component, msg=f"key_str '{key_str}' not found in update_history and this is not initialization")
+                raise EntityInternalError(owner=component, msg=f"key_str '{key_str}' not found in update_history and this is not initialization")
 
             self.update_history[key_str] = []
 
             # Can be various UndefinedType: NA_IN_PROGRESS, NOT_APPLIABLE
             if self.current_values.get(key_str):
-                raise RuleInternalError(owner=self, msg=f"current_values[{key_str}] ==  {self.current_values[key_str]}") 
+                raise EntityInternalError(owner=self, msg=f"current_values[{key_str}] ==  {self.current_values[key_str]}") 
 
             self.current_values[key_str] = InstanceAttrCurrentValue(
                                                 key_string=key_str, 
@@ -310,15 +310,15 @@ class ApplyResult(IApplySession):
             assert component == self.current_frame.component
 
             if is_from_init_bind:
-                raise RuleInternalError(owner=component, msg=f"key_str '{key_str}' found in update_history and this is initialization")
+                raise EntityInternalError(owner=component, msg=f"key_str '{key_str}' found in update_history and this is initialization")
 
             if not self.update_history[key_str]:
-                raise RuleInternalError(owner=component, msg=f"change history for key_str='{key_str}' is empty")
+                raise EntityInternalError(owner=component, msg=f"change history for key_str='{key_str}' is empty")
 
             # -- check if current value is different from new one
             value_current = self.update_history[key_str][-1].value
             if value_current == new_value:
-                raise RuleApplyError(owner=component, msg=f"register change failed, the value is the same: {value_current}")
+                raise EntityApplyError(owner=component, msg=f"register change failed, the value is the same: {value_current}")
 
             # TODO: is this really necessary - will be done in apply() later
             self.validate_type(component, strict=False, value=new_value)
@@ -333,20 +333,20 @@ class ApplyResult(IApplySession):
                 # TODO: not sure if this validation is ok
                 if not isinstance(parent_instance, 
                         self.current_frame.container.bound_model.get_type_info().type_):
-                    raise RuleInternalError(owner=self, msg=f"Parent instance {parent_instance} has wrong type")
+                    raise EntityInternalError(owner=self, msg=f"Parent instance {parent_instance} has wrong type")
 
 
                 # -- attr_name - fetch from initial bind dexp (very first)
                 init_instance_attr_value = self.update_history[key_str][0]
                 if not init_instance_attr_value.is_from_bind:
-                    raise RuleInternalError(owner=self, msg=f"{init_instance_attr_value} is not from bind")
+                    raise EntityInternalError(owner=self, msg=f"{init_instance_attr_value} is not from bind")
                 init_bind_dexp_result = init_instance_attr_value.dexp_result
                 # attribute name is in the last item
                 init_raw_attr_value = init_bind_dexp_result.value_history[-1]
                 attr_name = init_raw_attr_value.attr_name
 
                 if not hasattr(parent_instance, attr_name):
-                    raise RuleInternalError(owner=self, msg=f"Missing {parent_instance}.{attr_name}")
+                    raise EntityInternalError(owner=self, msg=f"Missing {parent_instance}.{attr_name}")
 
                 # ----------------------------------------
                 # Finally change instance value
@@ -437,10 +437,10 @@ class ApplyResult(IApplySession):
             assert self.stack_frames
             caller_container = self.current_frame.component.get_first_parent_container(consider_self=True)
             if comp_container is not caller_container:
-                raise RuleInternalError(owner=component, msg=f"Componenent's container '{comp_container}' must match caller's '{self.current_frame.component.name}' container: {caller_container.name}") 
+                raise EntityInternalError(owner=component, msg=f"Componenent's container '{comp_container}' must match caller's '{self.current_frame.component.name}' container: {caller_container.name}") 
 
         if self.finished:
-            raise RuleInternalError(owner=self, msg="Already finished") 
+            raise EntityInternalError(owner=self, msg="Already finished") 
 
         if self.stack_frames:
             assert not entry_call
@@ -451,10 +451,10 @@ class ApplyResult(IApplySession):
             if not component.is_subentity():
                 if self.defaults_mode:
                     if self.current_frame.instance is not NA_DEFAULTS_MODE:
-                        raise RuleInternalError(owner=self, msg=f"Defaults mode - current frame's instance's model must be NA_DEFAULTS_MODE, got: {type(self.instance)}") 
+                        raise EntityInternalError(owner=self, msg=f"Defaults mode - current frame's instance's model must be NA_DEFAULTS_MODE, got: {type(self.instance)}") 
                 else:
                     if not isinstance(self.current_frame.instance, comp_container_model):
-                        raise RuleInternalError(owner=self, msg=f"Current frame's instance's model does not corresponds to component's container's model. Expected: {comp_container_model}, got: {type(self.instance)}") 
+                        raise EntityInternalError(owner=self, msg=f"Current frame's instance's model does not corresponds to component's container's model. Expected: {comp_container_model}, got: {type(self.instance)}") 
 
             # TODO: for subentity() any need to check this at all in this phase?
         else:
@@ -465,17 +465,17 @@ class ApplyResult(IApplySession):
 
             if self.defaults_mode:
                 if self.instance is not NA_DEFAULTS_MODE:
-                    raise RuleInternalError(owner=self, msg=f"Defaults mode - instance must be NA_DEFAULTS_MODE, got: {type(self.instance)}") 
+                    raise EntityInternalError(owner=self, msg=f"Defaults mode - instance must be NA_DEFAULTS_MODE, got: {type(self.instance)}") 
             else:
                 if not isinstance(self.instance, comp_container_model):
-                    raise RuleInternalError(owner=self, msg=f"Entity instance's model does not corresponds to component's container's model. Expected: {comp_container_model}, got: {type(self.instance)}") 
+                    raise EntityInternalError(owner=self, msg=f"Entity instance's model does not corresponds to component's container's model. Expected: {comp_container_model}, got: {type(self.instance)}") 
 
         # TODO: in partial mode this raises RecursionError:
         #       component == self.component_only
         if self.component_only and component is self.component_only:
             # partial apply - detected component
             if not mode_subentity_items and in_component_only_tree:
-                raise RuleInternalError(owner=self, 
+                raise EntityInternalError(owner=self, 
                         # {parent} -> 
                         msg=f"{component}: in_component_only_tree should be False, got {in_component_only_tree}")
 
@@ -487,7 +487,7 @@ class ApplyResult(IApplySession):
 
 
         if depth > MAX_RECURSIONS:
-            raise RuleInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
+            raise EntityInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
 
         new_frame = None
 
@@ -517,10 +517,10 @@ class ApplyResult(IApplySession):
 
             component : SubEntityItems = component
             if not isinstance(component.bound_model.model, DotExpression):
-                raise RuleInternalError(owner=self, msg=f"For SubEntityItems `bound_model` needs to be DotExpression, got: {component.bound_model.model}") 
+                raise EntityInternalError(owner=self, msg=f"For SubEntityItems `bound_model` needs to be DotExpression, got: {component.bound_model.model}") 
 
             if getattr(component.bound_model, "contains", None):
-                raise RuleInternalError(owner=self, msg=f"For SubEntityItems complex `bound_model` is currently not supported (e.g. `contains`), use simple BoundModel, got: {component.bound_model}") 
+                raise EntityInternalError(owner=self, msg=f"For SubEntityItems complex `bound_model` is currently not supported (e.g. `contains`), use simple BoundModel, got: {component.bound_model}") 
 
             # original instance
             dexp_result: ExecResult = component.bound_model.model \
@@ -536,7 +536,7 @@ class ApplyResult(IApplySession):
             if isinstance(instance, (list, tuple)):
                 # ---- SubEntityItems case
                 if not component.is_subentity_items():
-                    raise RuleApplyValueError(owner=component, msg=f"Did not expect list of instances: {to_repr(instance)}") 
+                    raise EntityApplyValueError(owner=component, msg=f"Did not expect list of instances: {to_repr(instance)}") 
                 # enters recursion -> _apply() -> ...
                 # parent_values_subtree = self.current_frame.parent_values_subtree
 
@@ -556,7 +556,7 @@ class ApplyResult(IApplySession):
 
             # ---- SubEntitySingle case
             if not component.is_subentity_single():
-                raise RuleApplyValueError(owner=component, msg=f"Did not expect single instance: {to_repr(instance)}") 
+                raise EntityApplyValueError(owner=component, msg=f"Did not expect single instance: {to_repr(instance)}") 
 
             # ========================================
             # == SubEntityItems with single item ==
@@ -566,7 +566,7 @@ class ApplyResult(IApplySession):
                 # TODO: check that type_info.is_optional ...
                 ...
             elif not is_model_instance(instance):
-                raise RuleApplyValueError(owner=self, msg=f"Expected list/tuple or model instance, got: {instance} : {type(instance)}")
+                raise EntityApplyValueError(owner=self, msg=f"Expected list/tuple or model instance, got: {instance} : {type(instance)}")
 
             new_frame = ApplyStackFrame(
                             container = component, 
@@ -607,7 +607,7 @@ class ApplyResult(IApplySession):
             assert not component.is_container()
             attr_node = component.bind._dexp_node
             if not attr_node:
-                raise RuleInternalError(owner=component, msg=f"{attr_node.name}.bind='{component.bind}' is not setup")
+                raise EntityInternalError(owner=component, msg=f"{attr_node.name}.bind='{component.bind}' is not setup")
             local_setup_session = self.setup_session.create_local_setup_session(
                                         this_ns_instance_model_class=None,
                                         this_ns_value_attr_node = attr_node)
@@ -625,7 +625,7 @@ class ApplyResult(IApplySession):
             current_value_instance = self.current_values.get(comp_key_str, UNDEFINED)
 
             if current_value_instance is NA_IN_PROGRESS:
-                raise RuleApplyError(owner=component, 
+                raise EntityApplyError(owner=component, 
                             msg="The component is already in progress state. Probably circular dependency issue. Fix problematic references to this component and try again.") 
             elif current_value_instance is UNDEFINED:
                 self.current_values[comp_key_str] = NA_IN_PROGRESS
@@ -655,7 +655,7 @@ class ApplyResult(IApplySession):
                     #       value = bind_dexp_result.value
                     if not self.defaults_mode:
                         if not isinstance(value, (bool, NoneType)):
-                            raise RuleApplyValueError(owner=component, 
+                            raise EntityApplyValueError(owner=component, 
                                     msg=f"Component.enables can be applied only for Boolean or None values, got: {value} : {type(value)}")
                         if not value: 
                             process_further = False
@@ -743,7 +743,7 @@ class ApplyResult(IApplySession):
         """
 
         if not isinstance(instance_list, (list, tuple)):
-            raise RuleApplyValueError(owner=self, msg=f"{component}: Expected list/tuple in the new instance, got: {current_instance_list_new}")
+            raise EntityApplyValueError(owner=self, msg=f"{component}: Expected list/tuple in the new instance, got: {current_instance_list_new}")
 
         # instance_list = instance
 
@@ -752,13 +752,13 @@ class ApplyResult(IApplySession):
         new_instances_by_key = None
         if current_instance_list_new not in (None, UNDEFINED):
             if not isinstance(current_instance_list_new, (list, tuple)):
-                raise RuleApplyValueError(owner=self, msg=f"{component}: Expected list/tuple in the new instance, got: {current_instance_list_new}")
+                raise EntityApplyValueError(owner=self, msg=f"{component}: Expected list/tuple in the new instance, got: {current_instance_list_new}")
 
             new_instances_by_key = {}
             for index0, item_instance_new in enumerate(current_instance_list_new, 0):
                 key = component.get_key_pairs_or_index0(instance=item_instance_new, index0=index0)
                 if key in new_instances_by_key:
-                    raise RuleApplyValueError(owner=self, msg=f"{component}: Duplicate key {key}, first item is: {new_instances_by_key[key]}")
+                    raise EntityApplyValueError(owner=self, msg=f"{component}: Duplicate key {key}, first item is: {new_instances_by_key[key]}")
                 new_instances_by_key[key] = item_instance_new
 
 
@@ -773,7 +773,7 @@ class ApplyResult(IApplySession):
             if component.keys:
                 missing_keys = [kn for kn, kv in key if isinstance(kv, MissingKey)]
                 if missing_keys:
-                    raise RuleApplyValueError(owner=self, msg=f"Instance {instance} has key(s) with value None, got: {', '.join(missing_keys)}")
+                    raise EntityApplyValueError(owner=self, msg=f"Instance {instance} has key(s) with value None, got: {', '.join(missing_keys)}")
 
             if current_instance_list_new not in (None, UNDEFINED):
                 item_instance_new = new_instances_by_key.get(key, UNDEFINED)
@@ -796,7 +796,7 @@ class ApplyResult(IApplySession):
                 item_instance_new = None
 
             if key in instances_by_key:
-                raise RuleApplyValueError(owenr=self, msg=f"Found duplicate key {key}:\n  == {instance}\n  == {instances_by_key[key]}")
+                raise EntityApplyValueError(owenr=self, msg=f"Found duplicate key {key}:\n  == {instance}\n  == {instances_by_key[key]}")
 
             instances_by_key[key] = (instance, index0, item_instance_new)
 
@@ -914,7 +914,7 @@ class ApplyResult(IApplySession):
 
         if isinstance(self.instance_new, (list, tuple)):
             if not self.instance_new:
-                raise RuleInternalError(owner=self, msg="Instance is an empty list, can not detect type of base  structure")
+                raise EntityInternalError(owner=self, msg="Instance is an empty list, can not detect type of base  structure")
             # test only first
             instance_to_test = self.instance_new[0]
         else:
@@ -926,7 +926,7 @@ class ApplyResult(IApplySession):
             # TODO: it could be StructEnum.MODELS_LIKE too, but how to detect this? input param or?
             instance_new_struct_type = StructEnum.RULES_LIKE
         else:
-            raise RuleApplyError(owner=self, 
+            raise EntityApplyError(owner=self, 
                     msg=f"Object '{instance_to_test}' is not instance of bound model '{model}' and not model class: {type(instance_to_test)}.")
 
         self.instance_new_struct_type = instance_new_struct_type
@@ -983,7 +983,7 @@ class ApplyResult(IApplySession):
                                 instance=self.current_frame.instance_new)
             current_instance_new = exec_result.value
         else: 
-            raise RuleInternalError(owner=self, msg=f"Invalid instance_new_struct_type = {self.instance_new_struct_type}")
+            raise EntityInternalError(owner=self, msg=f"Invalid instance_new_struct_type = {self.instance_new_struct_type}")
 
         return current_instance_new
 
@@ -1064,10 +1064,10 @@ class ApplyResult(IApplySession):
                     # --- 3.b. run evaluation
                     if not bind_dexp_result:
                         # TODO: this belongs to Setup phase
-                        raise RuleApplyError(owner=self, msg="Evaluation can be defined only for components with 'bind' defined. Remove 'Evaluation' or define 'bind'.")
+                        raise EntityApplyError(owner=self, msg="Evaluation can be defined only for components with 'bind' defined. Remove 'Evaluation' or define 'bind'.")
                     self.execute_evaluation(component=component, evaluation=cleaner)
                 else:
-                    raise RuleApplyError(owner=self, msg=f"Unknown cleaner type {type(cleaner)}. Expected *Evaluation or *Validation.")
+                    raise EntityApplyError(owner=self, msg=f"Unknown cleaner type {type(cleaner)}. Expected *Evaluation or *Validation.")
 
         if self.defaults_mode and isinstance(component, FieldBase):
             # NOTE: change NA_DEFAULTS_MODE to most reasonable and
@@ -1091,7 +1091,7 @@ class ApplyResult(IApplySession):
           and current_value_instance is not NOT_APPLIABLE:
 
             if not isinstance(current_value_instance, InstanceAttrCurrentValue):
-                raise RuleInternalError(owner=self, msg=f"Unexpected current value instance found for {key_string}, got: {current_value_instance}")  
+                raise EntityInternalError(owner=self, msg=f"Unexpected current value instance found for {key_string}, got: {current_value_instance}")  
             current_value_instance.mark_finished()
 
 
@@ -1109,7 +1109,7 @@ class ApplyResult(IApplySession):
         " get initial dexp value, if instance_new try to updated/overwrite with it"
 
         if not isinstance(component, FieldBase):
-            raise RuleInternalError(owner=self, msg=f"Expected FieldBase field, got: {component}")
+            raise EntityInternalError(owner=self, msg=f"Expected FieldBase field, got: {component}")
 
         bind_dexp_result = component.get_dexp_result_from_instance(apply_session=self)
         init_value = bind_dexp_result.value
@@ -1159,7 +1159,7 @@ class ApplyResult(IApplySession):
                                 instance=self.current_frame.instance_new)
                 new_value = instance_new_bind_dexp_result.value
             else: 
-                raise RuleInternalError(owner=self, msg=f"Invalid instance_new_struct_type = {self.instance_new_struct_type}")
+                raise EntityInternalError(owner=self, msg=f"Invalid instance_new_struct_type = {self.instance_new_struct_type}")
 
             if new_value is not UNDEFINED:
                 new_value = component.try_adapt_value(new_value)
@@ -1198,7 +1198,7 @@ class ApplyResult(IApplySession):
         from current frame
         """
         if depth > MAX_RECURSIONS:
-            raise RuleInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
+            raise EntityInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
 
         # Started to process subentity_items, but not yet positioned on any subentity_items instance item 
         # the key will have no subentity_items::<instance_id>, just parent_key_string::parent_key_string::subentity_items_name
@@ -1258,7 +1258,7 @@ class ApplyResult(IApplySession):
 
         """
         if not component.is_container():
-            raise RuleInternalError(owner=component, msg=f"Expecting container, got: {component}") 
+            raise EntityInternalError(owner=component, msg=f"Expecting container, got: {component}") 
 
         instance_id = id(instance)
         key_string = self.key_string_container_cache.get(instance_id, None)
@@ -1286,7 +1286,7 @@ class ApplyResult(IApplySession):
                 # if parent_id not in self.key_string_container_cache:
                 #     # must_be_in_cache
                 #     if not self.component_name_only:
-                #         raise RuleInternalError(owner=component, msg=f"Parent instance's key not found in cache, got: {parent_instance}") 
+                #         raise EntityInternalError(owner=component, msg=f"Parent instance's key not found in cache, got: {parent_instance}") 
                 #     parent_key_string = f"__PARTIAL__{self.component_name_only}"
                 # else:
                 parent_key_string = self.key_string_container_cache[parent_id]
@@ -1294,7 +1294,7 @@ class ApplyResult(IApplySession):
             else:
                 container_parent = component.get_first_parent_container(consider_self=True)
                 if container_parent.is_subentity():
-                    raise RuleInternalError(owner=component, msg=f"Parent container {container_parent.name} is an SubEntitySingle/SubEntityItems and parent_instance is empty") 
+                    raise EntityInternalError(owner=component, msg=f"Parent container {container_parent.name} is an SubEntitySingle/SubEntityItems and parent_instance is empty") 
 
 
             self.key_string_container_cache[instance_id] = key_string
@@ -1334,7 +1334,7 @@ class ApplyResult(IApplySession):
         key_str = self.get_key_string(component)
         if key_str not in self.current_values:
             if not init_when_missing:
-                raise RuleInternalError(owner=component, msg="Value fetch too early") 
+                raise EntityInternalError(owner=component, msg="Value fetch too early") 
 
             # ------------------------------------------------------------
             # NOTE: apply() / mode_dexp_dependency 
@@ -1370,7 +1370,7 @@ class ApplyResult(IApplySession):
         # key_str = component.get_key_string(apply_session=self)
         key_str = self.get_key_string(component)
         if key_str not in self.current_values:
-            raise RuleInternalError(owner=component, msg=f"{key_str} not found in current values") 
+            raise EntityInternalError(owner=component, msg=f"{key_str} not found in current values") 
         attr_current_value_instance = self.current_values[key_str]
         return attr_current_value_instance.get_value(strict=strict)
 
@@ -1401,7 +1401,7 @@ class ApplyResult(IApplySession):
         for every node bind (M.<field>) is evaluated
         """
         if self.values_tree is None:
-            raise RuleInternalError(owner=self, msg="_get_values_tree() did not filled _values_tree cache") 
+            raise EntityInternalError(owner=self, msg="_get_values_tree() did not filled _values_tree cache") 
 
         if key_string is None:
             # component = self.entity
@@ -1410,7 +1410,7 @@ class ApplyResult(IApplySession):
             if key_string not in self.values_tree_by_key_string.keys():
                 if key_string not in self.current_values:
                     names_avail = get_available_names_example(key_string, self.values_tree_by_key_string.keys())
-                    raise RuleInternalError(owner=self, msg=f"Key string not found in values tree, got: {key_string}. Available: {names_avail}") 
+                    raise EntityInternalError(owner=self, msg=f"Key string not found in values tree, got: {key_string}. Available: {names_avail}") 
 
                 # -- fill values dict
                 assert not (self.current_frame.component==self.entity)
@@ -1435,7 +1435,7 @@ class ApplyResult(IApplySession):
                           ) -> ComponentTreeWValuesType:
         " recursive - see unit test for example - test_dump.py "
         if depth > MAX_RECURSIONS:
-            raise RuleInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
+            raise EntityInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
 
         if not component:
             component = self.current_frame.component
@@ -1478,7 +1478,7 @@ class ApplyResult(IApplySession):
 
             if attr_current_value_instance is not NOT_APPLIABLE:
                 if attr_current_value_instance is UNDEFINED:
-                    raise RuleInternalError(owner=component, msg="Not expected to have undefined current instance value") 
+                    raise EntityInternalError(owner=component, msg="Not expected to have undefined current instance value") 
             else:
                 attr_current_value_instance = None
 
@@ -1493,7 +1493,7 @@ class ApplyResult(IApplySession):
             values_dict["subentity_items"] = []
             self.current_frame.set_parent_values_subtree(values_dict["subentity_items"])
             if recursive:
-                raise RuleInternalError(owner=component, msg="Did not implement this case - subentity_items + recursive") 
+                raise EntityInternalError(owner=component, msg="Did not implement this case - subentity_items + recursive") 
         else:
             if is_init:
                 assert not recursive, "did not consider this case"
@@ -1564,7 +1564,7 @@ class ApplyResult(IApplySession):
     def _dump_values(self, tree: ComponentTreeWValuesType, depth: int=0) -> ValuesTree:
         # recursion
         if depth > MAX_RECURSIONS:
-            raise RuleInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
+            raise EntityInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
 
         output = {}
         # component's name

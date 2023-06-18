@@ -26,11 +26,11 @@ from .utils import (
         UndefinedType,
         )
 from .exceptions import (
-        RuleSetupValueError,
-        RuleSetupError,
-        RuleSetupNameError,
-        RuleInternalError,
-        RuleApplyError,
+        EntitySetupValueError,
+        EntitySetupError,
+        EntitySetupNameError,
+        EntityInternalError,
+        EntityApplyError,
         )
 from .namespaces import (
         DynamicAttrsBase,
@@ -116,7 +116,7 @@ class IDotExpressionNode(ABC):
 
     def finish(self):
         if self.is_finished:
-            raise RuleInternalError(owner=self, msg="already finished") 
+            raise EntityInternalError(owner=self, msg="already finished") 
         self.is_finished = True
 
 
@@ -221,18 +221,18 @@ class DotExpression(DynamicAttrsBase):
         # -- CHECK PRECONDITIONS
         # risky -> can cause failure in: str(self), repr(self)
         if not isinstance(self._namespace, Namespace):
-            raise RuleSetupValueError(owner=self, msg=f"Namespace parameter '{self._namespace}' needs to be instance of Namespace inherited class.")
+            raise EntitySetupValueError(owner=self, msg=f"Namespace parameter '{self._namespace}' needs to be instance of Namespace inherited class.")
 
         if self._is_literal:
             if not isinstance(self._node, STANDARD_TYPE_W_NONE_LIST):
-                raise RuleSetupValueError(owner=self, msg=f"Literal type '{self._node}' needs to some standard type: {STANDARD_TYPE_W_NONE_LIST}, got: {type(self._node)}")
+                raise EntitySetupValueError(owner=self, msg=f"Literal type '{self._node}' needs to some standard type: {STANDARD_TYPE_W_NONE_LIST}, got: {type(self._node)}")
 
         elif isinstance(self._node, str):
             if self._node in self.RESERVED_ATTR_NAMES:
-                raise RuleSetupValueError(owner=self, msg=f"Value expression's attribute '{self._node}' is a reserved name, choose another.")
+                raise EntitySetupValueError(owner=self, msg=f"Value expression's attribute '{self._node}' is a reserved name, choose another.")
         else:
             if not isinstance(self._node, OperationDexpNode):
-                raise RuleSetupValueError(owner=self, msg=f"Value expression's attribute '{self._node}' needs to be string or OperationDexpNode, got: {type(self._node)}")
+                raise EntitySetupValueError(owner=self, msg=f"Value expression's attribute '{self._node}' needs to be string or OperationDexpNode, got: {type(self._node)}")
 
         # -- COMPUTED VALUES
         # copy list of owner/previous
@@ -268,7 +268,7 @@ class DotExpression(DynamicAttrsBase):
 
     def _EnsureFinished(self):
         if self._status!=DExpStatusEnum.INITIALIZED:
-            raise RuleSetupError(owner=self, msg=f"Method Setup() already called, further DotExpression building/operator-building is not possible (status={self._status}).")
+            raise EntitySetupError(owner=self, msg=f"Method Setup() already called, further DotExpression building/operator-building is not possible (status={self._status}).")
 
 
     def Setup(self, setup_session:ISetupSession, owner:Any) -> Optional['IDotExpressionNode']:
@@ -292,27 +292,27 @@ class DotExpression(DynamicAttrsBase):
             # try to find in local repo
             registry = local_setup_session.get_registry(self._namespace, strict=False)
             if registry and not registry.NAMESPACE._manual_setup:
-                raise RuleInternalError(owner=self, msg=f"Registry should be passed only for namespace._manual_setup cases, got: {registry}")
+                raise EntityInternalError(owner=self, msg=f"Registry should be passed only for namespace._manual_setup cases, got: {registry}")
 
         if not registry:
             # if local repo not available or ns not found in it, find in container repo
             registry = setup_session.get_registry(self._namespace)
             if registry.NAMESPACE._manual_setup:
-                raise RuleInternalError(owner=self, msg=f"Registry should be passed for namespace._manual_setup cases (usually manually created ThisInstanceRegistry()), got: {registry}")
+                raise EntityInternalError(owner=self, msg=f"Registry should be passed for namespace._manual_setup cases (usually manually created ThisInstanceRegistry()), got: {registry}")
 
         assert registry
 
         # if registry:
         #     if not registry.NAMESPACE._manual_setup:
         #     # if not self._namespace._manual_setup:
-        #         raise RuleInternalError(owner=self, msg=f"Registry should be passed only for namespace._manual_setup cases, got: {registry}")
+        #         raise EntityInternalError(owner=self, msg=f"Registry should be passed only for namespace._manual_setup cases, got: {registry}")
         # else:
         #     if self._namespace._manual_setup:
-        #         raise RuleInternalError(owner=self, msg=f"Registry should be passed for namespace._manual_setup cases (usually manually created ThisInstanceRegistry()).")
+        #         raise EntityInternalError(owner=self, msg=f"Registry should be passed for namespace._manual_setup cases (usually manually created ThisInstanceRegistry()).")
         #     registry = setup_session.get_registry(self._namespace)
 
         if self._namespace != registry.NAMESPACE:
-            raise RuleInternalError(owner=self, msg=f"Registry has diff namespace from variable: {self._namespace} != {registry.NAMESPACE}")
+            raise EntityInternalError(owner=self, msg=f"Registry has diff namespace from variable: {self._namespace} != {registry.NAMESPACE}")
 
         current_dexp_node = None
         last_dexp_node = None
@@ -351,7 +351,7 @@ class DotExpression(DynamicAttrsBase):
             elif bit._func_args:
                 if bnr==1:
                     if self._namespace != FunctionsNS:
-                        raise RuleSetupNameError(owner=self, msg=f"Only FunctionsNS (Fn.) namespace accepts direct function calls. Got '{bit}' on '{bit._namespace}) namespace.")
+                        raise EntitySetupNameError(owner=self, msg=f"Only FunctionsNS (Fn.) namespace accepts direct function calls. Got '{bit}' on '{bit._namespace}) namespace.")
 
                 func_args = FunctionArgumentsType(*bit._func_args)
 
@@ -413,7 +413,7 @@ class DotExpression(DynamicAttrsBase):
             # can be Component or can be managed Model dataclass Field - when .denied is not appliable
             if hasattr(current_dexp_node, "denied") and current_dexp_node.denied:
                 # '{dexp_node_name}' 
-                raise RuleSetupValueError(owner=self, msg=f"DexpNode (owner={owner.name}) references '{current_dexp_node.name}' what is not allowed due: {current_dexp_node.deny_reason}.")
+                raise EntitySetupValueError(owner=self, msg=f"DexpNode (owner={owner.name}) references '{current_dexp_node.name}' what is not allowed due: {current_dexp_node.deny_reason}.")
 
         dexp_evaluator.finish()
 
@@ -425,7 +425,7 @@ class DotExpression(DynamicAttrsBase):
             self._dexp_node = dexp_evaluator.last_node()
             setup_session.register_dexp_node(self._dexp_node)
         else:
-            # TODO: raise RuleSetupError()
+            # TODO: raise EntitySetupError()
             self._all_ok = False
             self._evaluator = dexp_evaluator
             self._dexp_node = None
@@ -440,14 +440,14 @@ class DotExpression(DynamicAttrsBase):
         self._EnsureFinished()
 
         if aname in self.RESERVED_ATTR_NAMES: # , "%r -> %s" % (self._node, aname):
-            raise RuleSetupNameError(owner=self, msg=f"DotExpression's attribute '{aname}' is reserved name, choose another.")
+            raise EntitySetupNameError(owner=self, msg=f"DotExpression's attribute '{aname}' is reserved name, choose another.")
         if aname.startswith("__") and aname.endswith("__"):
             raise AttributeError(f"Attribute '{type(self)}' object has no attribute '{aname}'")
         return DotExpression(node=aname, namespace=self._namespace, Path=self.Path)
 
     def __call__(self, *args, **kwargs):
         if self._func_args is not None:
-            raise RuleInternalError(owner=self, msg="Node already a function, duplicate call?") 
+            raise EntityInternalError(owner=self, msg="Node already a function, duplicate call?") 
         self._func_args = [args, kwargs]
         return self
 
@@ -577,7 +577,7 @@ class NotAvailableExecResult(ExecResult):
                 reason=f"Not available since expression yields: {available_dexp_result.value}", 
             else:
                 if available_dexp_result not in (None, UNDEFINED):
-                    raise RuleInternalError(msg=f"Expected None/Undefined, got: {available_dexp_result}") 
+                    raise EntityInternalError(msg=f"Expected None/Undefined, got: {available_dexp_result}") 
                 reason="Value not available"
         instance = cls(reason=reason)
         instance.value = available_dexp_result
@@ -760,7 +760,7 @@ class OperationDexpNode(IDotExpressionNode):
     def _get_operation(self, op: str) -> Operation:
         operation = OPCODE_TO_FUNCTION.get(op, None)
         if operation is None:
-            raise RuleSetupValueError(owner=self, msg="Invalid operation code, {self.op} not one of: {', '.join(self.OP_TO_CODE.keys())}")
+            raise EntitySetupValueError(owner=self, msg="Invalid operation code, {self.op} not one of: {', '.join(self.OP_TO_CODE.keys())}")
         return operation
 
     def get_type_info(self) -> TypeInfo:
@@ -796,7 +796,7 @@ class OperationDexpNode(IDotExpressionNode):
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(self)
 
         if not self._status==DExpStatusEnum.INITIALIZED:
-            raise RuleSetupError(owner=setup_session, item=self, msg=f"AttrDexpNode not in INIT state, got {self._status}")
+            raise EntitySetupError(owner=setup_session, item=self, msg=f"AttrDexpNode not in INIT state, got {self._status}")
 
         # just to check if all ok
         self._first_dexp_node = self.create_dexp_node(self.first, title="First", setup_session=setup_session, owner=owner)
@@ -828,7 +828,7 @@ class OperationDexpNode(IDotExpressionNode):
                  ) -> ExecResult:
 
         if is_last and not self.is_finished:
-            raise RuleInternalError(owner=self, msg="Last dexp node is not finished.") 
+            raise EntityInternalError(owner=self, msg="Last dexp node is not finished.") 
 
         if dexp_result:
             raise NotImplementedError("TODO:")
@@ -862,14 +862,14 @@ class OperationDexpNode(IDotExpressionNode):
             try:
                 new_value = self.op_function(first_value, second_value)
             except Exception as ex:
-                raise RuleApplyError(owner=apply_session, msg=f"{self} := {self.op_function}({first_dexp_result.value}, {second_dexp_result.value}) raised error: {ex}")
+                raise EntityApplyError(owner=apply_session, msg=f"{self} := {self.op_function}({first_dexp_result.value}, {second_dexp_result.value}) raised error: {ex}")
         else:
             # unary operation
             try:
                 new_value = self.op_function(first_dexp_result.value)
             except Exception as ex:
                 # raise
-                raise RuleApplyError(owner=apply_session, msg=f"{self} := {self.op_function}({first_dexp_result.value}) raised error: {ex}")
+                raise EntityApplyError(owner=apply_session, msg=f"{self} := {self.op_function}({first_dexp_result.value}) raised error: {ex}")
 
         op_dexp_result = ExecResult()
 
@@ -930,7 +930,7 @@ def execute_dexp_or_node(
                             is_last=True,
                             )
     else:
-        raise RuleInternalError(
+        raise EntityInternalError(
                 f"Expected Dexp, OpDexp or FuncDexp, got: {type(dexp_or_value)} -> {dexp_or_value} / {type(dexp_node)} -> {dexp_node}")
 
     return dexp_result

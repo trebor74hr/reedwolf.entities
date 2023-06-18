@@ -48,7 +48,7 @@ from .valid_base import (
 from .expressions   import (
         DotExpression,
         )
-from .exceptions    import RuleSetupError
+from .exceptions    import EntitySetupError
 from .utils         import (
         to_int,
         message_truncate,
@@ -110,7 +110,7 @@ class Readonly(FieldValidationBase):
 
     def __post_init__(self):
         if not isinstance(self.value, (bool, DotExpression)):
-            raise RuleSetupError(owner=self, msg=f"ensure must be DotExpression or bool, got: {type(self.value)} / {self.value}")
+            raise EntitySetupError(owner=self, msg=f"ensure must be DotExpression or bool, got: {type(self.value)} / {self.value}")
 
         if not self.error:
             self.error = "The value is readonly"
@@ -243,13 +243,13 @@ class RangeLength(FieldValidationBase):
 
     def __post_init__(self):
         if self.min is None and self.max is None:
-            raise RuleSetupError(owner=self, msg="Please provide min and/or max")
+            raise EntitySetupError(owner=self, msg="Please provide min and/or max")
         if self.min is not None:
             self._check_dot_expression_or_positive_int("min", self.min)
         if self.max is not None:
             self._check_dot_expression_or_positive_int("max", self.max)
             if to_int(self.min) and self.max<self.min:
-                raise RuleSetupError(owner=self, msg="Please provide min <= max")
+                raise EntitySetupError(owner=self, msg="Please provide min <= max")
 
         if not self.error:
             if self.min and self.max:

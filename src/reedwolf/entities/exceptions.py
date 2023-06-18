@@ -15,7 +15,7 @@ from .namespaces import (
 
 # Base errors
 
-class RuleError(Exception, ABC):
+class EntityError(Exception, ABC):
     # TODO: validate that every call is marked for translations, check in constructor or using mypy
     def __init__(self, msg:str, owner:Optional['ComponentBase'] = None, item: Optional['Item'] = None):  # noqa: F821
         self.parent, self.item = owner, item
@@ -49,65 +49,65 @@ class RuleError(Exception, ABC):
 # ------------------------------------------------------------
 # General and internal errors
 # ------------------------------------------------------------
-class RuleInternalError(RuleError):
+class EntityInternalError(EntityError):
     pass
 
-class RuleNameNotFoundError(RuleError):
+class EntityNameNotFoundError(EntityError):
     pass
 
 # ------------------------------------------------------------
 # Entity Setup phase (boot time) validation errors
 # ------------------------------------------------------------
-class RuleSetupError(RuleError):
+class EntitySetupError(EntityError):
     pass
 
-class RuleSetupValueError(RuleSetupError):
+class EntitySetupValueError(EntitySetupError):
     pass
 
-class RuleSetupNameError(RuleSetupError):
+class EntitySetupNameError(EntitySetupError):
     pass
 
-class RuleSetupNameNotFoundError(RuleSetupNameError):
+class EntitySetupNameNotFoundError(EntitySetupNameError):
     pass
 
-class RuleSetupTypeError(RuleSetupError):
+class EntitySetupTypeError(EntitySetupError):
     pass
 
 
 # ------------------------------------------------------------
 # Entity Apply phase validation errors
 # ------------------------------------------------------------
-class RuleApplyError(RuleError):
+class EntityApplyError(EntityError):
     pass
 
-class RuleApplyValueError(RuleApplyError):
+class EntityApplyValueError(EntityApplyError):
     pass
 
-class RuleApplyNameError(RuleApplyError):
+class EntityApplyNameError(EntityApplyError):
     pass
 
-class RuleApplyNameNotFoundError(RuleApplyNameError):
+class EntityApplyNameNotFoundError(EntityApplyNameError):
     pass
 
-class RuleApplyTypeError(RuleApplyError):
+class EntityApplyTypeError(EntityApplyError):
     pass
 
 # ------------------------------------------------------------
 # Entity Load phase validation errors
 # ------------------------------------------------------------
-class RuleLoadError(RuleError):
+class EntityLoadError(EntityError):
     pass
 
-class RuleLoadValueError(RuleLoadError):
+class EntityLoadValueError(EntityLoadError):
     pass
 
-class RuleLoadNameError(RuleLoadError):
+class EntityLoadNameError(EntityLoadError):
     pass
 
-class RuleLoadNameNotFoundError(RuleLoadNameError):
+class EntityLoadNameNotFoundError(EntityLoadNameError):
     pass
 
-class RuleLoadTypeError(RuleLoadError):
+class EntityLoadTypeError(EntityLoadError):
     pass
 
 
@@ -115,7 +115,7 @@ class RuleLoadTypeError(RuleLoadError):
 # Validations
 # ------------------------------------------------------------
 
-class RuleValidationError(RuleError):
+class EntityValidationError(EntityError):
     MAX_ERR_DESC_ONE = 200
     MAX_ERR_DESC_ALL = 1000
 
@@ -132,14 +132,14 @@ class RuleValidationError(RuleError):
 
         super().__init__(msg=msg, owner=owner)
 
-# class RuleValidationFieldError(RuleError):
+# class EntityValidationFieldError(EntityError):
 #     def __init__(self, msg:str, owner:'Field', item : Optional['Item'] = None):  # noqa: F821
 #         " owner must be field and is required "
 #         super().__init__(msg=msg, owner=owner, item=item)
 # 
-# class RuleValidationValueError(RuleValidationError):
+# class EntityValidationValueError(EntityValidationError):
 #     pass
 
-class RuleValidationCardinalityError(RuleValidationError):
+class EntityValidationCardinalityError(EntityValidationError):
     pass
 

@@ -67,10 +67,10 @@ from .utils import (
         format_arg_name_list,
         )
 from .exceptions import (
-        RuleInternalError,
-        RuleSetupError,
-        RuleSetupNameError,
-        RuleSetupValueError,
+        EntityInternalError,
+        EntitySetupError,
+        EntitySetupNameError,
+        EntitySetupValueError,
         )
 from .namespaces import (
         DynamicAttrsBase,
@@ -189,9 +189,9 @@ class FunctionArgumentsType:
 
     def __post_init__(self):
         if not isinstance(self.args, (list, tuple)):
-            raise RuleSetupValueError(f"Function's positional arguments must be list or tuple, got:  {type(self.args)} / {self.args}")
+            raise EntitySetupValueError(f"Function's positional arguments must be list or tuple, got:  {type(self.args)} / {self.args}")
         if not isinstance(self.kwargs, dict):
-            raise RuleSetupValueError(f"Function's keyword arguments must be dictionary, got:  {type(self.kwargs)} / {self.kwargs}")
+            raise EntitySetupValueError(f"Function's keyword arguments must be dictionary, got:  {type(self.kwargs)} / {self.kwargs}")
 
     def get_args_kwargs(self) -> FunctionArgumentsTupleType:
         return self.args, self.kwargs
@@ -373,7 +373,7 @@ def get_model_fields(inspect_object: ModelType, strict: bool = True) -> Dict[str
         field_dict = inspect_object.__fields__
     else:
         if strict:
-            raise RuleSetupError(item=inspect_object, msg=f"Class should be Dataclass or Pydantic ({inspect_object})")
+            raise EntitySetupError(item=inspect_object, msg=f"Class should be Dataclass or Pydantic ({inspect_object})")
         # TODO: field_dist = inspect_model.__annotations__
         field_dict = {}
     return field_dict
@@ -388,7 +388,7 @@ def extract_model_field_meta(inspect_object: Any, attr_node_name: str) -> Tuple[
     th_field = fields.get(attr_node_name, None)
     if th_field:
         if not type(th_field) in (DcField, PydModelField):
-            raise RuleInternalError(f"Invalid type of th_field: {th_field}, expected dataclass.Field or pydantic.Field")
+            raise EntityInternalError(f"Invalid type of th_field: {th_field}, expected dataclass.Field or pydantic.Field")
         # assert PydModelField
     return th_field, fields
 
@@ -411,7 +411,7 @@ def extract_py_type_hints(inspect_object: Any, caller_name: str, strict: bool = 
             #       get_type_hints falls into problems producing NameError-s
             #         Object <class 'type'> / '<class 'reedwolf.entities.components.BooleanField'>'
             #         type hint is not possible/available: name 'OptionalBoolOrDExp' is not defined.
-            raise RuleSetupValueError(item=inspect_object, msg=f"{caller_name}: Object type hint is not possible/available: {ex}."
+            raise EntitySetupValueError(item=inspect_object, msg=f"{caller_name}: Object type hint is not possible/available: {ex}."
                                  + " Please verify that object is properly type hinted class attribute, function or method,"
                                  + " and type hint should not include not standard type Type alias (see entity/types.py comment).")
         return {"__exception__": ex}
@@ -421,7 +421,7 @@ def extract_function_py_type_hint_dict(function: Callable[..., Any]) -> Dict[str
     # TODO: typing
     """ returns: function return type + if it returns list or not """
     if not is_function(function):
-        raise RuleInternalError(f"Invalid object, expected type, got:  {function} / {type(function)}")
+        raise EntityInternalError(f"Invalid object, expected type, got:  {function} / {type(function)}")
 
     if isinstance(function, partial):
         function = function.func
@@ -431,7 +431,7 @@ def extract_function_py_type_hint_dict(function: Callable[..., Any]) -> Dict[str
         name = function.__class__.__name__
 
     if not hasattr(function, "__annotations__"):
-        raise RuleSetupNameError(item=function, msg=f"SetupSession: AttrDexpNode FUNCTION '{name}' is not valid, it has no __annotations__ / type hints metainfo.")
+        raise EntitySetupNameError(item=function, msg=f"SetupSession: AttrDexpNode FUNCTION '{name}' is not valid, it has no __annotations__ / type hints metainfo.")
 
     # e.g. Optional[List[SomeCustomClass]] or SomeCustomClass or ...
     py_type_hint_dict = extract_py_type_hints(function, caller_name=f"Function {name}")
@@ -486,10 +486,10 @@ class TypeInfo:
         # if self.th_field and self.th_field.name=='company_type': ...
 
         if isinstance(self.py_type_hint, str):
-            raise RuleInternalError(owner=self, msg=f"py_type_hint={self.py_type_hint} is still string, it should have been resolved before")
+            raise EntityInternalError(owner=self, msg=f"py_type_hint={self.py_type_hint} is still string, it should have been resolved before")
 
         if is_function(self.py_type_hint):
-            raise RuleInternalError(owner=self, msg=f"py_type_hint={self.py_type_hint} is a function/method")
+            raise EntityInternalError(owner=self, msg=f"py_type_hint={self.py_type_hint} is a function/method")
 
         self._extract_type_hint_details()
 
@@ -497,7 +497,7 @@ class TypeInfo:
 
         # if not self.is_list and not self.is_optional:
         #     if self.py_type_hint != self.type_:
-        #         raise RuleSetupValueError(item=self, msg=f"Unsupported type hint, got: {self.py_type_hint}. {ERR_MSG_SUPPORTED}")
+        #         raise EntitySetupValueError(item=self, msg=f"Unsupported type hint, got: {self.py_type_hint}. {ERR_MSG_SUPPORTED}")
 
     def is_none_type(self):
         return self.types == [NoneType]
@@ -535,7 +535,7 @@ class TypeInfo:
             # List[some_type]
             is_list = True
             if len(py_type_hint.__args__) != 1:
-                raise RuleSetupNameError(item=py_type_hint, msg=f"AttrDexpNode's annotation should have single List argument, got: {py_type_hint.__args__}.")
+                raise EntitySetupNameError(item=py_type_hint, msg=f"AttrDexpNode's annotation should have single List argument, got: {py_type_hint.__args__}.")
             inner_type = py_type_hint.__args__[0]
 
         elif origin_type is not None:
@@ -575,7 +575,7 @@ class TypeInfo:
         if not is_enum:
             for type_ in self.types:
                 if type_!=ItemType and type(type_)!=type:
-                    raise RuleSetupValueError(item=self, msg=f"Unsupported type hint, got: {self.py_type_hint}. {ERR_MSG_SUPPORTED}")
+                    raise EntitySetupValueError(item=self, msg=f"Unsupported type hint, got: {self.py_type_hint}. {ERR_MSG_SUPPORTED}")
 
 
     def check_compatible(self, other: Self) -> Optional[str]:
@@ -583,7 +583,7 @@ class TypeInfo:
         returns error message when input type is not compatible with given type
         """
         if other is None:
-            raise RuleInternalError(owner=self, msg=f"check_compatible({other}) - type_info of other not supplied")
+            raise EntityInternalError(owner=self, msg=f"check_compatible({other}) - type_info of other not supplied")
 
         if self==other:
             return None
@@ -685,7 +685,7 @@ class TypeInfo:
         # msg_prefix = f"{to_repr(caller)}:: " if caller else ""
 
         if isinstance(py_type_hint, str):
-            raise RuleSetupValueError(owner=cls, msg=
+            raise EntitySetupValueError(owner=cls, msg=
                         "{msg_prefix}Python type hint is a string, probably not resolved properly: {repr(py_type_hint)}."
                         "\nHINTS:"
                         "\n  1) if you have `from __future__ import annotations`, remove it, try to import that module, stabilize it and then try this again." 
@@ -712,9 +712,9 @@ class TypeInfo:
 
         msg_prefix = f"Function {py_function}::"
         if not py_type_hint:
-            raise RuleSetupNameError(item=py_function, msg = msg_prefix + f"AttrDexpNode FUNCTION '{name}' is not valid, it has no return type hint (annotations).")
+            raise EntitySetupNameError(item=py_function, msg = msg_prefix + f"AttrDexpNode FUNCTION '{name}' is not valid, it has no return type hint (annotations).")
         if not allow_nonetype and py_type_hint == NoneType:
-            raise RuleSetupNameError(item=py_function, msg = msg_prefix + f"SetupSession: AttrDexpNode FUNCTION '{name}' is not valid, returns None (from annotation).")
+            raise EntitySetupNameError(item=py_function, msg = msg_prefix + f"SetupSession: AttrDexpNode FUNCTION '{name}' is not valid, returns None (from annotation).")
 
         output = TypeInfo.get_or_create_by_type(
                         py_type_hint=py_type_hint,
@@ -742,9 +742,9 @@ class TypeInfo:
             if arg_name == "return":
                 continue
             if not py_type_hint:
-                raise RuleSetupNameError(item=py_function, msg=msg_prefix + f"AttrDexpNode FUNCTION '{name}.{arg_name}' is not valid, argument {arg_name} has no type hint (annotations).")
+                raise EntitySetupNameError(item=py_function, msg=msg_prefix + f"AttrDexpNode FUNCTION '{name}.{arg_name}' is not valid, argument {arg_name} has no type hint (annotations).")
             if py_type_hint in (NoneType,):
-                raise RuleSetupNameError(item=py_function, msg=msg_prefix + f"SetupSession: AttrDexpNode FUNCTION '{name}.{arg_name}' is not valid, argument {arg_name} has type hint (annotation) None.")
+                raise EntitySetupNameError(item=py_function, msg=msg_prefix + f"SetupSession: AttrDexpNode FUNCTION '{name}.{arg_name}' is not valid, argument {arg_name} has type hint (annotation) None.")
 
             output[arg_name] = TypeInfo.get_or_create_by_type(
                                     py_type_hint=py_type_hint,
@@ -763,9 +763,9 @@ class TypeInfo:
 # def extract_py_type_hints_for_attr(inspect_object: Any, attr_name: str, caller_name: str) -> PyTypeHint:
 #     py_type_hint_dict = extract_py_type_hints(inspect_object=inspect_object, caller_name=caller_name, strict=True)
 #     if attr_name not in py_type_hint_dict:
-#         raise RuleSetupValueError(item=inspect_object, msg=f"{caller_name}: Object type hint for '{attr_name}' not available. Available are {','.join(py_type_hint_dict.keys())}.")
+#         raise EntitySetupValueError(item=inspect_object, msg=f"{caller_name}: Object type hint for '{attr_name}' not available. Available are {','.join(py_type_hint_dict.keys())}.")
 #     hint_type = py_type_hint_dict[attr_name]
 #     if not hint_type: # check if type
-#         raise RuleSetupValueError(item=inspect_object, msg=f"{caller_name}: Object type hint for '{attr_name}' is not valid '{hint_type}'. Expected some type.")
+#         raise EntitySetupValueError(item=inspect_object, msg=f"{caller_name}: Object type hint for '{attr_name}' is not valid '{hint_type}'. Expected some type.")
 #     return hint_type
 

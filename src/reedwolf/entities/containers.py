@@ -24,15 +24,15 @@ from .utils import (
         camel_case_to_snake,
         )
 from .exceptions import (
-        RuleSetupError,
-        RuleSetupValueError,
-        RuleSetupNameError,
-        RuleSetupTypeError,
-        RuleInternalError,
-        RuleNameNotFoundError,
-        RuleSetupNameNotFoundError,
-        RuleApplyNameNotFoundError,
-        RuleValidationError,
+        EntitySetupError,
+        EntitySetupValueError,
+        EntitySetupNameError,
+        EntitySetupTypeError,
+        EntityInternalError,
+        EntityNameNotFoundError,
+        EntitySetupNameNotFoundError,
+        EntityApplyNameNotFoundError,
+        EntityValidationError,
         )
 from .namespaces import (
         ModelsNS,
@@ -142,10 +142,10 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
     def add_fieldgroup(self, fieldgroup:FieldGroup):
         if self.is_finished():
-            raise RuleSetupError(owner=self, msg="FieldGroup can not be added after setup() is called.")
+            raise EntitySetupError(owner=self, msg="FieldGroup can not be added after setup() is called.")
         found = [sec for sec in self.contains if sec.name==fieldgroup.name]
         if found:
-            raise RuleSetupError(owner=self, msg=f"FieldGroup {fieldgroup.name} is already added.")
+            raise EntitySetupError(owner=self, msg=f"FieldGroup {fieldgroup.name} is already added.")
         self.contains.append(fieldgroup)
 
     def is_top_parent(self):
@@ -173,7 +173,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         self.models = self.bound_model.fill_models()
 
         if not self.models:
-            raise RuleSetupError(owner=self, msg="Entity(models=List[models]) is required.")
+            raise EntitySetupError(owner=self, msg="Entity(models=List[models]) is required.")
 
         for bound_model_name, bound_model in self.models.items():
             assert bound_model_name.split(".")[-1] == bound_model.name
@@ -194,14 +194,14 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
         # is_list = False
         if not isinstance(bound_model, BoundModelBase):
-            raise RuleSetupError(owner=self, msg=f"{bound_model.name}: Needs to be Boundbound_model* instance, got: {bound_model}")
+            raise EntitySetupError(owner=self, msg=f"{bound_model.name}: Needs to be Boundbound_model* instance, got: {bound_model}")
 
         model = bound_model.model
 
         attr_node = None
         if is_subentity_main_model:
             if not isinstance(model, DotExpression):
-                raise RuleSetupError(owner=self, msg=f"{bound_model.name}: For SubEntityItems/SubEntitySingle main bound_model needs to be DotExpression: {bound_model.model}")
+                raise EntitySetupError(owner=self, msg=f"{bound_model.name}: For SubEntityItems/SubEntitySingle main bound_model needs to be DotExpression: {bound_model.model}")
 
         # alias_saved = False
         is_list = False
@@ -210,10 +210,10 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             # TODO: for functions value expressions need to be stored
             #       with all parameters (func_args)
             if not (self.is_subentity() or not is_main_model):
-                raise RuleSetupTypeError(owner=self, msg=f"{bound_model.name}: DotExpression should be used only in SubEntity containers and nested BoundModels")
+                raise EntitySetupTypeError(owner=self, msg=f"{bound_model.name}: DotExpression should be used only in SubEntity containers and nested BoundModels")
 
             if model.GetNamespace()!=ModelsNS:
-                raise RuleSetupTypeError(owner=self, msg=f"{bound_model.name}: DotExpression should be in ModelsNS namespace, got: {model.GetNamespace()}")
+                raise EntitySetupTypeError(owner=self, msg=f"{bound_model.name}: DotExpression should be in ModelsNS namespace, got: {model.GetNamespace()}")
 
             if is_subentity_main_model:
                 # TODO: DRY this - the only difference is setup_session - extract common logic outside / 
@@ -226,34 +226,34 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
             attr_node = setup_session_from.get_dexp_node_by_dexp(dexp=model)
             if attr_node:
-                raise RuleInternalError(owner=self, msg=f"AttrDexpNode data already in setup_session: {model} -> {attr_node}")
+                raise EntityInternalError(owner=self, msg=f"AttrDexpNode data already in setup_session: {model} -> {attr_node}")
 
             attr_node = model.Setup(setup_session=setup_session_from, owner=bound_model)
             if not attr_node:
-                raise RuleInternalError(owner=self, msg=f"AttrDexpNode not recognized: {model}")
+                raise EntityInternalError(owner=self, msg=f"AttrDexpNode not recognized: {model}")
 
             if not isinstance(attr_node.data, TypeInfo):
-                raise RuleInternalError(owner=self, msg=f"AttrDexpNode data is not TypeInfo, got: {type(attr_node.data)} / {attr_node.data}")
+                raise EntityInternalError(owner=self, msg=f"AttrDexpNode data is not TypeInfo, got: {type(attr_node.data)} / {attr_node.data}")
 
             model   = attr_node.data.type_
             is_list = attr_node.data.is_list
             py_type_hint = attr_node.data.py_type_hint
 
             if self.is_subentity_single() and is_list :
-                raise RuleSetupTypeError(owner=self, msg=f"{bound_model.name}: For SubEntitySingle did not expect List model type, got: {py_type_hint}")
+                raise EntitySetupTypeError(owner=self, msg=f"{bound_model.name}: For SubEntitySingle did not expect List model type, got: {py_type_hint}")
             elif self.is_subentity_items() and not is_list:
-                raise RuleSetupTypeError(owner=self, msg=f"{bound_model.name}: For SubEntityItems expected List model type, got: {py_type_hint}")
+                raise EntitySetupTypeError(owner=self, msg=f"{bound_model.name}: For SubEntityItems expected List model type, got: {py_type_hint}")
 
             # TODO: check bound_model cases - list, not list, etc.
             # elif self.is_bound_model() and ...
 
         else:
             if self.is_subentity():
-                raise RuleSetupTypeError(owner=self, msg=f"{bound_model.name}: For SubEntity use DotExpression as model, got: {model}")
+                raise EntitySetupTypeError(owner=self, msg=f"{bound_model.name}: For SubEntity use DotExpression as model, got: {model}")
             # TODO: maybe check model type_info is_list ...
 
         if not is_model_class(model) and not (is_list and model in STANDARD_TYPE_LIST):
-            raise RuleSetupError(owner=self, msg=f"Managed model {bound_model.name} needs to be a @dataclass, pydantic.BaseModel or List[{STANDARD_TYPE_LIST}], got: {type(model)}")
+            raise EntitySetupError(owner=self, msg=f"Managed model {bound_model.name} needs to be a @dataclass, pydantic.BaseModel or List[{STANDARD_TYPE_LIST}], got: {type(model)}")
 
         # == M.name version
         self.setup_session[ModelsNS].register_all_nodes(root_attr_node=attr_node, bound_model=bound_model, model=model)
@@ -287,16 +287,16 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
     def setup(self) -> Self:
         # components are flat list, no recursion/hierarchy browsing needed
         if self.bound_model is None:
-            raise RuleSetupError(owner=self, msg="bound_model not set. Initialize in constructor or call bind_to() first.")
+            raise EntitySetupError(owner=self, msg="bound_model not set. Initialize in constructor or call bind_to() first.")
 
         if not self.contains:
-            raise RuleSetupError(owner=self, msg="'contains' attribute is required with list of components")
+            raise EntitySetupError(owner=self, msg="'contains' attribute is required with list of components")
 
         if self.is_finished():
-            raise RuleSetupError(owner=self, msg="setup() should be called only once")
+            raise EntitySetupError(owner=self, msg="setup() should be called only once")
 
         if self.setup_session is not None:
-            raise RuleSetupError(owner=self, msg="SetupSession.setup() should be called only once")
+            raise EntitySetupError(owner=self, msg="SetupSession.setup() should be called only once")
 
         self.setup_session = create_setup_session(
                                 container=self,
@@ -344,7 +344,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         for component_name, component in self.components.items():
             # TODO: maybe bound Field.bind -> Model attr_node?
             if not component.is_finished():
-                raise RuleInternalError(owner=self, msg=f"{component} not finished. Is in overriden setup()/Setup() parent method super().setup()/Setup() been called (which sets parent and marks finished)?")
+                raise EntityInternalError(owner=self, msg=f"{component} not finished. Is in overriden setup()/Setup() parent method super().setup()/Setup() been called (which sets parent and marks finished)?")
 
         self.setup_session.finish()
 
@@ -368,14 +368,14 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         # TODO: currently components are retrieved only from contains - but should include validations + cardinality
         if name not in self.components:
             vars_avail = get_available_names_example(name, self.components.keys())
-            raise RuleNameNotFoundError(owner=self, msg=f"Component '{name}' not found, some valid_are: {vars_avail}")
+            raise EntityNameNotFoundError(owner=self, msg=f"Component '{name}' not found, some valid_are: {vars_avail}")
         return self.components[name]
 
     # ------------------------------------------------------------
 
     def pprint(self):
         if not hasattr(self, "components"):
-            raise RuleSetupError(owner=self, msg="Call .setup() first")
+            raise EntitySetupError(owner=self, msg="Call .setup() first")
         print(f"{self.name}: {self.__class__.__name__} ::")
         for nr, (name, component) in enumerate(self.components.items(),1):
             print(f"  {nr:02}. {name}: {component.__class__.__name__} ::")
@@ -399,7 +399,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
     def get_key_pairs(self, instance: ModelType) -> Tuple[(str, Any)]:
         if not self.keys:
-            raise RuleInternalError(msg="get_key_pairs() should be called only when 'keys' are defined")
+            raise EntityInternalError(msg="get_key_pairs() should be called only when 'keys' are defined")
         key_pairs = self.keys.get_key_pairs(instance, container=self)
         return key_pairs
 
@@ -478,19 +478,19 @@ class KeyFields(KeysBase):
 
     def __post_init__(self):
         if not self.field_names:
-            raise RuleSetupError("field_names are required")
+            raise EntitySetupError("field_names are required")
         for field_name in self.field_names:
             if not isinstance(field_name, str):
-                raise RuleSetupNameError(f"Fields needs to be list of strings, got '{field_name}'")
+                raise EntitySetupNameError(f"Fields needs to be list of strings, got '{field_name}'")
         if len(set(self.field_names)) != len(self.field_names):
-            raise RuleSetupNameError(f"Fields needs to be unique list of names, found duplicates: '{self.field_names}'")
+            raise EntitySetupNameError(f"Fields needs to be unique list of names, found duplicates: '{self.field_names}'")
 
     def validate(self, model: ModelType):
         model_fields = get_model_fields(model)
         for field_name in self.field_names:
             if field_name not in model_fields:
                 available_names = get_available_names_example(field_name, model_fields.keys())
-                raise RuleSetupNameNotFoundError(f"Field name '{field_name}' not found in list of attributes of '{model}'. Available names: {available_names}")
+                raise EntitySetupNameNotFoundError(f"Field name '{field_name}' not found in list of attributes of '{model}'. Available names: {available_names}")
 
 
     def get_key_pairs(self, instance: ModelType, container: IContainerBase) -> KeyPairs:
@@ -502,7 +502,7 @@ class KeyFields(KeysBase):
 
         for field_name in self.field_names:
             if not hasattr(instance, field_name):
-                raise RuleApplyNameNotFoundError(f"Field name '{field_name}' not found in list of attributes of '{type(instance)}'!?")
+                raise EntityApplyNameNotFoundError(f"Field name '{field_name}' not found in list of attributes of '{type(instance)}'!?")
             key = getattr(instance, field_name)
             if key is None:
                 # if missing then setup temp unique id
@@ -552,7 +552,7 @@ class Entity(ContainerBase):
     def __post_init__(self):
         if self.bound_model:
             if not (isinstance(self.bound_model, BoundModel) and is_model_class(self.bound_model.model)):
-                raise RuleSetupTypeError(owner=self, msg=f"Attribute 'bound_model' needs to be BoundModel with model DC/PYD, got: {self.bound_model}") 
+                raise EntitySetupTypeError(owner=self, msg=f"Attribute 'bound_model' needs to be BoundModel with model DC/PYD, got: {self.bound_model}") 
 
         if not self.name:
             self.name = "__".join([
@@ -572,12 +572,12 @@ class Entity(ContainerBase):
         self._check_cleaners([ChildrenValidationBase, ChildrenEvaluationBase])
 
         if not isinstance(self.config, Config):
-            raise RuleSetupValueError(owner=self, msg=f"config needs Config instance, got: {type(self.config)} / {self.config}")
+            raise EntitySetupValueError(owner=self, msg=f"config needs Config instance, got: {type(self.config)} / {self.config}")
 
         if self.context_class and not (
                 inspect.isclass(self.context_class)
                 and IContext in inspect.getmro(self.context_class)):
-            raise RuleSetupValueError(owner=self, msg=f"context_class needs to be class that inherits IContext, got: {self.context_class}")
+            raise EntitySetupValueError(owner=self, msg=f"context_class needs to be class that inherits IContext, got: {self.context_class}")
 
         # if self.functions:
         #     for function in self.functions:
@@ -602,22 +602,22 @@ class Entity(ContainerBase):
         # TODO: DRY this - for loop
         if bound_model:
             if self.bound_model is not None:
-                raise RuleSetupError(owner=self, msg="bound_model already already set, late binding not allowed.")
+                raise EntitySetupError(owner=self, msg="bound_model already already set, late binding not allowed.")
             self.bound_model = bound_model
 
         # if data:
         #     if self.data:
-        #         raise RuleSetupError(owner=self, msg="data already set, late binding not allowed.")
+        #         raise EntitySetupError(owner=self, msg="data already set, late binding not allowed.")
         #     self.data = data
 
         if functions:
             if self.functions:
-                raise RuleSetupError(owner=self, msg="functions already set, late binding not allowed.")
+                raise EntitySetupError(owner=self, msg="functions already set, late binding not allowed.")
             self.functinos = functions
 
         if context_class:
             if self.context_class:
-                raise RuleSetupError(owner=self, msg="context already set, late binding not allowed.")
+                raise EntitySetupError(owner=self, msg="context already set, late binding not allowed.")
             self.context_class = context_class
 
         if config:
@@ -681,7 +681,7 @@ class Entity(ContainerBase):
                   .apply()
 
         if not apply_session.finished:
-            raise RuleInternalError(owner=self, msg="Apply process is not finished")
+            raise EntityInternalError(owner=self, msg="Apply process is not finished")
 
         if raise_if_failed:
             apply_session.raise_if_failed()
@@ -714,11 +714,11 @@ class Entity(ContainerBase):
                   .apply()
 
         if not apply_session.finished:
-            raise RuleInternalError(owner=self, msg="Apply process is not finished")
+            raise EntityInternalError(owner=self, msg="Apply process is not finished")
 
         if apply_session.errors:
-            validation_error = RuleValidationError(owner=apply_session.entity, errors=apply_session.errors)
-            raise RuleInternalError(owner=self, msg=f"Internal issue, apply process should not yield validation error(s), got: {validation_error}")
+            validation_error = EntityValidationError(owner=apply_session.entity, errors=apply_session.errors)
+            raise EntityInternalError(owner=self, msg=f"Internal issue, apply process should not yield validation error(s), got: {validation_error}")
 
         output = apply_session._dump_defaults()
 
@@ -783,7 +783,7 @@ class SubEntityBase(ContainerBase, ABC):
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
         if not self.name:
             if not (self.bound_model.name and isinstance(self.bound_model.model, DotExpression)):
-                raise RuleInternalError(owner=self, msg="Bound model has not automatically set its name OR model is not DotExpression") 
+                raise EntityInternalError(owner=self, msg="Bound model has not automatically set its name OR model is not DotExpression") 
             self.name = get_name_from_bind(self.bound_model.model)
 
         super().__post_init__()
@@ -799,7 +799,7 @@ class SubEntityBase(ContainerBase, ABC):
         self.context_class = non_self_parent_container.context_class
         self.config = non_self_parent_container.config
         if not self.config:
-            raise RuleInternalError(owner=self, msg=f"Config not set from parent: {self.parent_container}") 
+            raise EntityInternalError(owner=self, msg=f"Config not set from parent: {self.parent_container}") 
 
     def setup(self, setup_session:SetupSession):
         # NOTE: setup_session is not used, can be reached with parent.setup_session(). left param
@@ -819,7 +819,7 @@ class SubEntityItems(SubEntityBase):
         self._check_cleaners((ItemsValidationBase, ChildrenValidationBase, ItemsEvaluationBase, ChildrenEvaluationBase))
         # for cleaner in self.cleaners:
         #     if not isinstance(cleaner, (ItemsValidationBase, ChildrenValidationBase, ItemsEvaluationBase, ChildrenEvaluationBase)):
-        #         raise RuleSetupTypeError(owner=self, msg=f"Cleaners should be instances of ItemsValidationBase, ChildrenValidationBase, ItemsEvaluationBase or ChildrenEvaluationBase, got: {type(cleaner)} / {cleaner}") 
+        #         raise EntitySetupTypeError(owner=self, msg=f"Cleaners should be instances of ItemsValidationBase, ChildrenValidationBase, ItemsEvaluationBase or ChildrenEvaluationBase, got: {type(cleaner)} / {cleaner}") 
         super().__post_init__()
 
     def is_subentity_items(self):
@@ -837,7 +837,7 @@ class SubEntitySingle(SubEntityBase):
         self._check_cleaners((SingleValidation, ChildrenValidationBase, ChildrenEvaluationBase))
         # for cleaner in self.cleaners:
         #     if not isinstance(cleaner, (SingleValidation, ChildrenValidationBase, ChildrenEvaluationBase)):
-        #         raise RuleSetupTypeError(owner=self, msg=f"Cleaners should be instances of SingleValidation, ChildrenValidationBase or ChildrenEvaluationBase, got: {type(cleaner)} / {cleaner}") 
+        #         raise EntitySetupTypeError(owner=self, msg=f"Cleaners should be instances of SingleValidation, ChildrenValidationBase or ChildrenEvaluationBase, got: {type(cleaner)} / {cleaner}") 
         super().__post_init__()
 
     def is_subentity_single(self):

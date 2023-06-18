@@ -40,10 +40,10 @@ from .utils import (
         message_truncate,
         )
 from .exceptions import (
-        RuleSetupValueError,
-        RuleInternalError,
-        RuleSetupError,
-        RuleSetupTypeError,
+        EntitySetupValueError,
+        EntityInternalError,
+        EntitySetupError,
+        EntitySetupTypeError,
         )
 from .namespaces import (
         ModelsNS,
@@ -202,7 +202,7 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
     def init_clean(self):
         # TODO: check that value is M ns and is a simple M. value
         if not isinstance(self.bind, DotExpression):
-            raise RuleSetupValueError(owner=self, msg="'bind' needs to be DotExpression (e.g. M.status).")
+            raise EntitySetupValueError(owner=self, msg="'bind' needs to be DotExpression (e.g. M.status).")
 
         if not self.name:
             # ModelsNs.person.surname -> surname
@@ -235,11 +235,11 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
                 parent = parent.parent
 
             if self.bind.GetNamespace()!=namespace_only:
-                raise RuleSetupValueError(owner=self, msg=f"{self.bind}: 'bind' needs to be in {namespace_only} DotExpression (e.g. M.status).")
+                raise EntitySetupValueError(owner=self, msg=f"{self.bind}: 'bind' needs to be in {namespace_only} DotExpression (e.g. M.status).")
 
             if len(self.bind.Path) not in range(1, MAX_BIND_DEPTH+1):
                 # warn(f"{self.bind}: 'bind' needs to be 1-4 deep DotExpression (e.g. M.status, M.city.country.name ).")
-                raise RuleSetupValueError(owner=self, msg=f"'bind' needs to be 1-{MAX_BIND_DEPTH} deep DotExpression (e.g. M.status, M.city.country.name ), got: {self.bind}")
+                raise EntitySetupValueError(owner=self, msg=f"'bind' needs to be 1-{MAX_BIND_DEPTH} deep DotExpression (e.g. M.status, M.city.country.name ), got: {self.bind}")
 
             self.bound_attr_node = setup_session.get_dexp_node_by_dexp(self.bind)
             if not self.bound_attr_node:
@@ -257,7 +257,7 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
 
             if not self.bound_attr_node:
                 # warn(f"TODO: {self}.bind = {self.bind} -> bound_attr_node can not be found.")
-                raise RuleSetupValueError(owner=self, msg=f"bind={self.bind}: bound_attr_node can not be found.")
+                raise EntitySetupValueError(owner=self, msg=f"bind={self.bind}: bound_attr_node can not be found.")
             # else:
             #     # ALT: self.bound_attr_node.add_bound_attr_node(BoundVar(setup_session.name, self.attr_node.namespace, self.attr_node.name))
             #     # self.attr_node.add_bound_attr_node(
@@ -265,7 +265,7 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
             #     #                  self.bound_attr_node.namespace,
             #     #                  self.bound_attr_node.name))
             #     # if not isinstance(self.bound_attr_node.data, TypeInfo):
-            #     #     raise RuleInternalError(owner=self, msg=f"Unhandled case, self.bound_attr_node.data is not TypeInfo, got: {self.bound_attr_node.data}")
+            #     #     raise EntityInternalError(owner=self, msg=f"Unhandled case, self.bound_attr_node.data is not TypeInfo, got: {self.bound_attr_node.data}")
             #     self._set_type_info()
 
         # NOTE: can have multiple Evaluation-s
@@ -273,9 +273,9 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
                       if self.cleaners else ""
 
         if self.autocomputed and not evaluations_w_autocomp:
-            raise RuleSetupError(owner=self, msg=f"When 'autocomputed' is set to '{self.autocomputed.name}', you need to have at least one Evaluation cleaner defined or set 'autocomputed' to False/AutocomputedEnum.NO")
+            raise EntitySetupError(owner=self, msg=f"When 'autocomputed' is set to '{self.autocomputed.name}', you need to have at least one Evaluation cleaner defined or set 'autocomputed' to False/AutocomputedEnum.NO")
         elif not self.autocomputed and evaluations_w_autocomp:
-            raise RuleSetupError(owner=self, msg=f"'When you have at least one Evaluation cleaner (found: {evaluations_w_autocomp}), set 'autocomputed = AutocomputedEnum.ALLWAYS/SOMETIMES' (got '{self.autocomputed.name}').")
+            raise EntitySetupError(owner=self, msg=f"'When you have at least one Evaluation cleaner (found: {evaluations_w_autocomp}), set 'autocomputed = AutocomputedEnum.ALLWAYS/SOMETIMES' (got '{self.autocomputed.name}').")
 
         if self.REQUIRED_VALIDATIONS:
             validations_kls_found = set([type(cleaner) for cleaner in self.cleaners if isinstance(cleaner, ValidationBase)]) if self.cleaners else set()
@@ -291,7 +291,7 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
                     missing_names.append(missing)
             if missing_names:
                 missing_names = " and ".join(missing_names)
-                raise RuleSetupError(owner=self, msg=f"'{self.__class__.__name__}' requires following Validations (cleaners attribute): {missing_names}")
+                raise EntitySetupError(owner=self, msg=f"'{self.__class__.__name__}' requires following Validations (cleaners attribute): {missing_names}")
 
             # OLD:
             #     validations_kls_required = set(self.REQUIRED_VALIDATIONS)
@@ -299,7 +299,7 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
             #     missing = (validations_kls_required - validations_kls_found)
             #     if missing:
             #         missing_names = ", ".join([validation.__name__ for validation in missing])
-            #         raise RuleSetupError(owner=self, msg=f"'{self.__class__.__name__}' requires following Validations (cleaners attribute): {missing_names}")
+            #         raise EntitySetupError(owner=self, msg=f"'{self.__class__.__name__}' requires following Validations (cleaners attribute): {missing_names}")
 
         return self
 
@@ -311,14 +311,14 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
             if self.PYTHON_TYPE:
                 self.python_type = self.PYTHON_TYPE
             else:
-                raise RuleInternalError(owner=self, msg="python_type must be set in custom setup() method or define PYTHON_TYPE class constant")
+                raise EntityInternalError(owner=self, msg="python_type must be set in custom setup() method or define PYTHON_TYPE class constant")
         self._set_type_info()
 
     # ------------------------------------------------------------
 
     def _set_type_info(self):
         if not self.python_type:
-            raise RuleInternalError(owner=self, msg="python_type not defined") 
+            raise EntityInternalError(owner=self, msg="python_type not defined") 
 
         # TODO: explain old message "static declared types. Dynamic types can be processed later"
 
@@ -335,12 +335,12 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
                 expected_type_info = self.bound_attr_node.data.type_info
 
         if not expected_type_info:
-            raise RuleInternalError(owner=self, msg=f"Can't extract type_info from bound_attr_node: {self.bound_attr_node} ")
+            raise EntityInternalError(owner=self, msg=f"Can't extract type_info from bound_attr_node: {self.bound_attr_node} ")
 
         err_msg = expected_type_info.check_compatible(self.type_info)
         if err_msg:
             expected_type_info.check_compatible(self.type_info)
-            raise RuleSetupTypeError(owner=self, msg=f"Given data type '{self.type_info}' is not compatible underneath model type '{expected_type_info}: {err_msg}'")
+            raise EntitySetupTypeError(owner=self, msg=f"Given data type '{self.type_info}' is not compatible underneath model type '{expected_type_info}: {err_msg}'")
 
 
     # ------------------------------------------------------------
@@ -357,7 +357,7 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
         component = apply_session.current_frame.component
 
         if component is not self:
-            raise RuleInternalError(owner=self, msg=f"Current frame component should match current objects (self), got:\n  {component}\n  !=\n  {self}") 
+            raise EntityInternalError(owner=self, msg=f"Current frame component should match current objects (self), got:\n  {component}\n  !=\n  {self}") 
 
         if value is UNDEFINED:
             value = apply_session.get_current_value(component, strict=strict)
@@ -418,7 +418,7 @@ class BooleanField(FieldBase):
     #     self.init_clean()
 
     #     if self.default is not None and not isinstance(self.default, (bool, DotExpression)):
-    #         raise RuleSetupValueError(owner=self, msg=f"'default'={self.default} needs to be bool value  (True/False).")
+    #         raise EntitySetupValueError(owner=self, msg=f"'default'={self.default} needs to be bool value  (True/False).")
 
 # ------------------------------------------------------------
 # ChoiceField
@@ -457,18 +457,18 @@ class ChoiceField(FieldBase):
         self.init_clean()
         if self.choices is None:
             # {self.name}: {self.__class__.__name__}: 
-            raise RuleSetupValueError(owner=self, msg="argument 'choices' is required.")
+            raise EntitySetupValueError(owner=self, msg="argument 'choices' is required.")
         if is_enum(self.choices):
-            raise RuleSetupValueError(owner=self, msg="argument 'choices' is Enum, use EnumChoices instead.")
+            raise EntitySetupValueError(owner=self, msg="argument 'choices' is Enum, use EnumChoices instead.")
 
         if isinstance(self.choices, (IFunctionDexpNode, CustomFunctionFactory, DotExpression)):
             if not (self.choice_value and self.choice_title):
-                raise RuleSetupValueError(owner=self, msg="expected 'choice_title' and 'choice_value' passed.")
+                raise EntitySetupValueError(owner=self, msg="expected 'choice_title' and 'choice_value' passed.")
         elif is_function(self.choices):
-            raise RuleSetupValueError(owner=self, msg="Passing functino to 'choices={self.choices}' is not allowed. Wrap it with 'Function()'.")
+            raise EntitySetupValueError(owner=self, msg="Passing functino to 'choices={self.choices}' is not allowed. Wrap it with 'Function()'.")
         else:
             if (self.choice_value or self.choice_title):
-                raise RuleSetupValueError(owner=self, msg="'choice_title' and 'choice_value' are not expected.")
+                raise EntitySetupValueError(owner=self, msg="'choice_title' and 'choice_value' are not expected.")
 
     # ------------------------------------------------------------
 
@@ -484,7 +484,7 @@ class ChoiceField(FieldBase):
 
         # -- Factory cases
         if is_function(choices):
-            raise RuleInternalError(owner=self, msg=f"Direct functions are not allowed, wrap with Function() instead. Got: {choices}")
+            raise EntityInternalError(owner=self, msg=f"Direct functions are not allowed, wrap with Function() instead. Got: {choices}")
         elif isinstance(choices, DotExpression):
             # TODO: restrict to dexp only - no operation
             if choices._status!=DExpStatusEnum.BUILT:
@@ -515,10 +515,10 @@ class ChoiceField(FieldBase):
             elif isinstance(dexp_node, AttrDexpNode):
                 attr_node: AttrDexpNode = dexp_node  # better name
                 if is_enum(attr_node.data.value):
-                    raise RuleSetupValueError(owner=self, msg=f"Using enum {attr_node.data.value}. Use EnumField instead.")
+                    raise EntitySetupValueError(owner=self, msg=f"Using enum {attr_node.data.value}. Use EnumField instead.")
 
                 if not hasattr(attr_node.data, "type_"):
-                    raise RuleSetupValueError(owner=self, msg=f"Wrong type for choices: {attr_node.data} / {attr_node.data.value}. You can use Function().")
+                    raise EntitySetupValueError(owner=self, msg=f"Wrong type for choices: {attr_node.data} / {attr_node.data.value}. You can use Function().")
                 choices = attr_node.data.type_
                 is_list = attr_node.data.is_list
 
@@ -533,7 +533,7 @@ class ChoiceField(FieldBase):
                     self.python_type = choices[0]
                     # TODO: deny default value - not available in this moment?
             else:
-                raise RuleInternalError(f"Unexpected: {self} -> type({type(self)})")
+                raise EntityInternalError(f"Unexpected: {self} -> type({type(self)})")
 
 
         # -- Final data structures 
@@ -550,7 +550,7 @@ class ChoiceField(FieldBase):
                 # fun_return_type_info = TypeInfo.extract_function_return_type_info(function=choices) # parent=self, 
                 # model_class, is_list = fun_return_type_info.type_, fun_return_type_info.is_list
                 # if not is_list:
-                #     raise RuleSetupValueError(owner=self, msg=f"Argument 'choices'={choices} is a function that does not return List[type]. Got: {fun_return_type}")
+                #     raise EntitySetupValueError(owner=self, msg=f"Argument 'choices'={choices} is a function that does not return List[type]. Got: {fun_return_type}")
             else:
                 assert not is_list
                 model_class = choices
@@ -567,19 +567,19 @@ class ChoiceField(FieldBase):
                 self.choice_title_attr_node = self._create_attr_node(setup_session, "choice_title", dexp=self.choice_title)
 
             if self.choice_title_attr_node.type_info.type_!=str:
-                raise RuleSetupValueError(owner=self, msg=f"Attribute choice_title needs to be bound to string attribute, got: {self.choice_title_attr_mode.type_info.type_}")
+                raise EntitySetupValueError(owner=self, msg=f"Attribute choice_title needs to be bound to string attribute, got: {self.choice_title_attr_mode.type_info.type_}")
             self.python_type = self.choice_value_attr_node.type_info.type_
 
 
         elif isinstance(choices, (list, tuple)):
             if len(choices)==0:
-                raise RuleSetupValueError(owner=self, msg="Attribute 'choices' is an empty list, Provide list of str/int/ChoiceOption.")
+                raise EntitySetupValueError(owner=self, msg="Attribute 'choices' is an empty list, Provide list of str/int/ChoiceOption.")
             if self.choice_value or self.choice_title:
-                raise RuleSetupValueError(owner=self, msg="When 'choices' is a list, choice_value and choice_title are not permitted.")
+                raise EntitySetupValueError(owner=self, msg="When 'choices' is a list, choice_value and choice_title are not permitted.")
             # now supports combining - but should have the same type
             for choice in choices:
                 if not isinstance(choice, (str, int, ChoiceOption)):
-                    raise RuleSetupValueError(owner=self, msg=f"Attribute choices has invalid choice, not one of str/int/ChoiceOption: {choice} / {type(choice)}")
+                    raise EntitySetupValueError(owner=self, msg=f"Attribute choices has invalid choice, not one of str/int/ChoiceOption: {choice} / {type(choice)}")
 
             if isinstance(choices[0], ChoiceOption):
                 self.python_type = type(choices[0].value)
@@ -587,7 +587,7 @@ class ChoiceField(FieldBase):
                 self.python_type = type(choices[0])
 
         else:
-            raise RuleSetupValueError(owner=self, msg=f"Attribute choices has invalid value, not Union[Function(), DotExpression, Union[List[ChoiceOption], List[int], List[str]], got : {choices} / {type(choices)}")
+            raise EntitySetupValueError(owner=self, msg=f"Attribute choices has invalid value, not Union[Function(), DotExpression, Union[List[ChoiceOption], List[int], List[str]], got : {choices} / {type(choices)}")
 
         if not self.python_type:
             warn(f"TODO: ChoiceField 'python_type' not set {self}")
@@ -609,11 +609,11 @@ class ChoiceField(FieldBase):
         Create choice AttrDexpNode() within local ThisInstanceRegistry
         """
         if not (dexp and isinstance(dexp, DotExpression) and dexp.GetNamespace()==ThisNS):
-            raise RuleSetupValueError(owner=self, msg=f"Argument '{aname}' is not set or has wrong type - should be DotExpression in This. namespace. Got: {dexp} / {type(dexp)}")
+            raise EntitySetupValueError(owner=self, msg=f"Argument '{aname}' is not set or has wrong type - should be DotExpression in This. namespace. Got: {dexp} / {type(dexp)}")
 
         attr_node = dexp.Setup(setup_session=setup_session, owner=self)
         if dexp._status != DExpStatusEnum.BUILT:
-            raise RuleInternalError(owner=self, msg=f"Setup failed for Dexp: {dexp} -> {dexp._status}")
+            raise EntityInternalError(owner=self, msg=f"Setup failed for Dexp: {dexp} -> {dexp._status}")
 
         return attr_node
 
@@ -648,32 +648,32 @@ class EnumField(FieldBase):
                 self.enum = enum_attr_node.data
                 # EnumMembers
                 if not self.enum:
-                    raise RuleSetupValueError(owner=self, msg="Underlying data type of attr_node expression is not enum. You should use: functions=[... Fn.EnumMembers(enum=<EnumType>)]")
+                    raise EntitySetupValueError(owner=self, msg="Underlying data type of attr_node expression is not enum. You should use: functions=[... Fn.EnumMembers(enum=<EnumType>)]")
                 elif not is_enum(self.enum):
-                    raise RuleSetupValueError(owner=self, msg=f"Data type of attr_node expression {self.enum} should Enum, got: {type(self.enum)}. You should use: functions=[... Fn.EnumMembers(enum=<EnumType>)]")
+                    raise EntitySetupValueError(owner=self, msg=f"Data type of attr_node expression {self.enum} should Enum, got: {type(self.enum)}. You should use: functions=[... Fn.EnumMembers(enum=<EnumType>)]")
                 # attr_node.data.py_type_hint
 
             # when not found -> it will be raised in other place
             if not isinstance(attr_node.data, TypeInfo):
-                raise RuleSetupValueError(owner=self, msg=f"Data type of attr_node {attr_node} should be TypeInfo, got: {type(attr_node.data)}")
+                raise EntitySetupValueError(owner=self, msg=f"Data type of attr_node {attr_node} should be TypeInfo, got: {type(attr_node.data)}")
 
             py_hint_type = attr_node.data.py_type_hint
 
             if not is_enum(py_hint_type):
                 # enum
                 if not self.enum:
-                    raise RuleSetupValueError(owner=self, msg=f"Data type (hint) of attr_node {attr_node} should be Enum or supply EnumField.enum. Got: {py_hint_type}")
+                    raise EntitySetupValueError(owner=self, msg=f"Data type (hint) of attr_node {attr_node} should be Enum or supply EnumField.enum. Got: {py_hint_type}")
 
                 enum_member_py_type = get_enum_member_py_type(self.enum)
                 # if not issubclass(self.enum, py_hint_type)
                 #     and (type(py_hint_type)==type and py_hint_type!=enum_member_py_type)):  # noqa: E129
                 if not (py_hint_type in inspect.getmro(self.enum)
                         or py_hint_type==enum_member_py_type):
-                    raise RuleSetupValueError(owner=self, msg=f"Data type of attr_node {attr_node} should be the same as supplied Enum. Enum {self.enum}/{enum_member_py_type} is not {py_hint_type}.")
+                    raise EntitySetupValueError(owner=self, msg=f"Data type of attr_node {attr_node} should be the same as supplied Enum. Enum {self.enum}/{enum_member_py_type} is not {py_hint_type}.")
             else:
                 # EnumField(... enum=CompanyTypeEnum)
                 if self.enum and self.enum!=py_hint_type:
-                    raise RuleSetupValueError(owner=self, msg=f"AttrDexpNode {attr_node} has predefined enum {self.enum} what is different from type_hint: {py_hint_type}")
+                    raise EntitySetupValueError(owner=self, msg=f"AttrDexpNode {attr_node} has predefined enum {self.enum} what is different from type_hint: {py_hint_type}")
                 self.enum = py_hint_type
                 enum_member_py_type = get_enum_member_py_type(self.enum)
 
@@ -682,7 +682,7 @@ class EnumField(FieldBase):
             # TODO: check this in Default() implementation
             # if self.default is not None:
             #     if not isinstance(self.default, self.enum):
-            #         raise RuleSetupValueError(owner=self, msg=f"Default should be an Enum {self.enum} value, got: {self.default}")
+            #         raise EntitySetupValueError(owner=self, msg=f"Default should be an Enum {self.enum} value, got: {self.default}")
 
         # TODO: on usage normalize concrete all available choices to Enum[ChoiceOption], and define:
         #       https://stackoverflow.com/questions/33690064/dynamically-create-an-enum-with-custom-values-in-python

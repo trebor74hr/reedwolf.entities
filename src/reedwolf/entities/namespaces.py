@@ -36,8 +36,8 @@ class Namespace(DynamicAttrsBase):
 
     def __getattr__(self, aname):
         if aname in self.RESERVED_ATTR_NAMES: # , "%r -> %s" % (self._node, aname):
-            from .exceptions import RuleSetupNameError
-            raise RuleSetupNameError(owner=self, msg=f"Namespace attribute {aname} is reserved, choose another name.")
+            from .exceptions import EntitySetupNameError
+            raise EntitySetupNameError(owner=self, msg=f"Namespace attribute {aname} is reserved, choose another name.")
 
         from .expressions import DotExpression
         return DotExpression(node=aname, namespace=self)

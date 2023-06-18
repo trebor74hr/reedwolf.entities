@@ -17,9 +17,9 @@ from typing import List, Optional, Union
 from dataclasses import dataclass, field
 
 from .exceptions import (
-        RuleSetupError,
-        RuleValidationCardinalityError,
-        RuleSetupTypeError,
+        EntitySetupError,
+        EntityValidationCardinalityError,
+        EntitySetupTypeError,
         )
 from .utils import (
         to_int,
@@ -46,9 +46,9 @@ def _validate_setup_common(validation, allow_none:Optional[bool]=None) -> 'AttrD
     model_attr_node = validation.parent.get_bound_model_attr_node()
     if allow_none is not None:
         if allow_none and not model_attr_node.isoptional():
-            raise RuleSetupTypeError(owner=validation, msg="Type hint is not Optional and cardinality allows None. Add Optional or set .allow_none=False/min=1+")
+            raise EntitySetupTypeError(owner=validation, msg="Type hint is not Optional and cardinality allows None. Add Optional or set .allow_none=False/min=1+")
         if not allow_none and model_attr_node.isoptional():
-            raise RuleSetupTypeError(owner=validation, msg="Type hint is Optional and cardinality does not allow None. Remove Optional or set .allow_none=True/min=0")
+            raise EntitySetupTypeError(owner=validation, msg="Type hint is Optional and cardinality does not allow None. Remove Optional or set .allow_none=True/min=0")
     return model_attr_node
 
 
@@ -84,7 +84,7 @@ class ICardinalityValidation(ItemsValidationBase, ABC): # count
     def validate_setup(self):
         """
         if not ok,
-            raises RuleSetupTypeError
+            raises EntitySetupTypeError
         """
 
     # TODO: @abstractmethod
@@ -93,7 +93,7 @@ class ICardinalityValidation(ItemsValidationBase, ABC): # count
         takes nr. of items and validates
         if ok, returns True
         if not ok,
-            if raise_err -> raises RuleValidationCardinalityError
+            if raise_err -> raises EntityValidationCardinalityError
             else -> return false
         """
         raise NotImplementedError("abstract method")
@@ -126,30 +126,30 @@ class Cardinality: # namespace holder
 
         def __post_init__(self):
             if self.min is None and self.max is None:
-                raise RuleSetupError(owner=self, msg="Please provide min and/or max")
+                raise EntitySetupError(owner=self, msg="Please provide min and/or max")
             if self.min is not None and (to_int(self.min) is None or to_int(self.min)<0):
-                raise RuleSetupError(owner=self, msg="Please provide integer min >=0 ")
+                raise EntitySetupError(owner=self, msg="Please provide integer min >=0 ")
             if self.max is not None and (to_int(self.max) is None or to_int(self.max)<0):
-                raise RuleSetupError(owner=self, msg="Please provide integer max >=0 ")
+                raise EntitySetupError(owner=self, msg="Please provide integer max >=0 ")
             if self.min is not None and self.max is not None and self.max<self.min:
-                raise RuleSetupError(owner=self, msg="Please provide min <= max")
+                raise EntitySetupError(owner=self, msg="Please provide min <= max")
             if self.max is not None and self.max==1:
-                raise RuleSetupError(owner=self, msg="Please provide max>1 or use Single.")
+                raise EntitySetupError(owner=self, msg="Please provide max>1 or use Single.")
 
         def validate_setup(self):
             # [] is allowed, and that is not same as None ( allow_none=(self.min==0)) )
             model_attr_node = _validate_setup_common(validation=self, allow_none=False)
             if not model_attr_node.islist():
-                raise RuleSetupTypeError(owner=self, msg="Type hint is not List and should be. Change to Single or add List[] type hint ")
+                raise EntitySetupTypeError(owner=self, msg="Type hint is not List and should be. Change to Single or add List[] type hint ")
 
         def validate(self, items_count:int, raise_err:bool=True):
             if self.min and items_count < self.min:
                 if raise_err:
-                    raise RuleValidationCardinalityError(owner=self, msg=f"Expected at least {self.min} item(s), got {items_count}.")
+                    raise EntityValidationCardinalityError(owner=self, msg=f"Expected at least {self.min} item(s), got {items_count}.")
                 return False
             if self.max and items_count < self.max:
                 if raise_err:
-                    raise RuleValidationCardinalityError(owner=self, msg=f"Expected at most {self.max} items, got {items_count}.")
+                    raise EntityValidationCardinalityError(owner=self, msg=f"Expected at most {self.max} items, got {items_count}.")
                 return False
             return True
 
@@ -170,12 +170,12 @@ class Cardinality: # namespace holder
         def validate_setup(self):
             model_attr_node = _validate_setup_common(validation=self, allow_none=self.allow_none)
             if not model_attr_node.islist():
-                raise RuleSetupTypeError(owner=self, msg="Type hint is not a List and should be. Change to Single or add List[] type hint")
+                raise EntitySetupTypeError(owner=self, msg="Type hint is not a List and should be. Change to Single or add List[] type hint")
 
         def validate(self, items_count:int, raise_err:bool=True):
             if items_count==0 and not self.allow_none:
                 if raise_err:
-                    raise RuleValidationCardinalityError(owner=self, msg="Expected at least one item, got none.")
+                    raise EntityValidationCardinalityError(owner=self, msg="Expected at least one item, got none.")
                 return False
             return True
 
@@ -246,7 +246,7 @@ class SingleValidation(ValidationBase):
     def validate_setup(self):
         model_attr_node = _validate_setup_common(validation=self, allow_none=self.allow_none)
         if model_attr_node.islist():
-            raise RuleSetupTypeError(owner=self, msg="Type hint is List and should be single instance. Change to Range/Multi or remove type hint List[]")
+            raise EntitySetupTypeError(owner=self, msg="Type hint is List and should be single instance. Change to Range/Multi or remove type hint List[]")
 
     def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
         return None
@@ -254,10 +254,10 @@ class SingleValidation(ValidationBase):
         #   raise NotImplementedError()
         #   if items_count==0 and not self.allow_none:
         #       if raise_err:
-        #           raise RuleValidationCardinalityError(owner=self, msg="Expected exactly one item, got none.")
+        #           raise EntityValidationCardinalityError(owner=self, msg="Expected exactly one item, got none.")
         #       return False
         #   if items_count!=1:
         #       if raise_err:
-        #           raise RuleValidationCardinalityError(owner=self, msg="Expected exactly one item, got {items_count}.")
+        #           raise EntityValidationCardinalityError(owner=self, msg="Expected exactly one item, got {items_count}.")
         #       return False
         #   return True

@@ -20,10 +20,10 @@ from .utils import (
         load_from_format,
         )
 from .exceptions import (
-        RuleLoadError,
-        RuleLoadTypeError,
-        RuleLoadNameError,
-        RuleInternalError,
+        EntityLoadError,
+        EntityLoadTypeError,
+        EntityLoadNameError,
+        EntityInternalError,
         )
 from .namespaces import ALL_NS_OBJECTS
 from .meta import (
@@ -63,7 +63,7 @@ class CallTraceMixin:
 
 def ast_node_repr(ast_node: ast.AST, depth: int = 0) -> str:
     if depth > MAX_RECURSIONS:
-        raise RuleInternalError(owner=ast_node, msg=f"Maximum recursion depth exceeded ({depth})")
+        raise EntityInternalError(owner=ast_node, msg=f"Maximum recursion depth exceeded ({depth})")
 
     if isinstance(ast_node, (int, str,)):
         out = ast_node
@@ -102,13 +102,13 @@ class DotExpressionLoader(CallTraceMixin):
             try:
                 module_node = ast.parse(expr_code)
             except Exception as ex:
-                raise RuleLoadTypeError(owner=call_repr, msg=f"Parsing failed: {ex}")
+                raise EntityLoadTypeError(owner=call_repr, msg=f"Parsing failed: {ex}")
 
             if type(module_node)!=ast.Module:
-                raise RuleLoadTypeError(owner=call_repr, msg=f"Expected ast.Module type, got: {type(module_node)}")
+                raise EntityLoadTypeError(owner=call_repr, msg=f"Expected ast.Module type, got: {type(module_node)}")
 
             if len(module_node.body)!=1:
-                raise RuleLoadTypeError(owner=call_repr, msg=f"Start ast.Module node should have only single body (expression) , got: {module_node.body}")
+                raise EntityLoadTypeError(owner=call_repr, msg=f"Start ast.Module node should have only single body (expression) , got: {module_node.body}")
 
             ast_node = module_node.body[0]
 
@@ -121,7 +121,7 @@ class DotExpressionLoader(CallTraceMixin):
 
     def _parse_expression_node(self, ast_node: ast.Expr, depth: int) -> DotExpression:
         if depth > MAX_RECURSIONS:
-            raise RuleInternalError(owner=ast_node, msg=f"Maximum recursion depth exceeded ({depth})")
+            raise EntityInternalError(owner=ast_node, msg=f"Maximum recursion depth exceeded ({depth})")
 
         with self.use_call_trace(f"parse({ast_node_repr(ast_node)})") as call_repr:
 
@@ -178,11 +178,11 @@ class DotExpressionLoader(CallTraceMixin):
                     else:
                         # Namespace.attrib/Func() case
                         if len(ast_node_list) <= 1:
-                            raise RuleLoadTypeError(owner=call_repr, msg=f"Expected at minimal <Namespace>.<attribute/function>, got: {ast_node_repr(ast_node_list)}")
+                            raise EntityLoadTypeError(owner=call_repr, msg=f"Expected at minimal <Namespace>.<attribute/function>, got: {ast_node_repr(ast_node_list)}")
                         ns_name = start_node.id
                         if ns_name not in ALL_NS_OBJECTS:
                             ops_avail = get_available_names_example(ns_name, ALL_NS_OBJECTS.keys())
-                            raise RuleLoadNameError(owner=call_repr, msg=f"Starting node should be namespace, found: {ns_name}, available: {ops_avail}")
+                            raise EntityLoadNameError(owner=call_repr, msg=f"Starting node should be namespace, found: {ns_name}, available: {ops_avail}")
 
                         # iterate all others
                         namespace = ALL_NS_OBJECTS[ns_name]
@@ -198,9 +198,9 @@ class DotExpressionLoader(CallTraceMixin):
                             # indirect recursion
                             dexp_node = self._process_ast_call(dexp_node=dexp_node, node=node, call_repr=call_repr, depth=depth+1)
                         else:
-                            raise RuleLoadTypeError(owner=call_repr, msg=f"Expected expression, attribute or name, got: {type(node)} / {node}")
+                            raise EntityLoadTypeError(owner=call_repr, msg=f"Expected expression, attribute or name, got: {type(node)} / {node}")
                 else:
-                    raise RuleInternalError(owner=self, msg=f"Expected Name/BinOp, got: {type(start_node)} / {start_node}") 
+                    raise EntityInternalError(owner=self, msg=f"Expected Name/BinOp, got: {type(start_node)} / {start_node}") 
 
             return dexp_node
 
@@ -221,14 +221,14 @@ class DotExpressionLoader(CallTraceMixin):
             elif type(start_node) in CONSTANT_AST_TYPE_LIST:
                 node = start_node
             else:
-                raise RuleLoadTypeError(owner=call_repr, msg=f"Expected expression/attribute for start node, got: {type(start_node)} / {ast_node_repr(start_node)}")
+                raise EntityLoadTypeError(owner=call_repr, msg=f"Expected expression/attribute for start node, got: {type(start_node)} / {ast_node_repr(start_node)}")
 
             ast_node_list = []
             nr = 0
             while True:
                 nr += 1
                 if nr > 200:
-                    raise RuleInternalError(owner=call_repr, 
+                    raise EntityInternalError(owner=call_repr, 
                             msg="Too many nodes to process...")  
                 ast_node_list.append(node)
                 if type(node)==ast.Attribute:
@@ -247,7 +247,7 @@ class DotExpressionLoader(CallTraceMixin):
                     # terminate
                     break
                 else:
-                    raise RuleLoadTypeError(owner=call_repr, msg=f"Expected expression, attribute, constant, bioop or name, got: {type(node)} / {ast_node_repr(node)}")
+                    raise EntityLoadTypeError(owner=call_repr, msg=f"Expected expression, attribute, constant, bioop or name, got: {type(node)} / {ast_node_repr(node)}")
 
             ast_node_list = list(reversed(ast_node_list))
             return ast_node_list
@@ -261,7 +261,7 @@ class DotExpressionLoader(CallTraceMixin):
         try:
             dexp_node = getattr(dexp_node, attr_name)
         except Exception as ex:
-            raise RuleLoadNameError(owner=call_repr, msg=f"Failed when creating DotExpression.attribute '{attr_name}' caused error: {ex}")
+            raise EntityLoadNameError(owner=call_repr, msg=f"Failed when creating DotExpression.attribute '{attr_name}' caused error: {ex}")
         return dexp_node
 
     # ------------------------------------------------------------
@@ -297,15 +297,15 @@ class DotExpressionLoader(CallTraceMixin):
         try:
             method_node = getattr(dexp_node_previous, method_name)
         except Exception as ex:
-            raise RuleLoadNameError(owner=call_repr, msg=f"Failed when creating DotExpression.Function '{method_name}' caused error: {ex}")
+            raise EntityLoadNameError(owner=call_repr, msg=f"Failed when creating DotExpression.Function '{method_name}' caused error: {ex}")
 
         if func_attr_node and not method_node.Equals(func_attr_node):
-            raise RuleInternalError(owner=self, msg=f"Failed in creating function DotExpression node, duplication removal failed: {method_node} != {func_attr_node}") 
+            raise EntityInternalError(owner=self, msg=f"Failed in creating function DotExpression node, duplication removal failed: {method_node} != {func_attr_node}") 
 
         try:
             dexp_node = method_node(*args, **kwargs)
         except Exception as ex:
-            raise RuleLoadNameError(owner=call_repr, msg=f"Failed when creating DotExpression.Function '{method_name}' caused error: {ex}")
+            raise EntityLoadNameError(owner=call_repr, msg=f"Failed when creating DotExpression.Function '{method_name}' caused error: {ex}")
 
         return dexp_node
 
@@ -323,13 +323,13 @@ class DotExpressionLoader(CallTraceMixin):
             assert len(node.ops)==1
             node_op = node.ops[0]
         else:
-            raise RuleLoadTypeError(owner=call_repr, msg=f"Expected binop/compare, got: {node}")
+            raise EntityLoadTypeError(owner=call_repr, msg=f"Expected binop/compare, got: {node}")
 
         if type(node_op) not in AST_NODE_TYPE_TO_FUNCTION:
             names_avail = get_available_names_example(
                     str(type(node_op)), 
                     [str(nt) for nt in AST_NODE_TYPE_TO_FUNCTION.keys()]),
-            raise RuleLoadTypeError(owner=call_repr, msg=f"Operation '{ast_node_repr(node_op)}' not supported. Available: {names_avail}")
+            raise EntityLoadTypeError(owner=call_repr, msg=f"Operation '{ast_node_repr(node_op)}' not supported. Available: {names_avail}")
 
         operation = AST_NODE_TYPE_TO_FUNCTION[type(node_op)]
         function = operation.load_function
@@ -347,7 +347,7 @@ class DotExpressionLoader(CallTraceMixin):
             names_avail = get_available_names_example(
                     str(type(node.op)), 
                     [str(nt) for nt in AST_NODE_TYPE_TO_FUNCTION.keys()]),
-            raise RuleLoadTypeError(owner=call_repr, msg=f"Operation '{ast_node_repr(node.op)}' not supported. Available: {names_avail}")
+            raise EntityLoadTypeError(owner=call_repr, msg=f"Operation '{ast_node_repr(node.op)}' not supported. Available: {names_avail}")
 
         operation = AST_NODE_TYPE_TO_FUNCTION[type(node.op)]
         function = operation.load_function
@@ -359,15 +359,15 @@ class DotExpressionLoader(CallTraceMixin):
     def _process_ast_start_node_call(self, ast_node: ast.AST, call_repr: str) -> DotExpression:
         if type(ast_node.func)==ast.Attribute:
             # func_name = ast_node.func.attr
-            raise RuleLoadTypeError(owner=call_repr, msg=f"Function '{ast_node.func}' is a function with link to Attribute. This should have been processed before ...")
+            raise EntityLoadTypeError(owner=call_repr, msg=f"Function '{ast_node.func}' is a function with link to Attribute. This should have been processed before ...")
 
         func_name = ast_node.func.id
         if func_name == "Just":
             if not (len(ast_node.args) == 1 and len(ast_node.keywords)==0):
-                raise RuleLoadTypeError(owner=call_repr, msg=f"Function 'Just' function can receive simple constant argument, got: {ast_node_repr(ast_node.args)} / {ast_node_repr(ast_node.keywords)}")
+                raise EntityLoadTypeError(owner=call_repr, msg=f"Function 'Just' function can receive simple constant argument, got: {ast_node_repr(ast_node.args)} / {ast_node_repr(ast_node.keywords)}")
             dexp_node = self._process_constant(node = ast_node.args[0], call_repr=call_repr)
         else:
-            raise RuleLoadTypeError(owner=call_repr, msg=f"Only 'Just' function can be a starting point, got: {func_name}")
+            raise EntityLoadTypeError(owner=call_repr, msg=f"Only 'Just' function can be a starting point, got: {func_name}")
 
         return dexp_node
 
@@ -382,10 +382,10 @@ class DotExpressionLoader(CallTraceMixin):
         elif type(node) in (ast.Str, ast.Bytes):
             value = node.s
         else:
-            raise RuleLoadTypeError(owner=call_repr, msg=f"Function 'Just' argument must be Constant/Num/Str, got: {ast_node_repr(node)}")
+            raise EntityLoadTypeError(owner=call_repr, msg=f"Function 'Just' argument must be Constant/Num/Str, got: {ast_node_repr(node)}")
 
         if not isinstance(value, STANDARD_TYPE_W_NONE_LIST):
-            raise RuleLoadTypeError(owner=call_repr, msg=f"Function 'Just' argument must be standard type: {STANDARD_TYPE_W_NONE_LIST}, got: {ast_node_repr(node)}")
+            raise EntityLoadTypeError(owner=call_repr, msg=f"Function 'Just' argument must be standard type: {STANDARD_TYPE_W_NONE_LIST}, got: {ast_node_repr(node)}")
 
         return value
 
@@ -409,28 +409,28 @@ class ComponentsLoader(CallTraceMixin):
 
     def _load_component(self, input_dict: dict, depth: int) -> ComponentBase:
         if depth>MAX_RECURSIONS:
-            raise RuleInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
+            raise EntityInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
 
         with self.use_call_trace(f"load({to_repr(input_dict)})") as call_repr:
             if not isinstance(input_dict, dict):
-                raise RuleLoadTypeError(owner=call_repr, msg=f"Expecting dict, got: {to_repr(input_dict)}")
+                raise EntityLoadTypeError(owner=call_repr, msg=f"Expecting dict, got: {to_repr(input_dict)}")
             input_dict = deepcopy(input_dict)
 
             comp_class_name = input_dict.pop("type", None)
             if not comp_class_name:
-                raise RuleLoadTypeError(owner=call_repr, msg=f"Expecting dict key 'type', not found between: {to_repr(input_dict.keys())}")
+                raise EntityLoadTypeError(owner=call_repr, msg=f"Expecting dict key 'type', not found between: {to_repr(input_dict.keys())}")
 
             comp_klass = COMPONENTS_REGISTRY.get(comp_class_name, None)
             if comp_klass is None:
                 klass_names_avail = get_available_names_example(comp_class_name, COMPONENTS_REGISTRY.keys())
-                raise RuleLoadTypeError(owner=call_repr, msg=f"Class name '{comp_class_name}' is unknown. Available: {klass_names_avail}")
+                raise EntityLoadTypeError(owner=call_repr, msg=f"Class name '{comp_class_name}' is unknown. Available: {klass_names_avail}")
 
             comp_class_attrs = input_dict.pop("attrs", None)
             if not comp_class_attrs:
-                raise RuleLoadTypeError(owner=call_repr, msg=f"Expecting dict key 'attrs', not found between: {to_repr(input_dict.keys())}")
+                raise EntityLoadTypeError(owner=call_repr, msg=f"Expecting dict key 'attrs', not found between: {to_repr(input_dict.keys())}")
 
             if input_dict.keys():
-                raise RuleLoadTypeError(owner=call_repr, msg=f"Found unrecognized dict key(s): {to_repr(input_dict.keys())}")
+                raise EntityLoadTypeError(owner=call_repr, msg=f"Found unrecognized dict key(s): {to_repr(input_dict.keys())}")
 
             kwargs = {}
             for attr_name, attr_value in comp_class_attrs.items():
@@ -441,14 +441,14 @@ class ComponentsLoader(CallTraceMixin):
                 component = comp_klass(**kwargs)
             except TypeError as ex:
                 # constructor error 
-                raise RuleLoadError(owner=call_repr, msg=f"Failed to load '{comp_klass}', error: {ex}. kwargs={kwargs}")
+                raise EntityLoadError(owner=call_repr, msg=f"Failed to load '{comp_klass}', error: {ex}. kwargs={kwargs}")
 
         return component
 
 
     def _load_process_attr_value(self, attr_value: Any, depth: int) -> Any:
         if depth>MAX_RECURSIONS:
-            raise RuleInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
+            raise EntityInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
 
         if isinstance(attr_value, list):
             attr_value_new = []

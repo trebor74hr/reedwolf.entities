@@ -23,9 +23,9 @@ from .namespaces import (
         Namespace,
         )
 from .exceptions import (
-        RuleSetupValueError,
-        RuleSetupTypeError,
-        RuleInternalError,
+        EntitySetupValueError,
+        EntitySetupTypeError,
+        EntityInternalError,
         )
 from .meta import (
         FunctionArgumentsType,
@@ -71,11 +71,11 @@ class PrepArg:
 
     def __post_init__(self):
         if self.type_info_or_callable is None:
-            raise RuleInternalError(owner=self, msg="type_info / 'callable() -> type_info' not supplied")
+            raise EntityInternalError(owner=self, msg="type_info / 'callable() -> type_info' not supplied")
 
         # TODO:
         # if self.is_none_type():
-        #     raise RuleInternalError(owner=self, msg="type_info / 'callable() -> type_info' is NoneType")
+        #     raise EntityInternalError(owner=self, msg="type_info / 'callable() -> type_info' is NoneType")
 
     def is_none_type(self):
         return self.type_info.is_none_type()
@@ -115,7 +115,7 @@ class PreparedArguments:
     def __post_init__(self):
         names_unfilled = [prep_arg.name for prep_arg in self.prep_arg_list if not prep_arg]
         if names_unfilled:
-            raise RuleInternalError(f"{self.parent_name}: Following prepared arguments are left unfilled: {', '.join(names_unfilled)}")
+            raise EntityInternalError(f"{self.parent_name}: Following prepared arguments are left unfilled: {', '.join(names_unfilled)}")
 
         self.prep_arg_dict = {
                 prep_arg.name: prep_arg 
@@ -193,7 +193,7 @@ class FunctionArguments:
         args, kwargs = (), {}
         if func_args_raw:
             if not isinstance(func_args_raw, FunctionArgumentsType):
-                raise RuleInternalError(owner=self, msg=f"Bad type {type(func_args_raw)} : {func_args_raw}")
+                raise EntityInternalError(owner=self, msg=f"Bad type {type(func_args_raw)} : {func_args_raw}")
             args, kwargs = func_args_raw.get_args_kwargs()
         return args, kwargs
 
@@ -213,7 +213,7 @@ class FunctionArguments:
             dexp: DotExpression = value_object
 
             if dexp.IsFinished():
-                raise RuleInternalError(owner=self, msg=f"{parent_name}: DotExpression is already setup {dexp}")
+                raise EntityInternalError(owner=self, msg=f"{parent_name}: DotExpression is already setup {dexp}")
 
             if not caller: 
                 # NOTE: Namespace top level like: Fn.Length(This.name) 
@@ -233,10 +233,10 @@ class FunctionArguments:
             elif model_class in STANDARD_TYPE_LIST:
                 local_setup_session = None 
             else:
-                raise RuleSetupValueError(owner=self, msg=f"{parent_name}: Unsupported type: {caller} / {model_class}")
+                raise EntitySetupValueError(owner=self, msg=f"{parent_name}: Unsupported type: {caller} / {model_class}")
 
             if not setup_session:
-                raise RuleInternalError(owner=self, msg=f"{parent_name}: SetupSession is required for DotExpression() function argument case") 
+                raise EntityInternalError(owner=self, msg=f"{parent_name}: SetupSession is required for DotExpression() function argument case") 
 
             with setup_session.use_stack_frame(
                     SetupStackFrame(
@@ -294,7 +294,7 @@ class FunctionArguments:
         given_args_count = len(given_args)
 
         if given_args_count > expected_args_unfilled_count:
-            raise RuleSetupValueError(owner=self, msg=f"{parent_name}: Function takes at most {expected_args_unfilled_count} unfilled argument{plural_suffix(expected_args_unfilled_count)} but {given_args_count} positional {be_conjugate(given_args_count)} given ({args_title})")
+            raise EntitySetupValueError(owner=self, msg=f"{parent_name}: Function takes at most {expected_args_unfilled_count} unfilled argument{plural_suffix(expected_args_unfilled_count)} but {given_args_count} positional {be_conjugate(given_args_count)} given ({args_title})")
 
         # --- Fill unfilled positional arguments in correct order - needs 2 jumps
         for unfill_index, value_object in enumerate(given_args):
@@ -313,12 +313,12 @@ class FunctionArguments:
         expected_arg_names = list(expected_args.keys())
         unknown_arg_names = [arg_name for arg_name in given_kwargs.keys() if arg_name not in expected_arg_names]
         if unknown_arg_names:
-            raise RuleSetupTypeError(owner=self, msg=f"{parent_name}: Function got an unexpected keyword argument{plural_suffix(len(unknown_arg_names))}: {format_arg_name_list(unknown_arg_names)} ({args_title})")
+            raise EntitySetupTypeError(owner=self, msg=f"{parent_name}: Function got an unexpected keyword argument{plural_suffix(len(unknown_arg_names))}: {format_arg_name_list(unknown_arg_names)} ({args_title})")
 
         # any multiple kwargs / named arguments? filled by positional and kwargs
         multiple_arg_names = [arg_name for arg_name in given_kwargs.keys() if expected_args[arg_name]]
         if multiple_arg_names:
-            raise RuleSetupTypeError(owner=self, msg=f"{parent_name}: Function got multiple values for argument{plural_suffix(len(multiple_arg_names))}: {format_arg_name_list(multiple_arg_names)} ({args_title})")
+            raise EntitySetupTypeError(owner=self, msg=f"{parent_name}: Function got multiple values for argument{plural_suffix(len(multiple_arg_names))}: {format_arg_name_list(multiple_arg_names)} ({args_title})")
 
         # --- Finally fill named arguments
         for arg_name, value_object in given_kwargs.items():
@@ -345,14 +345,14 @@ class FunctionArguments:
         # value from chain / stream - previous dot-node. e.g. 
         #   M.name.Lower() # value is passed from .name
         if not isinstance(caller, IDotExpressionNode):
-            raise RuleInternalError(f"{parent_name}: Caller is not IDotExpressionNode, got: {type(caller)} / {caller}")
+            raise EntityInternalError(f"{parent_name}: Caller is not IDotExpressionNode, got: {type(caller)} / {caller}")
 
         value_arg_implicit = UNDEFINED
 
         if not self.func_arg_list:
             # no arguments could be accepted at all, nor fixed nor value_arg nor func_args
             # will raise error later - wrong nr. of arguments
-            raise RuleSetupTypeError(owner=self, msg=f"{parent_name}: Filling dot-chain argument value from '{caller.full_name}' failed, function accepts no arguments.")
+            raise EntitySetupTypeError(owner=self, msg=f"{parent_name}: Filling dot-chain argument value from '{caller.full_name}' failed, function accepts no arguments.")
         elif value_arg_name:
             # value to kwarg 'value_arg_name' value argument
             # value_object = expected_args.get(value_arg_name, UNDEFINED)
@@ -361,7 +361,7 @@ class FunctionArguments:
                 value_or_dexp = prep_arg.value_or_dexp
                 if not (isinstance(value_or_dexp, DotExpression) 
                         and value_or_dexp._namespace == ThisNS):
-                    raise RuleSetupTypeError(owner=self, msg=f"{parent_name}: Function can not fill argument '{value_arg_name}' from '{caller.full_name}', argument is already filled with value '{value_or_dexp}'. Change arguments' setup or use 'This.' value expression.")
+                    raise EntitySetupTypeError(owner=self, msg=f"{parent_name}: Function can not fill argument '{value_arg_name}' from '{caller.full_name}', argument is already filled with value '{value_or_dexp}'. Change arguments' setup or use 'This.' value expression.")
                 value_arg_implicit = False
         else:
             # value to first unfilled positional argument
@@ -373,7 +373,7 @@ class FunctionArguments:
                                                and isinstance(prep_arg.value_or_dexp, DotExpression) 
                                                and prep_arg.value_or_dexp._namespace == ThisNS]
                 if not prep_args_within_thisns:
-                    raise RuleSetupTypeError(owner=self, msg=f"{parent_name}: Function can not take additional argument from '{caller.full_name}'. Remove at least one predefined argument or use value expression argument within 'This.' namespace.")
+                    raise EntitySetupTypeError(owner=self, msg=f"{parent_name}: Function can not take additional argument from '{caller.full_name}'. Remove at least one predefined argument or use value expression argument within 'This.' namespace.")
                 value_arg_implicit = False
 
 
@@ -386,7 +386,7 @@ class FunctionArguments:
             if ReservedArgumentNames.INJECT_COMPONENT_TREE in expected_args:
                 if not (isinstance(caller, AttrDexpNode)
                         and caller.namespace == FieldsNS):
-                    raise RuleInternalError(owner=self, msg=f"Expected F.<fieldname>, got: {caller}") 
+                    raise EntityInternalError(owner=self, msg=f"Expected F.<fieldname>, got: {caller}") 
                 component_tree_type_info = TypeInfo.get_or_create_by_type(py_type_hint=ComponentTreeWValuesType, caller=caller)
                 # NOTE: caller is here lost, hopefully won't be needed
                 value_kwargs[ReservedArgumentNames.INJECT_COMPONENT_TREE] = component_tree_type_info
@@ -434,7 +434,7 @@ class FunctionArguments:
         expected_args: Dict[str, Optional[PrepArg]] = OrderedDict([(arg.name, None) for arg in self.func_arg_list])
 
         if not setup_session:
-            raise RuleInternalError(owner=self, msg=f"{parent_name}: setup_session is empty") 
+            raise EntityInternalError(owner=self, msg=f"{parent_name}: setup_session is empty") 
 
         # ==== 1/3 : FIX_ARGS - by registration e.g. Function(my_py_function, args=(1,), kwargs={"b":2})
 
@@ -482,7 +482,7 @@ class FunctionArguments:
         unfilled = [arg_name for arg_name, type_info in expected_args.items() 
                     if not type_info and self.func_arg_dict[arg_name].default is UNDEFINED]
         if unfilled:
-            raise RuleSetupTypeError(owner=self, msg=f"{parent_name}: Function missing {len(unfilled)} required argument{plural_suffix(len(unfilled))}: {format_arg_name_list(unfilled)}")
+            raise EntitySetupTypeError(owner=self, msg=f"{parent_name}: Function missing {len(unfilled)} required argument{plural_suffix(len(unfilled))}: {format_arg_name_list(unfilled)}")
 
         # ---- Convert to common instance - will be used for later invocation
         prepared_args = PreparedArguments(
@@ -525,7 +525,7 @@ def check_prepared_arguments(
     for prep_arg in prepared_args:
         exp_arg : FuncArg = func_arg_dict[prep_arg.name]
         if prep_arg.type_info is None:
-            raise RuleInternalError(f"{prepared_args.parent_name} -> Argument '{prep_arg}' type_info is not set")
+            raise EntityInternalError(f"{prepared_args.parent_name} -> Argument '{prep_arg}' type_info is not set")
 
         err_msg = exp_arg.type_info.check_compatible(prep_arg.type_info)
         if err_msg:
@@ -536,7 +536,7 @@ def check_prepared_arguments(
 
     if err_messages:
         msg = ', '.join(err_messages)
-        raise RuleSetupTypeError(f"{prepared_args.parent_name}: {len(err_messages)} data type issue(s) => {msg}")
+        raise EntitySetupTypeError(f"{prepared_args.parent_name}: {len(err_messages)} data type issue(s) => {msg}")
 
 
 
@@ -579,12 +579,12 @@ def create_function_arguments(
         diff_left = args_default - args_types
         diff_right = args_types - args_default
         if "self" in diff_left:
-            raise RuleInternalError(owner=py_function, 
+            raise EntityInternalError(owner=py_function, 
                     msg=f"Function's default arguments '{args_default}' not same as all arguments:  {args_types}. Found 'self' in diference. Did you forget to instatiate object, to mark method as class/static or to provide instance to 'self' directly?")
 
         diff_left = ", ".join(list(diff_left))
         diff_right = ", ".join(list(diff_right))
-        raise RuleInternalError(owner=py_function, 
+        raise EntityInternalError(owner=py_function, 
                 msg=f"Function's default arguments '{args_default}' not same as all arguments:  {args_types} (diff: {diff_left} / {diff_right})). Args extraction issue...")
 
     func_args_specs = FunctionArguments()

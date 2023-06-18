@@ -13,8 +13,8 @@ from typing import (
         )
 
 from .exceptions import (
-        RuleApplyValueError,
-        RuleSetupValueError,
+        EntityApplyValueError,
+        EntitySetupValueError,
         )
 from .functions import (
         create_builtin_function_factory, 
@@ -50,7 +50,7 @@ def get_builtin_function_factories_dict() -> Dict[str, BuiltinFunctionFactory]:
 # ------------------------------------------------------------
 def enum_members(enum: Enum) -> List[Tuple[str, Any]]:
     if not is_enum(enum):
-        raise RuleApplyValueError(msg=f"Expecting enum type, got: {enum} / {type(enum)}")
+        raise EntityApplyValueError(msg=f"Expecting enum type, got: {enum} / {type(enum)}")
     return get_enum_members(enum)
 
 
@@ -63,7 +63,7 @@ def EnumMembers(
     it is not BuiltinFunctionFactory since it is added to functions= argument.
     """
     if not is_enum(enum):
-        raise RuleSetupValueError(msg=f"Expecting enum type, got: {enum} / {type(enum)}")
+        raise EntitySetupValueError(msg=f"Expecting enum type, got: {enum} / {type(enum)}")
     if not name:
         name = enum.__name__
     kwargs: Dict[str, Enum] = {"enum" : enum}
@@ -273,19 +273,19 @@ Last = create_builtin_function_factory(
 
 #    For validation error cases should:
 #       * return string error message, or
-#       * raise RuleSetupError based error
+#       * raise EntitySetupError based error
 
 # def ensure_is_number(arg_name: str, value_arg_type_info : TypeInfo) -> Optional[str]:
 #     if not value_arg_type_info.type_ in (int, float, Decimal):
-#         raise RuleSetupTypeError(f"Expected origin type to be int/float/Decimal type, got: {value_arg_type_info.py_type_hint}")
+#         raise EntitySetupTypeError(f"Expected origin type to be int/float/Decimal type, got: {value_arg_type_info.py_type_hint}")
 # 
 # def ensure_is_list(arg_name: str, value_arg_type_info : TypeInfo) -> Optional[str]:
 #     if not value_arg_type_info.is_list:
-#         raise RuleSetupTypeError(f"Expected list/tuple/sequence type, got: {value_arg_type_info.py_type_hint}")
+#         raise EntitySetupTypeError(f"Expected list/tuple/sequence type, got: {value_arg_type_info.py_type_hint}")
 # 
 # def ensure_has_len(arg_name: str, value_arg_type_info : TypeInfo) -> Optional[str]:
 #     if not hasattr(value_arg_type_info.type_, "__len__"):
-#         raise RuleSetupTypeError(f"Expected type with __len__ method implemented, got: {value_arg_type_info.py_type_hint}")
+#         raise EntitySetupTypeError(f"Expected type with __len__ method implemented, got: {value_arg_type_info.py_type_hint}")
 
 # TODO: ove implementiraj - da rade na listi i da rade na jednom item-u
 #       Oldest - same as First, but for date/datetime fields ?
