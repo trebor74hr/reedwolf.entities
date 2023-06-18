@@ -293,7 +293,7 @@ class DotExpressionLoader(CallTraceMixin):
             dexp_node_previous = dexp_node.Path[-2]
         else:
             func_attr_node = dexp_node.Path[-1]
-            dexp_node_previous = dexp_node.GetNamespace()
+            dexp_node_previous = dexp_node._namespace
         try:
             method_node = getattr(dexp_node_previous, method_name)
         except Exception as ex:

@@ -212,8 +212,8 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             if not (self.is_subentity() or not is_main_model):
                 raise EntitySetupTypeError(owner=self, msg=f"{bound_model.name}: DotExpression should be used only in SubEntity containers and nested BoundModels")
 
-            if model.GetNamespace()!=ModelsNS:
-                raise EntitySetupTypeError(owner=self, msg=f"{bound_model.name}: DotExpression should be in ModelsNS namespace, got: {model.GetNamespace()}")
+            if model._namespace!=ModelsNS:
+                raise EntitySetupTypeError(owner=self, msg=f"{bound_model.name}: DotExpression should be in ModelsNS namespace, got: {model._namespace}")
 
             if is_subentity_main_model:
                 # TODO: DRY this - the only difference is setup_session - extract common logic outside / 

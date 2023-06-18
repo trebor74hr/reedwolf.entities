@@ -187,7 +187,8 @@ class DotExpression(DynamicAttrsBase):
     # NOTE: each item in this list should be implemented as attribute or method in this class
     # "GetAttrDexpNode",
     # "Read", 
-    RESERVED_ATTR_NAMES = {"Clone", "Path", "Setup", "GetNamespace", "Equals", 
+    # "GetNamespace", 
+    RESERVED_ATTR_NAMES = {"Clone", "Path", "Setup", "Equals", 
                            "_evaluator",  # allwyays filled, contains all nodes
                            "_dexp_node",  # is last node (redundant), but None if case of error
                            "_node", "_namespace", "_name", "_func_args", "_is_top", "_status",
@@ -254,8 +255,8 @@ class DotExpression(DynamicAttrsBase):
         # NOTE: currently not used
         return self.__class__(node=self._node, namespace=self._namespace, Path=self.Path)
 
-    def GetNamespace(self) -> Namespace:
-        return self._namespace
+    # def GetNamespace(self) -> Namespace:
+    #     return self._namespace
 
     def Equals(self, other: Any) -> bool:
         return (isinstance(other, self.__class__)

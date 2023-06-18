@@ -32,6 +32,7 @@ from datetime import date, time, datetime, timedelta
 from enum import Enum, IntEnum
 
 from .utils import (
+        to_repr,
         UNDEFINED,
         NA_DEFAULTS_MODE,
         UndefinedType,
@@ -200,7 +201,10 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
     def init_clean(self):
         # TODO: check that value is M ns and is a simple M. value
         if not isinstance(self.bind, DotExpression):
-            raise EntitySetupValueError(owner=self, msg="'bind' needs to be DotExpression (e.g. M.status).")
+            raise EntitySetupValueError(owner=self, msg=f"Argument 'bind' needs to be DotExpression (e.g. M.status), got: {to_repr(self.bind)}")
+
+        if self.bind._namespace != ModelsNS:
+            raise EntitySetupValueError(owner=self, msg=f"Argument 'bind' needs to be 'Models.' / 'M.' DotExpression, got: {to_repr(self.bind)}")
 
         if not self.name:
             # ModelsNs.person.surname -> surname
@@ -232,7 +236,7 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
                     break
                 parent = parent.parent
 
-            if self.bind.GetNamespace()!=namespace_only:
+            if self.bind._namespace!=namespace_only:
                 raise EntitySetupValueError(owner=self, msg=f"{self.bind}: 'bind' needs to be in {namespace_only} DotExpression (e.g. M.status).")
 
             if len(self.bind.Path) not in range(1, MAX_BIND_DEPTH+1):
@@ -612,7 +616,7 @@ class ChoiceField(FieldBase):
         """
         Create choice AttrDexpNode() within local ThisInstanceRegistry
         """
-        if not (dexp and isinstance(dexp, DotExpression) and dexp.GetNamespace()==ThisNS):
+        if not (dexp and isinstance(dexp, DotExpression) and dexp._namespace==ThisNS):
             raise EntitySetupValueError(owner=self, msg=f"Argument '{aname}' is not set or has wrong type - should be DotExpression in This. namespace. Got: {dexp} / {type(dexp)}")
 
         attr_node = dexp.Setup(setup_session=setup_session, owner=self)

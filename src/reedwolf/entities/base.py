@@ -717,7 +717,7 @@ class ComponentBase(SetParentMixin, ABC):
         if isinstance(subcomponent, (DotExpression, )): # Operation
             # copy_to_setup_session=copy_to_setup_session,
             dexp: DotExpression = subcomponent
-            namespace = dexp.GetNamespace()
+            namespace = dexp._namespace
             if namespace._manual_setup:
                 # needs manual Setup() later call with extra context - now is too
                 # early (e.g. ThisNS)
