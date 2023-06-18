@@ -924,7 +924,7 @@ class ApplyResult(IApplySession):
             instance_new_struct_type = StructEnum.MODELS_LIKE
         elif is_model_class(instance_to_test.__class__):
             # TODO: it could be StructEnum.MODELS_LIKE too, but how to detect this? input param or?
-            instance_new_struct_type = StructEnum.RULES_LIKE
+            instance_new_struct_type = StructEnum.ENTITY_LIKE
         else:
             raise EntityApplyError(owner=self, 
                     msg=f"Object '{instance_to_test}' is not instance of bound model '{model}' and not model class: {type(instance_to_test)}.")
@@ -977,7 +977,7 @@ class ApplyResult(IApplySession):
             else:
                 current_instance_new = None
 
-        elif self.instance_new_struct_type == StructEnum.RULES_LIKE:
+        elif self.instance_new_struct_type == StructEnum.ENTITY_LIKE:
             exec_result = self.get_attr_value_by_comp_name(
                                 component=component, 
                                 instance=self.current_frame.instance_new)
@@ -1152,7 +1152,7 @@ class ApplyResult(IApplySession):
                             component.get_dexp_result_from_instance(apply_session=self)
                     new_value = instance_new_bind_dexp_result.value
 
-            elif self.instance_new_struct_type == StructEnum.RULES_LIKE:
+            elif self.instance_new_struct_type == StructEnum.ENTITY_LIKE:
                 instance_new_bind_dexp_result = \
                         self.get_attr_value_by_comp_name(
                                 component=component, 

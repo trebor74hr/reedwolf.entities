@@ -1313,7 +1313,7 @@ class ApplyStackFrame:
     # check UseApplyStackFrame. copy_from_previous_frame
     # ---------------------------------------------------------------------------------
 
-    # UPDATE by this instance - can be RULES_LIKE or MODELS_LIKE (same dataclass) struct
+    # UPDATE by this instance - can be ENTITY_LIKE or MODELS_LIKE (same dataclass) struct
     # required but is None when not update
     instance_new: Union[ModelType, NoneType, UndefinedType] = field(repr=False, default=UNDEFINED)
 
@@ -1429,7 +1429,7 @@ class StructEnum(str, Enum):
     # models like - follows flat, storage/db like structure
     MODELS_LIKE = "MODELS"
     # entity like - follows hierachical structure like defined in entity
-    RULES_LIKE  = "RULES"
+    ENTITY_LIKE  = "RULES"
 
 # TODO: consider using classes instead, e.g.
 #       class InputStructBase:
