@@ -56,6 +56,7 @@ from .valid_field import (
         MaxLength,
         ExactLength,
         MinLength,
+        HourFieldValidation,
         )
 from .valid_items import (
         ItemsValidation,
@@ -154,8 +155,7 @@ __all__ = [
 
     # validations
     "FieldValidation",
-
-    # validations
+    "HourFieldValidation",
     "Required",
     "MinLength",
     "MaxLength",

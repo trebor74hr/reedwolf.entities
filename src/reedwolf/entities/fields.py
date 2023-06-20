@@ -18,6 +18,7 @@ from abc import ABC
 from typing import (
         Union, 
         List, 
+        Sequence,
         Optional, 
         Any, 
         ClassVar, 
@@ -448,11 +449,15 @@ class ChoiceField(FieldBase):
     # Note that with Python 3.10, it is now possible to do it natively with dataclasses.
 
     # List[Dict[str, TransMessageType]
-    choices: Optional[Union[IFunctionDexpNode, 
-                            CustomFunctionFactory, 
-                            DotExpression, 
-                            Union[List[ChoiceOption], 
-                            List[Union[int,str]]]]] = None
+    choices: Optional[
+                Union[
+                    IFunctionDexpNode, 
+                    CustomFunctionFactory, 
+                    DotExpression, 
+                    Sequence[ChoiceOption], 
+                    Sequence[str],
+                    Sequence[int],
+                    ]] = None
     choice_value: Optional[DotExpression] = None
     choice_title: Optional[DotExpression] = None
     # choice_available: Optional[DotExpression]=True # returns bool

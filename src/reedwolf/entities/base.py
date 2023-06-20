@@ -188,20 +188,20 @@ class ReservedArgumentNames(str, Enum):
 # ------------------------------------------------------------
 
 
-class BaseOnlyArgs:  # noqa: SIM119
-
-    def __init__(self, *args):
-        self.args = args
-        self.name = self.__class__.__name__
-
-    def __str__(self):
-        return "\n".join(self.to_strlist())
-
-    def __repr__(self):
-        return f"{self.__class__.__name__}({repr_obj(self.args)})"
-
-    def to_strlist(self):
-        return list_to_strlist(self.args, before=f"{self.__class__.__name__}(", after=")")
+# class BaseOnlyArgs:  # noqa: SIM119
+# 
+#     def __init__(self, *args):
+#         self.args = args
+#         self.name = self.__class__.__name__
+# 
+#     def __str__(self):
+#         return "\n".join(self.to_strlist())
+# 
+#     def __repr__(self):
+#         return f"{self.__class__.__name__}({repr_obj(self.args)})"
+# 
+#     def to_strlist(self):
+#         return list_to_strlist(self.args, before=f"{self.__class__.__name__}(", after=")")
 
 
 # ------------------------------------------------------------
@@ -215,8 +215,9 @@ def _(message: str) -> TransMessageType:
 # TODO: accept "{dot_node}" - can be a security issue, attr_nodes() should not make any logic
 #       use .format() ... (not f"", btw. should not be possible anyway)
 
-class msg(BaseOnlyArgs):
-    pass
+def msg(message: Union[str, TransMessageType]) -> Union[str, TransMessageType]:
+    # TODO: should fill arguments {} and {name} 
+    return message
 
 
 # ------------------------------------------------------------

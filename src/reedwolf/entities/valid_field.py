@@ -286,3 +286,15 @@ class RangeLength(FieldValidationBase):
                                         f"({message_truncate(value)})")
         return None
 
+# ------------------------------------------------------------
+# Some simple / common validations
+# ------------------------------------------------------------
+
+@dataclass
+class HourFieldValidation(FieldValidation):
+    def __init__(self, **kwargs):
+        super().__init__(
+            ensure=(Fn.is_int(This.Value) & (This.Value >= 0) & (This.Value <= 23)),
+            error=_("Hour value needs to be a number between 0 and 23."),
+            **kwargs,
+        )
