@@ -265,28 +265,29 @@ class AttrDexpNode(IDotExpressionNode):
             # ------------------------------------------------------------
             value_new_as_list = []
 
-            for idx, val_prev in enumerate(value_prev_as_list, 0):
-                if isinstance(val_prev, IAttributeAccessorBase):
+            for idx, value_prev in enumerate(value_prev_as_list, 0):
+                if isinstance(value_prev, IAttributeAccessorBase):
                     # NOTE: if this is last in chain - fetch final value
-                    value_new = val_prev.get_attribute(
+                    value_new = value_prev.get_attribute(
                                     apply_session=apply_session, 
                                     attr_name=attr_name, 
                                     is_last=is_last)
                 else:
                     if idx==0 and attr_name==ReservedAttributeNames.INSTANCE_ATTR_NAME:
-                        value_new = val_prev
+                        value_new = value_prev
                     else:
-                        if val_prev is None:
-                            value_new = UNDEFINED
-                        elif val_prev is NA_DEFAULTS_MODE:
+                        if (value_prev is UNDEFINED 
+                          or value_prev is None
+                          or value_prev is NA_DEFAULTS_MODE
+                          ):
                             # 'Maybe monad' like
-                            value_new = val_prev
+                            value_new = value_prev
                         else:
-                            if not hasattr(val_prev, attr_name):
+                            if not hasattr(value_prev, attr_name):
                                 # TODO: list which fields are available
                                 # if all types match - could be internal problem?
-                                raise EntityApplyNameError(owner=self, msg=f"Attribute '{attr_name}' not found in '{to_repr(val_prev)}' : '{type(val_prev)}'")
-                            value_new = getattr(val_prev, attr_name)
+                                raise EntityApplyNameError(owner=self, msg=f"Attribute '{attr_name}' not found in '{to_repr(value_prev)}' : '{type(value_prev)}'")
+                            value_new = getattr(value_prev, attr_name)
 
                 value_new_as_list.append(value_new)
 
