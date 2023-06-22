@@ -22,7 +22,6 @@ from ..utils import (
         )
 from ..meta import (
         TypeInfo,
-        is_enum,
         STANDARD_TYPE_LIST,
         )
 from ..base import (
@@ -35,6 +34,7 @@ from ..fields import (
         FieldGroup, 
         ChoiceField,
         BooleanField,
+        EnumField,
         )
 from ..containers import (
         SubEntityBase, 
@@ -68,20 +68,25 @@ class DumpPydanticClassLinesStore:
     class_dumps: Dict[str, DumpPydanticClassLines] = field(init=False, default_factory=OrderedDict)
     types_by_lib : Dict[str, Set[str]] = field(init=False, default_factory=dict)
 
-    def use_type(self, klass: type) -> str:
+    def use_type(self, klass: type) -> Union[str, str]:
+        " 2nd return param is lib_name when is not part of standard library "
         lib_name, _, type_name = str(klass).rpartition(".")
+
+        lib_name_out = None
 
         if lib_name != "typing":
             type_name = klass.__name__
             module = inspect.getmodule(klass)
             lib_name = module.__name__
+            if lib_name != "builtins":
+                lib_name_out = lib_name
 
         if lib_name != "builtins":
             if lib_name not in self.types_by_lib:
                 self.types_by_lib[lib_name] = set()
             self.types_by_lib[lib_name].add(type_name)
 
-        return type_name
+        return type_name, lib_name_out
 
 
     @staticmethod
@@ -116,7 +121,6 @@ class DumpPydanticClassLinesStore:
         assert class_dump.vars_declarations
 
         if not path_names[-1]==class_dump.name:
-            import pdb;pdb.set_trace() 
             raise Exception(f"not valid: {class_dump.name} vs {path_names}")
 
         full_name = self.get_cd_full_name(path_names, name=None)
@@ -145,9 +149,42 @@ class DumpPydanticClassLinesStore:
             out.append("")
         return out
 
+    # ------------------------------------------------------------
+
+    # def dump_choice_field_w_custom_option_type(self, 
+    #         component: ChoiceField, 
+    #         indent: int,
+    #         depth: int,
+    #         ) -> Union[DelarationCodeLinesType, FieldCodeLinesType]:
+    #     lines = []
+    #     title_type_info = component.choice_title_attr_node.type_info
+
+    #     py_type_name, lib_name = self.use_type(component.python_type)
+
+    #     # parent_klass_full_name = title_type_info.parent_object.__name__
+    #     # parent_klass_name = parent_klass_full_name.split(".")[-1]
+    #     # # value_klass_name = py_type_klass.__name__
+    #     # value_klass_name = component.choice_value_type_info.type_.__name__
+    #     # should be string
+    #     # title_klass_name = title_type_info.type_
+
+    #     py_type_name = f"{snake_case_to_camel(parent_klass_name)}ChoiceDTO"
+    #     lines.append("")
+    #     # lines.append(f"{indent}class {py_type_name}(BaseModel):")
+    #     title = f"Choice type for {component.name}"
+    #     lines.extend(DumpPydanticClassLinesStore.create_pydantic_class_declaration(
+    #                     depth,
+    #                     py_type_name,
+    #                     title=title))
+    #     lines.append(f"{indent_next}value: {value_klass_name}")
+    #     lines.append(f"{indent_next}title: str")
+    #     # lines.append("")
+    #     return lines
+
+    # ------------------------------------------------------------
 
     def dump_field(self, 
-            component: ComponentBase, 
+            component: FieldBase, 
             indent: int,
             depth: int,
             ) -> Union[DelarationCodeLinesType, FieldCodeLinesType]:
@@ -162,34 +199,29 @@ class DumpPydanticClassLinesStore:
         if component.bound_attr_node:
             assert isinstance(component.bound_attr_node.data, TypeInfo)
 
-            py_type_klass = component.bound_attr_node.data.type_
-            if is_enum(py_type_klass):
-                py_type_name = self.use_type(py_type_klass)
-            elif isinstance(component, ChoiceField) \
-                    and component.choice_title_attr_node is not None \
-                    and component.choice_title_attr_node.type_info is not None:
-                title_type_info = component.choice_title_attr_node.type_info
-                parent_klass_full_name = title_type_info.parent_object.__name__
-                parent_klass_name = parent_klass_full_name.split(".")[-1]
-                # value_klass_name = py_type_klass.__name__
-                value_klass_name = component.choice_value_type_info.type_.__name__
-                # should be string
-                # title_klass_name = title_type_info.type_
-                py_type_name = f"{snake_case_to_camel(parent_klass_name)}ChoiceDTO"
-                lines.append("")
-                # lines.append(f"{indent}class {py_type_name}(BaseModel):")
-                title = f"Choice type for {component.name}"
-                lines.extend(DumpPydanticClassLinesStore.create_pydantic_class_declaration(
-                                depth,
-                                py_type_name,
-                                title=title))
-                lines.append(f"{indent_next}value: {value_klass_name}")
-                lines.append(f"{indent_next}title: str")
-                # lines.append("")
+            # py_type_klass = component.bound_attr_node.data.type_
+
+            py_type_klass = component.type_info.type_
+            assert py_type_klass
+
+            if isinstance(component, EnumField):
+                py_type_klass = component.enum
+                py_type_name, _ = self.use_type(py_type_klass)
+            elif isinstance(component, ChoiceField):
+                py_type_name, _ = self.use_type(component.python_type)
+
+            # elif isinstance(component, ChoiceField) \
+            #         and component.choice_title_attr_node is not None \
+            #         and component.choice_title_attr_node.type_info is not None:
+            #     self.dump_choice_field_w_custom_option_type(
+            #             component=component,
+            #             indent=indent,
+            #             depth=depth,
+            #             )
             elif py_type_klass in STANDARD_TYPE_LIST:
-                py_type_name = self.use_type(py_type_klass)
+                py_type_name, _ = self.use_type(py_type_klass)
             else:
-                py_type_name = self.use_type(Any)
+                py_type_name, _ = self.use_type(Any)
                 todo_comment=f"TODO: domain_dataclass {py_type_name}"
 
             # type hint options
@@ -202,7 +234,7 @@ class DumpPydanticClassLinesStore:
         else:
             # todo_comment = f"  # TODO: unbound {component.bind}"
             todo_comment = f"TODO: unbound {component.bind}"
-            py_type_name = self.use_type(Any)
+            py_type_name, _ = self.use_type(Any)
 
         var_declaration = DumpPydanticClassLinesStore.create_pydantic_var_declaration(
                     py_name, 
@@ -232,7 +264,7 @@ class DumpPydanticClassLinesStore:
 
     def dump_class_with_children(self, 
             path: List[str], 
-            component: ComponentBase, 
+            component: Union[FieldGroup, Entity, SubEntityBase],
             indent: int, 
             depth: int,
             ) -> Union[DelarationCodeLinesType, FieldCodeLinesType]:
