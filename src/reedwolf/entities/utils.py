@@ -192,7 +192,14 @@ def snake_case_to_camel(name: str) -> str:
     out = []
     for name_bit in name.split("."):
         class_name = []
-        for bit in name_bit.split("_"):
+
+        name_bit_list = name_bit.split("__")
+        if len(name_bit_list) == 1:
+            name_bit_list = name_bit.split("_")
+
+        for bit in name_bit_list:
+            if not bit: 
+                continue
             bit = bit[0].upper()+bit[1:]
             class_name.append(bit)
         out.append("".join(class_name))

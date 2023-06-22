@@ -171,9 +171,15 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         # A.1. MODELS - collect attr_nodes from managed models
         # ------------------------------------------------------------
         self.models = self.bound_model.fill_models()
-
         if not self.models:
             raise EntitySetupError(owner=self, msg="Entity(models=List[models]) is required.")
+
+        if not isinstance(self.models, dict):
+            print(self.models)
+            import pdb;pdb.set_trace() 
+            self.bound_model.fill_models()
+
+        assert isinstance(self.models, dict), self.models
 
         for bound_model_name, bound_model in self.models.items():
             assert bound_model_name.split(".")[-1] == bound_model.name
@@ -550,15 +556,6 @@ class Entity(ContainerBase):
     name_counter_by_parent_name: Dict[str, int] = field(init=False, repr=False, default_factory=dict)
 
     def __post_init__(self):
-        if self.bound_model:
-            if not (isinstance(self.bound_model, BoundModel) and is_model_class(self.bound_model.model)):
-                raise EntitySetupTypeError(owner=self, msg=f"Attribute 'bound_model' needs to be BoundModel with model DC/PYD, got: {self.bound_model}") 
-
-        if not self.name:
-            self.name = "__".join([
-                camel_case_to_snake(self.__class__.__name__),
-                camel_case_to_snake(self.bound_model.model.__name__),
-                ])
 
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
         if not self.config:
@@ -569,6 +566,16 @@ class Entity(ContainerBase):
         super().__post_init__()
 
     def init_clean(self):
+        if self.bound_model:
+            if not (isinstance(self.bound_model, BoundModel) and is_model_class(self.bound_model.model)):
+                raise EntitySetupTypeError(owner=self, msg=f"Attribute 'bound_model' needs to be BoundModel with model DC/PYD, got: {self.bound_model}") 
+
+            if not self.name:
+                self.name = "__".join([
+                    camel_case_to_snake(self.__class__.__name__),
+                    camel_case_to_snake(self.bound_model.model.__name__),
+                    ])
+
         self._check_cleaners([ChildrenValidationBase, ChildrenEvaluationBase])
 
         if not isinstance(self.config, Config):
@@ -781,9 +788,9 @@ class SubEntityBase(ContainerBase, ABC):
 
     def __post_init__(self):
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
+        if not (isinstance(self.bound_model, BoundModelBase) and isinstance(self.bound_model.model, DotExpression)):
+            raise EntityInternalError(owner=self, msg=f"Attribute bound_model='{self.bound_model}' is not BoundModel instance or '.model' is not a DotExpression") 
         if not self.name:
-            if not (self.bound_model.name and isinstance(self.bound_model.model, DotExpression)):
-                raise EntityInternalError(owner=self, msg="Bound model has not automatically set its name OR model is not DotExpression") 
             self.name = get_name_from_bind(self.bound_model.model)
 
         super().__post_init__()
