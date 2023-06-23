@@ -58,14 +58,23 @@ FieldCodeLinesType = List[str]
 
 @dataclass
 class CodegenStackFrame(IStackFrame):
-    path_names: List[str] = field(repr=False)
     depth: Optional[int] = field(repr=False) # 0 based
+    path_names: List[str] = field(repr=False)
     component: ComponentBase = field(repr=False)
-    indent: int = field(repr=False)
+    indent: int = field(repr=False, init=False)
 
     def __post_init__(self):
         assert isinstance(self.component, ComponentBase)
+
+        # make a copy
+        self.path_names = self.path_names[:]
+        self.path_names.append(self.component.name)
         assert len(self.path_names) == self.depth+1
+
+        self.indent = PY_INDENT * self.depth
+
+        if self.depth > MAX_RECURSIONS:
+            raise EntityInternalError(owner=component, msg=f"Maximum recursion depth exceeded ({self.depth})")
 
 # ------------------------------------------------------------
 
@@ -178,6 +187,7 @@ class DumpToPydantic(IStackOwnerSession):
     # ------------------------------------------------------------
 
     def dump_field(self) -> Union[DelarationCodeLinesType, FieldCodeLinesType]:
+
         component = self.current_frame.component
         indent = self.current_frame.indent
         depth = self.current_frame.depth
@@ -260,12 +270,12 @@ class DumpToPydantic(IStackOwnerSession):
 
     # ------------------------------------------------------------
 
-    def dump_class_with_children(self, 
-            path_names: List[str], 
-            component: Union[FieldGroup, Entity, SubEntityBase],
-            indent: int, 
-            depth: int,
-            ) -> Union[DelarationCodeLinesType, FieldCodeLinesType]:
+    def dump_class_with_children(self) -> Union[DelarationCodeLinesType, FieldCodeLinesType]:
+
+        path_names = self.current_frame.path_names
+        component  = self.current_frame.component 
+        indent     = self.current_frame.indent    
+        depth      = self.current_frame.depth     
 
         # if isinstance(component, BooleanField) and component.enables:
         #     import pdb;pdb.set_trace() 
@@ -303,62 +313,53 @@ class DumpToPydantic(IStackOwnerSession):
 
     # ------------------------------------------------------------
 
-    def dump_to_str(self,
-                    component:ComponentBase,
-                    # internal params
-                    path_names: List[str] = None,
-                    depth:int=0) -> List[str]:
-        if depth==0:
-            path_names = []
-        else:
-            if depth > MAX_RECURSIONS:
-                raise EntityInternalError(owner=component, msg=f"Maximum recursion depth exceeded ({depth})")
-            path_names = path_names[:]
+    def dump_to_str(self) -> List[str]:
 
-        path_names.append(component.name)
-        indent = PY_INDENT * depth
+        component   = self.current_frame.component
+        path_names  = self.current_frame.path_names
+        depth       = self.current_frame.depth
+        indent      = self.current_frame.indent
 
-        with self.use_stack_frame(
-                CodegenStackFrame(
-                    depth=depth,
-                    path_names = path_names,
-                    component = component,
-                    indent = indent,
-                    )):
+        lines : List[str] = []
+        vars_declarations: List[str] = []
 
-            lines : List[str] = []
-            vars_declarations: List[str] = []
+        indent_next = PY_INDENT * (depth+1)
 
-            indent_next = PY_INDENT * (depth+1)
+        any_dump = False
+        children = component.get_children()
 
-            any_dump = False
-            children = component.get_children()
+        if isinstance(component, (FieldGroup, Entity, SubEntityBase)):
+            lines_, vars_declarations_ = self.dump_class_with_children()
+            lines.extend(lines_)
+            vars_declarations.extend(vars_declarations_)
+            any_dump = True
 
-            if isinstance(component, (FieldGroup, Entity, SubEntityBase)):
-                lines_, vars_declarations_ = self.dump_class_with_children(path_names, component, indent, depth)
-                lines.extend(lines_)
-                vars_declarations.extend(vars_declarations_)
-                any_dump = True
+        if isinstance(component, (FieldBase,)):
+            lines_, vars_declarations_ = self.dump_field()
+            lines.extend(lines_)
+            vars_declarations.extend(vars_declarations_)
+            any_dump = True
 
-            if isinstance(component, (FieldBase,)):
-                lines_, vars_declarations_ = self.dump_field()
-                lines.extend(lines_)
-                vars_declarations.extend(vars_declarations_)
-                any_dump = True
+        if not any_dump:
+            raise Exception(f"No dump for: {component}")
 
-            if not any_dump:
-                raise Exception(f"No dump for: {component}")
+        self.add_cd(path_names, KlassPydanticDump(
+                                name=component.name,
+                                lines=lines, 
+                                vars_declarations=vars_declarations))
 
-            self.add_cd(path_names, KlassPydanticDump(
-                                    name=component.name,
-                                    lines=lines, 
-                                    vars_declarations=vars_declarations))
+        for sub_component in children:
+            with self.use_stack_frame(
+                    CodegenStackFrame(
+                        depth=depth+1,
+                        path_names = path_names,
+                        component = sub_component,
+                        # indent = indent,
+                        )):
 
-            for sub_component in children:
                 # recursion
-                self.dump_to_str(sub_component, 
-                                 path_names=path_names, 
-                                 depth=depth+1)
+                self.dump_to_str()
+
                 cd = self.get_cd_by_name(path_names, name=sub_component.name)
                 # print(f"RT: {component.name} -> {sub_component.name}")
                 if cd.vars_declarations:
@@ -408,7 +409,13 @@ class DumpToPydantic(IStackOwnerSession):
 
 def dump_to_pydantic_models_as_str(component:ComponentBase) -> str:
     dumper = DumpToPydantic()
-    return dumper.dump_to_str(component=component)
+    with dumper.use_stack_frame(
+            CodegenStackFrame(
+                depth=0,
+                path_names = [],
+                component = component,
+                )):
+        return dumper.dump_to_str()
 
 # ------------------------------------------------------------
 
