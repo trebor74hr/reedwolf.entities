@@ -208,7 +208,8 @@ class DumpPydanticClassLinesStore:
                 py_type_klass = component.enum
                 py_type_name, _ = self.use_type(py_type_klass)
             elif isinstance(component, ChoiceField):
-                py_type_name, _ = self.use_type(component.python_type)
+                py_type_klass = component.python_type
+                py_type_name, _ = self.use_type(py_type_klass)
 
             # elif isinstance(component, ChoiceField) \
             #         and component.choice_title_attr_node is not None \
@@ -231,6 +232,10 @@ class DumpPydanticClassLinesStore:
             if component.bound_attr_node.data.is_optional:
                 self.use_type(Optional)
                 py_type_name = f"Optional[{py_type_name}]"
+
+            # NOTE: currently not implemented for:
+            #   default, required, readonly, max-length, etc.
+
         else:
             # todo_comment = f"  # TODO: unbound {component.bind}"
             todo_comment = f"TODO: unbound {component.bind}"
