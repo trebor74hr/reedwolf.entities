@@ -117,17 +117,17 @@ class EntityLoadTypeError(EntityLoadError):
 class EntityCodegenError(EntityError):
     pass
 
-class EntityCodegenValueError(EntityCodegenError):
-    pass
-
-class EntityCodegenNameError(EntityCodegenError):
-    pass
-
-class EntityCodegenNameNotFoundError(EntityCodegenNameError):
-    pass
-
-class EntityCodegenTypeError(EntityCodegenError):
-    pass
+# class EntityCodegenValueError(EntityCodegenError):
+#     pass
+# 
+# class EntityCodegenNameError(EntityCodegenError):
+#     pass
+# 
+# class EntityCodegenNameNotFoundError(EntityCodegenNameError):
+#     pass
+# 
+# class EntityCodegenTypeError(EntityCodegenError):
+#     pass
 
 
 
