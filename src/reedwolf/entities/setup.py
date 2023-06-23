@@ -1,6 +1,5 @@
 from abc import abstractmethod
 from dataclasses import dataclass, field
-from contextlib import AbstractContextManager
 from typing import (
         Any,
         List,
@@ -47,6 +46,7 @@ from .meta import (
         HookOnFinishedAllCallable,
         )
 from .base import (
+        IStackOwnerSession,
         ComponentBase,
         IContainerBase,
         extract_type_info,
@@ -54,7 +54,7 @@ from .base import (
         BoundModelBase,
         ReservedAttributeNames,
         SetupStackFrame,
-        UseStackFrameMixin,
+        UseStackFrameCtxManagerBase,
         )
 from .functions import (
         FunctionsFactoryRegistry,
@@ -454,39 +454,23 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
 # ------------------------------------------------------------
 
 
-class UseSetupStackFrame(UseStackFrameMixin, AbstractContextManager):
-    " with() ... custom context manager. Very similar to UseSetupStackFrame "
-
-    # ALT: from contextlib import contextmanager
-    def __init__(self, setup_session: ISetupSession, frame: SetupStackFrame):
-        self.setup_session = setup_session
-        self.frame = frame
-
-        self.copy_from_previous_frame()
+class UseSetupStackFrameCtxManager(UseStackFrameCtxManagerBase):
+    " with() ... custom context manager. "
 
     def copy_from_previous_frame(self):
-        if not self.setup_session.stack_frames:
+        if not self.owner_session.stack_frames:
             return
 
-        previous_frame = self.setup_session.stack_frames[0]
+        previous_frame = self.owner_session.stack_frames[0]
 
         self._copy_attr_from_previous_frame(previous_frame, "local_setup_session", 
                                             if_set_must_be_same=False)
-
-    def __enter__(self):
-        self.setup_session.push_frame_to_stack(self.frame)
-        return self.frame
-
-    def __exit__(self, exc_type, exc_value, exc_tb):
-        frame_popped = self.setup_session.pop_frame_from_stack()
-        if not exc_type and frame_popped != self.frame:
-            raise EntityInternalError(owner=self, msg=f"Something wrong with frame stack, got {frame_popped}, expected {self.frame}")
 
 
 # ------------------------------------------------------------
 
 @dataclass
-class SetupSessionBase(ISetupSession):
+class SetupSessionBase(IStackOwnerSession, ISetupSession):
 
     container                    : Optional[IContainerBase]
     parent_setup_session         : Optional[ISetupSession]
@@ -508,6 +492,9 @@ class SetupSessionBase(ISetupSession):
 
     # stack of frames - first frame is current. On the end of the process the stack must be empty
     stack_frames: List[SetupStackFrame] = field(repr=False, init=False, default_factory=list)
+
+    # autocomputed
+    current_frame: Optional[SetupStackFrame] = field(repr=False, init=False, default=None)
 
     def __post_init__(self):
         if self.container is not None and not isinstance(self.container, IContainerBase):
@@ -569,30 +556,13 @@ class SetupSessionBase(ISetupSession):
 
     # ------------------------------------------------------------
 
-    def use_stack_frame(self, frame: SetupStackFrame) -> UseSetupStackFrame:
+    def use_stack_frame(self, frame: SetupStackFrame) -> UseSetupStackFrameCtxManager:
         if not isinstance(frame, SetupStackFrame):
             raise EntityInternalError(owner=self, msg=f"Expected SetupStackFrame, got frame: {frame}") 
 
-        return UseSetupStackFrame(setup_session=self, frame=frame)
+        return UseSetupStackFrameCtxManager(owner_session=self, frame=frame)
 
     # ------------------------------------------------------------
-
-    def push_frame_to_stack(self, frame: SetupStackFrame):
-        self.stack_frames.insert(0, frame)
-
-    def pop_frame_from_stack(self) -> SetupStackFrame:
-        assert self.stack_frames
-        return self.stack_frames.pop(0)
-
-    @property
-    def current_frame(self) -> Optional[SetupStackFrame]:
-        if not self.stack_frames:
-            # raise EntityInternalError(owner=self, msg=f"current_frame not available, stack frame is empty")
-            return None
-        return self.stack_frames[0]
-
-    # ------------------------------------------------------------
-
 
     def get_registry(self, namespace: Namespace, strict:bool= True) -> IRegistry:
         if namespace._name not in self._registry_dict:

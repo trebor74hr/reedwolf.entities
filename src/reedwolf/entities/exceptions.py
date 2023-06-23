@@ -112,6 +112,26 @@ class EntityLoadTypeError(EntityLoadError):
 
 
 # ------------------------------------------------------------
+# Codegen (code generator) errors
+# ------------------------------------------------------------
+class EntityCodegenError(EntityError):
+    pass
+
+class EntityCodegenValueError(EntityCodegenError):
+    pass
+
+class EntityCodegenNameError(EntityCodegenError):
+    pass
+
+class EntityCodegenNameNotFoundError(EntityCodegenNameError):
+    pass
+
+class EntityCodegenTypeError(EntityCodegenError):
+    pass
+
+
+
+# ------------------------------------------------------------
 # Validations
 # ------------------------------------------------------------
 

@@ -8,7 +8,6 @@ from typing import (
         Union,
         Type,
         )
-from contextlib import AbstractContextManager
 from collections import OrderedDict, defaultdict
 
 from .exceptions import (
@@ -58,7 +57,7 @@ from .base import (
         InstanceChange,
         InstanceAttrCurrentValue,
         get_instance_key_string_attrname_pair,
-        UseStackFrameMixin, 
+        UseStackFrameCtxManagerBase, 
         )
 from .fields import (
         FieldBase,
@@ -81,26 +80,18 @@ from .containers import (
         )
 
 
-class UseApplyStackFrame(UseStackFrameMixin, AbstractContextManager):
-    " with() ... custom context manager. Very similar to UseSetupStackFrame "
-
-    # ALT: from contextlib import contextmanager
-    def __init__(self, apply_session: IApplySession, frame: ApplyStackFrame):
-        self.apply_session = apply_session
-        self.frame = frame
-
-        self.copy_from_previous_frame()
-
+class UseApplyStackFrameCtxManager(UseStackFrameCtxManagerBase):
+    " with() ... custom context manager. "
 
     def copy_from_previous_frame(self):
         """
         if the instance is the same - consider from last frame 
         container (copy/check), index0 (copy/check), component ...
         """
-        if not self.apply_session.stack_frames:
+        if not self.owner_session.stack_frames:
             return
 
-        previous_frame = self.apply_session.stack_frames[0]
+        previous_frame = self.owner_session.stack_frames[0]
 
         self._copy_attr_from_previous_frame(previous_frame, "in_component_only_tree", 
                                             if_set_must_be_same=False)
@@ -131,15 +122,6 @@ class UseApplyStackFrame(UseStackFrameMixin, AbstractContextManager):
             # check / init again 
             self.frame.clean()
 
-
-    def __enter__(self):
-        self.apply_session.push_frame_to_stack(self.frame)
-        return self.frame
-
-    def __exit__(self, exc_type, exc_value, exc_tb):
-        frame_popped = self.apply_session.pop_frame_from_stack()
-        if not exc_type and frame_popped != self.frame:
-            raise EntityInternalError(owner=self, msg=f"Something wrong with frame stack, got {frame_popped}, expected {self.frame}")
 
 
 # ============================================================
@@ -202,11 +184,11 @@ class ApplyResult(IApplySession):
 
     # ------------------------------------------------------------
 
-    def use_stack_frame(self, frame: ApplyStackFrame) -> UseApplyStackFrame:
+    def use_stack_frame(self, frame: ApplyStackFrame) -> UseApplyStackFrameCtxManager:
         if not isinstance(frame, ApplyStackFrame):
             raise EntityInternalError(owner=self, msg=f"Expected ApplyStackFrame, got frame: {frame}") 
 
-        return UseApplyStackFrame(apply_session=self, frame=frame)
+        return UseApplyStackFrameCtxManager(owner_session=self, frame=frame)
 
     # ------------------------------------------------------------
 

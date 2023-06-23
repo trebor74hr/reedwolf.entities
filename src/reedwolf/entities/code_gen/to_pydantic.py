@@ -1,5 +1,6 @@
 import inspect
 from collections import OrderedDict
+from contextlib import AbstractContextManager
 from dataclasses import (
         dataclass, 
         field,
@@ -15,6 +16,11 @@ from typing import (
 
 from ..exceptions import (
         EntityInternalError,
+        EntityCodegenError,
+        EntityCodegenValueError,
+        EntityCodegenNameError,
+        EntityCodegenNameNotFoundError,
+        EntityCodegenTypeError,
         )
 from ..utils import (
         snake_case_to_camel,
@@ -25,6 +31,9 @@ from ..meta import (
         STANDARD_TYPE_LIST,
         )
 from ..base import (
+        IStackOwnerSession,
+        IStackFrame,
+        UseStackFrameCtxManagerBase,
         ComponentBase,
         PY_INDENT,
         MAX_RECURSIONS,
@@ -48,25 +57,42 @@ FieldCodeLinesType = List[str]
 # ------------------------------------------------------------
 
 @dataclass
-class DumpPydanticClassLines:
-    name:str
+class CodegenStackFrame(IStackFrame):
+    path_names: List[str] = field(repr=False)
+    depth: Optional[int] = field(repr=False) # 0 based
+    component: ComponentBase = field(repr=False)
+    indent: int = field(repr=False)
 
-    lines: List[str]
-    vars_declarations: List[str]
-
-    # py_name:str
-    # py_type:str
-    # class_py_name:Optional[str]
-    # class_py_type:Optional[str]
+    def __post_init__(self):
+        assert isinstance(self.component, ComponentBase)
+        assert len(self.path_names) == self.depth+1
 
 # ------------------------------------------------------------
 
 @dataclass
-class DumpPydanticClassLinesStore:
+class KlassPydanticDump:
+    " dumped lines of code and declarations for a component "
+    name:str
+    lines: List[str]
+    vars_declarations: List[str]
+
+# ------------------------------------------------------------
+
+@dataclass
+class DumpToPydantic(IStackOwnerSession):
 
     # all internal
-    class_dumps: Dict[str, DumpPydanticClassLines] = field(init=False, default_factory=OrderedDict)
+    class_dumps: Dict[str, KlassPydanticDump] = field(init=False, default_factory=OrderedDict)
     types_by_lib : Dict[str, Set[str]] = field(init=False, default_factory=dict)
+    # obligatory for stack handling
+    stack_frames: List[CodegenStackFrame] = field(repr=False, init=False, default_factory=list)
+    # autocomputed
+    current_frame: Optional[CodegenStackFrame] = field(repr=False, init=False, default=None)
+
+    def use_stack_frame(self, frame: CodegenStackFrame) -> UseStackFrameCtxManagerBase:
+        if not isinstance(frame, CodegenStackFrame):
+            raise EntityInternalError(owner=self, msg=f"Expected CodegenStackFrame, got frame: {frame}") 
+        return UseStackFrameCtxManagerBase(owner_session = self, frame=frame)
 
     def use_type(self, klass: type) -> Union[str, str]:
         " 2nd return param is lib_name when is not part of standard library "
@@ -99,7 +125,7 @@ class DumpPydanticClassLinesStore:
         return path_name
 
 
-    def get_cd_by_name(self, path_names: List[str], name:str) -> DumpPydanticClassLines:
+    def get_cd_by_name(self, path_names: List[str], name:str) -> KlassPydanticDump:
         assert name
         full_name = self.get_cd_full_name(path_names, name=name)
         cd = self.class_dumps.get(full_name, None)
@@ -116,7 +142,7 @@ class DumpPydanticClassLinesStore:
         # return out[0]
 
 
-    def add_cd(self, path_names: List[str], class_dump:DumpPydanticClassLines):
+    def add_cd(self, path_names: List[str], class_dump:KlassPydanticDump):
         assert class_dump.name
         assert class_dump.vars_declarations
 
@@ -151,43 +177,10 @@ class DumpPydanticClassLinesStore:
 
     # ------------------------------------------------------------
 
-    # def dump_choice_field_w_custom_option_type(self, 
-    #         component: ChoiceField, 
-    #         indent: int,
-    #         depth: int,
-    #         ) -> Union[DelarationCodeLinesType, FieldCodeLinesType]:
-    #     lines = []
-    #     title_type_info = component.choice_title_attr_node.type_info
-
-    #     py_type_name, lib_name = self.use_type(component.python_type)
-
-    #     # parent_klass_full_name = title_type_info.parent_object.__name__
-    #     # parent_klass_name = parent_klass_full_name.split(".")[-1]
-    #     # # value_klass_name = py_type_klass.__name__
-    #     # value_klass_name = component.choice_value_type_info.type_.__name__
-    #     # should be string
-    #     # title_klass_name = title_type_info.type_
-
-    #     py_type_name = f"{snake_case_to_camel(parent_klass_name)}ChoiceDTO"
-    #     lines.append("")
-    #     # lines.append(f"{indent}class {py_type_name}(BaseModel):")
-    #     title = f"Choice type for {component.name}"
-    #     lines.extend(DumpPydanticClassLinesStore.create_pydantic_class_declaration(
-    #                     depth,
-    #                     py_type_name,
-    #                     title=title))
-    #     lines.append(f"{indent_next}value: {value_klass_name}")
-    #     lines.append(f"{indent_next}title: str")
-    #     # lines.append("")
-    #     return lines
-
-    # ------------------------------------------------------------
-
-    def dump_field(self, 
-            component: FieldBase, 
-            indent: int,
-            depth: int,
-            ) -> Union[DelarationCodeLinesType, FieldCodeLinesType]:
+    def dump_field(self) -> Union[DelarationCodeLinesType, FieldCodeLinesType]:
+        component = self.current_frame.component
+        indent = self.current_frame.indent
+        depth = self.current_frame.depth
 
         py_name = component.name
         todo_comment = ""
@@ -241,7 +234,7 @@ class DumpPydanticClassLinesStore:
             todo_comment = f"TODO: unbound {component.bind}"
             py_type_name, _ = self.use_type(Any)
 
-        var_declaration = DumpPydanticClassLinesStore.create_pydantic_var_declaration(
+        var_declaration = DumpToPydantic.create_pydantic_var_declaration(
                     py_name, 
                     py_type_name, 
                     todo_comment, 
@@ -255,20 +248,20 @@ class DumpPydanticClassLinesStore:
             class_py_type = f"{snake_case_to_camel(component.name)}DetailsDTO"
             # lines.append(f"{indent}class {class_py_type}(BaseModel):")
             title = f"Component beneath type {component.name}"
-            lines.extend(DumpPydanticClassLinesStore.create_pydantic_class_declaration(
+            lines.extend(DumpToPydantic.create_pydantic_class_declaration(
                             depth,
                             class_py_type,
                             title=title))
 
             # self.vars_declarations.append(f'{indent}{class_py_name}: {class_py_type}')
-            vars_declarations.append(f'{indent}{DumpPydanticClassLinesStore.create_pydantic_var_declaration(class_py_name, class_py_type)}')
+            vars_declarations.append(f'{indent}{DumpToPydantic.create_pydantic_var_declaration(class_py_name, class_py_type)}')
 
         return lines, vars_declarations
 
     # ------------------------------------------------------------
 
     def dump_class_with_children(self, 
-            path: List[str], 
+            path_names: List[str], 
             component: Union[FieldGroup, Entity, SubEntityBase],
             indent: int, 
             depth: int,
@@ -280,10 +273,9 @@ class DumpPydanticClassLinesStore:
         lines = []
         vars_declarations = []
         py_type_name = f"{snake_case_to_camel(component.name)}DTO"
-        # make a copy
-        path = path + [py_type_name]
 
-        py_type_name_ext = snake_case_to_camel(".".join(path))
+        # py_type_name_ext = snake_case_to_camel(".".join(map(snake_case_to_camel, path_names)))
+        py_type_name_ext = snake_case_to_camel(py_type_name)
 
         # vars_declarations will be consumed in owner, so
         # only for top object it won't be consumed
@@ -298,12 +290,12 @@ class DumpPydanticClassLinesStore:
                 py_type_name_ext = f"Optional[{py_type_name_ext}]"
 
         # self.vars_declarations.append(f'{indent}{component.name}: {py_type_name_ext}')
-        vars_declarations.append(f'{indent}{DumpPydanticClassLinesStore.create_pydantic_var_declaration(component.name, py_type_name_ext, title=component.title)}')
+        vars_declarations.append(f'{indent}{DumpToPydantic.create_pydantic_var_declaration(component.name, py_type_name_ext, title=component.title)}')
 
         lines.append("")
         # lines.append("")
         # lines.append(f"{indent}class {py_name}(BaseModel):")
-        lines.extend(DumpPydanticClassLinesStore.create_pydantic_class_declaration(
+        lines.extend(DumpToPydantic.create_pydantic_class_declaration(
                         depth,
                         py_type_name,
                         title=component.title))
@@ -314,64 +306,68 @@ class DumpPydanticClassLinesStore:
     def dump_to_str(self,
                     component:ComponentBase,
                     # internal params
-                    path:List[str]=None,
                     path_names: List[str] = None,
                     depth:int=0) -> List[str]:
         if depth==0:
-            path = []
             path_names = []
         else:
+            if depth > MAX_RECURSIONS:
+                raise EntityInternalError(owner=component, msg=f"Maximum recursion depth exceeded ({depth})")
             path_names = path_names[:]
-            path = path[:]
 
         path_names.append(component.name)
-
-        if depth > MAX_RECURSIONS:
-            raise EntityInternalError(owner=component, msg=f"Maximum recursion depth exceeded ({depth})")
-
-        lines : List[str] = []
-        vars_declarations: List[str] = []
-
         indent = PY_INDENT * depth
-        indent_next = PY_INDENT * (depth+1)
 
-        any_dump = False
-        children = component.get_children()
+        with self.use_stack_frame(
+                CodegenStackFrame(
+                    depth=depth,
+                    path_names = path_names,
+                    component = component,
+                    indent = indent,
+                    )):
 
-        if isinstance(component, (FieldGroup, Entity, SubEntityBase)):
-            lines_, vars_declarations_ = self.dump_class_with_children(path, component, indent, depth)
-            lines.extend(lines_)
-            vars_declarations.extend(vars_declarations_)
-            any_dump = True
+            lines : List[str] = []
+            vars_declarations: List[str] = []
 
-        if isinstance(component, (FieldBase,)):
-            lines_, vars_declarations_ = self.dump_field(component, indent, depth)
-            lines.extend(lines_)
-            vars_declarations.extend(vars_declarations_)
-            any_dump = True
+            indent_next = PY_INDENT * (depth+1)
 
-        if not any_dump:
-            raise Exception(f"No dump for: {component}")
+            any_dump = False
+            children = component.get_children()
 
-        self.add_cd(path_names, DumpPydanticClassLines(
-                                name=component.name,
-                                lines=lines, 
-                                vars_declarations=vars_declarations))
+            if isinstance(component, (FieldGroup, Entity, SubEntityBase)):
+                lines_, vars_declarations_ = self.dump_class_with_children(path_names, component, indent, depth)
+                lines.extend(lines_)
+                vars_declarations.extend(vars_declarations_)
+                any_dump = True
 
-        for sub_component in children:
-            # recursion
-            self.dump_to_str(sub_component, 
-                             path=path, 
-                             path_names=path_names, 
-                             depth=depth+1)
-            cd = self.get_cd_by_name(path_names, name=sub_component.name)
-            # print(f"RT: {component.name} -> {sub_component.name}")
-            if cd.vars_declarations:
-                # remove last (simple) cluss dump and dump it here
-                # in order to preserve structure:
-                #   attributes
-                #   custom_class definitions
-                lines.extend(cd.vars_declarations)
+            if isinstance(component, (FieldBase,)):
+                lines_, vars_declarations_ = self.dump_field()
+                lines.extend(lines_)
+                vars_declarations.extend(vars_declarations_)
+                any_dump = True
+
+            if not any_dump:
+                raise Exception(f"No dump for: {component}")
+
+            self.add_cd(path_names, KlassPydanticDump(
+                                    name=component.name,
+                                    lines=lines, 
+                                    vars_declarations=vars_declarations))
+
+            for sub_component in children:
+                # recursion
+                self.dump_to_str(sub_component, 
+                                 path_names=path_names, 
+                                 depth=depth+1)
+                cd = self.get_cd_by_name(path_names, name=sub_component.name)
+                # print(f"RT: {component.name} -> {sub_component.name}")
+                if cd.vars_declarations:
+                    # remove last (simple) cluss dump and dump it here
+                    # in order to preserve structure:
+                    #   attributes
+                    #   custom_class definitions
+                    lines.extend(cd.vars_declarations)
+
 
         if depth==0:
             all_lines = []
@@ -411,8 +407,8 @@ class DumpPydanticClassLinesStore:
 # ------------------------------------------------------------
 
 def dump_to_pydantic_models_as_str(component:ComponentBase) -> str:
-    class_dump_store = DumpPydanticClassLinesStore()
-    return class_dump_store.dump_to_str(component=component)
+    dumper = DumpToPydantic()
+    return dumper.dump_to_str(component=component)
 
 # ------------------------------------------------------------
 
@@ -421,4 +417,39 @@ def dump_to_pydantic_models(component:ComponentBase, fname:str) -> str:
     with open(fname, "w") as fout:
         fout.write(code)
     return code
+
+
+# ------------------------------------------------------------
+# OBSOLETE
+# ------------------------------------------------------------
+
+# def dump_choice_field_w_custom_option_type(self, 
+#         component: ChoiceField, 
+#         indent: int,
+#         depth: int,
+#         ) -> Union[DelarationCodeLinesType, FieldCodeLinesType]:
+#     lines = []
+#     title_type_info = component.choice_title_attr_node.type_info
+
+#     py_type_name, lib_name = self.use_type(component.python_type)
+
+#     # parent_klass_full_name = title_type_info.parent_object.__name__
+#     # parent_klass_name = parent_klass_full_name.split(".")[-1]
+#     # # value_klass_name = py_type_klass.__name__
+#     # value_klass_name = component.choice_value_type_info.type_.__name__
+#     # should be string
+#     # title_klass_name = title_type_info.type_
+
+#     py_type_name = f"{snake_case_to_camel(parent_klass_name)}ChoiceDTO"
+#     lines.append("")
+#     # lines.append(f"{indent}class {py_type_name}(BaseModel):")
+#     title = f"Choice type for {component.name}"
+#     lines.extend(DumpToPydantic.create_pydantic_class_declaration(
+#                     depth,
+#                     py_type_name,
+#                     title=title))
+#     lines.append(f"{indent_next}value: {value_klass_name}")
+#     lines.append(f"{indent_next}title: str")
+#     # lines.append("")
+#     return lines
 

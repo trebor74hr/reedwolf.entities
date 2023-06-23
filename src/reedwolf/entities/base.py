@@ -2,6 +2,7 @@
 
 from abc import ABC, abstractmethod
 import inspect
+from contextlib import AbstractContextManager
 from enum import Enum
 from typing import (
         List, 
@@ -1137,8 +1138,72 @@ class BoundModelBase(ComponentBase, ABC):
 
 # ============================================================
 
+class IStackFrame(ABC):
+    ...
 
-class UseStackFrameMixin:
+class IStackOwnerSession(ABC):
+    """
+    must have:
+        stack_frames: List[IStackFrame]
+        current_frame: IStackFrame
+    """
+
+    @abstractmethod
+    def use_stack_frame(self, frame: IStackFrame) -> "UseStackFrameCtxManagerBase":
+        """
+        TODO: implement this too here in base. Only
+              difference is Class that returns, what could be
+              done with input argument, abstract function or
+              class attribute ...
+
+        Implement example:
+            if not isinstance(frame, ApplyStackFrame):
+                raise EntityInternalError(owner=self, msg=f"Expected ApplyStackFrame, got frame: {frame}") 
+            return UseApplyStackFrameCtxManager(owner_session=self, frame=frame)
+        """
+
+    def push_frame_to_stack(self, frame: IStackFrame):
+        self.stack_frames.insert(0, frame)
+        self.current_frame = frame
+
+    def pop_frame_from_stack(self) -> IStackFrame:
+        # TODO: DRY - apply.py
+        assert self.stack_frames
+        ret = self.stack_frames.pop(0)
+        self.current_frame = self.stack_frames[0] if self.stack_frames else None
+        return ret
+
+
+
+@dataclass
+class UseStackFrameCtxManagerBase(AbstractContextManager):
+    """
+    'onwer_session' must implement following:
+
+
+    # ALT: from contextlib import contextmanager
+
+    """
+    owner_session: IStackOwnerSession
+    frame: IStackFrame
+
+    def __post_init__(self):
+        self.copy_from_previous_frame()
+
+    def copy_from_previous_frame(self):
+        return
+
+    def __enter__(self):
+        self.owner_session.push_frame_to_stack(self.frame)
+        return self.frame
+
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        if not self.owner_session.current_frame == self.frame:
+            raise EntityInternalError(owner=self, msg=f"Something wrong with frame stack (2), got {self.owner_session.current_frame}, expected {self.frame}")
+        frame_popped = self.owner_session.pop_frame_from_stack()
+        if not exc_type and frame_popped != self.frame:
+            raise EntityInternalError(owner=self, msg=f"Something wrong with frame stack, got {frame_popped}, expected {self.frame}")
+
 
     def _copy_attr_from_previous_frame(self, 
             previous_frame: Self, 
@@ -1445,7 +1510,7 @@ class StructEnum(str, Enum):
 # ------------------------------------------------------------
 
 @dataclass
-class IApplySession:
+class IApplySession(IStackOwnerSession):
     # TODO: možda bi ovo trebalo izbaciti ... - link na IRegistry u dexp node-ovima 
     setup_session: ISetupSession = field(repr=False)
     entity: IContainerBase = field(repr=False) 
@@ -1473,6 +1538,7 @@ class IApplySession:
     # stack of frames - first frame is current. On the end of the process the
     # stack must be empty
     stack_frames: List[ApplyStackFrame] = field(repr=False, init=False, default_factory=list)
+    current_frame: Optional[ApplyStackFrame] = field(repr=False, init=False, default=None)
 
     # I do not prefer attaching key_string to instance i.e. setattr(instance, key_string)
     # but having instance not expanded, but to store in a special structure
@@ -1574,18 +1640,6 @@ class IApplySession:
             new_value: Any,
             is_from_init_bind:bool=False) -> InstanceAttrValue:
         ...
-
-    def push_frame_to_stack(self, frame: ApplyStackFrame):
-        self.stack_frames.insert(0, frame)
-
-    def pop_frame_from_stack(self) -> ApplyStackFrame:
-        assert self.stack_frames
-        return self.stack_frames.pop(0)
-
-    @property
-    def current_frame(self) -> ApplyStackFrame:
-        assert self.stack_frames
-        return self.stack_frames[0]
 
     def finish(self):
         if self.finished:
