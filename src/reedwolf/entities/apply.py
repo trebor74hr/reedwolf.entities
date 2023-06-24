@@ -136,6 +136,9 @@ class ApplyResult(IApplySession):
     Similar is Function -> IFunctionFactory.
     """
 
+    STACK_FRAME_CLASS = ApplyStackFrame
+    STACK_FRAME_CTX_MANAGER_CLASS = UseApplyStackFrameCtxManager
+
     def __post_init__(self):
         if not isinstance(self.entity, Entity):
             raise EntityApplyError(owner=self, msg=f"Component object '{self.entity}' is not top container - Entity.")
@@ -184,11 +187,11 @@ class ApplyResult(IApplySession):
 
     # ------------------------------------------------------------
 
-    def use_stack_frame(self, frame: ApplyStackFrame) -> UseApplyStackFrameCtxManager:
-        if not isinstance(frame, ApplyStackFrame):
-            raise EntityInternalError(owner=self, msg=f"Expected ApplyStackFrame, got frame: {frame}") 
+    # def use_stack_frame(self, frame: ApplyStackFrame) -> UseApplyStackFrameCtxManager:
+    #     if not isinstance(frame, ApplyStackFrame):
+    #         raise EntityInternalError(owner=self, msg=f"Expected ApplyStackFrame, got frame: {frame}") 
 
-        return UseApplyStackFrameCtxManager(owner_session=self, frame=frame)
+    #     return UseApplyStackFrameCtxManager(owner_session=self, frame=frame)
 
     # ------------------------------------------------------------
 

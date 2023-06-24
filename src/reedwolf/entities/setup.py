@@ -496,6 +496,9 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
     # autocomputed
     current_frame: Optional[SetupStackFrame] = field(repr=False, init=False, default=None)
 
+    STACK_FRAME_CLASS: ClassVar[type] = SetupStackFrame
+    STACK_FRAME_CTX_MANAGER_CLASS: ClassVar[type] = UseSetupStackFrameCtxManager
+
     def __post_init__(self):
         if self.container is not None and not isinstance(self.container, IContainerBase):
             raise EntityInternalError(owner=self, msg=f"Expecting container for parent, got: {type(self.container)} / {self.container}") 
@@ -556,11 +559,11 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
 
     # ------------------------------------------------------------
 
-    def use_stack_frame(self, frame: SetupStackFrame) -> UseSetupStackFrameCtxManager:
-        if not isinstance(frame, SetupStackFrame):
-            raise EntityInternalError(owner=self, msg=f"Expected SetupStackFrame, got frame: {frame}") 
+    # def use_stack_frame(self, frame: SetupStackFrame) -> UseSetupStackFrameCtxManager:
+    #     if not isinstance(frame, SetupStackFrame):
+    #         raise EntityInternalError(owner=self, msg=f"Expected SetupStackFrame, got frame: {frame}") 
 
-        return UseSetupStackFrameCtxManager(owner_session=self, frame=frame)
+    #     return UseSetupStackFrameCtxManager(owner_session=self, frame=frame)
 
     # ------------------------------------------------------------
 

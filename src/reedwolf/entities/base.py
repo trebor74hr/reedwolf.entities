@@ -25,6 +25,8 @@ from types import (
         )
 
 from .utils import (
+        add_yaml_indent_to_strlist,
+        YAML_INDENT,
         varname_to_title,
         UNDEFINED,
         NA_DEFAULTS_MODE,
@@ -89,8 +91,6 @@ from .contexts import (
 
 # ------------------------------------------------------------
 
-YAML_INDENT :str = "  "
-PY_INDENT : str  = "    "
 MAX_RECURSIONS: int = 30
 DEXP_PREFIX = "DEXP::"
 
@@ -104,9 +104,6 @@ def repr_obj(obj, limit=100):
         out = out[:limit-3] + "..."
     return out
 
-
-def add_indent_to_strlist(out):
-    return (f"\n{YAML_INDENT}".join(out)).splitlines()
 
 
 def obj_to_strlist(obj, path=[]):
@@ -123,7 +120,7 @@ def list_to_strlist(args, before, after):
     else:
         out.append(before)
         for v in args:
-            out.extend(add_indent_to_strlist(obj_to_strlist(v)))
+            out.extend(add_yaml_indent_to_strlist(obj_to_strlist(v)))
         out.append(after)
     return out
 
@@ -388,7 +385,7 @@ class ComponentBase(SetParentMixin, ABC):
             value = getattr(self, name)
             if type(field) in (list, tuple):
                 out.extend(
-                    add_indent_to_strlist(
+                    add_yaml_indent_to_strlist(
                         list_to_strlist(
                             value,
                             before=f"{name}=[,",
@@ -405,12 +402,12 @@ class ComponentBase(SetParentMixin, ABC):
                 if len(vstr) <= 1:
                     out.append(f"{name}={vstr[0]},")
                 else:
-                    # vstr = add_indent_to_strlist(vstr)
+                    # vstr = add_yaml_indent_to_strlist(vstr)
                     out.append(f"{name}=")
                     for v2 in vstr:
                         out.append(f"{YAML_INDENT}{v2}")
         out.append(")")
-        return add_indent_to_strlist(out)
+        return add_yaml_indent_to_strlist(out)
 
     # ------------------------------------------------------------
 
@@ -1141,39 +1138,6 @@ class BoundModelBase(ComponentBase, ABC):
 class IStackFrame(ABC):
     ...
 
-class IStackOwnerSession(ABC):
-    """
-    must have:
-        stack_frames: List[IStackFrame]
-        current_frame: IStackFrame
-    """
-
-    @abstractmethod
-    def use_stack_frame(self, frame: IStackFrame) -> "UseStackFrameCtxManagerBase":
-        """
-        TODO: implement this too here in base. Only
-              difference is Class that returns, what could be
-              done with input argument, abstract function or
-              class attribute ...
-
-        Implement example:
-            if not isinstance(frame, ApplyStackFrame):
-                raise EntityInternalError(owner=self, msg=f"Expected ApplyStackFrame, got frame: {frame}") 
-            return UseApplyStackFrameCtxManager(owner_session=self, frame=frame)
-        """
-
-    def push_frame_to_stack(self, frame: IStackFrame):
-        self.stack_frames.insert(0, frame)
-        self.current_frame = frame
-
-    def pop_frame_from_stack(self) -> IStackFrame:
-        # TODO: DRY - apply.py
-        assert self.stack_frames
-        ret = self.stack_frames.pop(0)
-        self.current_frame = self.stack_frames[0] if self.stack_frames else None
-        return ret
-
-
 
 @dataclass
 class UseStackFrameCtxManagerBase(AbstractContextManager):
@@ -1184,7 +1148,7 @@ class UseStackFrameCtxManagerBase(AbstractContextManager):
     # ALT: from contextlib import contextmanager
 
     """
-    owner_session: IStackOwnerSession
+    owner_session: "IStackOwnerSession"
     frame: IStackFrame
 
     def __post_init__(self):
@@ -1232,6 +1196,34 @@ class UseStackFrameCtxManagerBase(AbstractContextManager):
             if if_set_must_be_same and prev_frame_attr_value != this_frame_attr_value:
                 raise EntityInternalError(owner=self, 
                     msg=f"Attribute '{attr_name}' value in previous frame is different from current:\n  {previous_frame}\n    = {prev_frame_attr_value}\n<>\n  {self.frame}\n    = {this_frame_attr_value} ") 
+
+
+class IStackOwnerSession(ABC):
+    """
+    must have:
+        stack_frames: List[IStackFrame]
+        current_frame: IStackFrame
+    """
+    STACK_FRAME_CLASS: ClassVar[type] = IStackFrame
+    STACK_FRAME_CTX_MANAGER_CLASS: ClassVar[type] = UseStackFrameCtxManagerBase
+
+    def use_stack_frame(self, frame: IStackFrame) -> UseStackFrameCtxManagerBase:
+        if not isinstance(frame, self.STACK_FRAME_CLASS):
+            raise EntityInternalError(owner=self, msg=f"Expected {self.STACK_FRAME_CLASS}, got frame: {frame}") 
+        return self.STACK_FRAME_CTX_MANAGER_CLASS(owner_session = self, frame=frame)
+
+    def push_frame_to_stack(self, frame: IStackFrame):
+        self.stack_frames.insert(0, frame)
+        self.current_frame = frame
+
+    def pop_frame_from_stack(self) -> IStackFrame:
+        # TODO: DRY - apply.py
+        assert self.stack_frames
+        ret = self.stack_frames.pop(0)
+        self.current_frame = self.stack_frames[0] if self.stack_frames else None
+        return ret
+
+
 
 
 # ============================================================

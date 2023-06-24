@@ -193,6 +193,10 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
     # will be set later
     # is_key:          bool = field(init=False, repr=False, default=False)
 
+    # TODO: found no way to achive this: copied from ComponentBase just to have
+    #       these field in repr()/str() listed at the end
+    #   parent       : Union[Self, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    #   parent_name  : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
     def __post_init__(self):
         self.init_clean()

@@ -19,6 +19,9 @@ try:
 except ImportError:
     yaml = None
 
+PY_INDENT : str  = "    "
+YAML_INDENT :str = "  "
+
 
 class Singleton(type):
     " https://stackoverflow.com/questions/6760685/creating-a-singleton-in-python "
@@ -303,5 +306,14 @@ def check_identificator_name(dexp_node_name: str):
 
     # return dexp_node_name
 
+
+def add_py_indent_to_strlist(indent_level, lines: List[str], prefix=PY_INDENT) -> List[str]:
+    " if line is empty or is only space - strip it, otherwise add indent of 4 "
+    return [f"{prefix*indent_level}{line}" if line.strip() else line.strip() for line in lines]
+
+
+def add_yaml_indent_to_strlist(out: List[str]) -> List[str]:
+    " add yaml indent (2) to every line "
+    return (f"\n{YAML_INDENT}".join(out)).splitlines()
 
 
