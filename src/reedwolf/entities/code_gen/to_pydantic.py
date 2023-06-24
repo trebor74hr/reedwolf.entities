@@ -64,8 +64,9 @@ class CodegenStackFrame(IStackFrame):
     filename: str = field()
     path_names: List[str] = field()
     depth: Optional[int] = field(repr=False) # 0 based
+    indent_level: int = field(repr=False)
+
     # autocomputed
-    indent: int = field(repr=False, init=False)
     component_name: str = field(init=False)
 
     def __post_init__(self):
@@ -76,10 +77,18 @@ class CodegenStackFrame(IStackFrame):
         self.path_names.append(self.component.name)
         assert len(self.path_names) == self.depth+1
 
-        self.indent = PY_INDENT * self.depth
 
         if self.depth > MAX_RECURSIONS:
             raise EntityInternalError(owner=component, msg=f"Maximum recursion depth exceeded ({self.depth})")
+
+    def set_filename(self, filename:str): 
+        self.filename = filename
+
+    def set_indent_level(self, indent_level:int): 
+        self.indent_level = indent_level
+
+    def get_indent(self): 
+        return f"{PY_INDENT * self.indent_level}"
 
 # ------------------------------------------------------------
 
@@ -137,6 +146,8 @@ class FilePydanticDump:
 
 @dataclass
 class DumpToPydantic(IStackOwnerSession):
+
+    filenames_up_to_level: Optional[int] = field(default=1)
 
     # all internal
     # component_dump: Dict[str, ComponentPydanticDump] = field(init=False, default_factory=OrderedDict)
@@ -251,8 +262,8 @@ class DumpToPydantic(IStackOwnerSession):
     def dump_field(self) -> Union[DelarationCodeLinesType, FieldCodeLinesType]:
 
         component = self.current_frame.component
-        indent = self.current_frame.indent
-        depth = self.current_frame.depth
+        indent_level = self.current_frame.indent_level
+        indent = self.current_frame.get_indent()
 
         py_name = component.name
         todo_comment = ""
@@ -321,12 +332,15 @@ class DumpToPydantic(IStackOwnerSession):
             # lines.append(f"{indent}class {class_py_type}(BaseModel):")
             title = f"Component beneath type {component.name}"
             lines.extend(DumpToPydantic.create_pydantic_class_declaration(
-                            depth,
-                            class_py_type,
+                            indent_level=indent_level,
+                            name=class_py_type,
                             title=title))
 
             # self.vars_declarations.append(f'{indent}{class_py_name}: {class_py_type}')
-            vars_declarations.append(f'{indent}{DumpToPydantic.create_pydantic_var_declaration(class_py_name, class_py_type)}')
+            var_declaration = DumpToPydantic.create_pydantic_var_declaration(
+                                    class_py_name, 
+                                    class_py_type)
+            vars_declarations.append(f'{indent}{var_declaration}')
 
         return lines, vars_declarations
 
@@ -336,11 +350,9 @@ class DumpToPydantic(IStackOwnerSession):
 
         path_names = self.current_frame.path_names
         component  = self.current_frame.component 
-        indent     = self.current_frame.indent    
-        depth      = self.current_frame.depth     
+        indent_level = self.current_frame.indent_level
+        indent       = self.current_frame.get_indent()
 
-        # if isinstance(component, BooleanField) and component.enables:
-        #     import pdb;pdb.set_trace() 
         assert isinstance(component, (FieldGroup, Entity, SubEntityBase))
         lines = []
         vars_declarations = []
@@ -368,8 +380,8 @@ class DumpToPydantic(IStackOwnerSession):
         # lines.append("")
         # lines.append(f"{indent}class {py_name}(BaseModel):")
         lines.extend(DumpToPydantic.create_pydantic_class_declaration(
-                        depth,
-                        py_type_name,
+                        indent_level=indent_level,
+                        name=py_type_name,
                         title=component.title))
         return lines, vars_declarations
 
@@ -379,20 +391,27 @@ class DumpToPydantic(IStackOwnerSession):
         component   = self.current_frame.component
         path_names  = self.current_frame.path_names
         depth       = self.current_frame.depth
-        indent      = self.current_frame.indent
-        filename    = self.current_frame.filename
+
+        is_composite_component = isinstance(component, (FieldGroup, Entity, SubEntityBase))
+
+        children = component.get_children()
+
         if depth == 0:
-            filename = f"{component.name}"
+            self.current_frame.set_filename(component.name)
+            self.current_frame.set_indent_level(0)
+        elif self.filenames_up_to_level >= (depth+1) and is_composite_component:
+            self.current_frame.set_filename(component.name)
+            self.current_frame.set_indent_level(0)
+
+        indent_level= self.current_frame.indent_level
+        filename    = self.current_frame.filename
 
         lines : List[str] = []
         vars_declarations: List[str] = []
 
-        indent_next = PY_INDENT * (depth+1)
-
         any_dump = False
-        children = component.get_children()
 
-        if isinstance(component, (FieldGroup, Entity, SubEntityBase)):
+        if is_composite_component:
             lines_, vars_declarations_ = self.dump_class_with_children()
             lines.extend(lines_)
             vars_declarations.extend(vars_declarations_)
@@ -420,7 +439,7 @@ class DumpToPydantic(IStackOwnerSession):
                         path_names = path_names,
                         component = sub_component,
                         filename = filename,
-                        # indent = indent,
+                        indent_level = indent_level+1,
                         )):
 
                 # recursion
@@ -448,11 +467,19 @@ class DumpToPydantic(IStackOwnerSession):
     
 # ------------------------------------------------------------
 
-def dump_to_pydantic_models_as_dict(component:ComponentBase) -> Dict[str, str]:
-    dumper = DumpToPydantic()
+def dump_to_pydantic_models_as_dict(
+        component:ComponentBase, 
+        filenames_up_to_level: Optional[int] = 1,
+        ) -> Dict[str, str]:
+
+    assert filenames_up_to_level >= 1, filenames_up_to_level
+    dumper = DumpToPydantic(
+                filenames_up_to_level=filenames_up_to_level,
+                )
     with dumper.use_stack_frame(
             CodegenStackFrame(
                 depth=0,
+                indent_level=0,
                 path_names = [],
                 component = component,
                 filename = component.name,
@@ -461,9 +488,15 @@ def dump_to_pydantic_models_as_dict(component:ComponentBase) -> Dict[str, str]:
 
 # ------------------------------------------------------------
 
-def dump_to_pydantic_models(component:ComponentBase, fname_or_dname:str) -> str:
-    lines_by_file = dump_to_pydantic_models_as_dict(component=component)
-
+def dump_to_pydantic_models(
+        component:ComponentBase, 
+        fname_or_dname:str,
+        filenames_up_to_level: Optional[int] = 1,
+        ) -> str:
+    lines_by_file = dump_to_pydantic_models_as_dict(
+                        component=component,
+                        filenames_up_to_level=filenames_up_to_level,
+                        )
     lines_by_file_out = OrderedDict()
 
     if len(lines_by_file)==1:

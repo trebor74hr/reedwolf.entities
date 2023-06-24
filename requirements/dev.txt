@@ -3,4 +3,5 @@
 flake8 >= 6.0.0, < 6.1; python_version >= "3.8.1"
 flake8 >= 5.0.4, < 5.1; python_version < "3.8.1"
 PyYAML >=6.0.0, < 6.1; python_version < "3.8.1"
+pydantic >=-1.10.9, <1.10.9
 
