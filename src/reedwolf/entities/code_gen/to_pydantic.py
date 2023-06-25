@@ -234,14 +234,16 @@ class FilePydanticDump:
 
         comp_dump_first = None
         for comp_dump in self.comp_dump_dict.values():
+            # if "can_user_change" in str(comp_dump): import pdb;pdb.set_trace() 
+
             if not comp_dump_first:
                 comp_dump_first = comp_dump
             if comp_dump.dumped:
                 continue
             all_lines.extend(comp_dump.dump_to_strlist())
 
-        if not comp_dump_first:
-            raise EntityInternalError(owner=self, msg=f"comp_dump_first not set") 
+        if not (comp_dump_first and comp_dump_first.class_declaration):
+            raise EntityInternalError(owner=self, msg=f"comp_dump_first='{comp_dump_first}' or its 'class_declaration' not set") 
 
         all_lines.append("")
         all_lines.append("")
@@ -265,7 +267,6 @@ class CodegenStackFrame(IStackFrame):
     path_names: List[str] = field()
     owner_class_name_path: List[str] = field(repr=False)
     depth: Optional[int] = field(repr=False) # 0 based
-    indent_level: int = field(repr=False)
 
     # autocomputed
     component_name: str = field(init=False)
@@ -276,8 +277,6 @@ class CodegenStackFrame(IStackFrame):
         else:
             assert self.owner_comp_dump
         assert isinstance(self.component, ComponentBase)
-
-        # self.file_dump = FilePydanticDump(filename=filename)
 
         self.component_name = self.component.name
         # make a copy and add component name
@@ -293,20 +292,12 @@ class CodegenStackFrame(IStackFrame):
             self.owner_class_name_path.append(self.owner_comp_dump.class_declaration.name)
 
     def set_new_file_dump(self, file_dump: FilePydanticDump): 
-        assert self.file_dump != file_dump
+        assert self.file_dump.filename != file_dump.filename
         self.file_dump = file_dump
-        self.indent_level = 0
-
-    # def set_new_filename(self, filename:str): 
-    #     assert self.filename != filename
-    #     self.filename = filename
-    #     self.indent_level = 0
-
-    # def get_indent(self): 
-    #     return f"{PY_INDENT * self.indent_level}"
 
 
 # ------------------------------------------------------------
+
 
 @dataclass
 class DumpToPydantic(IStackOwnerSession):
@@ -412,7 +403,6 @@ class DumpToPydantic(IStackOwnerSession):
             2) optional - var with complex type with class decl.
         """
         component = self.current_frame.component
-        indent_level = self.current_frame.indent_level
 
         todo_comment = ""
         children = component.get_children()
@@ -433,14 +423,6 @@ class DumpToPydantic(IStackOwnerSession):
             elif isinstance(component, ChoiceField):
                 py_type_klass = component.python_type
                 py_type_name, _ = self.use_type(py_type_klass)
-
-            # elif isinstance(component, ChoiceField) \
-            #         and component.choice_title_attr_node is not None \
-            #         and component.choice_title_attr_node.type_info is not None:
-            #     self.dump_choice_field_w_custom_option_type(
-            #             component=component,
-            #             depth=depth,
-            #             )
             elif py_type_klass in STANDARD_TYPE_LIST:
                 py_type_name, _ = self.use_type(py_type_klass)
             else:
@@ -503,7 +485,6 @@ class DumpToPydantic(IStackOwnerSession):
 
         path_names = self.current_frame.path_names
         component  = self.current_frame.component 
-        indent_level = self.current_frame.indent_level
         assert isinstance(component, (FieldGroup, Entity, SubEntityBase))
 
         py_type_name = f"{snake_case_to_camel(component.name)}DTO"
@@ -545,19 +526,18 @@ class DumpToPydantic(IStackOwnerSession):
         path_names  = self.current_frame.path_names
         depth       = self.current_frame.depth
 
+
         is_composite_component = isinstance(component, (FieldGroup, Entity, SubEntityBase))
 
         children = component.get_children()
 
-        # set_file_for_children = False
-        # if depth!=0 and self.file_split_to_depth >= (depth+1) and children: 
-        #     # is_composite_component:
-        #     set_file_for_children = True
+        # if component.name == "can_user_change": import pdb;pdb.set_trace() 
 
-        indent_level= self.current_frame.indent_level
-        # filename    = self.current_frame.filename
-        file_dump     = self.current_frame.file_dump
-
+        if depth!=0 and self.file_split_to_depth >= (depth+1) and children: 
+            file_dump = self.get_or_create_file_dump(component.name)
+            self.current_frame.set_new_file_dump(file_dump)
+        else:
+            file_dump     = self.current_frame.file_dump
 
         if is_composite_component:
             vars_declarations, class_declaration = self.dump_composite_class()
@@ -565,9 +545,6 @@ class DumpToPydantic(IStackOwnerSession):
             vars_declarations, class_declaration = self.dump_field()
         else:
             raise EntityInternalError(owner=self, msg=f"No dump for: {component}")
-
-        # if class_declaration and not set_file_for_children:
-        #     lines.extend(add_py_indent_to_strlist(indent_level, class_declaration))
 
         if self.current_frame.owner_comp_dump:
             # belongs to owner
@@ -586,6 +563,7 @@ class DumpToPydantic(IStackOwnerSession):
                                     ))
 
         if children:
+
             for nr, sub_component in enumerate(children,0):
                 with self.use_stack_frame(
                         CodegenStackFrame(
@@ -594,33 +572,18 @@ class DumpToPydantic(IStackOwnerSession):
                             path_names = path_names,
                             component = sub_component,
                             file_dump = file_dump,
-                            # file_dump = dumper.get_or_create_file_dump(filename)
-                            indent_level = indent_level+1,
                             owner_class_name_path = self.current_frame.owner_class_name_path,
                             )):
-                    # if set_filename_for_children:
-                    #     self.current_frame.set_new_filename(component.name)
-                    #     if nr==0:
-                    #         file_dump = self.get_or_create_file_dump(filename)
-                    #         assert class_declaration
-                    #         file_dump.set_class_declaration(
-                    #              add_py_indent_to_strlist(0, class_declaration))
-
                     # RECURSION
                     self.dump_all()
 
                     sub_comp_dump = self.get_current_comp_dump()
 
-                    comp_dump.nested_comp_dumps.append(sub_comp_dump)
+                    assert self.current_frame.owner_comp_dump is comp_dump
 
-                    # if set_filename_for_children or sub_comp_dump.filename == comp_dump.filename:
-                    #   # or sub_comp_dump.filename == component.name:
-                    #     comp_dump.lines.extend(sub_comp_dump.vars_declarations)
-                    # else:
-                    #     sub_comp_dump.lines.extend(
-                    #         add_py_indent_to_strlist(
-                    #             self.current_frame.indent_level + 1, 
-                    #             sub_comp_dump.vars_declarations))
+                    if self.current_frame.owner_comp_dump.file_dump is self.current_frame.file_dump:
+                        comp_dump.nested_comp_dumps.append(sub_comp_dump)
+
         else:
             assert not class_declaration
 
@@ -652,7 +615,6 @@ def dump_to_pydantic_models_as_dict(
                 component = component,
                 file_dump = dumper.get_or_create_file_dump(component.name),
                 depth=0,
-                indent_level=0,
                 path_names = [],
                 owner_class_name_path=[],
                 )):
@@ -702,37 +664,4 @@ def dump_to_pydantic_models(
 
     return lines_by_file_out
 
-
-# ------------------------------------------------------------
-# OBSOLETE
-# ------------------------------------------------------------
-
-# def dump_choice_field_w_custom_option_type(self, 
-#         component: ChoiceField, 
-#         depth: int,
-#         ) -> Union[DelarationCodeLinesType, FieldCodeLinesType]:
-#     lines = []
-#     title_type_info = component.choice_title_attr_node.type_info
-
-#     py_type_name, lib_name = self.use_type(component.python_type)
-
-#     # parent_klass_full_name = title_type_info.parent_object.__name__
-#     # parent_klass_name = parent_klass_full_name.split(".")[-1]
-#     # # value_klass_name = py_type_klass.__name__
-#     # value_klass_name = component.choice_value_type_info.type_.__name__
-#     # should be string
-#     # title_klass_name = title_type_info.type_
-
-#     py_type_name = f"{snake_case_to_camel(parent_klass_name)}ChoiceDTO"
-#     lines.append("")
-#     # lines.append(f"class {py_type_name}(BaseModel):")
-#     title = f"Choice type for {component.name}"
-#     lines.extend(DumpToPydantic.dump_to_strlist(
-#                     depth,
-#                     py_type_name,
-#                     title=title))
-#     lines.append(f"{indent_next}value: {value_klass_name}")
-#     lines.append(f"{indent_next}title: str")
-#     # lines.append("")
-#     return lines
 
