@@ -86,7 +86,7 @@ class VariableDeclaration:
     class_name_base: str
     # decoration template
     class_name_deco_templ: str
-    # NOTE: belongs to - not used for now
+    # cross-reference
     class_declaration: Optional[ClassDeclaration]
 
     title : str = ""
@@ -103,7 +103,12 @@ class VariableDeclaration:
         assert not self.owner_comp_dump
         self.owner_comp_dump = owner_comp_dump
         if self.class_declaration:
-            self.class_name_full_path = ".".join(self.owner_comp_dump.owners_path_class_names + [self.class_declaration.name])
+            # if self.owner_comp_dump.file_dump:
+            self.class_name_full_path = ".".join(
+                    self.owner_comp_dump.owners_path_class_names \
+                    + [self.class_declaration.name])
+            # if self.class_name_full_path == "EntityCompanyDTO.CanUserAccessChildrenDTO":
+            #     import pdb;pdb.set_trace() 
 
     def dump_to_str(self) -> str:
         if self.class_name_full_path:
@@ -148,6 +153,7 @@ class ComponentPydanticDump:
     #     comp_name_details: CompTypeDetails
     vars_declarations: List[VariableDeclaration]  = field(repr=False, init=False, default_factory=list)
 
+    # all registered classes are nested under owner class
     nested_comp_dumps: List[Self] = field(repr=False, init=False, default_factory=list)
 
     # autocomputed
@@ -157,18 +163,29 @@ class ComponentPydanticDump:
     def __post_init__(self):
         self.owners_path_class_names = []
 
+        # if self.name == "address_set":
+        #     import pdb;pdb.set_trace() 
+
         if self.owner_comp_dump:
-            if self.owner_comp_dump.owners_path_class_names:
+            if self.owner_comp_dump.file_dump is self.file_dump \
+              and self.owner_comp_dump.owners_path_class_names:
                 self.owners_path_class_names.extend(self.owner_comp_dump.owners_path_class_names[:])
 
         if self.class_declaration:
             self.owners_path_class_names.append(self.class_declaration.name)
 
 
+
     def add_vars_declarations(self, vars_declarations: List[VariableDeclaration]):
         for variable_declaration in vars_declarations:
             variable_declaration.set_owner_comp_dump(self)
             self.vars_declarations.append(variable_declaration)
+
+    def add_nested_comp_dump(self, comp_dump: Self):
+        # if self.current_frame.owner_comp_dump.file_dump is self.current_frame.file_dump:
+        if self.file_dump is not comp_dump.file_dump:
+            raise EntityInternalError(owner=self, msg=f"File dump must be the same of nested class and this one:\n  {self.file_dump}\n  !=\n  {comp_dump.file_dump}") 
+        self.nested_comp_dumps.append(comp_dump)
 
     def dump_to_strlist(self) -> List[str]:
         " object can have nothing - e.g. plain std. type attribute, e.g. String(M.id) "
@@ -582,7 +599,9 @@ class DumpToPydantic(IStackOwnerSession):
                     assert self.current_frame.owner_comp_dump is comp_dump
 
                     if self.current_frame.owner_comp_dump.file_dump is self.current_frame.file_dump:
-                        comp_dump.nested_comp_dumps.append(sub_comp_dump)
+                        # in this case classes are nested under owner class
+                        comp_dump.add_nested_comp_dump(sub_comp_dump)
+
 
         else:
             assert not class_declaration
