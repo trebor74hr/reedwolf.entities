@@ -132,7 +132,8 @@ class ComponentPydanticDump:
 
     """
     name:str
-    filename: str
+    # filename: str
+    file_dump: "FilePydanticDump"
 
     # class <comp-name>DTO:
     class_declaration: ClassDeclaration = field(repr=False)
@@ -259,7 +260,8 @@ class FilePydanticDump:
 class CodegenStackFrame(IStackFrame):
     owner_comp_dump: Optional[ComponentPydanticDump] = field(repr=False)
     component: ComponentBase = field(repr=False)
-    filename: str = field()
+    # filename: str = field(kw_only=False)
+    file_dump: FilePydanticDump = field(init=True)
     path_names: List[str] = field()
     owner_class_name_path: List[str] = field(repr=False)
     depth: Optional[int] = field(repr=False) # 0 based
@@ -274,6 +276,9 @@ class CodegenStackFrame(IStackFrame):
         else:
             assert self.owner_comp_dump
         assert isinstance(self.component, ComponentBase)
+
+        # self.file_dump = FilePydanticDump(filename=filename)
+
         self.component_name = self.component.name
         # make a copy and add component name
         self.path_names = self.path_names[:]
@@ -287,10 +292,15 @@ class CodegenStackFrame(IStackFrame):
         if self.owner_comp_dump:
             self.owner_class_name_path.append(self.owner_comp_dump.class_declaration.name)
 
-    def set_new_filename(self, filename:str): 
-        assert self.filename != filename
-        self.filename = filename
+    def set_new_file_dump(self, file_dump: FilePydanticDump): 
+        assert self.file_dump != file_dump
+        self.file_dump = file_dump
         self.indent_level = 0
+
+    # def set_new_filename(self, filename:str): 
+    #     assert self.filename != filename
+    #     self.filename = filename
+    #     self.indent_level = 0
 
     # def get_indent(self): 
     #     return f"{PY_INDENT * self.indent_level}"
@@ -301,7 +311,7 @@ class CodegenStackFrame(IStackFrame):
 @dataclass
 class DumpToPydantic(IStackOwnerSession):
 
-    filenames_up_to_level: Optional[int] = field(default=1)
+    file_split_to_depth: Optional[int] = field(default=1)
 
     # all internal
     file_dump_dict: Dict[str, FilePydanticDump] = field(init=False, repr=False, default_factory=OrderedDict)
@@ -330,7 +340,8 @@ class DumpToPydantic(IStackOwnerSession):
                 lib_name_out = lib_name
 
         if lib_name != "builtins":
-            file_dump = self.get_or_create_file_dump()
+            # file_dump = self.get_or_create_file_dump()
+            file_dump = self.current_frame.file_dump
 
             if lib_name not in file_dump.types_by_lib:
                 file_dump.types_by_lib[lib_name] = set()
@@ -340,8 +351,8 @@ class DumpToPydantic(IStackOwnerSession):
 
     # ------------------------------------------------------------
 
-    def get_or_create_file_dump(self) -> FilePydanticDump:
-        filename = self.current_frame.filename
+    def get_or_create_file_dump(self, filename: str) -> FilePydanticDump:
+        # filename = self.current_frame.filename
         if filename not in self.file_dump_dict:
             self.file_dump_dict[filename] = FilePydanticDump(filename=filename)
         return self.file_dump_dict[filename]
@@ -363,7 +374,8 @@ class DumpToPydantic(IStackOwnerSession):
     def set_comp_dump(self, comp_dump:ComponentPydanticDump) -> ComponentPydanticDump:
         assert comp_dump.name
 
-        file_dump = self.get_or_create_file_dump()
+        # file_dump = self.get_or_create_file_dump()
+        file_dump = self.current_frame.file_dump
 
         path_names: List[str] = self.current_frame.path_names
 
@@ -381,7 +393,8 @@ class DumpToPydantic(IStackOwnerSession):
 
 
     def get_current_comp_dump(self) -> ComponentPydanticDump:
-        file_dump = self.get_file_dump(self.current_frame.filename)
+        # file_dump = self.get_file_dump(self.current_frame.filename)
+        file_dump = self.current_frame.file_dump
 
         full_name = self.get_comp_dump_full_name(self.current_frame.path_names)
 
@@ -536,13 +549,15 @@ class DumpToPydantic(IStackOwnerSession):
 
         children = component.get_children()
 
-        # set_filename_for_children = False
-        # if depth!=0 and self.filenames_up_to_level >= (depth+1) and children: 
+        # set_file_for_children = False
+        # if depth!=0 and self.file_split_to_depth >= (depth+1) and children: 
         #     # is_composite_component:
-        #     set_filename_for_children = True
+        #     set_file_for_children = True
 
         indent_level= self.current_frame.indent_level
-        filename    = self.current_frame.filename
+        # filename    = self.current_frame.filename
+        file_dump     = self.current_frame.file_dump
+
 
         if is_composite_component:
             vars_declarations, class_declaration = self.dump_composite_class()
@@ -551,7 +566,7 @@ class DumpToPydantic(IStackOwnerSession):
         else:
             raise EntityInternalError(owner=self, msg=f"No dump for: {component}")
 
-        # if class_declaration and not set_filename_for_children:
+        # if class_declaration and not set_file_for_children:
         #     lines.extend(add_py_indent_to_strlist(indent_level, class_declaration))
 
         if self.current_frame.owner_comp_dump:
@@ -565,7 +580,7 @@ class DumpToPydantic(IStackOwnerSession):
         comp_dump = self.set_comp_dump(
                             ComponentPydanticDump(
                                     name=component.name,
-                                    filename=filename,
+                                    file_dump=file_dump,
                                     class_declaration=class_declaration,
                                     owner_comp_dump = self.current_frame.owner_comp_dump,
                                     ))
@@ -578,14 +593,15 @@ class DumpToPydantic(IStackOwnerSession):
                             depth=depth+1,
                             path_names = path_names,
                             component = sub_component,
-                            filename = filename,
+                            file_dump = file_dump,
+                            # file_dump = dumper.get_or_create_file_dump(filename)
                             indent_level = indent_level+1,
                             owner_class_name_path = self.current_frame.owner_class_name_path,
                             )):
                     # if set_filename_for_children:
                     #     self.current_frame.set_new_filename(component.name)
                     #     if nr==0:
-                    #         file_dump = self.get_or_create_file_dump()
+                    #         file_dump = self.get_or_create_file_dump(filename)
                     #         assert class_declaration
                     #         file_dump.set_class_declaration(
                     #              add_py_indent_to_strlist(0, class_declaration))
@@ -623,18 +639,18 @@ class DumpToPydantic(IStackOwnerSession):
 
 def dump_to_pydantic_models_as_dict(
         component:ComponentBase, 
-        filenames_up_to_level: Optional[int] = 1,
+        file_split_to_depth: Optional[int] = 1,
         ) -> Dict[str, str]:
 
-    assert filenames_up_to_level >= 1, filenames_up_to_level
+    assert file_split_to_depth >= 1, file_split_to_depth
     dumper = DumpToPydantic(
-                filenames_up_to_level=filenames_up_to_level,
+                file_split_to_depth=file_split_to_depth,
                 )
     with dumper.use_stack_frame(
             CodegenStackFrame(
                 owner_comp_dump=None,
                 component = component,
-                filename = component.name,
+                file_dump = dumper.get_or_create_file_dump(component.name),
                 depth=0,
                 indent_level=0,
                 path_names = [],
@@ -647,11 +663,11 @@ def dump_to_pydantic_models_as_dict(
 def dump_to_pydantic_models(
         component:ComponentBase, 
         fname_or_dname:str,
-        filenames_up_to_level: Optional[int] = 1,
+        file_split_to_depth: Optional[int] = 1,
         ) -> str:
     lines_by_file = dump_to_pydantic_models_as_dict(
                         component=component,
-                        filenames_up_to_level=filenames_up_to_level,
+                        file_split_to_depth=file_split_to_depth,
                         )
     lines_by_file_out = OrderedDict()
 
