@@ -12,6 +12,8 @@ from typing import (
         Union,
         )
 from functools import reduce
+from importlib import import_module
+
 # from threading import Lock
 
 try:
@@ -317,3 +319,23 @@ def add_yaml_indent_to_strlist(out: List[str]) -> List[str]:
     return (f"\n{YAML_INDENT}".join(out)).splitlines()
 
 
+def dynamic_import(class_path:str) -> Any:
+    " typing.List -> from typing import List + List will be returned "
+    from .exceptions import EntityInternalError
+
+    call_repr = f"dynamic_import({class_path})"
+    bits = class_path.split(".")
+
+    module_path = ".".join(bits[:-1])
+    instance_name = bits[-1]
+    try:
+        module_instance = import_module(module_path)
+    except ImportError as ex:
+        raise EntityInternalError(owner=call_repr, msg=f"Import raised exception: {ex}")
+
+    if not hasattr(module_instance, instance_name):
+        raise EntityInternalError(owner=call_repr, msg=f"Object with name '{instance_name}' not found")
+
+    instance = getattr(module_instance, instance_name)
+
+    return instance

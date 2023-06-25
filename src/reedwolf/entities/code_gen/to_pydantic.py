@@ -14,6 +14,7 @@ from typing import (
         Dict,
         Any,
         ClassVar,
+        Tuple,
         )
 
 from ..exceptions import (
@@ -64,8 +65,8 @@ THIS_MODULE = os.path.basename(__file__).split(".")[0]
 @dataclass
 class ClassDeclaration:
     name : str
+    file_dump: "FilePydanticDump"
     title : str =""
-    # class_declaration_owner: Optional[Self]
 
     def __post_init__(self):
         ...
@@ -102,13 +103,20 @@ class VariableDeclaration:
     def set_owner_comp_dump(self, owner_comp_dump: "ComponentPydanticDump"):
         assert not self.owner_comp_dump
         self.owner_comp_dump = owner_comp_dump
+
+        register_local_import = True
         if self.class_declaration:
-            # if self.owner_comp_dump.file_dump:
-            self.class_name_full_path = ".".join(
-                    self.owner_comp_dump.owners_path_class_names \
-                    + [self.class_declaration.name])
-            # if self.class_name_full_path == "EntityCompanyDTO.CanUserAccessChildrenDTO":
-            #     import pdb;pdb.set_trace() 
+            if self.class_declaration.file_dump is self.owner_comp_dump.file_dump:
+                self.class_name_full_path = ".".join(
+                        self.owner_comp_dump.owners_path_class_names \
+                        + [self.class_declaration.name])
+            else:
+                self.class_name_full_path = self.class_declaration.name
+                self.owner_comp_dump\
+                        .file_dump\
+                        .use_type_w_lib(
+                                type_name=self.class_declaration.name, 
+                                lib_name=f".{self.class_declaration.file_dump.filename}")
 
     def dump_to_str(self) -> str:
         if self.class_name_full_path:
@@ -229,6 +237,30 @@ class FilePydanticDump:
     comp_dump_dict: Dict[str, ComponentPydanticDump] = field(init=False, repr=False, default_factory=OrderedDict)
     types_by_lib : Dict[str, Set[str]] = field(init=False, repr=False, default_factory=dict)
 
+    # ------------------------------------------------------------
+
+    def use_type(self, klass: type) -> Tuple[str, str]:
+        " 2nd return param is lib_name when is not part of standard library "
+        lib_name, _, type_name = str(klass).rpartition(".")
+        lib_name_out = None
+        if lib_name != "typing":
+            type_name = klass.__name__
+            module = inspect.getmodule(klass)
+            lib_name = module.__name__
+            if lib_name != "builtins":
+                lib_name_out = lib_name
+        type_name = self.use_type_w_lib(type_name=type_name, lib_name=lib_name)
+        return type_name, lib_name_out
+
+    def use_type_w_lib(self, type_name : str, lib_name: str) -> str:
+        if lib_name != "builtins":
+            if lib_name not in self.types_by_lib:
+                self.types_by_lib[lib_name] = set()
+            self.types_by_lib[lib_name].add(type_name)
+        return type_name
+
+    # ------------------------------------------------------------
+
     def dump_to_str(self) -> str:
         all_lines = []
         all_lines.extend([
@@ -334,28 +366,9 @@ class DumpToPydantic(IStackOwnerSession):
 
     # ------------------------------------------------------------
 
-    def use_type(self, klass: type) -> Union[str, str]:
-        " 2nd return param is lib_name when is not part of standard library "
-        lib_name, _, type_name = str(klass).rpartition(".")
-
-        lib_name_out = None
-
-        if lib_name != "typing":
-            type_name = klass.__name__
-            module = inspect.getmodule(klass)
-            lib_name = module.__name__
-            if lib_name != "builtins":
-                lib_name_out = lib_name
-
-        if lib_name != "builtins":
-            # file_dump = self.get_or_create_file_dump()
-            file_dump = self.current_frame.file_dump
-
-            if lib_name not in file_dump.types_by_lib:
-                file_dump.types_by_lib[lib_name] = set()
-            file_dump.types_by_lib[lib_name].add(type_name)
-
-        return type_name, lib_name_out
+    def use_type(self, klass: type) -> Tuple[str, str]:
+        file_dump = self.current_frame.file_dump
+        return file_dump.use_type(klass)
 
     # ------------------------------------------------------------
 
@@ -479,7 +492,9 @@ class DumpToPydantic(IStackOwnerSession):
             class_py_type = f"{snake_case_to_camel(component.name)}ChildrenDTO"
             class_declaration = ClassDeclaration(
                                     name=class_py_type,
-                                    title=f"Children of '{component.name}'")
+                                    title=f"Children of '{component.name}'",
+                                    file_dump = self.current_frame.file_dump,
+                                    )
 
             # class_py_type_ext = ".".join(self.current_frame.owner_class_name_path))
             var_py_name = f"{component.name}_children"
@@ -507,7 +522,9 @@ class DumpToPydantic(IStackOwnerSession):
         py_type_name = f"{snake_case_to_camel(component.name)}DTO"
         class_declaration = ClassDeclaration(
                                 name=py_type_name,
-                                title=component.title)
+                                title=component.title,
+                                file_dump = self.current_frame.file_dump,
+                                )
 
         vars_declarations = []
 
