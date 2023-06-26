@@ -175,8 +175,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             raise EntitySetupError(owner=self, msg="Entity(models=List[models]) is required.")
 
         if not isinstance(self.models, dict):
-            print(self.models)
-            import pdb;pdb.set_trace() 
+            # TODO: this never happens - define new test case, implenet (or drop this logic)
             self.bound_model.fill_models()
 
         assert isinstance(self.models, dict), self.models
@@ -195,8 +194,6 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         is_main_model = (bound_model==self.bound_model)
 
         is_subentity_main_model = (self.is_subentity() and is_main_model)
-
-        # if self.name == "address_set_ext": import pdb;pdb.set_trace() 
 
         # is_list = False
         if not isinstance(bound_model, BoundModelBase):

@@ -224,7 +224,9 @@ def camel_case_to_snake(name: str) -> str:
         out.append(class_name)
     return ".".join(out)
 
+
 _RE_SPACES = re.compile(" +")
+
 def varname_to_title(varname:str) -> str:
     out = varname.replace("_", " ")
     out = _RE_SPACES.sub(" ", out).strip()
@@ -324,7 +326,7 @@ def dynamic_import(module_path:str, member_name: Optional[str] = None) -> Any:
     from .exceptions import EntityInternalError
 
     call_repr = f"dynamic_import({module_path}{(', ' + member_name) if member_name else ''})"
-    bits = module_path.split(".")
+    # bits = module_path.split(".")
     # module_path, member_name = ".".join(bits[:-1]), bits[-1]
     try:
         module_instance = import_module(module_path)

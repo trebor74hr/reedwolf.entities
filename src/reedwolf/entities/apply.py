@@ -208,7 +208,7 @@ class ApplyResult(IApplySession):
             component: ComponentBase, 
             validation_class: Type[ValidationBase],
             evaluation_class: Type[EvaluationBase],
-        ) -> ExecResult:
+      ) -> ExecResult:
 
         assert issubclass(validation_class, ValidationBase)
         assert issubclass(evaluation_class, EvaluationBase)
@@ -242,8 +242,8 @@ class ApplyResult(IApplySession):
                     #     # TODO: this belongs to Setup phase
                     #     raise EntityApplyError(owner=self, msg="Evaluation can be defined only for components with 'bind' defined. Remove 'Evaluation' or define 'bind'.")
                     self._execute_evaluation(component=component, evaluation=cleaner)
-                elif  not (isinstance(cleaner, ValidationBase) or  
-                           isinstance(cleaner, EvaluationBase)):
+                elif not (isinstance(cleaner, ValidationBase) or  
+                          isinstance(cleaner, EvaluationBase)):
                     raise EntityApplyError(owner=self, msg=f"Unknown cleaner type {type(cleaner)}. Expected *Evaluation or *Validation.")
 
         return all_ok
@@ -1088,7 +1088,7 @@ class ApplyResult(IApplySession):
                                         init_bind_dexp_result=init_bind_dexp_result)
             # TODO: self.config.logger.warning(f"{'  ' * self.current_frame.depth} update: {component.name}")
         else:
-            bind_dexp_result = None
+            bind_dexp_result = None  # noqa: F841
 
         # NOTE: bind_dexp_result not used
         all_ok = self._execute_cleaners(component,

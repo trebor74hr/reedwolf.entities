@@ -136,6 +136,7 @@ __all__ = [
     # fields
     "AutocomputedEnum",
     "StringField",
+    "SizedStringField",
     "TextField",
     "BooleanField",
     "IntegerField",

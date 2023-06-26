@@ -34,6 +34,10 @@ from dataclasses import (
         field,
         )
 
+from .namespaces import (
+        Fn, 
+        This,
+        )
 from .meta import (
         TransMessageType,
         NoneType,
@@ -41,6 +45,7 @@ from .meta import (
 from .base import (
         IApplySession,
         ValidationFailure,
+        _,
         )
 from .valid_base import (
         ValidationBase,

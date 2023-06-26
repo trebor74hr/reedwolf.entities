@@ -1,67 +1,28 @@
-import os
-import inspect
-from collections import OrderedDict
-from contextlib import AbstractContextManager
 from dataclasses import (
         dataclass, 
-        field,
         )
 from typing import (
         List, 
-        Set, 
         Optional,
         Dict,
-        Any,
         ClassVar,
-        Tuple,
         )
 
-from ..exceptions import (
-        EntityInternalError,
-        )
 from ..utils import (
-        snake_case_to_camel,
-        to_repr,
-        get_available_names_example,
-        add_py_indent_to_strlist,
         PY_INDENT,
         )
-from ..meta import (
-        TypeInfo,
-        STANDARD_TYPE_LIST,
-        Self,
-        )
 from ..base import (
-        IStackOwnerSession,
-        IStackFrame,
-        UseStackFrameCtxManagerBase,
         ComponentBase,
-        MAX_RECURSIONS,
-        )
-from ..fields import (
-        FieldBase, 
-        FieldGroup, 
-        ChoiceField,
-        BooleanField,
-        EnumField,
-        )
-from ..containers import (
-        SubEntityBase, 
-        SubEntityItems, 
-        SubEntitySingle, 
-        Entity,
         )
 
 from .base import (
-        DelarationCodeLinesType,
-        PyType,
         ClassDeclarationBase,
         VariableDeclarationBase,
         ComponentDumpBase,
         FileDumpBase,
-        CodegenStackFrame,
         DumpToBase,
         dump_to_models_as_dict,
+        dump_to_models,
         )
 
 
@@ -114,7 +75,7 @@ class DumpToPydantic(DumpToBase):
     KlassVariableDeclaration    : ClassVar[type] = VariableDeclaration    
     KlassComponentDump          : ClassVar[type] = ComponentPydanticDump  
     KlassFileDump               : ClassVar[type] = FilePydanticDump       
-    
+
 # ------------------------------------------------------------
 
 def dump_to_pydantic_models_as_dict(

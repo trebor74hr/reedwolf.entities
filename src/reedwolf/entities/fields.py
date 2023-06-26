@@ -322,7 +322,6 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
 
         # TODO: explain old message "static declared types. Dynamic types can be processed later"
 
-        # if self.name == "value": import pdb;pdb.set_trace() 
         base_type_info = TypeInfo.get_or_create_by_type(
                                 py_type_hint=self.python_type, 
                                 caller=self,

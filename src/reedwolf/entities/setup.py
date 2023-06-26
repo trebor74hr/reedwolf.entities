@@ -320,7 +320,6 @@ class RegistryBase(IRegistry):
             if full_dexp_node_name not in self.store:
                 names_avail = get_available_names_example(full_dexp_node_name, self.store.keys())
                 valid_names = f"Valid attributes: {names_avail}" if self.store.keys() else "Namespace has no attributes at all."
-                # import pdb;pdb.set_trace() 
                 raise EntitySetupNameNotFoundError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': Invalid attribute name '{full_dexp_node_name}'. {valid_names}")
 
             attr_node_template = self.store.get(full_dexp_node_name)
