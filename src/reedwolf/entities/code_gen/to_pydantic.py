@@ -353,6 +353,8 @@ class CodegenStackFrame(IStackFrame):
 @dataclass
 class DumpToPydantic(IStackOwnerSession):
 
+    # if None -> split on all levels
+    # default is 1 -> no split at all, single file is produced
     file_split_to_depth: Optional[int] = field(default=1)
 
     # all internal
@@ -571,11 +573,14 @@ class DumpToPydantic(IStackOwnerSession):
 
         children = component.get_children()
 
-        if depth!=0 and self.file_split_to_depth >= (depth+1) and children: 
+        if children and depth!=0 and (
+          self.file_split_to_depth is None 
+          or self.file_split_to_depth >= (depth+1)): 
             file_dump = self.get_or_create_file_dump(component.name)
             self.current_frame.set_new_file_dump(file_dump)
         else:
             file_dump     = self.current_frame.file_dump
+        assert file_dump == self.current_frame.file_dump
 
         if is_composite_component:
             vars_declarations, class_declaration, py_types_to_use = \
@@ -656,10 +661,13 @@ def dump_to_pydantic_models_as_dict(
         file_split_to_depth: Optional[int] = 1,
         ) -> Dict[str, str]:
 
-    assert file_split_to_depth >= 1, file_split_to_depth
+    if not (file_split_to_depth is None or file_split_to_depth >= 1):
+        raise EntityInternalError(owner=self, msg=f"file_split_to_depth argument needs to be integer >= 1 or None (for all levels). Got: {file_split_to_depth}") 
+
     dumper = DumpToPydantic(
                 file_split_to_depth=file_split_to_depth,
                 )
+
     with dumper.use_stack_frame(
             CodegenStackFrame(
                 owner_comp_dump=None,
@@ -697,7 +705,7 @@ def dump_to_pydantic_models(
             fout.write(code)
         lines_by_file_out[fname_abs] = code
     else:
-        # dump in a single file
+        # dump in several files
         root = os.path.abspath(fname_or_dname)
         if not os.path.exists(root):
             os.makedirs(root)
