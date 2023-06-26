@@ -85,6 +85,7 @@ class ClassDeclaration:
 class VariableDeclaration:
 
     name : str
+    flatten: bool
     class_name_base: str
     # decoration template
     class_name_deco_templ: str
@@ -108,6 +109,7 @@ class VariableDeclaration:
         register_local_import = True
         if self.class_declaration:
             if self.class_declaration.file_dump is self.owner_comp_dump.file_dump:
+                # not top level in file split - used in nested case (not flatten)
                 self.class_name_full_path = ".".join(
                         self.owner_comp_dump.owners_path_class_names \
                         + [self.class_declaration.name])
@@ -120,7 +122,7 @@ class VariableDeclaration:
                                 lib_name=f".{self.class_declaration.file_dump.filename}")
 
     def dump_to_str(self) -> str:
-        if self.class_name_full_path:
+        if not self.flatten and self.class_name_full_path:
             class_name = self.class_name_deco_templ.format(self.class_name_full_path)
         else:
             class_name = self.class_name_deco_templ.format(self.class_name_base)
@@ -355,7 +357,11 @@ class DumpToPydantic(IStackOwnerSession):
 
     # if None -> split on all levels
     # default is 1 -> no split at all, single file is produced
+    # more details in dump_to_pydantic_models()
     file_split_to_depth: Optional[int] = field(default=1)
+
+    # more details in dump_to_pydantic_models()
+    flatten: bool = field(default=False)
 
     # all internal
     file_dump_dict: Dict[str, FilePydanticDump] = field(init=False, repr=False, default_factory=OrderedDict)
@@ -483,6 +489,7 @@ class DumpToPydantic(IStackOwnerSession):
 
         var_declaration = VariableDeclaration(
                     name=component.name, 
+                    flatten=self.flatten,
                     class_name_base = py_type_name, 
                     class_name_deco_templ = py_type_name_deco_templ, 
                     comment = todo_comment, 
@@ -501,6 +508,7 @@ class DumpToPydantic(IStackOwnerSession):
             var_py_name = f"{component.name}_children"
             var_declaration = VariableDeclaration(
                                     name = var_py_name, 
+                                    flatten=self.flatten,
                                     class_name_base = class_py_type,
                                     class_name_deco_templ = "{}",
                                     class_declaration=class_declaration,
@@ -551,6 +559,7 @@ class DumpToPydantic(IStackOwnerSession):
 
         var_declaration = VariableDeclaration(
                                 name=component.name, 
+                                flatten=self.flatten,
                                 class_name_base=py_type_name, 
                                 class_name_deco_templ=class_name_deco_templ, 
                                 title=component.title,
@@ -635,7 +644,8 @@ class DumpToPydantic(IStackOwnerSession):
                     if not self.current_frame.owner_comp_dump is comp_dump:
                         raise EntityInternalError(owner=self, msg=f"self.current_frame.owner_comp_dump={self.current_frame.owner_comp_dump} is not comp_dump={comp_dump}") 
 
-                    if self.current_frame.owner_comp_dump.file_dump is self.current_frame.file_dump:
+                    if not self.flatten \
+                      and self.current_frame.owner_comp_dump.file_dump is self.current_frame.file_dump:
                         # in this case classes are nested under owner class
                         comp_dump.add_nested_comp_dump(sub_comp_dump)
 
@@ -659,6 +669,7 @@ class DumpToPydantic(IStackOwnerSession):
 def dump_to_pydantic_models_as_dict(
         component:ComponentBase, 
         file_split_to_depth: Optional[int] = 1,
+        flatten: bool = False,
         ) -> Dict[str, str]:
 
     if not (file_split_to_depth is None or file_split_to_depth >= 1):
@@ -666,6 +677,7 @@ def dump_to_pydantic_models_as_dict(
 
     dumper = DumpToPydantic(
                 file_split_to_depth=file_split_to_depth,
+                flatten=flatten,
                 )
 
     with dumper.use_stack_frame(
@@ -685,10 +697,25 @@ def dump_to_pydantic_models(
         component:ComponentBase, 
         fname_or_dname:str,
         file_split_to_depth: Optional[int] = 1,
+        flatten: bool = False,
         ) -> str:
+    """
+    file_split_to_depth
+        1 - (default) no split at all, single file is produced
+        2 - all components on level depth 2 will have own file
+        3 - ...
+        None - split on all levels, every component -> own file
+
+    flatten 
+        False -> dependent classes are nested inside parent classes (except
+            when component is top component in the file - see previous
+            paremeter
+        True - no nesting, all classes are on module level
+    """
     lines_by_file = dump_to_pydantic_models_as_dict(
                         component=component,
                         file_split_to_depth=file_split_to_depth,
+                        flaten=flatten,
                         )
     lines_by_file_out = OrderedDict()
 
