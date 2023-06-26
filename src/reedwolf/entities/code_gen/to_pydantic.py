@@ -205,7 +205,13 @@ class ComponentPydanticDump:
 
     def _dump_to_strlist_nested_comps(self, lines: List[str]):
         if self.nested_comp_dumps:
-            for comp_dump in self.nested_comp_dumps:
+            comp_dump_list = self.nested_comp_dumps
+            # if self.deps_order:
+            #     comp_dump_list = reversed(comp_dump_list)
+
+            for comp_dump in comp_dump_list:
+                if comp_dump.dumped:
+                    continue
                 nested_lines = comp_dump.dump_to_strlist()
                 lines.extend(
                     add_py_indent_to_strlist(1, 
@@ -252,6 +258,8 @@ class FilePydanticDump:
     " one filename - can have several ComponentPydanticDump "
 
     filename: str
+    flatten: bool
+    deps_order: bool
 
     # internal
     comp_dump_dict: Dict[str, ComponentPydanticDump] = field(init=False, repr=False, default_factory=OrderedDict)
@@ -301,10 +309,14 @@ class FilePydanticDump:
                 all_lines.append(f"    {class_name},")
             all_lines.append(")")
 
-        comp_dump_first = None
-        for comp_dump in self.comp_dump_dict.values():
-            if not comp_dump_first:
-                comp_dump_first = comp_dump
+        comp_dump_list = self.comp_dump_dict.values()
+
+        comp_dump_first = list(comp_dump_list)[0]
+
+        if self.flatten and self.deps_order:
+            comp_dump_list = reversed(comp_dump_list)
+
+        for comp_dump in comp_dump_list:
             if comp_dump.dumped:
                 continue
             all_lines.extend(comp_dump.dump_to_strlist())
@@ -399,7 +411,11 @@ class DumpToPydantic(IStackOwnerSession):
     def get_or_create_file_dump(self, filename: str) -> FilePydanticDump:
         # filename = self.current_frame.filename
         if filename not in self.file_dump_dict:
-            self.file_dump_dict[filename] = FilePydanticDump(filename=filename)
+            self.file_dump_dict[filename] = \
+                    FilePydanticDump(
+                        filename=filename, 
+                        flatten=self.flatten,
+                        deps_order=self.deps_order)
         return self.file_dump_dict[filename]
 
     def get_file_dump(self, filename: str) -> FilePydanticDump:
