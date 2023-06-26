@@ -66,7 +66,7 @@ PyType = type
 class ClassDeclarationBase:
 
     name : str
-    file_dump: "FilePydanticDumpBase"
+    file_dump: "FileDumpBase"
     title : str =""
 
     def __post_init__(self):
@@ -95,13 +95,13 @@ class VariableDeclarationBase:
     comment: str = ""
 
     # later computed when assigned to component
-    owner_comp_dump : Optional["ComponentPydanticDumpBase"] = field(repr=False, init=False, default=None)
+    owner_comp_dump : Optional["ComponentDumpBase"] = field(repr=False, init=False, default=None)
     class_name_full_path: Optional[str ]= field(repr=False, init=False, default=None)
 
     def __post_init__(self):
         ...
 
-    def set_owner_comp_dump(self, owner_comp_dump: "ComponentPydanticDumpBase"):
+    def set_owner_comp_dump(self, owner_comp_dump: "ComponentDumpBase"):
         assert not self.owner_comp_dump
         self.owner_comp_dump = owner_comp_dump
 
@@ -127,19 +127,19 @@ class VariableDeclarationBase:
 
 
 @dataclass
-class ComponentPydanticDumpBase:
+class ComponentDumpBase:
     """ dumped lines of code and declarations for a component 
     class_declaration
         vars_declarations
 
         DumpAll (
-            List[ComponentPydanticDumpBase]
+            List[ComponentDumpBase]
             )
     """
 
     name:str
     # filename: str
-    file_dump: "FilePydanticDumpBase"
+    file_dump: "FileDumpBase"
 
     deps_order: bool = field(repr=False)
 
@@ -243,15 +243,15 @@ class ComponentPydanticDumpBase:
 
 
 @dataclass 
-class FilePydanticDumpBase:
-    " one filename - can have several ComponentPydanticDumpBase "
+class FileDumpBase:
+    " one filename - can have several ComponentDumpBase "
 
     filename: str
     flatten: bool
     deps_order: bool
 
     # internal
-    comp_dump_dict: Dict[str, ComponentPydanticDumpBase] = field(init=False, repr=False, default_factory=OrderedDict)
+    comp_dump_dict: Dict[str, ComponentDumpBase] = field(init=False, repr=False, default_factory=OrderedDict)
     types_by_lib : Dict[str, Set[str]] = field(init=False, repr=False, default_factory=dict)
 
 
@@ -287,10 +287,10 @@ class FilePydanticDumpBase:
 @dataclass
 class CodegenStackFrame(IStackFrame):
 
-    owner_comp_dump: Optional[ComponentPydanticDumpBase] = field(repr=False)
+    owner_comp_dump: Optional[ComponentDumpBase] = field(repr=False)
     component: ComponentBase = field(repr=False)
     # filename: str = field(kw_only=False)
-    file_dump: FilePydanticDumpBase = field(init=True)
+    file_dump: FileDumpBase = field(init=True)
     path_names: List[str] = field()
     owner_class_name_path: List[str] = field(repr=False)
     depth: Optional[int] = field(repr=False) # 0 based
@@ -321,7 +321,7 @@ class CodegenStackFrame(IStackFrame):
         if self.owner_comp_dump:
             self.owner_class_name_path.append(self.owner_comp_dump.class_declaration.name)
 
-    def set_new_file_dump(self, file_dump: FilePydanticDumpBase): 
+    def set_new_file_dump(self, file_dump: FileDumpBase): 
         if self.file_dump.filename == file_dump.filename:
             raise EntityInternalError(owner=self, msg=f"Expected diff self.file_dump.filename == file_dump.filename, got: {file_dump}") 
         self.file_dump = file_dump
@@ -331,19 +331,31 @@ class CodegenStackFrame(IStackFrame):
 
 
 @dataclass
-class DumpToPydanticBase(IStackOwnerSession):
+class DumpToBase(IStackOwnerSession):
 
-    # more details in dump_to_pydantic_models()
+    # file_split_to_depth:
+    #     1 - (default) no split at all, single file is produced
+    #     2 - all components on level depth 2 will have own file
+    #     3 - ...
+    #     None - split on all levels, every component -> own file
     file_split_to_depth: Optional[int] = field(default=1)
 
-    # more details in dump_to_pydantic_models()
+    # flatten:
+    #     False - (default) dependent classes are nested inside parent classes (except
+    #         when component is top component in the file - see previous
+    #         paremeter
+    #     True - no nesting, all classes are on module level
     flatten: bool = field(default=False)
 
-    # more details in dump_to_pydantic_models()
+    # deps_order:
+    #     False - (default) classes are in order from top to bottom
+    #     True - classes are ordered in dependency order so all dependent classes 
+    #            are above class that needs them.
     deps_order: bool = field(default=False)
 
+
     # all internal
-    file_dump_dict: Dict[str, FilePydanticDumpBase] = field(init=False, repr=False, default_factory=OrderedDict)
+    file_dump_dict: Dict[str, FileDumpBase] = field(init=False, repr=False, default_factory=OrderedDict)
 
     # obligatory for stack handling
     stack_frames: List[CodegenStackFrame] = field(repr=False, init=False, default_factory=list)
@@ -356,33 +368,33 @@ class DumpToPydanticBase(IStackOwnerSession):
     # needs to be set in inherited class
     KlassClassDeclaration       : ClassVar[type] = None
     KlassVariableDeclaration    : ClassVar[type] = None
-    KlassComponentPydanticDump  : ClassVar[type] = None
-    KlassFilePydanticDump       : ClassVar[type] = None
+    KlassComponentDump  : ClassVar[type] = None
+    KlassFileDump       : ClassVar[type] = None
 
     def __post_init__(self):
 
-        if not issubclass(self.__class__.KlassClassDeclaration, ClassDeclarationBase):
+        if not (self.__class__.KlassClassDeclaration and issubclass(self.__class__.KlassClassDeclaration, ClassDeclarationBase)):
             raise EntityInternalError(owner=self, msg=f"For KlassClassDeclaration expecting ClassDeclarationBase class, got: {self.__class__.KlassClassDeclaration} ")
-        if not issubclass(self.__class__.KlassVariableDeclaration, VariableDeclarationBase):
+        if not (self.__class__.KlassVariableDeclaration and issubclass(self.__class__.KlassVariableDeclaration, VariableDeclarationBase)):
             raise EntityInternalError(owner=self, msg=f"For KlassVariableDeclaration expecting VariableDeclarationBase class, got: {self.__class__.KlassVariableDeclaration}")
-        if not issubclass(self.__class__.KlassComponentPydanticDump, ComponentPydanticDumpBase):
-            raise EntityInternalError(owner=self, msg=f"For KlassComponentPydanticDump expecting ComponentPydanticDumpBase class, got: {self.__class__.KlassComponentPydanticDump}")
-        if not issubclass(self.__class__.KlassFilePydanticDump, FilePydanticDumpBase):
-            raise EntityInternalError(owner=self, msg=f"For KlassFilePydanticDump expecting FilePydanticDumpBase class, got: {self.__class__.KlassFilePydanticDump }")
+        if not (self.__class__.KlassComponentDump and issubclass(self.__class__.KlassComponentDump, ComponentDumpBase)):
+            raise EntityInternalError(owner=self, msg=f"For KlassComponentDump expecting ComponentDumpBase class, got: {self.__class__.KlassComponentDump}")
+        if not (self.__class__.KlassFileDump and issubclass(self.__class__.KlassFileDump, FileDumpBase)):
+            raise EntityInternalError(owner=self, msg=f"For KlassFileDump expecting FileDumpBase class, got: {self.__class__.KlassFileDump }")
 
     # ------------------------------------------------------------
 
-    def get_or_create_file_dump(self, filename: str) -> FilePydanticDumpBase:
+    def get_or_create_file_dump(self, filename: str) -> FileDumpBase:
         # filename = self.current_frame.filename
         if filename not in self.file_dump_dict:
             self.file_dump_dict[filename] = \
-                    self.KlassFilePydanticDump(
+                    self.KlassFileDump(
                         filename=filename, 
                         flatten=self.flatten,
                         deps_order=self.deps_order)
         return self.file_dump_dict[filename]
 
-    def get_file_dump(self, filename: str) -> FilePydanticDumpBase:
+    def get_file_dump(self, filename: str) -> FileDumpBase:
         if filename not in self.file_dump_dict:
             raise EntityInternalError(owner=self, msg=f"File dump '{filename}' not found") 
         return self.file_dump_dict[filename]
@@ -396,7 +408,7 @@ class DumpToPydanticBase(IStackOwnerSession):
         return path_name
 
 
-    def set_comp_dump(self, comp_dump:ComponentPydanticDumpBase) -> ComponentPydanticDumpBase:
+    def set_comp_dump(self, comp_dump:ComponentDumpBase) -> ComponentDumpBase:
         # file_dump = self.get_or_create_file_dump()
         file_dump = self.current_frame.file_dump
 
@@ -415,7 +427,7 @@ class DumpToPydanticBase(IStackOwnerSession):
         return comp_dump
 
 
-    def get_current_comp_dump(self) -> ComponentPydanticDumpBase:
+    def get_current_comp_dump(self) -> ComponentDumpBase:
         # file_dump = self.get_file_dump(self.current_frame.filename)
         file_dump = self.current_frame.file_dump
 
@@ -619,7 +631,7 @@ class DumpToPydanticBase(IStackOwnerSession):
 
 
         comp_dump = self.set_comp_dump(
-                            self.KlassComponentPydanticDump(
+                            self.KlassComponentDump(
                                     name=component.name,
                                     file_dump=file_dump,
                                     deps_order=self.deps_order,

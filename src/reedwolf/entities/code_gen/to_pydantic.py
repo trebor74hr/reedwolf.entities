@@ -58,10 +58,10 @@ from .base import (
         PyType,
         ClassDeclarationBase,
         VariableDeclarationBase,
-        ComponentPydanticDumpBase,
-        FilePydanticDumpBase,
+        ComponentDumpBase,
+        FileDumpBase,
         CodegenStackFrame,
-        DumpToPydanticBase,
+        DumpToBase,
         )
 
 
@@ -103,13 +103,13 @@ class VariableDeclaration(VariableDeclarationBase):
 
 # ------------------------------------------------------------
 
-class ComponentPydanticDump(ComponentPydanticDumpBase):
+class ComponentPydanticDump(ComponentDumpBase):
     ...
 
 # ------------------------------------------------------------
 
 @dataclass 
-class FilePydanticDump(FilePydanticDumpBase):
+class FilePydanticDump(FileDumpBase):
 
     def dump_to_str(self) -> str:
         all_lines = []
@@ -163,12 +163,12 @@ class FilePydanticDump(FilePydanticDumpBase):
 # ------------------------------------------------------------
 
 @dataclass
-class DumpToPydantic(DumpToPydanticBase):
+class DumpToPydantic(DumpToBase):
 
     KlassClassDeclaration       : ClassVar[type] = ClassDeclaration       
     KlassVariableDeclaration    : ClassVar[type] = VariableDeclaration    
-    KlassComponentPydanticDump  : ClassVar[type] = ComponentPydanticDump  
-    KlassFilePydanticDump       : ClassVar[type] = FilePydanticDump       
+    KlassComponentDump          : ClassVar[type] = ComponentPydanticDump  
+    KlassFileDump               : ClassVar[type] = FilePydanticDump       
     
 # ------------------------------------------------------------
 
@@ -178,6 +178,11 @@ def dump_to_pydantic_models_as_dict(
         flatten: bool = False,
         deps_order: bool = False,
         ) -> Dict[str, str]:
+    """
+    file_split_to_depth - more details in base.DumpToBase
+    flatten - more details in base.DumpToBase
+    deps_order - more details in base.DumpToBase
+    """
 
     if not (file_split_to_depth is None or file_split_to_depth >= 1):
         raise EntityInternalError(owner=self, msg=f"file_split_to_depth argument needs to be integer >= 1 or None (for all levels). Got: {file_split_to_depth}") 
@@ -209,22 +214,9 @@ def dump_to_pydantic_models(
         deps_order: bool = False,
         ) -> str:
     """
-    file_split_to_depth
-        1 - (default) no split at all, single file is produced
-        2 - all components on level depth 2 will have own file
-        3 - ...
-        None - split on all levels, every component -> own file
-
-    flatten 
-        False - (default) dependent classes are nested inside parent classes (except
-            when component is top component in the file - see previous
-            paremeter
-        True - no nesting, all classes are on module level
-
-    deps_order
-        False - (default) classes are in order from top to bottom
-        True - classes are ordered in dependency order so all dependent classes 
-               are above class that needs them.
+    file_split_to_depth - more details in base.DumpToBase
+    flatten - more details in base.DumpToBase
+    deps_order - more details in base.DumpToBase
     """
     lines_by_file = dump_to_pydantic_models_as_dict(
                         component=component,
