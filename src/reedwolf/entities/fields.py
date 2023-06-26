@@ -266,13 +266,6 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
                 # warn(f"TODO: {self}.bind = {self.bind} -> bound_attr_node can not be found.")
                 raise EntitySetupValueError(owner=self, msg=f"bind={self.bind}: bound_attr_node can not be found.")
             # else:
-            #     # ALT: self.bound_attr_node.add_bound_attr_node(BoundVar(setup_session.name, self.attr_node.namespace, self.attr_node.name))
-            #     # self.attr_node.add_bound_attr_node(
-            #     #         BoundVar(setup_session.name,
-            #     #                  self.bound_attr_node.namespace,
-            #     #                  self.bound_attr_node.name))
-            #     # if not isinstance(self.bound_attr_node.data, TypeInfo):
-            #     #     raise EntityInternalError(owner=self, msg=f"Unhandled case, self.bound_attr_node.data is not TypeInfo, got: {self.bound_attr_node.data}")
             #     self._set_type_info()
 
         # NOTE: can have multiple Evaluation-s
@@ -329,7 +322,8 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
 
         # TODO: explain old message "static declared types. Dynamic types can be processed later"
 
-        self.type_info = TypeInfo.get_or_create_by_type(
+        # if self.name == "value": import pdb;pdb.set_trace() 
+        base_type_info = TypeInfo.get_or_create_by_type(
                                 py_type_hint=self.python_type, 
                                 caller=self,
                                 )
@@ -344,11 +338,13 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
         if not expected_type_info:
             raise EntityInternalError(owner=self, msg=f"Can't extract type_info from bound_attr_node: {self.bound_attr_node} ")
 
-        err_msg = expected_type_info.check_compatible(self.type_info)
+        err_msg = expected_type_info.check_compatible(base_type_info)
         if err_msg:
-            expected_type_info.check_compatible(self.type_info)
-            raise EntitySetupTypeError(owner=self, msg=f"Given data type '{self.type_info}' is not compatible underneath model type '{expected_type_info}: {err_msg}'")
+            expected_type_info.check_compatible(base_type_info)
+            raise EntitySetupTypeError(owner=self, msg=f"Given data type '{base_type_info}' is not compatible underneath model type '{expected_type_info}: {err_msg}'")
 
+        # if all ok, set to more richer type_info
+        self.type_info = expected_type_info
 
     # ------------------------------------------------------------
 

@@ -10,7 +10,6 @@ from typing import (
         List, 
         Set, 
         Optional,
-        Union,
         Dict,
         Any,
         ClassVar,
@@ -60,10 +59,11 @@ DelarationCodeLinesType = List[str]
 THIS_PACKAGE = inspect.getmodule(base).__package__
 THIS_MODULE = os.path.basename(__file__).split(".")[0]
 
-
+PyType = type
 
 @dataclass
 class ClassDeclaration:
+
     name : str
     file_dump: "FilePydanticDump"
     title : str =""
@@ -83,6 +83,7 @@ class ClassDeclaration:
 
 @dataclass
 class VariableDeclaration:
+
     name : str
     class_name_base: str
     # decoration template
@@ -142,8 +143,8 @@ class ComponentPydanticDump:
         DumpAll (
             List[ComponentPydanticDump]
             )
-
     """
+
     name:str
     # filename: str
     file_dump: "FilePydanticDump"
@@ -153,7 +154,7 @@ class ComponentPydanticDump:
 
     owner_comp_dump : Optional[Self] = field(repr=False)
 
-    # variable declarations - can have:
+    # Variable declarations - can have:
     #   - 1 item for normal case: 
     #     comp_name: CompType
     #   - 2 items for boolean + enables: 
@@ -170,9 +171,6 @@ class ComponentPydanticDump:
 
     def __post_init__(self):
         self.owners_path_class_names = []
-
-        # if self.name == "address_set":
-        #     import pdb;pdb.set_trace() 
 
         if self.owner_comp_dump:
             if self.owner_comp_dump.file_dump is self.file_dump \
@@ -231,6 +229,7 @@ class ComponentPydanticDump:
 @dataclass 
 class FilePydanticDump:
     " one filename - can have several ComponentPydanticDump "
+
     filename: str
 
     # internal
@@ -283,8 +282,6 @@ class FilePydanticDump:
 
         comp_dump_first = None
         for comp_dump in self.comp_dump_dict.values():
-            # if "can_user_change" in str(comp_dump): import pdb;pdb.set_trace() 
-
             if not comp_dump_first:
                 comp_dump_first = comp_dump
             if comp_dump.dumped:
@@ -309,6 +306,7 @@ class FilePydanticDump:
 
 @dataclass
 class CodegenStackFrame(IStackFrame):
+
     owner_comp_dump: Optional[ComponentPydanticDump] = field(repr=False)
     component: ComponentBase = field(repr=False)
     # filename: str = field(kw_only=False)
@@ -321,17 +319,20 @@ class CodegenStackFrame(IStackFrame):
     component_name: str = field(init=False)
 
     def __post_init__(self):
+        if not isinstance(self.component, ComponentBase):
+            raise EntityInternalError(owner=self, msg=f"Expected Component, got: {self.component}") 
+
         if self.depth==0:
             assert not self.owner_comp_dump
         else:
             assert self.owner_comp_dump
-        assert isinstance(self.component, ComponentBase)
 
         self.component_name = self.component.name
         # make a copy and add component name
         self.path_names = self.path_names[:]
         self.path_names.append(self.component.name)
-        assert len(self.path_names) == self.depth+1
+        if not len(self.path_names) == self.depth+1:
+            raise EntityInternalError(owner=self, msg=f"Depth is {self.depth} and length of path-names not matched: {self.path_names}") 
 
         if self.depth > MAX_RECURSIONS:
             raise EntityInternalError(owner=component, msg=f"Maximum recursion depth exceeded ({self.depth})")
@@ -341,7 +342,8 @@ class CodegenStackFrame(IStackFrame):
             self.owner_class_name_path.append(self.owner_comp_dump.class_declaration.name)
 
     def set_new_file_dump(self, file_dump: FilePydanticDump): 
-        assert self.file_dump.filename != file_dump.filename
+        if self.file_dump.filename == file_dump.filename:
+            raise EntityInternalError(owner=self, msg=f"Expected diff self.file_dump.filename == file_dump.filename, got: {file_dump}") 
         self.file_dump = file_dump
 
 
@@ -366,12 +368,6 @@ class DumpToPydantic(IStackOwnerSession):
 
     # ------------------------------------------------------------
 
-    def use_type(self, klass: type) -> Tuple[str, str]:
-        file_dump = self.current_frame.file_dump
-        return file_dump.use_type(klass)
-
-    # ------------------------------------------------------------
-
     def get_or_create_file_dump(self, filename: str) -> FilePydanticDump:
         # filename = self.current_frame.filename
         if filename not in self.file_dump_dict:
@@ -393,8 +389,6 @@ class DumpToPydantic(IStackOwnerSession):
 
 
     def set_comp_dump(self, comp_dump:ComponentPydanticDump) -> ComponentPydanticDump:
-        assert comp_dump.name
-
         # file_dump = self.get_or_create_file_dump()
         file_dump = self.current_frame.file_dump
 
@@ -427,10 +421,15 @@ class DumpToPydantic(IStackOwnerSession):
 
     # ------------------------------------------------------------
 
-    def dump_field(self) -> Union[List[VariableDeclaration], Optional[ClassDeclaration]]:
-        """ can return 1 or 2 items:
+    def dump_field(self) -> Tuple[
+                List[VariableDeclaration], 
+                Optional[ClassDeclaration], 
+                List[PyType]]:
+        """ Can return 1 - 3 items:
             1) attribute (no class decl) 
             2) optional - var with complex type with class decl.
+            3) List of python-types to be used in this or owner file_dump
+               what needs to be done in caller
         """
         component = self.current_frame.component
 
@@ -439,42 +438,44 @@ class DumpToPydantic(IStackOwnerSession):
 
         vars_declarations = []
 
-        if component.bound_attr_node:
-            assert isinstance(component.bound_attr_node.data, TypeInfo)
+        file_dump = self.current_frame.file_dump
 
-            # py_type_klass = component.bound_attr_node.data.type_
+        if component.type_info:
+            type_info = component.type_info
 
             py_type_klass = component.type_info.type_
-            assert py_type_klass
+            if not py_type_klass:
+                raise EntityInternalError(owner=self, msg=f"component.type_info.type_ is not set: {to_repr(component.type_info)}") 
+
 
             if isinstance(component, EnumField):
                 py_type_klass = component.enum
-                py_type_name, _ = self.use_type(py_type_klass)
+                py_type_name, _ = file_dump.use_type(py_type_klass)
             elif isinstance(component, ChoiceField):
                 py_type_klass = component.python_type
-                py_type_name, _ = self.use_type(py_type_klass)
+                py_type_name, _ = file_dump.use_type(py_type_klass)
             elif py_type_klass in STANDARD_TYPE_LIST:
-                py_type_name, _ = self.use_type(py_type_klass)
+                py_type_name, _ = file_dump.use_type(py_type_klass)
             else:
-                py_type_name, _ = self.use_type(Any)
+                py_type_name, _ = file_dump.use_type(Any)
                 todo_comment=f"TODO: domain_dataclass {py_type_name}"
 
             # type hint options - decorated type name
             py_type_name_deco_templ = "{}"
-            if component.bound_attr_node.data.is_list:
-                self.use_type(List)
+            if type_info.is_list:
+                file_dump.use_type(List)
                 py_type_name_deco_templ = f"List[{py_type_name_deco_templ}]"
-            if component.bound_attr_node.data.is_optional:
-                self.use_type(Optional)
+
+            if type_info.is_optional:
+                file_dump.use_type(Optional)
                 py_type_name_deco_templ = f"Optional[{py_type_name_deco_templ}]"
 
             # NOTE: currently not implemented for:
             #   default, required, readonly, max-length, etc.
 
         else:
-            # todo_comment = f"  # TODO: unbound {component.bind}"
-            todo_comment = f"TODO: unbound {component.bind}"
-            py_type_name, _ = self.use_type(Any)
+            todo_comment = f"TODO: unknown type for bind: {component.bind}"
+            py_type_name, _ = file_dump.use_type(Any)
             py_type_name_deco_templ = "{}"
 
 
@@ -495,8 +496,6 @@ class DumpToPydantic(IStackOwnerSession):
                                     title=f"Children of '{component.name}'",
                                     file_dump = self.current_frame.file_dump,
                                     )
-
-            # class_py_type_ext = ".".join(self.current_frame.owner_class_name_path))
             var_py_name = f"{component.name}_children"
             var_declaration = VariableDeclaration(
                                     name = var_py_name, 
@@ -508,16 +507,21 @@ class DumpToPydantic(IStackOwnerSession):
         else:
             class_declaration = None
 
-        return vars_declarations, class_declaration
+        return vars_declarations, class_declaration, []
 
     # ------------------------------------------------------------
 
-    def dump_composite_class(self) -> Union[List[VariableDeclaration], Optional[ClassDeclaration]]:
-        " returns single variable decl "
+    def dump_composite_class(self) -> Tuple[
+                List[VariableDeclaration], 
+                ClassDeclaration, 
+                List[PyType]]:
+
+        " see return values description in dump_field() "
 
         path_names = self.current_frame.path_names
         component  = self.current_frame.component 
-        assert isinstance(component, (FieldGroup, Entity, SubEntityBase))
+        if not isinstance(component, (FieldGroup, Entity, SubEntityBase)):
+            raise EntityInternalError(owner=self, msg=f"Invalid type of component, expected [FieldGroup, Entity, SubEntityBase], got: {to_repr(component)}") 
 
         py_type_name = f"{snake_case_to_camel(component.name)}DTO"
         class_declaration = ClassDeclaration(
@@ -528,19 +532,20 @@ class DumpToPydantic(IStackOwnerSession):
 
         vars_declarations = []
 
-        # py_type_name_ext2 = snake_case_to_camel(".".join(map(snake_case_to_camel, path_names)))
         class_name_deco_templ = "{}"
 
+        py_types_to_use = []
         if isinstance(component, SubEntityBase):
             subitem_type_info = component.bound_model.type_info
 
             if isinstance(component, SubEntityItems):
-                self.use_type(List)
+                py_types_to_use.append(List)
                 class_name_deco_templ = f"List[{class_name_deco_templ}]"
 
             if subitem_type_info.is_optional:
-                self.use_type(Optional)
+                py_types_to_use.append(Optional)
                 class_name_deco_templ = f"Optional[{class_name_deco_templ}]"
+
 
         var_declaration = VariableDeclaration(
                                 name=component.name, 
@@ -551,7 +556,8 @@ class DumpToPydantic(IStackOwnerSession):
                                 )
         vars_declarations.append(var_declaration)
 
-        return vars_declarations, class_declaration
+        return vars_declarations, class_declaration, py_types_to_use
+
 
     # ------------------------------------------------------------
 
@@ -565,8 +571,6 @@ class DumpToPydantic(IStackOwnerSession):
 
         children = component.get_children()
 
-        # if component.name == "can_user_change": import pdb;pdb.set_trace() 
-
         if depth!=0 and self.file_split_to_depth >= (depth+1) and children: 
             file_dump = self.get_or_create_file_dump(component.name)
             self.current_frame.set_new_file_dump(file_dump)
@@ -574,9 +578,11 @@ class DumpToPydantic(IStackOwnerSession):
             file_dump     = self.current_frame.file_dump
 
         if is_composite_component:
-            vars_declarations, class_declaration = self.dump_composite_class()
+            vars_declarations, class_declaration, py_types_to_use = \
+                    self.dump_composite_class()
         elif isinstance(component, (FieldBase,)):
-            vars_declarations, class_declaration = self.dump_field()
+            vars_declarations, class_declaration, py_types_to_use = \
+                    self.dump_field()
         else:
             raise EntityInternalError(owner=self, msg=f"No dump for: {component}")
 
@@ -584,9 +590,16 @@ class DumpToPydantic(IStackOwnerSession):
             # belongs to owner
             assert vars_declarations, component
             self.current_frame.owner_comp_dump.add_vars_declarations(vars_declarations)
+
+            file_dump_for_imports = self.current_frame.owner_comp_dump.file_dump
+            for py_type in py_types_to_use:
+                file_dump_for_imports.use_type(py_type)
+
         else:
             # NOTE: vars_declarations won't be consumed in top level component
-            assert depth==0
+            if depth!=0:
+                raise EntityInternalError(owner=self, msg=f"Comp dump owner not set and depth is not 0, got: {depth}") 
+
 
         comp_dump = self.set_comp_dump(
                             ComponentPydanticDump(
@@ -608,12 +621,14 @@ class DumpToPydantic(IStackOwnerSession):
                             file_dump = file_dump,
                             owner_class_name_path = self.current_frame.owner_class_name_path,
                             )):
+
                     # RECURSION
                     self.dump_all()
 
                     sub_comp_dump = self.get_current_comp_dump()
 
-                    assert self.current_frame.owner_comp_dump is comp_dump
+                    if not self.current_frame.owner_comp_dump is comp_dump:
+                        raise EntityInternalError(owner=self, msg=f"self.current_frame.owner_comp_dump={self.current_frame.owner_comp_dump} is not comp_dump={comp_dump}") 
 
                     if self.current_frame.owner_comp_dump.file_dump is self.current_frame.file_dump:
                         # in this case classes are nested under owner class
@@ -621,8 +636,8 @@ class DumpToPydantic(IStackOwnerSession):
 
 
         else:
-            assert not class_declaration
-
+            if class_declaration:
+                raise EntityInternalError(owner=self, msg=f"class_declaration should be None, got: {class_declaration}") 
 
         if depth==0:
             lines_by_file = OrderedDict()
