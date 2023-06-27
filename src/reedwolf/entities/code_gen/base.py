@@ -14,6 +14,7 @@ from typing import (
         Any,
         ClassVar,
         Tuple,
+        Union,
         )
 
 from ..exceptions import (
@@ -25,10 +26,13 @@ from ..utils import (
         to_repr,
         get_available_names_example,
         add_py_indent_to_strlist,
+        UndefinedType,
+        UNDEFINED,
         )
 from ..meta import (
         STANDARD_TYPE_LIST,
         Self,
+        NoneType,
         )
 from ..base import (
         IStackOwnerSession,
@@ -256,7 +260,8 @@ class FileDumpBase:
     # internal
     comp_dump_dict: Dict[str, ComponentDumpBase] = field(init=False, repr=False, default_factory=OrderedDict)
     types_by_lib : Dict[str, Set[str]] = field(init=False, repr=False, default_factory=dict)
-
+    # main component's dump - set in dump_to_str
+    comp_dump_first: Union[NoneType, ComponentDumpBase, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
 
     def use_type(self, klass: type) -> Tuple[str, str]:
         " 2nd return param is lib_name when is not part of standard library "
@@ -315,7 +320,7 @@ class FileDumpBase:
 
         comp_dump_list = self.comp_dump_dict.values()
 
-        comp_dump_first = list(comp_dump_list)[0]
+        self.comp_dump_first = list(comp_dump_list)[0]
 
         if self.flatten and self.deps_order:
             comp_dump_list = reversed(comp_dump_list)
@@ -325,14 +330,14 @@ class FileDumpBase:
                 continue
             all_lines.extend(comp_dump.dump_to_strlist())
 
-        if not (comp_dump_first and comp_dump_first.class_declaration):
-            raise EntityInternalError(owner=self, msg=f"comp_dump_first='{comp_dump_first}' or its 'class_declaration' not set") 
+        if not self.comp_dump_first.class_declaration:
+            raise EntityInternalError(owner=self, msg=f"self.comp_dump_first='{self.comp_dump_first}' or its 'class_declaration' not set") 
 
         all_lines.append("")
         all_lines.append("")
         all_lines.append("def _check_hints():")
         all_lines.append("    from typing import get_type_hints")
-        all_lines.append(f"    return get_type_hints({comp_dump_first.class_declaration.name})")
+        all_lines.append(f"    return get_type_hints({self.comp_dump_first.class_declaration.name})")
         all_lines.append("")
 
         out = "\n".join(all_lines)
@@ -747,7 +752,7 @@ def dump_to_models_as_dict(
         file_split_to_depth: Optional[int] = 1,
         flatten: bool = False,
         deps_order: bool = False,
-        ) -> Dict[str, str]:
+        ) -> Tuple[DumpToBase, Dict[str, str]]:
     """
     file_split_to_depth - more details in base.DumpToBase
     flatten - more details in base.DumpToBase
@@ -774,7 +779,7 @@ def dump_to_models_as_dict(
                 path_names = [],
                 owner_class_name_path=[],
                 )):
-        return dumper.dump_all()
+        return dumper, dumper.dump_all()
 
 # ------------------------------------------------------------
 
@@ -785,26 +790,41 @@ def dump_to_models(
         file_split_to_depth: Optional[int] = 1,
         flatten: bool = False,
         deps_order: bool = False,
-        ) -> Dict[str, str]:
+        add_init_py: bool = False,
+        ) -> Tuple[DumpToBase, Dict[str, str]]:
     """
-    file_split_to_depth - more details in base.DumpToBase
-    flatten - more details in base.DumpToBase
-    deps_order - more details in base.DumpToBase
+    file_split_to_depth 
+        more details in base.DumpToBase
+
+    flatten 
+        more details in base.DumpToBase
+
+    deps_order 
+        more details in base.DumpToBase
+
+    add_init_py 
+        (appliable when file_split_to_depth=1) - create
+        __init__.py in output folder.
     """
     if not (KlassDumpTo and issubclass(KlassDumpTo, DumpToBase)):
         raise EntityCodegenError(msg=f"For KlassDumpTo expecting DumpToBase class, got: {KlassDumpTo}")
 
-    lines_by_file = dump_to_models_as_dict(
+    if file_split_to_depth==1 and add_init_py:
+        raise EntityCodegenError(msg=f"Option add_init_py appliable only when file_split_to_depth is 1, got: {file_split_to_depth}")
+
+    dumper, lines_by_file = dump_to_models_as_dict(
                         KlassDumpTo=KlassDumpTo,
                         component=component,
                         file_split_to_depth=file_split_to_depth,
-                        flaten=flatten,
+                        flatten=flatten,
                         deps_order=deps_order,
                         )
+
     lines_by_file_out = OrderedDict()
 
-    if len(lines_by_file)==1:
-        # dump in a single file
+    if file_split_to_depth==1:
+        # dump in a single file in given filename
+        assert len(lines_by_file)==1
         if not fname_or_dname.endswith(".py"):
             fname_or_dname += ".py"
         if os.path.exists(fname_or_dname) and not os.path.isfile(fname_or_dname):
@@ -816,7 +836,7 @@ def dump_to_models(
             fout.write(code)
         lines_by_file_out[fname_abs] = code
     else:
-        # dump in several files
+        # dump in several files in given folder
         root = os.path.abspath(fname_or_dname)
         if not os.path.exists(root):
             os.makedirs(root)
@@ -832,6 +852,13 @@ def dump_to_models(
                 fout.write(code)
             lines_by_file_out[fname_abs] = code
 
-    return lines_by_file_out
+        if add_init_py:
+            fname_abs = os.path.join(root, "__init__.py")
+            code = []
+            code = "\n".join(code)
+            with open(fname_abs, "w") as fout:
+                fout.write(code)
+
+    return dumper, lines_by_file_out
 
 

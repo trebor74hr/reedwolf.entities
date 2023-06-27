@@ -6,6 +6,7 @@ from typing import (
         Optional,
         Dict,
         ClassVar,
+        Tuple,
         )
 
 from ..utils import (
@@ -83,8 +84,7 @@ def dump_to_pydantic_models_as_dict(
         file_split_to_depth: Optional[int] = 1,
         flatten: bool = False,
         deps_order: bool = False,
-        ) -> Dict[str, str]:
-
+        ) -> Tuple[DumpToBase, Dict[str, str]]:
     return dump_to_models_as_dict(
         KlassDumpTo=DumpToPydantic,
         component=component,
@@ -102,11 +102,14 @@ def dump_to_pydantic_models(
         file_split_to_depth: Optional[int] = 1,
         flatten: bool = False,
         deps_order: bool = False,
-        ) -> Dict[str, str]:
+        add_init_py: bool = False,
+        ) -> Tuple[DumpToBase, Dict[str, str]]:
     return dump_to_models(
         KlassDumpTo=DumpToPydantic,
+        fname_or_dname=fname_or_dname,
         component=component,
         file_split_to_depth=file_split_to_depth,
         flatten=flatten,
         deps_order=deps_order,
+        add_init_py=add_init_py,
         )
