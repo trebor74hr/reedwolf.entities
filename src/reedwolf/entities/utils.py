@@ -82,6 +82,10 @@ NA_IN_PROGRESS = UndefinedType(name="NA_IN_PROGRESS")
 NOT_APPLIABLE = UndefinedType(name="NOT_APPLIABLE")
 
 
+def is_none_value(value: Any):
+    return value is None or isinstance(value, UndefinedType)
+
+
 class DumpFormatEnum(str, Enum):
     JSON = "json"
     YAML = "yaml"

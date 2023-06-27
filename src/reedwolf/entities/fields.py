@@ -86,6 +86,9 @@ from .registries import (
         SetupSession,
         )
 from .valid_field import (
+        MinValue,
+        )
+from .valid_field import (
         MaxLength,
         ExactLength,
         FieldValidationBase
@@ -714,11 +717,21 @@ class IntegerField(FieldBase):
     #       SmallAutoField
     #       SmallIntegerField
     # TODO: positive
-    #       -> cleaner= [MinValue(0)]
     #       PositiveBigIntegerField
-    #       PositiveIntegerField
     #       PositiveSmallIntegerField
     PYTHON_TYPE:ClassVar[type] = int
+
+@dataclass
+class PositiveIntegerField(IntegerField):
+    # TODO: add unit tests 
+    def __post_init__(self):
+        self.cleaners.insert(0, MinValue(1))
+
+@dataclass
+class IdField(IntegerField):
+    " can be negative "
+    # TODO: add unit tests 
+    ...
 
 @dataclass
 class FloatField(FieldBase):

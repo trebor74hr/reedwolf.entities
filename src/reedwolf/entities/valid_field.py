@@ -38,9 +38,22 @@ from .namespaces import (
         Fn, 
         This,
         )
+from .utils import (
+        to_int,
+        message_truncate,
+        is_none_value,
+        )
 from .meta import (
+        StandardType,
+        STANDARD_TYPE_LIST,
         TransMessageType,
         NoneType,
+        )
+from .exceptions import (
+        EntitySetupError,
+        )
+from .expressions import (
+        DotExpression,
         )
 from .base import (
         IApplySession,
@@ -49,14 +62,6 @@ from .base import (
         )
 from .valid_base import (
         ValidationBase,
-        )
-from .expressions   import (
-        DotExpression,
-        )
-from .exceptions    import EntitySetupError
-from .utils         import (
-        to_int,
-        message_truncate,
         )
 
 class FieldValidationBase(ValidationBase, ABC):
@@ -153,6 +158,42 @@ class Readonly(FieldValidationBase):
 
 
 @dataclass
+class MinValue(FieldValidationBase):
+    """ could be implemented with std. FieldValidator This.Value > 0 - but then
+        right side could not be DotExpression 
+    """
+    # TODO: unit test needed
+    # TODO: MaxValue
+    # TODO: DRY - lot of similar code in all these classes
+    value:          Union[StandardType, DotExpression]
+    name:           Optional[str] = None
+    error:          Optional[TransMessageType] = field(repr=False, default=None)
+    available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
+    title:          Optional[TransMessageType] = field(repr=False, default=None)
+
+    def __post_init__(self):
+        # TODO: allow DotExpression 
+        if type(self.value) not in STANDARD_TYPE_LIST:
+            raise EntitySetupError(owner=self, msg="Argument 'value' must be some standard type (TODO: DotExpression), got: {type(self.value)} : {self.value}")
+        if not self.error:
+            self.error = "The value it too big"
+        super().__post_init__()
+
+    def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
+        # TODO: evaluate self.value when DotExpression
+        component = apply_session.current_frame.component
+        value = apply_session.get_current_value(component, strict=False)
+        if not is_none_value(value) and value < self.value:
+            return ValidationFailure(
+                            component_key_string = apply_session.get_key_string(component),
+                            error=self.error, 
+                            validation_name=self.name,
+                            validation_title=self.title,
+                            details=_("The value should be less than '{self.valueis}', got: {value}"),
+                            )
+        return None
+
+@dataclass
 class ExactLength(FieldValidationBase):
     value:          Union[int, DotExpression]
     name:           Optional[str] = None
@@ -167,6 +208,7 @@ class ExactLength(FieldValidationBase):
         super().__post_init__()
 
     def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
+        # TODO: evaluate self.value when DotExpression
         component = apply_session.current_frame.component
         value = apply_session.get_current_value(component, strict=False)
         if value and hasattr(value, "__len__") and len(value) != self.value:
@@ -195,6 +237,7 @@ class MaxLength(FieldValidationBase):
         super().__post_init__()
 
     def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
+        # TODO: evaluate self.value when DotExpression
         component = apply_session.current_frame.component
         value = apply_session.get_current_value(component, strict=False)
         if value and hasattr(value, "__len__") and len(value) > self.value:
@@ -224,6 +267,7 @@ class MinLength(FieldValidationBase):
         super().__post_init__()
 
     def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
+        # TODO: evaluate self.value when DotExpression
         component = apply_session.current_frame.component
         value = apply_session.get_current_value(component, strict=False)
         if value and hasattr(value, "__len__") and len(value) < self.value:
@@ -270,6 +314,7 @@ class RangeLength(FieldValidationBase):
 
     # value: Any, component: "ComponentBase", 
     def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
+        # TODO: evaluate self.value when DotExpression
         component = apply_session.current_frame.component
         value = apply_session.get_current_value(component, strict=False)
         if hasattr(value, "__len__"):
