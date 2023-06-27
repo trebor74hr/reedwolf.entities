@@ -33,7 +33,7 @@ class ClassDeclaration(ClassDeclarationBase):
 
     def dump_to_strlist(self) -> List[str]:
         lines = []
-        lines.append(f"@dataclass")
+        lines.append("@dataclass")
         lines.append(f"class {self.name}:")
         if self.title:
             lines.append(f'{PY_INDENT}""" {self.title} """')

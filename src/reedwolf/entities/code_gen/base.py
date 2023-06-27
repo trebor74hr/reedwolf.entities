@@ -656,7 +656,7 @@ class DumpToBase(IStackOwnerSession):
 
     def dump_all(self) -> Dict[str, CodeStringType]:
         if self.finished:
-            raise EntityCodegenError(owner=self, msg=f"Dump already done.") 
+            raise EntityCodegenError(owner=self, msg="Dump already done.") 
 
         component   = self.current_frame.component
         path_names  = self.current_frame.path_names
@@ -753,7 +753,7 @@ class DumpToBase(IStackOwnerSession):
 
     def dump_init_py_to_str_list(self) -> CodeLinesType:
         if not self.finished:
-            raise EntityCodegenError(owner=self, msg=f"Dump is not yet done. Call 'dump_all()' first and try again.") 
+            raise EntityCodegenError(owner=self, msg="Dump is not yet done. Call 'dump_all()' first and try again.") 
 
         code = []
         all_main_classes = []
