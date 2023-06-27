@@ -24,8 +24,8 @@ from .base import (
         DumpToBase,
         dump_to_models_as_dict,
         dump_to_models,
+        CodeStringType,
         )
-
 
 # ------------------------------------------------------------
 
@@ -84,7 +84,7 @@ def dump_to_pydantic_models_as_dict(
         file_split_to_depth: Optional[int] = 1,
         flatten: bool = False,
         deps_order: bool = False,
-        ) -> Tuple[DumpToBase, Dict[str, str]]:
+        ) -> Tuple[DumpToBase, Dict[str, CodeStringType]]:
     return dump_to_models_as_dict(
         KlassDumpTo=DumpToPydantic,
         component=component,
@@ -103,7 +103,7 @@ def dump_to_pydantic_models(
         flatten: bool = False,
         deps_order: bool = False,
         add_init_py: bool = False,
-        ) -> Tuple[DumpToBase, Dict[str, str]]:
+        ) -> Tuple[DumpToBase, Dict[str, CodeStringType]]:
     return dump_to_models(
         KlassDumpTo=DumpToPydantic,
         fname_or_dname=fname_or_dname,

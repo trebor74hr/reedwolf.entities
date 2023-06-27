@@ -28,6 +28,7 @@ from ..utils import (
         add_py_indent_to_strlist,
         UndefinedType,
         UNDEFINED,
+        PY_INDENT,
         )
 from ..meta import (
         STANDARD_TYPE_LIST,
@@ -56,7 +57,8 @@ from ..containers import (
 
 DelarationCodeLinesType = List[str]
 PyType = type
-
+CodeLinesType = List[str]
+CodeStringType = str
 
 @dataclass
 class ClassDeclarationBase:
@@ -69,7 +71,7 @@ class ClassDeclarationBase:
         ...
 
     @abstractmethod
-    def dump_to_strlist(self) -> List[str]:
+    def dump_to_strlist(self) -> CodeLinesType:
         ...
 
 
@@ -195,7 +197,7 @@ class ComponentDumpBase:
         self.nested_comp_dumps.append(comp_dump)
 
 
-    def _dump_to_strlist_nested_comps(self, lines: List[str]):
+    def _dump_to_strlist_nested_comps(self, lines: CodeLinesType):
         if self.nested_comp_dumps:
             comp_dump_list = self.nested_comp_dumps
             # if self.deps_order:
@@ -211,7 +213,7 @@ class ComponentDumpBase:
                         nested_lines))
 
 
-    def dump_to_strlist(self) -> List[str]:
+    def dump_to_strlist(self) -> CodeLinesType:
         " object can have nothing - e.g. plain std. type attribute, e.g. String(M.id) "
         if self.dumped:
             raise EntityInternalError(owner=self, msg="Component dump already done") 
@@ -285,7 +287,7 @@ class FileDumpBase:
 
 
     @abstractmethod
-    def dump_to_str_fill_imports(self) -> List[str]:
+    def dump_to_str_fill_imports(self) -> CodeLinesType:
         ...
 
     def get_this_module(cls):
@@ -426,6 +428,7 @@ class DumpToBase(IStackOwnerSession):
     stack_frames: List[CodegenStackFrame] = field(repr=False, init=False, default_factory=list)
     # autocomputed
     current_frame: Optional[CodegenStackFrame] = field(repr=False, init=False, default=None)
+    finished: bool = field(repr=False, init=False, default = False)
 
     STACK_FRAME_CLASS: ClassVar[type] = CodegenStackFrame
     STACK_FRAME_CTX_MANAGER_CLASS: ClassVar[type] = UseStackFrameCtxManagerBase
@@ -651,11 +654,13 @@ class DumpToBase(IStackOwnerSession):
 
     # ------------------------------------------------------------
 
-    def dump_all(self) -> Dict[str, str]:
+    def dump_all(self) -> Dict[str, CodeStringType]:
+        if self.finished:
+            raise EntityCodegenError(owner=self, msg=f"Dump already done.") 
+
         component   = self.current_frame.component
         path_names  = self.current_frame.path_names
         depth       = self.current_frame.depth
-
 
         is_composite_component = isinstance(component, (FieldGroup, Entity, SubEntityBase))
 
@@ -738,10 +743,36 @@ class DumpToBase(IStackOwnerSession):
             lines_by_file = OrderedDict()
             for file_dump in self.file_dump_dict.values():
                 lines_by_file[file_dump.filename] = file_dump.dump_to_str()
+            self.finished = True
         else:
             lines_by_file = None
 
         return lines_by_file
+
+    # ------------------------------------------------------------
+
+    def dump_init_py_to_str_list(self) -> CodeLinesType:
+        if not self.finished:
+            raise EntityCodegenError(owner=self, msg=f"Dump is not yet done. Call 'dump_all()' first and try again.") 
+
+        code = []
+        all_main_classes = []
+        main_model_name = "MainModel"
+        for nr, file_dump in enumerate(self.file_dump_dict.values()):
+            if nr==0:
+                code.append(f"from .{file_dump.filename} import {file_dump.comp_dump_first.class_declaration.name} as {main_model_name}")
+            code.append(f"from .{file_dump.filename} import {file_dump.comp_dump_first.class_declaration.name}")
+            all_main_classes.append(file_dump.comp_dump_first.class_declaration.name)
+
+        code.append("")
+        code.append("__all__ = [")
+        code.append(f'{PY_INDENT}"{main_model_name}",')
+        for main_class in all_main_classes:
+            code.append(f'{PY_INDENT}"{main_class}",')
+        code.append("]")
+
+        return code
+
 
 # ------------------------------------------------------------
 
@@ -752,7 +783,7 @@ def dump_to_models_as_dict(
         file_split_to_depth: Optional[int] = 1,
         flatten: bool = False,
         deps_order: bool = False,
-        ) -> Tuple[DumpToBase, Dict[str, str]]:
+        ) -> Tuple[DumpToBase, Dict[str, CodeStringType]]:
     """
     file_split_to_depth - more details in base.DumpToBase
     flatten - more details in base.DumpToBase
@@ -791,7 +822,7 @@ def dump_to_models(
         flatten: bool = False,
         deps_order: bool = False,
         add_init_py: bool = False,
-        ) -> Tuple[DumpToBase, Dict[str, str]]:
+        ) -> Tuple[DumpToBase, Dict[str, CodeStringType]]:
     """
     file_split_to_depth 
         more details in base.DumpToBase
@@ -853,9 +884,9 @@ def dump_to_models(
             lines_by_file_out[fname_abs] = code
 
         if add_init_py:
-            fname_abs = os.path.join(root, "__init__.py")
-            code = []
+            code = dumper.dump_init_py_to_str_list()
             code = "\n".join(code)
+            fname_abs = os.path.join(root, "__init__.py")
             with open(fname_abs, "w") as fout:
                 fout.write(code)
 
