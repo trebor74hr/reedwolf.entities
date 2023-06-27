@@ -337,9 +337,7 @@ class FileDumpBase:
 
         all_lines.append("")
         all_lines.append("")
-        all_lines.append("def _check_hints():")
-        all_lines.append("    from typing import get_type_hints")
-        all_lines.append(f"    return get_type_hints({self.comp_dump_first.class_declaration.name})")
+        all_lines.append(f"MAIN_MODEL={self.comp_dump_first.class_declaration.name}")
         all_lines.append("")
 
         out = "\n".join(all_lines)
