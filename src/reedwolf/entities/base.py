@@ -711,20 +711,12 @@ class ComponentBase(SetParentMixin, ABC):
                     setup_session: ISetupSession):  # noqa: F821
         called = False
 
-        # print(f"_invoke_component_setup({subcomponent})")
-
-        if isinstance(subcomponent, (DotExpression, )): # Operation
-            # copy_to_setup_session=copy_to_setup_session,
+        if isinstance(subcomponent, (DotExpression,)):
             dexp: DotExpression = subcomponent
             namespace = dexp._namespace
-            if namespace._manual_setup:
-                # needs manual Setup() later call with extra context - now is too
-                # early (e.g. ThisNS)
-                called = False
-            # and dexp._status != DExpStatusEnum.INITIALIZED:
-            elif namespace == ModelsNS \
-               and dexp.IsFinished():
-                # Setup() was called in container.setup() before
+            if dexp.IsFinished():
+                # Setup() was called in container.setup() before or in some
+                #         other dependency
                 called = False
             else:
                 dexp.Setup(setup_session=setup_session, owner=self)
@@ -750,6 +742,7 @@ class ComponentBase(SetParentMixin, ABC):
         container = self.get_first_parent_container(consider_self=True)
 
         if getattr(self, "bind", None):
+            # TODO: this is 2nd place to call '.Setup()'. Explain!
             # similar logic in apply.py :: _apply()
             assert not self.is_container()
             attr_node = self.bind.Setup(setup_session=setup_session, owner=self)

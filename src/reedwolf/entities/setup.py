@@ -112,7 +112,6 @@ class RegistryBase(IRegistry):
     NAMESPACE : ClassVar[Namespace] = None
     ROOT_VALUE_NEEDS_FETCH_BY_NAME: ClassVar[bool] = True
 
-
     def __init__(self):
         self.store : Dict[str, AttrDexpNode] = {}
         self.setup_session = UNDEFINED
@@ -191,7 +190,7 @@ class RegistryBase(IRegistry):
         #           type_info: TypeInfo = TypeInfo.get_or_create_by_type(th_field)
 
         if attr_name in (ReservedAttributeNames.INSTANCE_ATTR_NAME,):
-            raise EntitySetupNameError(msg=f"Sorry but model attribute name {attr_name} is reserved. Rename it and try again (model={model_class.__name__}).")
+            raise EntitySetupNameError(msg=f"Model attribute name '{attr_name} is reserved. Rename it and try again (model={model_class.__name__}).")
 
         # This one should not fail
         # , func_node
@@ -297,7 +296,6 @@ class RegistryBase(IRegistry):
             raise EntitySetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': AttrDexpNode '{dexp_node_name}' is invalid, should not start with _")
 
         type_info = None
-
         if owner_dexp_node:
             assert owner_dexp_node.name!=dexp_node_name
             if not isinstance(owner_dexp_node, IDotExpressionNode):
@@ -566,12 +564,33 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
 
     # ------------------------------------------------------------
 
-    def get_registry(self, namespace: Namespace, strict:bool= True) -> IRegistry:
-        if namespace._name not in self._registry_dict:
+    def _get_avail_registry_names(self, namespace: Namespace, is_internal_use: bool) -> List[str]:
+        if not is_internal_use:
+            registry_names = [reg.NAMESPACE._GetNameWithAlias() 
+                              for reg in self._registry_dict.values() 
+                              if not reg.NAMESPACE._is_for_internal_use_only]
+        else:
+            registry_names = [reg.NAMESPACE._GetNameWithAlias() 
+                              for reg in self._registry_dict.values()]
+
+        avail_names = get_available_names_example(namespace._name, registry_names)
+        return avail_names
+
+
+    def get_registry(self, namespace: Namespace, strict: bool = True, is_internal_use: bool = False) -> IRegistry:
+        registry = self._registry_dict.get(namespace._name, UNDEFINED)
+        if registry is UNDEFINED:
             if strict:
-                raise EntityInternalError(owner=self, msg=f"Registry '{namespace._name}' not found, available are: {self._registry_dict.keys()}")
+                avail_names = self._get_avail_registry_names(namespace, is_internal_use)
+                raise EntitySetupNameError(owner=self, msg=f"Registry '{namespace._name}' not found. Available: {avail_names}")
             return UNDEFINED
+
+        if not is_internal_use and namespace._is_for_internal_use_only:
+            avail_names = self._get_avail_registry_names(namespace, is_internal_use)
+            raise EntitySetupNameError(owner=self, msg=f"Registry '{namespace._name}' is for internal use only. Available registries: {avail_names}")
+
         return self._registry_dict[namespace._name]
+
 
     def __getitem__(self, namespace: Namespace) -> IRegistry:
         return self._registry_dict[namespace._name]
@@ -664,63 +683,3 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
 
         self.finished = True
 
-
-
-
-
-# ------------------------------------------------------------
-# OBSOLETE
-# ------------------------------------------------------------
-# if vname!=dexp_node.name:
-#     found = [dexp_node_name for setup_session_name, ns, dexp_node_name in dexp_node.bound_list if vname==dexp_node_name]
-#     if not found:
-#         raise EntityInternalError(owner=self, msg=f"Attribute name not the same as stored in setup_session {dexp_node.name}!={vname} or bound list: {dexp_node.bound_list}")
-
-
-
-# # ------------------------------------------------------------
-# 
-# # obsolete - using FunctionNS() , functions, EnumMembers instead
-# 
-# class DataRegistry(RegistryBase):
-# 
-#     NAMESPACE = DataNS
-# 
-#     def create_dexp_node(self, data_var:IData) -> IDotExpressionNode:
-#         # ------------------------------------------------------------
-#         # A.2. DATAPROVIDERS - Collect all dexp_nodes from dataproviders fieldgroup
-#         # ------------------------------------------------------------
-#         if False:
-#             ...
-#         # elif isinstance(data_var, StaticData):
-#         #     dexp_node = AttrDexpNode(
-#         #                             name=data_var.name,
-#         #                             data=data_var,
-#         #                             namespace=DataNS,
-#         #                             type_info=data_var.type_info,
-#         #                             )
-#         # elif isinstance(data_var, DynamicData):
-#         #     assert isinstance(data_var.function, CustomFunctionFactory)
-#         #     # TODO: consider storing CustomFactoryFunction instead of CustomFunction instances
-#         #     #       to allow extra arguments when referenced
-#         #     dexp_node = data_var.function.create_function(
-#         #                     setup_session=self.setup_session,
-#         #                     caller=None,
-#         #                     func_args=EmptyFunctionArguments, 
-#         #                     name=data_var.name) 
-#         else:
-#             # TODO: does Operation needs special handling?
-#             # if not isinstance(data_var, IData:
-#             raise EntitySetupError(owner=self, msg=f"Register expexted IData, got {data_var} / {type(data_var)}.")
-# 
-#         return dexp_node
-# 
-#     def register(self, data_var:IData):
-#         dexp_node = self.create_dexp_node(data_var)
-#         # can be AttrDexpNode or FunctionDexpNode
-#         # alt_dexp_node_name=data_var.name
-#         self.register_dexp_node(dexp_node)
-#         return dexp_node
-# 
-#     def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
-#         raise NotImplementedError()

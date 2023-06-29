@@ -1,5 +1,8 @@
 # TODO: this module probably should be merged into expressions - since there is circular depencdency - see __getattr__
 from abc import ABC, abstractmethod
+from typing import (
+        Optional,
+        )
 
 # ------------------------------------------------------------
 # Namespaces - classes and singletons
@@ -20,19 +23,24 @@ class DynamicAttrsBase(ABC):
 
 class Namespace(DynamicAttrsBase):
 
-    RESERVED_ATTR_NAMES = {"_name", "_manual_setup"}
-
-    def __init__(self, name:str, manual_setup:bool = False):
+    RESERVED_ATTR_NAMES = {"_name", "_is_for_internal_use_only", "_alias", "_GetNameWithAlias"}
+    
+    # manual_setup: bool = False, 
+    def __init__(self, name:str, alias: Optional[str] = None, is_for_internal_use_only: bool = False):
         self._name = name
-        # manual_setup == True ==> Setup() for DotExpression-s needs to be
-        # called postponed, manually, usually with extrra context - like ThisNS
-        self._manual_setup = manual_setup
+        # namespace can be used for internal use only, should not be used directly
+        self._is_for_internal_use_only: bool = is_for_internal_use_only
+        # alias, e.g. for Models. -> M.
+        self._alias: Optional[str] = alias
 
     def __str__(self):
         return f"{self._name}"
 
-    def __repr__(self):
-        return f"NS[{self._name}]"
+    def __str__(self):
+        return f"{self._name}"
+
+    def _GetNameWithAlias(self):
+        return f"{self._name}{ f' / {self._alias}' if self._alias else ''}"
 
     def __getattr__(self, aname):
         if aname in self.RESERVED_ATTR_NAMES: # , "%r -> %s" % (self._node, aname):
@@ -48,10 +56,10 @@ class Namespace(DynamicAttrsBase):
 FunctionsNS = Namespace("Fn")
 
 # internally used
-OperationsNS = Namespace("Op")
+OperationsNS = Namespace("Op", is_for_internal_use_only=True)
 
 # managed models
-ModelsNS = Namespace("Models")
+ModelsNS = Namespace("Models", alias="M")
 
 # # Data/D - can be list, primitive type, object, Option etc.
 # #   evaluated from functions or Expressions
@@ -67,10 +75,10 @@ ModelsNS = Namespace("Models")
 #               injected into component or component to be reused in other entity-struct
 
 # TODO: rename to ComponentsNS / C.
-FieldsNS = Namespace("Fields")
+FieldsNS = Namespace("Fields", alias="F")
 
 # This - values from a current context, e.g. iteration of loop, option in select
-ThisNS = Namespace("This", manual_setup=True)
+ThisNS = Namespace("This")  # , manual_setup=True
 
 # Context - see contexts.py
 ContextNS = Namespace("Ctx")

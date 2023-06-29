@@ -489,27 +489,20 @@ class ChoiceField(FieldBase):
 
     def setup(self, setup_session: SetupSession):
 
-        super().setup(setup_session=setup_session)
-
         choices = self.choices
         choices_checked = False
         is_list = UNDEFINED
         choice_from_function = False
         dexp_node = None
 
-        # -- Factory cases
         if is_function(choices):
             raise EntityInternalError(owner=self, msg=f"Direct functions are not allowed, wrap with Function() instead. Got: {choices}")
-        elif isinstance(choices, DotExpression):
-            # TODO: restrict to dexp only - no operation
-            if choices._status!=DExpStatusEnum.BUILT:
-                # reported before - warn(f"TODO: There is an error with value expression {self.choices} - skip it for now.")
-                choices = None
-            else:
-                dexp_node = setup_session.get_dexp_node_by_dexp(dexp=choices)
-                if not dexp_node:
-                    dexp_node = choices.Setup(setup_session=setup_session, owner=self)
 
+        if isinstance(choices, DotExpression):
+            # if choices._status!=DExpStatusEnum.BUILT:
+            dexp_node = setup_session.get_dexp_node_by_dexp(dexp=choices)
+            if not dexp_node:
+                dexp_node = choices.Setup(setup_session=setup_session, owner=self)
         elif isinstance(choices, CustomFunctionFactory):
             custom_function_factory : CustomFunctionFactory = choices
             dexp_node = custom_function_factory.create_function(
@@ -558,17 +551,15 @@ class ChoiceField(FieldBase):
             # ignored
             pass
         elif is_model_class(choices):
+            model_class = choices
             if choice_from_function:
                 if not is_list:
                     raise NotImplementedError("Not a list! Enum or what? To be done: {choices}")
-                model_class = choices
-                # fun_return_type_info = TypeInfo.extract_function_return_type_info(function=choices) # parent=self, 
-                # model_class, is_list = fun_return_type_info.type_, fun_return_type_info.is_list
-                # if not is_list:
-                #     raise EntitySetupValueError(owner=self, msg=f"Argument 'choices'={choices} is a function that does not return List[type]. Got: {fun_return_type}")
             else:
                 assert not is_list
-                model_class = choices
+                if is_list:
+                    # TODO: explain, give example
+                    raise EntityInternalError(owner=self, msg="Choices is a a list of model instances, expecting single instance.") 
 
             with setup_session.use_stack_frame(
                     SetupStackFrame(
@@ -576,8 +567,7 @@ class ChoiceField(FieldBase):
                         component = self, 
                         local_setup_session = setup_session.create_local_setup_session(
                                                     this_ns_instance_model_class=model_class)
-                    )):
-                # model_class=model_class
+              )):
                 self.choice_value_attr_node = self._create_attr_node(setup_session, "choice_value", dexp=self.choice_value)
                 self.choice_title_attr_node = self._create_attr_node(setup_session, "choice_title", dexp=self.choice_title)
 
@@ -605,7 +595,13 @@ class ChoiceField(FieldBase):
             raise EntitySetupValueError(owner=self, msg=f"Attribute choices has invalid value, not Union[Function(), DotExpression, Union[List[ChoiceOption], List[int], List[str]], got : {choices} / {type(choices)}")
 
         if not self.python_type:
-            warn(f"TODO: ChoiceField 'python_type' not set {self}")
+            # TODO: implement if missing
+            raise EntityInternalError(owner=self, msg="ChoiceField 'python_type' not set") 
+
+        # NOTE: must be done after to avoid calling Setup() for choice_value
+        #       and choice_title. For these two default This namespace is not
+        #       appliable, need special one, This.Instance + This.<model-attrs>
+        super().setup(setup_session=setup_session)
 
         # TODO: on usage normalize concrete all available choices to Enum[ChoiceOption], and define:
         #       https://stackoverflow.com/questions/33690064/dynamically-create-an-enum-with-custom-values-in-python

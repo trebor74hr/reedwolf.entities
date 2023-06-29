@@ -139,7 +139,7 @@ class IRegistry:
 class ISetupSession(ABC):
 
     @abstractmethod
-    def get_registry(self, namespace: Namespace, strict:bool= True) -> IRegistry:
+    def get_registry(self, namespace: Namespace, strict: bool = True, is_internal_use: bool = False) -> IRegistry:
         ...
 
     @abstractmethod
@@ -192,7 +192,7 @@ class DotExpression(DynamicAttrsBase):
                            "_evaluator",  # allwyays filled, contains all nodes
                            "_dexp_node",  # is last node (redundant), but None if case of error
                            "_node", "_namespace", "_name", "_func_args", "_is_top", "_status",
-                           "_is_literal",
+                           "_is_literal", "_is_internal_use",
                            "_EnsureFinished", "IsFinished",
                            # "_is_reserved_function",
                            } # "_read_functions",  "_dexp_node_name"
@@ -205,6 +205,7 @@ class DotExpression(DynamicAttrsBase):
         namespace: Namespace,
         Path: Optional[List[Self]] = None,
         is_literal: bool = False,
+        is_internal_use: bool = False,
     ):
         " NOTE: when adding new params, add to Clone() too "
         # SAFE OPERATIONS
@@ -214,6 +215,8 @@ class DotExpression(DynamicAttrsBase):
         self._is_top = Path is None
         self._name = str(self._node)
         self._is_literal = is_literal
+        self._is_internal_use = is_internal_use
+
         # init Path => to make __str__ works
         self.Path = None 
 
@@ -271,16 +274,16 @@ class DotExpression(DynamicAttrsBase):
         if self._status!=DExpStatusEnum.INITIALIZED:
             raise EntitySetupError(owner=self, msg=f"Method Setup() already called, further DotExpression building/operator-building is not possible (status={self._status}).")
 
-
     def Setup(self, setup_session:ISetupSession, owner:Any) -> Optional['IDotExpressionNode']:
         """
         Owner used just for reference count.
         """
-        # TODO: Owner is "ComponentBase" - define some common protocol/interface and use it
-
-        # TODO: consider dropping owner parameter and use setup_session.current_frame.component or owner instead?
-
+        # TODO: Owner is "ComponentBase" - define some common
+        #       protocol/interface and use it
+        # TODO: consider dropping owner parameter and use
+        #       setup_session.current_frame.component or owner instead?
         # TODO: circular dependency - maybe to pass eval class to this method
+
         from .expression_evaluators import DotExpressionEvaluator
 
         self._EnsureFinished()
@@ -291,26 +294,14 @@ class DotExpression(DynamicAttrsBase):
 
         if local_setup_session:
             # try to find in local repo
-            registry = local_setup_session.get_registry(self._namespace, strict=False)
-            if registry and not registry.NAMESPACE._manual_setup:
-                raise EntityInternalError(owner=self, msg=f"Registry should be passed only for namespace._manual_setup cases, got: {registry}")
+            registry = local_setup_session.get_registry(self._namespace, strict=False, is_internal_use=self._is_internal_use)
 
         if not registry:
             # if local repo not available or ns not found in it, find in container repo
-            registry = setup_session.get_registry(self._namespace)
-            if registry.NAMESPACE._manual_setup:
-                raise EntityInternalError(owner=self, msg=f"Registry should be passed for namespace._manual_setup cases (usually manually created ThisInstanceRegistry()), got: {registry}")
+            registry = setup_session.get_registry(self._namespace, is_internal_use=self._is_internal_use)
 
-        assert registry
-
-        # if registry:
-        #     if not registry.NAMESPACE._manual_setup:
-        #     # if not self._namespace._manual_setup:
-        #         raise EntityInternalError(owner=self, msg=f"Registry should be passed only for namespace._manual_setup cases, got: {registry}")
-        # else:
-        #     if self._namespace._manual_setup:
-        #         raise EntityInternalError(owner=self, msg=f"Registry should be passed for namespace._manual_setup cases (usually manually created ThisInstanceRegistry()).")
-        #     registry = setup_session.get_registry(self._namespace)
+        if not registry:
+            raise EntityInternalError(owner=self, msg=f"Registry not created for: {self._namespace}")
 
         if self._namespace != registry.NAMESPACE:
             raise EntityInternalError(owner=self, msg=f"Registry has diff namespace from variable: {self._namespace} != {registry.NAMESPACE}")
@@ -444,6 +435,8 @@ class DotExpression(DynamicAttrsBase):
             raise EntitySetupNameError(owner=self, msg=f"DotExpression's attribute '{aname}' is reserved name, choose another.")
         if aname.startswith("__") and aname.endswith("__"):
             raise AttributeError(f"Attribute '{type(self)}' object has no attribute '{aname}'")
+        if aname.startswith("_"):
+            raise AttributeError(f"Attribute '{type(self)}' object has no attribute (2) '{aname}'")
         return DotExpression(node=aname, namespace=self._namespace, Path=self.Path)
 
     def __call__(self, *args, **kwargs):
@@ -489,29 +482,29 @@ class DotExpression(DynamicAttrsBase):
 
     # NOTE: Operations are put in internal OperationsNS
 
-    def __eq__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode("==", self, other), namespace=OperationsNS)  # noqa: E702
-    def __ne__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode("!=", self, other), namespace=OperationsNS)  # noqa: E702
-    def __gt__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode(">" , self, other), namespace=OperationsNS)  # noqa: E702
-    def __ge__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode(">=", self, other), namespace=OperationsNS)  # noqa: E702
-    def __lt__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode("<" , self, other), namespace=OperationsNS)  # noqa: E702
-    def __le__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode("<=", self, other), namespace=OperationsNS)  # noqa: E702
+    def __eq__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode("==", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
+    def __ne__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode("!=", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
+    def __gt__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode(">" , self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
+    def __ge__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode(">=", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
+    def __lt__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode("<" , self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
+    def __le__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode("<=", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
 
     # +, -, *, /
-    def __add__(self, other):       self._EnsureFinished(); return DotExpression(OperationDexpNode("+" , self, other), namespace=OperationsNS)  # noqa: E702
-    def __sub__(self, other):       self._EnsureFinished(); return DotExpression(OperationDexpNode("-" , self, other), namespace=OperationsNS)  # noqa: E702
-    def __mul__(self, other):       self._EnsureFinished(); return DotExpression(OperationDexpNode("*" , self, other), namespace=OperationsNS)  # noqa: E702
-    def __truediv__(self, other):   self._EnsureFinished(); return DotExpression(OperationDexpNode("/" , self, other), namespace=OperationsNS)  # noqa: E702
+    def __add__(self, other):       self._EnsureFinished(); return DotExpression(OperationDexpNode("+" , self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
+    def __sub__(self, other):       self._EnsureFinished(); return DotExpression(OperationDexpNode("-" , self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
+    def __mul__(self, other):       self._EnsureFinished(); return DotExpression(OperationDexpNode("*" , self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
+    def __truediv__(self, other):   self._EnsureFinished(); return DotExpression(OperationDexpNode("/" , self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
 
     # what is this??
-    def __floordiv__(self, other):  self._EnsureFinished(); return DotExpression(OperationDexpNode("//", self, other), namespace=OperationsNS)  # noqa: E702
+    def __floordiv__(self, other):  self._EnsureFinished(); return DotExpression(OperationDexpNode("//", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
 
     # in
-    def __contains__(self, other):  self._EnsureFinished(); return DotExpression(OperationDexpNode("in", self, other), namespace=OperationsNS)  # noqa: E702
+    def __contains__(self, other):  self._EnsureFinished(); return DotExpression(OperationDexpNode("in", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
 
     # Bool operators, NOT, AND, OR
-    def __invert__(self):           self._EnsureFinished(); return DotExpression(OperationDexpNode("not", self), namespace=OperationsNS)  # ~  # noqa: E702
-    def __and__(self, other):       self._EnsureFinished(); return DotExpression(OperationDexpNode("and", self, other), namespace=OperationsNS)  # &  # noqa: E702
-    def __or__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode("or" , self, other), namespace=OperationsNS)  # |  # noqa: E702
+    def __invert__(self):           self._EnsureFinished(); return DotExpression(OperationDexpNode("not", self       ),namespace=OperationsNS, is_internal_use=True)  # ~  # noqa: E702
+    def __and__(self, other):       self._EnsureFinished(); return DotExpression(OperationDexpNode("and", self, other),namespace=OperationsNS, is_internal_use=True)  # &  # noqa: E702
+    def __or__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode("or" , self, other),namespace=OperationsNS, is_internal_use=True)  # |  # noqa: E702
 
     # ------------------------------------------------------------
 
