@@ -335,11 +335,14 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         #       process only that component and will not go deeper. later
         #       subentity_items.setup() will do this within own tree dep (own .components / .setup_session)
 
+        local_setup_session = self.try_create_local_setup_session(self.setup_session)
+
         # iterate all subcomponents and call _setup() for each
         with self.setup_session.use_stack_frame(
                 SetupStackFrame(
                     container = self, 
                     component = self, 
+                    local_setup_session=local_setup_session,
                 )):
             self._setup(setup_session=self.setup_session)
 

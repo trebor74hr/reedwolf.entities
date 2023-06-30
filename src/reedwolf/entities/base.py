@@ -160,16 +160,30 @@ class AttrDexpNodeTypeEnum(str, Enum):
 
 class ReservedAttributeNames(str, Enum):
 
+    # Manual setup cases only
+    # -----------------------
     # Applies to model instances, e.g. This.Instance <= Company()
+    # see ChoiceField / Function arguments etc.
     INSTANCE_ATTR_NAME = "Instance" 
 
+    # Field components
+    # ----------------
     # Applies to model instance's attributes, e.g. This.Value <= Company().name
     VALUE_ATTR_NAME = "Value" 
 
+    # Containers (Entity/SubEntitySingle) + FieldGroup + Field with children (BooleanField)
+    # -------------------------------------------------------------------------------------
+    # Applies to components which have children (list of components, e.g. in
+    # contiains)
+    CHILDREN_ATTR_NAME = "Children" 
+
+    # SubEntityItems 
+    # ---------------------------------------------------------------------------
+    # Applies to components which can have list of items (SubEntities)
+    ITEMS_ATTR_NAME = "Items" 
+
     # TODO: reach 1 level deep:
     #   PARENT_ATTR_NAME = "Parent" 
-    #   CHILDREN_ATTR_NAME = "Children" 
-    #   ITEMS_ATTR_NAME = "Items" 
     #   CHILDREN_KEY = "__children__" 
 
     # TODO: traversing?:
@@ -736,24 +750,87 @@ class ComponentBase(SetParentMixin, ABC):
 
     # ------------------------------------------------------------
 
+    def try_create_local_setup_session(self, setup_session: ISetupSession) -> Optional[ISetupSession]:
+
+        children = self.get_children()
+
+        if isinstance(self, IFieldBase):
+            # ==== similar logic in apply.py :: _apply() ====
+            # TODO: this is 2nd place to call '.Setup()'. Explain!
+            assert not self.is_container()
+            assert getattr(self, "bind", None)
+
+            attr_node = self.bind.Setup(setup_session=setup_session, owner=self)
+            if not attr_node:
+                raise EntitySetupNameError(owner=self, msg=f"{attr_node.name}.bind='{self.bind}' could not be evaluated")
+            # Field -> .Value .<attributes>
+            local_setup_session = setup_session.create_local_setup_session(
+                                        this_ns_instance_model_class=None,
+                                        this_ns_value_attr_node = attr_node,
+                                        )
+        elif children:
+            local_setup_session = None
+
+            # 0. složi na način da napraviš novu klasu:
+            #    a) je li treba uključiti fields/attributes - True/False
+            #    b) kako se zove glavni reference atribut 
+            #       "instance", "Value", "Children", "Items"
+            #    c) je li lista ili je jedan
+            #   pa na kraju od ova dva parametra i dvije impl. klase:
+            #        this_ns_instance_model_class / ThisInstanceRegistry
+            #        this_ns_value_attr_node  / ThisValueRegistry
+            #   će nastati jedna - s input-om za cijelu specifikaciju što treba napraviti
+            #
+            # 1. treba imati dostupno:
+            #   This.Children
+            #   This.<field-name>
+            # 2. složi istu stvar ako je isinstance(component, SubEntityItems)
+            #    2.1 za njih je dostupno:
+            #       This.Items
+            # 3. ujedini s logikom u apply 
+            #    traži 
+            #       if getattr(component, "bind", None):
+            #       create_local_setup_session()
+            #    i stavi u jednu funkciju 
+            #
+            # 4. poseban slučaj BooleanField koji ima i children i ima i bind
+            #   za njega treba i jedno i drugo
+            #       Children -> .Children + .<attributes>
+            #       Value -> .Value
+            # if self.is_subentity_items():
+            #     # Items -> .Items 
+            #     local_setup_session = setup_session.create_local_setup_session(
+            #                                 this_ns_instance_model_class=None,
+            #                                 this_ns_value_attr_node = attr_node,
+            #                                 )
+            # else:
+            #     # Children -> .Children + .<attributes>
+            #     print(dir(self))
+            #     if self.is_container():
+            #         type_info = self.bound_model.get_type_info()
+            #         model_class = type_info.type_
+            #     else:
+            #         raise NotImplementedError()
+
+            #     local_setup_session = setup_session.create_local_setup_session(
+            #                                 this_ns_instance_model_class=model_class,
+            #                                 this_ns_value_attr_node = None,
+            #                                 )
+        else:
+            if self.is_container():
+                raise EntityInternalError(owner=self, msg="Container should have local_session created") 
+            local_setup_session = None
+
+        return local_setup_session
+
+    # ------------------------------------------------------------
+
     def setup(self, setup_session: ISetupSession):  # noqa: F821
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(self)
 
         container = self.get_first_parent_container(consider_self=True)
 
-        if getattr(self, "bind", None):
-            # TODO: this is 2nd place to call '.Setup()'. Explain!
-            # similar logic in apply.py :: _apply()
-            assert not self.is_container()
-            attr_node = self.bind.Setup(setup_session=setup_session, owner=self)
-            if not attr_node:
-                raise EntitySetupNameError(owner=self, msg=f"{attr_node.name}.bind='{self.bind}' could not be evaluated")
-            local_setup_session = setup_session.create_local_setup_session(
-                                        this_ns_instance_model_class=None,
-                                        this_ns_value_attr_node = attr_node,
-                                        )
-        else:
-            local_setup_session = None
+        local_setup_session = self.try_create_local_setup_session(setup_session)
 
         with setup_session.use_stack_frame(
                 SetupStackFrame(

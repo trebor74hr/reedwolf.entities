@@ -1,5 +1,8 @@
 import inspect
-
+from dataclasses import (
+        dataclass, 
+        field,
+        )
 from typing import (
         Any,
         List,
@@ -24,6 +27,7 @@ from .exceptions import (
         EntityApplyNameError,
         )
 from .namespaces import (
+        Namespace,
         ModelsNS,
         FieldsNS,
         ThisNS,
@@ -77,15 +81,18 @@ from .setup import (
 
 # ------------------------------------------------------------
 
+@dataclass
 class FunctionsRegistry(RegistryUseDenied):
-    NAMESPACE = FunctionsNS
+    NAMESPACE: ClassVar[Namespace] = FunctionsNS
 
+@dataclass
 class OperationsRegistry(RegistryUseDenied):
-    NAMESPACE = OperationsNS
+    NAMESPACE: ClassVar[Namespace] = OperationsNS
 
 # ------------------------------------------------------------
 
 
+@dataclass
 class ModelsRegistry(RegistryBase):
     """
     All models have full path from top container (for better readibility)
@@ -93,16 +100,17 @@ class ModelsRegistry(RegistryBase):
     instance, instead of apply_session.current_frame.instance.
     See get_root_value() implementation.
     """
-    NAMESPACE = ModelsNS
-
     # == M.company.name case
     # # Caller should not fetch attribute by name from return value of
     # # get_root_value()
     # ROOT_VALUE_NEEDS_FETCH_BY_NAME: ClassVar[bool] = False
 
-    def __init__(self):
-        super().__init__()
-        self.root_attr_nodes : Optional[Dict[str, AttrDexpNode]] = {}
+    root_attr_nodes : Optional[Dict[str, AttrDexpNode]] = field(repr=False, init=False, default_factory=dict)
+
+    NAMESPACE: ClassVar[Namespace] = ModelsNS
+
+    # def __post_init__(self):
+    #     super().__post_init__()
 
     # NOTE: no register() method due complex logic - see
     #       ContainerBase._register_bound_model()
@@ -210,9 +218,10 @@ class ModelsRegistry(RegistryBase):
 # ------------------------------------------------------------
 
 
+@dataclass
 class FieldsRegistry(RegistryBase):
 
-    NAMESPACE = FieldsNS
+    NAMESPACE: ClassVar[Namespace] = FieldsNS
 
     ALLOWED_BASE_TYPES: ClassVar[List[type]] = (IFieldBase, )
 
@@ -276,16 +285,15 @@ class FieldsRegistry(RegistryBase):
 # ------------------------------------------------------------
 
 
+@dataclass
 class ContextRegistry(RegistryBase):
 
-    NAMESPACE = ContextNS
+    context_class: Optional[IContext] = field(repr=False)
 
-    def __init__(self, 
-                 context_class: Optional[Type[IContext]], 
-                 ):
-        super().__init__() # functions_factory_registry=functions_factory_registry)
+    NAMESPACE: ClassVar[Namespace] = ContextNS
 
-        self.context_class = context_class
+    def __post_init__(self):
+        super().__post_init__() 
         if self.context_class:
             self.register_all_nodes()
 
@@ -347,14 +355,16 @@ class ContextRegistry(RegistryBase):
 # ------------------------------------------------------------
 
 
+@dataclass
 class ConfigRegistry(RegistryBase):
 
-    NAMESPACE = ConfigNS
+    config: Config = field(repr=False)
 
-    def __init__(self, config: Config):
-        super().__init__()
+    NAMESPACE: ClassVar[Namespace] = ConfigNS
 
-        self.config = config
+    def __post_init__(self):
+        super().__post_init__()
+
         if not self.config:
             raise EntityInternalError(owner=self, msg="Config is required")
 
@@ -382,7 +392,8 @@ class ConfigRegistry(RegistryBase):
 # ------------------------------------------------------------
 
 
-class ThisInstanceRegistry(RegistryBase):
+@dataclass
+class ThisRegistry(RegistryBase):
     """ 
     Applies to model instances, e.g. 
         company <= Company(name="Cisco", city="London")
@@ -394,76 +405,75 @@ class ThisInstanceRegistry(RegistryBase):
     Uses ReservedAttributeNames.INSTANCE_ATTR_NAME == "Instance" 
     """
 
-    NAMESPACE = ThisNS
+    children_mode: bool = False
+    model_class: Optional[ModelType] = None
+    attr_node: Optional[AttrDexpNode] = None
 
-    def __init__(self, model_class: ModelType):
-        super().__init__() # functions_factory_registry=functions_factory_registry)
-        self.model_class = model_class
-        if not is_model_class(self.model_class):
-            raise EntitySetupValueError(owner=self, msg=f"Expected model class (DC/PYD), got: {type(self.model_class)} / {self.model_class} ")
+    NAMESPACE: ClassVar[Namespace] = ThisNS
 
-        for attr_name in get_model_fields(self.model_class):
-            # th_field: ModelField in .values()
-            attr_node = self._create_attr_node_for_model_attr(self.model_class, attr_name)
-            self.register_attr_node(attr_node)
-
-        # This.Instance == ReservedAttributeNames.INSTANCE_ATTR_NAME 
-        self.register_instance_attr_node(model_class=model_class)
+    # autocomputed
+    attr_name: Optional[str] = field(init=False, repr=False, default=None)
 
 
-    def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
-        if not isinstance(apply_session.current_frame.instance, self.model_class):
-            raise EntityInternalError(owner=self, msg=f"Type of apply session's instance expected to be '{self.model_class}, got: {apply_session.current_frame.instance}") 
-        return apply_session.current_frame.instance, None
+    def __post_init__(self):
+
+        super().__post_init__()
+
+        if not (self.model_class or self.attr_node):
+            raise EntityInternalError(owner=self, msg="Pass model_class or attr_node.") 
+
+        if self.attr_node:
+            if not isinstance(self.attr_node, AttrDexpNode):
+                raise EntitySetupValueError(owner=self, msg=f"Expected AttrDexpNode, got: {type(self.attr_node)} / {self.attr_node}")
+            self.attr_name = self.attr_node.name
+
+            # This.Value == ReservedAttributeNames.VALUE_ATTR_NAME.value
+            self.register_value_attr_node(attr_node=self.attr_node)
+
+        if self.model_class:
+            if not is_model_class(self.model_class):
+                raise EntitySetupValueError(owner=self, msg=f"Expected model class (DC/PYD), got: {type(self.model_class)} / {self.model_class} ")
+
+            for attr_name in get_model_fields(self.model_class):
+                # th_field: ModelField in .values()
+                attr_node = self._create_attr_node_for_model_attr(self.model_class, attr_name)
+                self.register_attr_node(attr_node)
+
+            # This.Instance == ReservedAttributeNames.INSTANCE_ATTR_NAME 
+            self.register_instance_attr_node(model_class=self.model_class)
+
+        else:
+            if self.children_mode:
+                raise EntityInternalError(owner=self, msg="Children mode allowed only when model_class is passed") 
 
 
-# ------------------------------------------------------------
 
-class ThisValueRegistry(RegistryBase):
-    """ 
-    Applies to model instance's attribute, e.g. 
-        company <= Company(name="Cisco", city="London")
-        company_name = company.name
-
-        This.Value <= company_name
-
-    Uses ReservedAttributeNames.VALUE_ATTR_NAME == "Value" 
-    """
-
-    NAMESPACE = ThisNS
-
-    def __init__(self, attr_node: AttrDexpNode):
-        # TODO: model_class: ModelType
-        super().__init__()
-
-        self.attr_node = attr_node
-        if not isinstance(self.attr_node, AttrDexpNode):
-            raise EntitySetupValueError(owner=self, msg=f"Expected AttrDexpNode, got: {type(self.attr_node)} / {self.attr_node}")
-        self.attr_name = self.attr_node.name
-
-        # TODO: consider adding this too? how to fetch Parent?
-        #   self.model_class = model_class
-        #   if not is_model_class(self.model_class):
-        #       raise EntitySetupValueError(owner=self, msg=f"Expected model class (DC/PYD), got: {type(self.model_class)} / {self.model_class}")
-        #
-        #   model_fields = get_model_fields(self.model_class)
-        #   if self.attr_name not in model_fields:
-        #       raise EntitySetupValueError(owner=self, msg=f"Attribute '{attr_name}' not found in {type(self.model_class)} / {self.model_class}")
-
-        # This.Value == ReservedAttributeNames.VALUE_ATTR_NAME.value
-        self.register_value_attr_node(attr_node=attr_node)
-
-
-    def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
+    def get_root_value(self, 
+            apply_session: IApplySession, 
+            attr_name: AttrName
+            ) -> Tuple[Any, Optional[AttrName]]:
+        " TODO: explain: when 2nd param is not None, then ... "
         # TODO: 
         # if not isinstance(apply_session.current_frame.instance, self.model_class):
         #     raise EntityInternalError(owner=self, msg=f"Type of apply session's instance expected to be '{self.model_class}, got: {apply_session.current_frame.instance}") 
 
-        if attr_name != ReservedAttributeNames.VALUE_ATTR_NAME.value:
-            raise EntityApplyNameError(owner=self, msg=f"Only '.Value' attribute is expected, got: {attr_name}") 
+        out = UNDEFINED
 
-        # instead of fetching .Value, instruct caller to fetch component's bound attribute
-        return apply_session.current_frame.instance, self.attr_name
+        if self.attr_name and attr_name == ReservedAttributeNames.VALUE_ATTR_NAME.value:
+            # instead of fetching .Value, instruct caller to fetch component's
+            # bound attribute
+            out = apply_session.current_frame.instance, self.attr_name
+
+        elif self.model_class:
+            if not isinstance(apply_session.current_frame.instance, self.model_class):
+                raise EntityInternalError(owner=self, msg=f"Type of apply session's instance expected to be '{self.model_class}, got: {apply_session.current_frame.instance}") 
+            out = apply_session.current_frame.instance, None
+
+        if not out:
+            raise EntityApplyNameError(owner=self, msg=f"Unknown attribute '.{attr_name}'.") 
+
+        return out
+
 
 # ------------------------------------------------------------
 
@@ -478,7 +488,7 @@ class SetupSession(SetupSessionBase):
         some local context, e.g. Component This. dexps 
         Args:
 
-            a) this_ns_instance_model_class -> .Instance + all-attributes logic
+            a) this_ns_instance_model_class -> This.Instance + This.<all-attribute-names> logic
 
             b) this_ns_value_attr_node -> .Value logic, no other attributes for now
 
@@ -491,25 +501,23 @@ class SetupSession(SetupSessionBase):
         # if not this_ns_instance_model_class:
         #     raise EntityInternalError(owner=self, msg="Expected this_ns_instance_model_class.") 
 
+        kwargs = {}
         if this_ns_instance_model_class:
-            assert this_ns_value_attr_node is None
-            this_registry = ThisInstanceRegistry(
-                    model_class=this_ns_instance_model_class,
-                    )
-        elif this_ns_value_attr_node:
-            this_registry = ThisValueRegistry(
-                    # model_class=this_ns_instance_model_class,
-                    attr_node=this_ns_value_attr_node,
-                    )
-        else:
-            raise EntityInternalError(owner=self, msg="Expected this_ns_instance_model_class or this_ns_value_attr_node") 
+            kwargs["model_class"]=this_ns_instance_model_class
+
+        if this_ns_value_attr_node:
+            kwargs["attr_node"]=this_ns_value_attr_node
+
+        if not kwargs:
+            raise EntityInternalError(owner=self, msg="Expected this_ns_instance_model_class and/or this_ns_value_attr_node") 
+
+        this_registry = ThisRegistry(**kwargs)
 
         local_setup_session = SetupSession(
                                 container=self.container,
                                 parent_setup_session=None,
                                 functions_factory_registry=self.functions_factory_registry,
                                 )
-
         local_setup_session.add_registry(this_registry)
 
         return local_setup_session
@@ -517,3 +525,51 @@ class SetupSession(SetupSessionBase):
 # ------------------------------------------------------------
 # OBSOLETE
 # ------------------------------------------------------------
+
+# # ------------------------------------------------------------
+# 
+# class ThisValueRegistry(RegistryBase):
+#     """ 
+#     Applies to model instance's attribute, e.g. 
+#         company <= Company(name="Cisco", city="London")
+#         company_name = company.name
+# 
+#         This.Value <= company_name
+# 
+#     Uses ReservedAttributeNames.VALUE_ATTR_NAME == "Value" 
+#     """
+# 
+#     NAMESPACE = ThisNS
+# 
+#     def __init__(self, attr_node: AttrDexpNode):
+#         # TODO: model_class: ModelType
+#         super().__init__()
+# 
+#         self.attr_node = attr_node
+#         if not isinstance(self.attr_node, AttrDexpNode):
+#             raise EntitySetupValueError(owner=self, msg=f"Expected AttrDexpNode, got: {type(self.attr_node)} / {self.attr_node}")
+#         self.attr_name = self.attr_node.name
+# 
+#         # TODO: consider adding this too? how to fetch Parent?
+#         #   self.model_class = model_class
+#         #   if not is_model_class(self.model_class):
+#         #       raise EntitySetupValueError(owner=self, msg=f"Expected model class (DC/PYD), got: {type(self.model_class)} / {self.model_class}")
+#         #
+#         #   model_fields = get_model_fields(self.model_class)
+#         #   if self.attr_name not in model_fields:
+#         #       raise EntitySetupValueError(owner=self, msg=f"Attribute '{attr_name}' not found in {type(self.model_class)} / {self.model_class}")
+# 
+#         # This.Value == ReservedAttributeNames.VALUE_ATTR_NAME.value
+#         self.register_value_attr_node(attr_node=attr_node)
+# 
+# 
+#     def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
+#         # TODO: 
+#         # if not isinstance(apply_session.current_frame.instance, self.model_class):
+#         #     raise EntityInternalError(owner=self, msg=f"Type of apply session's instance expected to be '{self.model_class}, got: {apply_session.current_frame.instance}") 
+# 
+#         if attr_name != ReservedAttributeNames.VALUE_ATTR_NAME.value:
+#             raise EntityApplyNameError(owner=self, msg=f"Only '.Value' attribute is expected, got: {attr_name}") 
+# 
+#         # instead of fetching .Value, instruct caller to fetch component's bound attribute
+#         return apply_session.current_frame.instance, self.attr_name

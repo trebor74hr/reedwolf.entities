@@ -102,20 +102,23 @@ def get_dexp_node_name(owner_name: Optional[str],
 # ------------------------------------------------------------
 
 
+@dataclass
 class RegistryBase(IRegistry):
     """
     Namespaces are DynamicAttrsBase with flexible attributes, so it is not
     convenient to have some advanced logic within. Thus Registry logic 
     is put in specialized classes - SetupSession.
     """
+    store : Dict[str, AttrDexpNode] = field(repr=False, init=False, default_factory=dict)
+    setup_session: Union[ISetupSession, UndefinedType] = field(repr=False, init=False, default=UNDEFINED)
+    finished: bool                  = field(init=False, repr=False, default=False)
+
     # TODO: with 3.11 - Protocol
     NAMESPACE : ClassVar[Namespace] = None
     ROOT_VALUE_NEEDS_FETCH_BY_NAME: ClassVar[bool] = True
 
-    def __init__(self):
-        self.store : Dict[str, AttrDexpNode] = {}
-        self.setup_session = UNDEFINED
-        self.finished: bool = False
+    def __post_init__(self):
+        ...
 
     def set_setup_session(self, setup_session: ISetupSession):
         if self.setup_session:
