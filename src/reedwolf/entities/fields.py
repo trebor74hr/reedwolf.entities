@@ -173,10 +173,6 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
     #           contains=<this-field.enables-list>)
     #   See also "available".
 
-    # TODO: možda složiti da radi i za Choice/Enum -> structural pattern
-    #       matching like, samo nisam još našao zgodnu sintaksu.
-    enables:        Optional[List[ComponentBase]] = field(repr=False, default=None)
-
     # NOTE: this has no relation to type hinting - this is used for html input placeholder attribute
     hint:           Optional[TransMessageType] = field(repr=False, default=None)
 
@@ -200,6 +196,7 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
     #   parent_name  : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
     def __post_init__(self):
+        self._allowed_cleaner_base_list = [FieldValidationBase, FieldEvaluationBase]
         self.init_clean()
         super().__post_init__()
 
@@ -218,10 +215,7 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
 
         self.autocomputed = AutocomputedEnum.from_value(self.autocomputed)
 
-        allowed_cleaner_base_list = [FieldValidationBase, FieldEvaluationBase]
-        if self.enables:
-            allowed_cleaner_base_list.extend([ChildrenValidationBase, ChildrenEvaluationBase])
-        self._check_cleaners(allowed_cleaner_base_list)
+        self._check_cleaners(self._allowed_cleaner_base_list)
 
         self.init_clean_base()
 
@@ -418,10 +412,18 @@ class StringField(StringFieldBase):
 @dataclass
 class BooleanField(FieldBase):
     PYTHON_TYPE:ClassVar[type] = bool
+
+    # TODO: možda složiti da radi i za Choice/Enum -> structural pattern
+    #       matching like, samo nisam još našao zgodnu sintaksu.
+    enables:        Optional[List[ComponentBase]] = field(repr=False, default=None)
+
     # default:        Optional[Union[bool, DotExpression]] = None
 
-    # def __post_init__(self):
-    #     self.init_clean()
+    def init_clean(self):
+        if self.enables:
+            self._allowed_cleaner_base_list.extend([ChildrenValidationBase, ChildrenEvaluationBase])
+        super().init_clean()
+
 
     #     if self.default is not None and not isinstance(self.default, (bool, DotExpression)):
     #         raise EntitySetupValueError(owner=self, msg=f"'default'={self.default} needs to be bool value  (True/False).")
@@ -464,7 +466,7 @@ class ChoiceField(FieldBase):
     choice_title_attr_node: AttrDexpNode = field(init=False, default=None, repr=False)
 
     def __post_init__(self):
-        self.init_clean()
+        super().__post_init__()
         if self.choices is None:
             # {self.name}: {self.__class__.__name__}: 
             raise EntitySetupValueError(owner=self, msg="argument 'choices' is required.")
@@ -637,8 +639,6 @@ class EnumField(FieldBase):
 
     enum_value_py_type: Optional[type] = field(init=False, default=None)
 
-    # def __post_init__(self):
-    #     self.init_clean()
 
     def setup(self, setup_session: ISetupSession):
 
@@ -721,6 +721,7 @@ class PositiveIntegerField(IntegerField):
     # TODO: add unit tests 
     def __post_init__(self):
         self.cleaners.insert(0, MinValue(1))
+        super().__post_init__()
 
 @dataclass
 class IdField(IntegerField):
