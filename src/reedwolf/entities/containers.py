@@ -57,9 +57,12 @@ from .base import (
         KeyPairs,
         IApplySession,
         SetupStackFrame,
+        ISetupSession,
+        IFieldBase,
         )
 from .expressions import (
         DotExpression,
+        IThisRegistry,
         )
 from .bound_models import (
         BoundModel,
@@ -80,6 +83,11 @@ from .registries import (
         OperationsRegistry,
         ContextRegistry,
         ConfigRegistry,
+        ThisRegistryForValue,
+        ThisRegistryForChildren,
+        ThisRegistryForValueAndChildren,
+        ThisRegistryForItems,
+        ThisRegistryForInstance,
         )
 from .valid_children import (
         ChildrenValidationBase,
@@ -335,15 +343,22 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         #       process only that component and will not go deeper. later
         #       subentity_items.setup() will do this within own tree dep (own .components / .setup_session)
 
-        local_setup_session = self.try_create_local_setup_session(self.setup_session)
-
+        # for containers
         # iterate all subcomponents and call _setup() for each
         with self.setup_session.use_stack_frame(
                 SetupStackFrame(
                     container = self, 
                     component = self, 
-                    local_setup_session=local_setup_session,
+                    local_setup_session = None,
                 )):
+            # setup this_registry objects must be inside of stack_frame due
+            # premature component.bind setup in some ThisRegistryFor* classes.
+            this_registry = self.try_create_this_registry(component=self, setup_session=self.setup_session)
+            assert this_registry
+            local_setup_session = self.setup_session.create_local_setup_session(this_registry)
+            self.setup_session.current_frame.set_local_setup_session(local_setup_session)
+
+            # setup me
             self._setup(setup_session=self.setup_session)
 
         # check all ok?
@@ -408,6 +423,67 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             raise EntityInternalError(msg="get_key_pairs() should be called only when 'keys' are defined")
         key_pairs = self.keys.get_key_pairs(instance, container=self)
         return key_pairs
+
+    # ------------------------------------------------------------
+
+    @staticmethod
+    def create_this_registry_for_instance(
+            model_class: ModelType, 
+            owner: Optional[ComponentBase], 
+            children: Optional[List[ComponentBase]], 
+            setup_session: ISetupSession
+            ) -> IThisRegistry:
+        """ 
+        - ThisRegistryForInstance it is unavailable to low-level modules -
+          e.g. func_args -> setup.
+        - .Instance + <attr-names> is used only in manual setup cases, 
+          e.g. ChoiceField()
+        """
+        return ThisRegistryForInstance(model_class=model_class, owner=owner, children=children, setup_session=setup_session)
+
+
+    def try_create_this_registry(self, component: ComponentBase, setup_session: ISetupSession) -> Optional[IThisRegistry]:
+
+        children = component.get_children()
+
+        if isinstance(component, IFieldBase):
+            # ==== similar logic in apply.py :: _apply() ====
+            # TODO: this is 2nd place to call '.Setup()'. Explain!
+            assert not component.is_container()
+            assert getattr(component, "bind", None)
+
+            # Field -> This.Value == This.<all-attributes>
+            if not component.bind.IsFinished():
+                attr_node = component.bind.Setup(setup_session=setup_session, owner=self)
+            else:
+                attr_node = component.bind._dexp_node
+
+            if not attr_node:
+                raise EntitySetupNameError(owner=component, msg=f"{attr_node.name}.bind='{component.bind}' could not be evaluated")
+
+            if children:
+                # Field with children (e.g. BooleanField.enables)
+                # Children -> This..Children + This.<all-attributes>
+                # model_class = component.get_type_info().type_
+                this_registry = ThisRegistryForValueAndChildren(attr_node=attr_node, owner=component, children=children, setup_session=setup_session)
+            else:
+                this_registry = ThisRegistryForValue(attr_node)
+
+
+        elif children:
+            if component.is_subentity_items():
+                # Items -> This.Items 
+                this_registry = ThisRegistryForItems(owner=component, children=children)
+            else:
+                # Children -> This.Children + This.<all-attributes>
+                this_registry = ThisRegistryForChildren(owner=component, children=children, setup_session=setup_session)
+        else:
+            if component.is_container():
+                raise EntityInternalError(owner=self, msg="Container should have local_session created") 
+            # no This for you!
+            this_registry = None
+
+        return this_registry
 
 
 # ------------------------------------------------------------
@@ -525,6 +601,7 @@ class KeyFields(KeysBase):
 
 @dataclass
 class Entity(ContainerBase):
+
     contains        : List[ComponentBase] = field(repr=False)
 
     # --- optional - following can be bound later with .bind_to()

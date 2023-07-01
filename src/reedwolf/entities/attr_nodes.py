@@ -93,9 +93,6 @@ class AttrDexpNode(IDotExpressionNode):
         elif isinstance(self.data, IFieldBase):
             self.attr_node_type = AttrDexpNodeTypeEnum.FIELD
             self.data_supplier_name = f"{self.data.name}"
-        # elif isinstance(self.data, IData):
-        #     self.attr_node_type = AttrDexpNodeTypeEnum.DATA
-        #     self.data_supplier_name = f"{self.data.name}"
         elif isinstance(self.data, ComponentBase):
             self.attr_node_type = AttrDexpNodeTypeEnum.COMPONENT
             self.data_supplier_name = f"{self.data.name}"
@@ -109,7 +106,6 @@ class AttrDexpNode(IDotExpressionNode):
             else:
                 self.attr_node_type = AttrDexpNodeTypeEnum.VEXP
             self.data_supplier_name = f"{self.data!r}"
-
 
         # ---------------------------------------------
         # CASE: Concrete type
@@ -130,15 +126,11 @@ class AttrDexpNode(IDotExpressionNode):
                 raise EntityInternalError(owner=self, msg="TypeInfo case - expected th_field (ModelField or py_function).")
 
             self.attr_node_type = AttrDexpNodeTypeEnum.TH_FIELD
-            # self.data_supplier_name = f"TH[{type_info.var_type.name}: {type_info.type_.__name__}]"
             self.data_supplier_name = f"TH[{self.data.type_.__name__}]"
         else:
             if is_function(self.data):
-                # self.attr_node_type = AttrDexpNodeTypeEnum.FUNCTION
-                # self.data_supplier_name = f"{self.data.__name__}"
                 raise EntitySetupValueError(owner=self, msg=f"Node '.{self.name}' is a function. Maybe you forgot to wrap it with 'reedwolf.entities.Function()'?")
             raise EntitySetupValueError(owner=self, msg=f"AttrDexpNode {self.name} should be based on PYD/DC class, got: {self.data}")
-
 
         # NOTE: .type_info could be calculated later in finish() method
 

@@ -15,6 +15,7 @@ from .utils import (
         UNDEFINED,
         UndefinedType,
         check_identificator_name,
+        to_repr,
         )
 from .exceptions import (
         EntityError,
@@ -33,6 +34,7 @@ from .expressions import (
         IDotExpressionNode,
         IFunctionDexpNode,
         IRegistry,
+        IThisRegistry,
         ISetupSession,
         IAttributeAccessorBase,
         )
@@ -44,6 +46,7 @@ from .meta import (
         ModelType,
         TypeInfo,
         HookOnFinishedAllCallable,
+        get_model_fields,
         )
 from .base import (
         IStackOwnerSession,
@@ -101,6 +104,27 @@ def get_dexp_node_name(owner_name: Optional[str],
 
 # ------------------------------------------------------------
 
+@dataclass
+class RegistryChildValueAccessor:
+    Value : Any
+
+@dataclass
+class RegistryChildrenAccessor:
+    children : List[RegistryChildValueAccessor]
+
+# --------------------
+
+@dataclass
+class RegistryItemValueAccessor:
+    Value : Any
+
+
+@dataclass
+class RegistryItemsAccessor:
+    children : List[RegistryItemValueAccessor]
+
+# ------------------------------------------------------------
+
 
 @dataclass
 class RegistryBase(IRegistry):
@@ -119,6 +143,20 @@ class RegistryBase(IRegistry):
 
     def __post_init__(self):
         ...
+
+
+    @abstractmethod
+    def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
+        """ 
+        Apply phase - Namespace.<attr_name> - 
+        function returns the instance (root value) from which attr_name will be read from 
+
+        attr_name is not used for fetching the value, but for rare cases when 
+        different source / instance is used based on different attr_name. See
+        ThisNS.Instance.
+        """
+        ...
+
 
     def set_setup_session(self, setup_session: ISetupSession):
         if self.setup_session:
@@ -141,31 +179,7 @@ class RegistryBase(IRegistry):
     def items(self) -> List[Tuple[str, AttrDexpNode]]:
         return self.store.items()
 
-
-    def register_instance_attr_node(self, model_class: ModelType, attr_name_prefix: Optional[str]=None) -> AttrDexpNode:
-        " used for This.Instance / M.Instance to return instance itself "
-        if not is_model_class(model_class):
-            raise EntitySetupValueError(owner=self, msg=f"Expected model class (DC/PYD), got: {type(model_class)} / {model_class} ")
-
-        th_field = None
-        type_info = TypeInfo.get_or_create_by_type(
-                        py_type_hint=model_class,
-                        caller=None,
-                        )
-        attr_name = ReservedAttributeNames.INSTANCE_ATTR_NAME.value
-        if attr_name_prefix:
-            attr_name = f"{attr_name_prefix}{attr_name}"
-
-        attr_node = AttrDexpNode(
-                        name=attr_name,
-                        data=type_info,
-                        namespace=self.NAMESPACE,
-                        type_info=type_info, 
-                        th_field=th_field,
-                        )
-        self.register_attr_node(attr_node)
-        return attr_node
-
+    # ------------------------------------------------------------
 
     def register_value_attr_node(self, attr_node: AttrDexpNode) -> AttrDexpNode:
         " used for This.Value to return attribute value "
@@ -185,6 +199,139 @@ class RegistryBase(IRegistry):
         self.register_attr_node(attr_node)
         return attr_node
 
+    # --------------------
+
+    def _register_children(self, 
+                           setup_session: ISetupSession,
+                           attr_name: ReservedAttributeNames,
+                           owner: IContainerBase, 
+                           children: List[ComponentBase],
+                           attr_name_prefix: str = None,
+                           ) -> AttrDexpNode:
+        " used for This.Children to return instance itself "
+
+        if not isinstance(owner, ComponentBase):
+            raise EntitySetupValueError(owner=self, msg=f"Expected ComponentBase, got: {type(owner)} / {to_repr(owner)}")
+
+        if not isinstance(children, (list, tuple)) or len(children)==0:
+            raise EntitySetupValueError(owner=self, msg=f"Expected list/tuple of children (components), got: {type(children)} / {to_repr(children)}")
+
+        for nr, child in enumerate(children, 1):
+            if not isinstance(child, ComponentBase):
+                raise EntitySetupValueError(owner=self, msg=f"Child {nr}: Expected ComponentBase, got: {type(child)} / {to_repr(child)}")
+
+            child_type_info = None
+            if hasattr(child, "bind"):
+                # NOTE: check that sessino is setup correctly for this field?
+                assert setup_session and setup_session.current_frame
+
+                if not setup_session.current_frame.component == owner:
+                    raise EntityInternalError(owner=child, msg=f"setup_session.current_frame.component={setup_session.current_frame.component} <> owner={owner}") 
+
+                if not child.bind.IsFinished():
+                    attr_node = child.bind.Setup(setup_session=setup_session, owner=owner)
+                else:
+                    attr_node = child.bind._dexp_node
+                child_type_info = attr_node.get_type_info()
+            else:
+                # TODO: currently not supported - FieldGroup. SubEntitySingle
+                #       if not child_type_info:
+                #       if hasattr(child, "bound_model"):
+                #           # raise EntityInternalError(owner=child, msg=f"get_type_info() is not available") 
+                #           child_type_info = child.bound_model.get_type_info()
+                #       else:
+                #           raise EntityInternalError(owner=child, msg=f"child_type_info could not be extracted, got: {child_type_info}") 
+                continue
+
+
+            attr_node = AttrDexpNode(
+                            name=child.name,
+                            data=child_type_info,
+                            namespace=self.NAMESPACE,
+                            type_info=child_type_info, 
+                            th_field=None,
+                            )
+            self.register_attr_node(attr_node)
+
+        if attr_name == ReservedAttributeNames.CHILDREN_ATTR_NAME.value:
+            owner_model_class = RegistryChildrenAccessor
+        elif attr_name == ReservedAttributeNames.ITEMS_ATTR_NAME.value:
+            owner_model_class = RegistryItemsAccessor
+        else:
+            raise EntityInternalError(owner=self, msg=f"Unsupported attr_name={attr_name}") 
+
+        return self._register_children_attr_node(
+                        model_class = owner_model_class,
+                        attr_name = attr_name,
+                        attr_name_prefix = attr_name_prefix)
+
+    # --------------------
+
+    def _register_children_attr_node(self, 
+                    model_class: ModelType, 
+                    attr_name = ReservedAttributeNames,
+                    attr_name_prefix: Optional[str]=None) -> AttrDexpNode:
+        if not is_model_class(model_class):
+            raise EntitySetupValueError(owner=self, msg=f"Expected model class (DC/PYD), got: {type(model_class)} / {model_class} ")
+
+        th_field = None
+        type_info = TypeInfo.get_or_create_by_type(
+                        py_type_hint=model_class,
+                        caller=None,
+                        )
+        if attr_name_prefix:
+            attr_name = f"{attr_name_prefix}{attr_name}"
+
+        attr_node = AttrDexpNode(
+                        name=attr_name,
+                        data=type_info,
+                        namespace=self.NAMESPACE,
+                        type_info=type_info, 
+                        th_field=th_field,
+                        )
+        self.register_attr_node(attr_node)
+        return attr_node
+
+    # --------------------
+
+    def register_items_attr_node(self, owner: IContainerBase, children: List[ComponentBase]) -> AttrDexpNode:
+        " used for This.Items to return list items - each having children "
+        if not owner.is_subentity_items():
+            raise EntitySetupValueError(owner=self, msg=f"Expected SubEntityItems, got: {type(owner)} / {to_repr(owner)} ")
+
+        if not isinstance(children, (list, tuple)) or len(children)==0:
+            raise EntitySetupValueError(owner=self, msg=f"Expected list/tuple of children (components), got: {type(children)} / {to_repr(children)} ")
+
+        for nr, child in enumerate(children, 1):
+            if not isinstance(child, ComponentBase):
+                raise EntitySetupValueError(owner=self, msg=f"Child {nr}: Expected ComponentBase, got: {type(child)} / {to_repr(child)} ")
+
+        type_info = owner.bound_model.get_type_info()
+
+        attr_name = ReservedAttributeNames.ITEMS_ATTR_NAME.value
+        attr_node = AttrDexpNode(
+                        name=attr_name,
+                        data=type_info,
+                        namespace=self.NAMESPACE,
+                        type_info=type_info, 
+                        th_field=None,
+                        )
+        self.register_attr_node(attr_node)
+        return attr_node
+
+    # --------------------
+
+    def _register_model_nodes(self, model_class: ModelType):
+        if not is_model_class(model_class):
+            raise EntitySetupValueError(owner=self, msg=f"Expected model class (DC/PYD), got: {type(model_class)} / {to_repr(model_class)} ")
+
+        for attr_name in get_model_fields(model_class):
+            # th_field: ModelField in .values()
+            attr_node = self._create_attr_node_for_model_attr(model_class, attr_name)
+            self.register_attr_node(attr_node)
+
+
+    # ------------------------------------------------------------
 
     @classmethod
     def _create_attr_node_for_model_attr(cls, model_class: ModelType, attr_name:str) -> AttrDexpNode:
@@ -211,6 +358,7 @@ class RegistryBase(IRegistry):
                         )
         return attr_node
 
+    # ------------------------------------------------------------
 
     def register_dexp_node(self, dexp_node:IDotExpressionNode, alt_dexp_node_name=None):
         """
@@ -395,20 +543,9 @@ class RegistryBase(IRegistry):
 
         return dexp_node
 
-    @abstractmethod
-    def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
-        """ 
-        Apply phase - Namespace.<attr_name> - 
-        function returns the instance (root value) from which attr_name will be read from 
-
-        attr_name is not used for fetching the value, but for rare cases when 
-        different source / instance is used based on different attr_name. See
-        ThisNS.Instance.
-        """
-        ...
-
 
 # ------------------------------------------------------------
+
 
 
 class RegistryUseDenied(RegistryBase):
@@ -544,7 +681,6 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
     def __repr__(self):
         return str(self)
 
-
     # ------------------------------------------------------------
 
     def add_registry(self, registry: IRegistry):
@@ -585,6 +721,7 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
         if registry is UNDEFINED:
             if strict:
                 avail_names = self._get_avail_registry_names(namespace, is_internal_use)
+                import pdb;pdb.set_trace() 
                 raise EntitySetupNameError(owner=self, msg=f"Registry '{namespace._name}' not found. Available: {avail_names}")
             return UNDEFINED
 
@@ -685,4 +822,21 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
                 raise EntityInternalError(owner=self, msg=f"DexpNode {dexp_node} still not finished, finish() moethod did not set is_finished")  
 
         self.finished = True
+
+    # ------------------------------------------------------------
+
+    def create_local_setup_session_for_this_instance(self, 
+                                                     model_class: ModelType, 
+                                                     owner: Optional[ComponentBase],
+                                                     children: Optional[List[ComponentBase]]
+                                                     ) -> IThisRegistry:
+        this_registry = self.container.create_this_registry_for_instance(
+                                model_class=model_class, 
+                                owner=owner, 
+                                children=children,
+                                setup_session=self)
+        local_setup_session = self.create_local_setup_session(this_registry)
+        return local_setup_session
+
+
 

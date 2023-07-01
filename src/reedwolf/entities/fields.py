@@ -75,15 +75,13 @@ from .expressions   import (
         DotExpression,
         DExpStatusEnum,
         IFunctionDexpNode,
+        ISetupSession,
         )
 from .attr_nodes import (
         AttrDexpNode
         )
 from .functions import (
         CustomFunctionFactory,
-        )
-from .registries import (
-        SetupSession,
         )
 from .valid_field import (
         MinValue,
@@ -228,7 +226,7 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
         self.init_clean_base()
 
 
-    def setup(self, setup_session:SetupSession):
+    def setup(self, setup_session:ISetupSession):
 
         super().setup(setup_session=setup_session)
 
@@ -268,8 +266,6 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
             if not self.bound_attr_node:
                 # warn(f"TODO: {self}.bind = {self.bind} -> bound_attr_node can not be found.")
                 raise EntitySetupValueError(owner=self, msg=f"bind={self.bind}: bound_attr_node can not be found.")
-            # else:
-            #     self._set_type_info()
 
         # NOTE: can have multiple Evaluation-s
         evaluations_w_autocomp = ", ".join([cleaner.name for cleaner in self.cleaners if isinstance(cleaner, EvaluationBase) and cleaner.REQUIRES_AUTOCOMPUTE]) \
@@ -296,14 +292,6 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
                 missing_names = " and ".join(missing_names)
                 raise EntitySetupError(owner=self, msg=f"'{self.__class__.__name__}' requires following Validations (cleaners attribute): {missing_names}")
 
-            # OLD:
-            #     validations_kls_required = set(self.REQUIRED_VALIDATIONS)
-            #     validations_kls_found = set([type(cleaner) for cleaner in self.cleaners if isinstance(cleaner, ValidationBase)]) if self.cleaners else set()
-            #     missing = (validations_kls_required - validations_kls_found)
-            #     if missing:
-            #         missing_names = ", ".join([validation.__name__ for validation in missing])
-            #         raise EntitySetupError(owner=self, msg=f"'{self.__class__.__name__}' requires following Validations (cleaners attribute): {missing_names}")
-
         return self
 
     # ------------------------------------------------------------
@@ -316,6 +304,13 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
             else:
                 raise EntityInternalError(owner=self, msg="python_type must be set in custom setup() method or define PYTHON_TYPE class constant")
         self._set_type_info()
+
+    # ------------------------------------------------------------
+
+    def get_type_info(self):
+        if not self.type_info:
+            raise EntityInternalError(owner=self, msg="type_info is not yet set, probably setup was not called")
+        return self.type_info
 
     # ------------------------------------------------------------
 
@@ -487,7 +482,7 @@ class ChoiceField(FieldBase):
 
     # ------------------------------------------------------------
 
-    def setup(self, setup_session: SetupSession):
+    def setup(self, setup_session: ISetupSession):
 
         choices = self.choices
         choices_checked = False
@@ -561,12 +556,17 @@ class ChoiceField(FieldBase):
                     # TODO: explain, give example
                     raise EntityInternalError(owner=self, msg="Choices is a a list of model instances, expecting single instance.") 
 
+            local_setup_session = setup_session.create_local_setup_session_for_this_instance(
+                                        model_class=model_class,
+                                        owner=self,
+                                        children=None,
+                                        )
+
             with setup_session.use_stack_frame(
                     SetupStackFrame(
                         container = self.get_first_parent_container(consider_self=True), 
                         component = self, 
-                        local_setup_session = setup_session.create_local_setup_session(
-                                                    this_ns_instance_model_class=model_class)
+                        local_setup_session = local_setup_session,
               )):
                 self.choice_value_attr_node = self._create_attr_node(setup_session, "choice_value", dexp=self.choice_value)
                 self.choice_title_attr_node = self._create_attr_node(setup_session, "choice_title", dexp=self.choice_title)
@@ -611,8 +611,7 @@ class ChoiceField(FieldBase):
     # ------------------------------------------------------------
 
     def _create_attr_node(self, 
-            # local_setup_session: SetupSession,
-            setup_session: SetupSession, 
+            setup_session: ISetupSession, 
             aname: str, 
             dexp: DotExpression, 
             ):
@@ -641,7 +640,7 @@ class EnumField(FieldBase):
     # def __post_init__(self):
     #     self.init_clean()
 
-    def setup(self, setup_session:SetupSession):
+    def setup(self, setup_session: ISetupSession):
 
         super().setup(setup_session=setup_session)
 

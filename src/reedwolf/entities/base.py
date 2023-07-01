@@ -31,6 +31,7 @@ from .utils import (
         UNDEFINED,
         NA_DEFAULTS_MODE,
         UndefinedType,
+        MISSING,
         get_available_names_example,
         # ThreadSafeCounter,
         DumpFormatEnum,
@@ -83,7 +84,7 @@ from .expressions import (
         IDotExpressionNode,
         IFunctionDexpNode,
         ISetupSession,
-        # execute_dexp_or_node,
+        IThisRegistry,
         )
 from .contexts import (
         IContext,
@@ -748,96 +749,27 @@ class ComponentBase(SetParentMixin, ABC):
             assert not hasattr(subcomponent, "setup"), f"{self.name}.{subcomponent_name} has attribute that is not Component: {type(subcomponent)}"
         return called
 
-    # ------------------------------------------------------------
-
-    def try_create_local_setup_session(self, setup_session: ISetupSession) -> Optional[ISetupSession]:
-
-        children = self.get_children()
-
-        if isinstance(self, IFieldBase):
-            # ==== similar logic in apply.py :: _apply() ====
-            # TODO: this is 2nd place to call '.Setup()'. Explain!
-            assert not self.is_container()
-            assert getattr(self, "bind", None)
-
-            attr_node = self.bind.Setup(setup_session=setup_session, owner=self)
-            if not attr_node:
-                raise EntitySetupNameError(owner=self, msg=f"{attr_node.name}.bind='{self.bind}' could not be evaluated")
-            # Field -> .Value .<attributes>
-            local_setup_session = setup_session.create_local_setup_session(
-                                        this_ns_instance_model_class=None,
-                                        this_ns_value_attr_node = attr_node,
-                                        )
-        elif children:
-            local_setup_session = None
-
-            # 0. složi na način da napraviš novu klasu:
-            #    a) je li treba uključiti fields/attributes - True/False
-            #    b) kako se zove glavni reference atribut 
-            #       "instance", "Value", "Children", "Items"
-            #    c) je li lista ili je jedan
-            #   pa na kraju od ova dva parametra i dvije impl. klase:
-            #        this_ns_instance_model_class / ThisInstanceRegistry
-            #        this_ns_value_attr_node  / ThisValueRegistry
-            #   će nastati jedna - s input-om za cijelu specifikaciju što treba napraviti
-            #
-            # 1. treba imati dostupno:
-            #   This.Children
-            #   This.<field-name>
-            # 2. složi istu stvar ako je isinstance(component, SubEntityItems)
-            #    2.1 za njih je dostupno:
-            #       This.Items
-            # 3. ujedini s logikom u apply 
-            #    traži 
-            #       if getattr(component, "bind", None):
-            #       create_local_setup_session()
-            #    i stavi u jednu funkciju 
-            #
-            # 4. poseban slučaj BooleanField koji ima i children i ima i bind
-            #   za njega treba i jedno i drugo
-            #       Children -> .Children + .<attributes>
-            #       Value -> .Value
-            # if self.is_subentity_items():
-            #     # Items -> .Items 
-            #     local_setup_session = setup_session.create_local_setup_session(
-            #                                 this_ns_instance_model_class=None,
-            #                                 this_ns_value_attr_node = attr_node,
-            #                                 )
-            # else:
-            #     # Children -> .Children + .<attributes>
-            #     print(dir(self))
-            #     if self.is_container():
-            #         type_info = self.bound_model.get_type_info()
-            #         model_class = type_info.type_
-            #     else:
-            #         raise NotImplementedError()
-
-            #     local_setup_session = setup_session.create_local_setup_session(
-            #                                 this_ns_instance_model_class=model_class,
-            #                                 this_ns_value_attr_node = None,
-            #                                 )
-        else:
-            if self.is_container():
-                raise EntityInternalError(owner=self, msg="Container should have local_session created") 
-            local_setup_session = None
-
-        return local_setup_session
 
     # ------------------------------------------------------------
+
 
     def setup(self, setup_session: ISetupSession):  # noqa: F821
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(self)
 
         container = self.get_first_parent_container(consider_self=True)
 
-        local_setup_session = self.try_create_local_setup_session(setup_session)
-
         with setup_session.use_stack_frame(
                 SetupStackFrame(
                     container = container, 
                     component = self, 
-                    local_setup_session=local_setup_session,
                 )):
+            # setup this_registry objects must be inside of stack_frame due
+            # premature component.bind setup in some ThisRegistryFor* classes.
+            this_registry = container.try_create_this_registry(component=self, setup_session=setup_session)
+            if this_registry:
+                local_setup_session = setup_session.create_local_setup_session(this_registry)
+                setup_session.current_frame.set_local_setup_session(local_setup_session, force=True)
+
             ret = self._setup(setup_session=setup_session)
 
         return ret
@@ -1126,6 +1058,19 @@ class IFieldGroup(ABC):
 class IContainerBase(ABC):
 
     @abstractmethod
+    def create_this_registry_for_instance(self, 
+            model_class: ModelType, 
+            owner: Optional[ComponentBase], 
+            children: Optional[List[ComponentBase]], 
+            setup_session: ISetupSession
+            ) -> IThisRegistry:
+        ...
+
+    @abstractmethod
+    def try_create_this_registry(self, component: ComponentBase, setup_session: ISetupSession) -> Optional[IThisRegistry]:
+        ...
+
+    @abstractmethod
     def add_fieldgroup(self, fieldgroup:IFieldGroup):  # noqa: F821
         ...
 
@@ -1253,8 +1198,9 @@ class UseStackFrameCtxManagerBase(AbstractContextManager):
         this_frame_attr_value = getattr(self.frame, attr_name)
         prev_frame_attr_value = getattr(previous_frame, attr_name)
 
-        if this_frame_attr_value in (None, UNDEFINED):
-            if prev_frame_attr_value not in (None, UNDEFINED):
+        if this_frame_attr_value is None or this_frame_attr_value is UNDEFINED:
+            # if prev_frame_attr_value not in (None, UNDEFINED):
+            if not (prev_frame_attr_value is None or prev_frame_attr_value is UNDEFINED):
                 if not may_be_copied:
                     raise EntityInternalError(owner=self, 
                         msg=f"Attribute '{attr_name}' value in previous frame is non-empty and current frame has empty value:\n  {previous_frame}\n    = {prev_frame_attr_value}\n<>\n  {self.frame}\n    = {this_frame_attr_value} ") 
@@ -1330,6 +1276,14 @@ class SetupStackFrame:
             self.bound_model = self.component
         else:
             self.bound_model = self.container.bound_model
+
+    # ------------------------------------------------------------
+
+    def set_local_setup_session(self, local_setup_session: ISetupSession, force: bool = False):
+        if not force and self.local_setup_session:
+            raise EntityInternalError(owner=self, msg=f"local_setup_session already set to '{self.local_setup_session}', got: '{local_setup_session}'") 
+        self.local_setup_session = local_setup_session
+
 
 
 # ------------------------------------------------------------
@@ -1519,6 +1473,7 @@ class ApplyStackFrame:
 
         assert self.bound_model_root
 
+
     def set_parent_values_subtree(self, parent_values_subtree: Union[Dict, List]) -> Union[Dict, List]:
         " returns original values "
         # NOTE: didn't want to introduce a new stack frame layer for just changing one attribute
@@ -1530,7 +1485,7 @@ class ApplyStackFrame:
 
     def set_local_setup_session(self, local_setup_session: ISetupSession):
         if self.local_setup_session:
-            raise EntityInternalError(owner=self, msg=f"local_setup_session alread set to '{self.local_setup_session}', got: '{local_setup_session}'") 
+            raise EntityInternalError(owner=self, msg=f"local_setup_session already set to '{self.local_setup_session}', got: '{local_setup_session}'") 
         self.local_setup_session = local_setup_session
 
 
@@ -1845,43 +1800,3 @@ def extract_type_info(
     return type_info, th_field # , func_node
 
 
-# ============================================================
-# OBSOLETE
-# ============================================================
-
-# ------------------------------------------------------------
-# ComponentBase
-# ------------------------------------------------------------
-
-# # TODO: this is rejected since dexp_result could be from non-bind dexp
-# #       and only bind dexp could provide parent_instance used for setting 
-# #       new instance attribute (see register_instance_attr_change() ).
-# def get_dexp_result_from_history(self, apply_session:IApplySession) -> ExecResult:
-#     """ Fetch ExecResult from component.bind from APPLY_SESSION.UPDATE_HISTORY
-#         last record.
-#         !!! ExecResult.value could be unadapted :( !!!
-#         Could work on non-stored fields.
-#         Probaly a bit faster, only dict queries.
-#     """
-#     # ALT: fetch from:
-#     #       bind_dexp: DotExpression = getattr(component, "bind", None)
-#     #       bind_dexp._evaluator.execute()
-#     key_str = self.get_key_string(apply_session=apply_session)
-#     assert key_str in apply_session.update_history
-#     instance_attr_value = apply_session.update_history[key_str][-1]
-#     return instance_attr_value.dexp_result
-
-# def _get_children_tree_impl(self, key: str, apply_session: Optional[IApplySession], depth:int=0) -> Dict[ComponentNameType, ComponentBase]:
-#     bind_dexp_result = self.get_dexp_result_from_instance(apply_session=apply_session)
-#     value = bind_dexp_result.value
-#     children_dict_traversed["value"] = value
-#
-#     # dexp = self.bind
-#     # dexp_result = execute_dexp_or_node(
-#     #                 dexp_or_value=dexp,
-#     #                 dexp_node=dexp,
-#     #                 dexp_result = UNDEFINED,
-#     #                 prev_node_type_info=None, # prev_node_type_info,
-#     #                 apply_session=apply_session)
-#     # value = dexp_result.value
-#     # children_dict_traversed["value"] = value

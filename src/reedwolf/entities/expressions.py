@@ -24,6 +24,7 @@ from typing import (
 from .utils import (
         UNDEFINED,
         UndefinedType,
+        to_repr,
         )
 from .exceptions import (
         EntitySetupValueError,
@@ -47,6 +48,9 @@ from .meta import (
         LiteralType,
         AttrName,
         Self,
+        get_model_fields,
+        ModelType,
+        is_model_class,
         )
 # ------------------------------------------------------------
 # interfaces / base classes / internal structs
@@ -136,7 +140,30 @@ class IRegistry:
 
 # ------------------------------------------------------------
 
+
+class IThisRegistry(IRegistry):
+    # to mark class
+    ...
+
+
+
+# ------------------------------------------------------------
+
 class ISetupSession(ABC):
+
+    @abstractmethod
+    def create_local_setup_session(self, this_registry: IThisRegistry) -> Self:
+        ...
+
+    @abstractmethod
+    def create_local_setup_session_for_this_instance(self, 
+                                                     model_class: ModelType, 
+                                                     owner: Optional[Any], 
+                                                     children: Optional[List[Any]]
+                                                     ) -> Self:
+        " creates Session with ThisRegistryForInstance "
+        # TODO: ugly name :(
+        ...
 
     @abstractmethod
     def get_registry(self, namespace: Namespace, strict: bool = True, is_internal_use: bool = False) -> IRegistry:
