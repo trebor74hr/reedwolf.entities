@@ -474,6 +474,10 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             if component.is_subentity_items():
                 # Items -> This.Items 
                 this_registry = ThisRegistryForItemsAndChildren(owner=component, children=children, setup_session=setup_session)
+            # TODO: add Instance - to BoundModel instance
+            # elif component.is_subentity_single():
+            #     # Children -> This.Children + This.<all-attributes> + This.Instance
+            #     this_registry = ThisRegistryForInstanceAndChildren(owner=component, children=children, setup_session=setup_session)
             else:
                 # Children -> This.Children + This.<all-attributes>
                 this_registry = ThisRegistryForChildren(owner=component, children=children, setup_session=setup_session)

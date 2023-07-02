@@ -489,8 +489,16 @@ class ThisRegistryForValueAndChildren(ThisRegistryForChildren):
 
         return apply_session.current_frame.instance, atrr_name_to_fetch
 
+# ------------------------------------------------------------
+
+# TODO: for SubEntitySingle
+# @dataclass
+# class ThisRegistryForInstanceAndChildren(ThisRegistryForChildren):
+#     " inherits ThisRegistryForChildren + adds .Instance"
+
 
 # --------------------
+
 
 @dataclass
 class ThisRegistryForInstance(IThisRegistry, RegistryBase):
