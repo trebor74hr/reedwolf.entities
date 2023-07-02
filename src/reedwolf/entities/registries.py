@@ -460,6 +460,7 @@ class ThisRegistryForChildren(IThisRegistry, RegistryBase):
 
 @dataclass
 class ThisRegistryForValueAndChildren(ThisRegistryForChildren):
+    " inherits ThisRegistryForChildren + adds .Value"
 
     attr_node: AttrDexpNode
     owner: ComponentBase = field(repr=False)
