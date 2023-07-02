@@ -86,7 +86,7 @@ from .registries import (
         ThisRegistryForValue,
         ThisRegistryForChildren,
         ThisRegistryForValueAndChildren,
-        ThisRegistryForItems,
+        ThisRegistryForItemsAndChildren,
         ThisRegistryForInstance,
         )
 from .valid_children import (
@@ -473,7 +473,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         elif children:
             if component.is_subentity_items():
                 # Items -> This.Items 
-                this_registry = ThisRegistryForItems(owner=component, children=children)
+                this_registry = ThisRegistryForItemsAndChildren(owner=component, children=children)
             else:
                 # Children -> This.Children + This.<all-attributes>
                 this_registry = ThisRegistryForChildren(owner=component, children=children, setup_session=setup_session)

@@ -64,8 +64,10 @@ from .valid_base import (
         ValidationBase,
         )
 
+
 class FieldValidationBase(ValidationBase, ABC):
     ...
+
 
 @dataclass
 class FieldValidation(FieldValidationBase):
@@ -78,6 +80,10 @@ class FieldValidation(FieldValidationBase):
 
     def validate(self, apply_session: IApplySession) -> Union[NoneType, ValidationFailure]:
         return self._validate_common_impl(apply_session=apply_session)
+
+    # def __repr__(self):
+    #     # due multiple inheritance - to force calling ComponentBase implementation
+    #     return super(ValidationBase).__repr__()
 
 
 @dataclass
@@ -104,6 +110,7 @@ class Required(FieldValidationBase):
                             details="The value is required."
                             )
         return None
+
 
 @dataclass
 class Readonly(FieldValidationBase):

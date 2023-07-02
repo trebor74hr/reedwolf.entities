@@ -477,6 +477,7 @@ class ThisRegistryForValueAndChildren(ThisRegistryForChildren):
         self.attr_name = self.attr_node.name
         # This.Value == ReservedAttributeNames.VALUE_ATTR_NAME
         self.register_value_attr_node(attr_node=self.attr_node)
+        # TODO: .Children?
 
     def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
         instance, atrr_name_to_fetch = super().get_root_value(apply_session=apply_session, attr_name=attr_name)
@@ -555,7 +556,13 @@ class ThisRegistryForInstance(IThisRegistry, RegistryBase):
 # --------------------
 
 @dataclass
-class ThisRegistryForItems(IThisRegistry, RegistryBase):
+class ThisRegistryForItemsAndChildren(IThisRegistry, RegistryBase):
+    """
+    Items -> input is list of items, which can be filtered, mapped, counter, selected single ...
+    # TODO: .Children?
+    """
+    # TODO: consider to include Children + attributes too :
+    #       -> validation will be runned againts all items
 
     owner: ComponentBase
     children: List[ComponentBase] = field(repr=False)
@@ -565,6 +572,7 @@ class ThisRegistryForItems(IThisRegistry, RegistryBase):
     def __post_init__(self):
         # This.Items == ReservedAttributeNames.ITEMS_ATTR_NAME.value
         self.register_items_attr_node(owner=self.owner, children=self.children)
+        # TODO: .Children?
 
     def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
         raise NotImplementedError("todo")

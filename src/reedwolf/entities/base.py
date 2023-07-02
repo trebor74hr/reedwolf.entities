@@ -18,6 +18,7 @@ from dataclasses import (
         dataclass,
         field,
         field as DcField,
+        fields,
         MISSING as DC_MISSING,
         )
 from types import (
@@ -199,25 +200,6 @@ class ReservedArgumentNames(str, Enum):
     INJECT_COMPONENT_TREE = "inject_component_tree" 
 
 # ------------------------------------------------------------
-
-
-# class BaseOnlyArgs:  # noqa: SIM119
-# 
-#     def __init__(self, *args):
-#         self.args = args
-#         self.name = self.__class__.__name__
-# 
-#     def __str__(self):
-#         return "\n".join(self.to_strlist())
-# 
-#     def __repr__(self):
-#         return f"{self.__class__.__name__}({repr_obj(self.args)})"
-# 
-#     def to_strlist(self):
-#         return list_to_strlist(self.args, before=f"{self.__class__.__name__}(", after=")")
-
-
-# ------------------------------------------------------------
 # Message functions
 # ------------------------------------------------------------
 
@@ -381,10 +363,28 @@ class ComponentBase(SetParentMixin, ABC):
         return "\n".join(self.to_strlist())
 
     def __str__(self):
-        return f"{self.__class__.__name__}({self.name})"
+        if self.name:
+            out = f"{self.__class__.__name__}({self.name})"
+        else:
+            out = []
+            for dc_field in reversed(fields(self)):
+                if dc_field.repr:
+                    val = getattr(self, dc_field.name)
+                    if type(val) not in (NoneType, UndefinedType):
+                        item = f"{dc_field.name}={val}"
+                        if self.name == "parent_name":
+                            out.insert(0, item)
+                        else:
+                            out.append(item)
+            if out:
+                out = ", ".join(reversed(out))
+                out = f"{self.__class__.__name__}({out})"
+            else:
+                out = super().__str__()
+        return out
 
     def __repr__(self):
-        return str(self)
+        return self.__str__()
 
     def to_strlist(self, path=None):
         if path is None:

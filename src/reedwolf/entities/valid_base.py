@@ -61,6 +61,11 @@ class ValidationBase(ComponentBase, ABC): # TODO: make it abstract
         super().__post_init__()
 
 
+    # def __repr__(self):
+    #     # due multiple inheritance - to force calling ComponentBase implementation
+    #     return super().__repr__()
+
+
     def _check_dot_expression_or_positive_int(self, attr_name:str, attr_value: Any):
         if not isinstance(attr_value, DotExpression) and not to_int(attr_value, 0) >= 0:
             raise EntitySetupError(owner=self, msg="Argument '{attr_name}' must be integer >= 0 or DotExpression, got: {attr_value}")

@@ -18,6 +18,7 @@ from .namespaces import (  # noqa: F401
 from .exceptions import (
         EntityError,
         EntitySetupError,
+        EntityApplyError,
         EntityValidationError,
         EntityNameNotFoundError,
         )
@@ -127,6 +128,7 @@ __all__ = [
     # exceptions
     "EntityError",
     "EntitySetupError",
+    "EntityApplyError",
     "EntityValidationError",
     "EntityNameNotFoundError",
 
