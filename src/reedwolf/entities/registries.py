@@ -566,13 +566,25 @@ class ThisRegistryForItemsAndChildren(IThisRegistry, RegistryBase):
 
     owner: ComponentBase
     children: List[ComponentBase] = field(repr=False)
+    # TODO: introduce python 3.10: 'kw_only=True'. Until then it is reset after use.
+    # used only for children registration - in component.bind setup
+    setup_session: ISetupSession = field(repr=False)
 
     NAMESPACE: ClassVar[Namespace] = ThisNS
 
     def __post_init__(self):
-        # This.Items == ReservedAttributeNames.ITEMS_ATTR_NAME.value
+        # Children + <attributes>
         self.register_items_attr_node(owner=self.owner, children=self.children)
+
+        # This.Items == ReservedAttributeNames.ITEMS_ATTR_NAME.value
+        self._register_children(setup_session=self.setup_session,
+                                attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME,
+                                owner=self.owner, 
+                                children=self.children,
+                                attr_name_prefix=None,
+                                )
         # TODO: .Children?
+        self.setup_session = None
 
     def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
         raise NotImplementedError("todo")
