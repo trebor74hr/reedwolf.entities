@@ -409,7 +409,6 @@ class DotExpression(DynamicAttrsBase):
                             dexp_node_name=dexp_node_name,
                             owner_dexp_node=last_dexp_node,
                             owner=owner,
-                            # func_args=bit._func_args,
                             )
 
             # add node to evaluator

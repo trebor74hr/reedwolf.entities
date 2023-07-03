@@ -153,6 +153,7 @@ class ModelsRegistry(RegistryBase):
             alt_attr_node_name = None if is_root else f"{name_for_reg}__{attr_name}"
             self.register_attr_node(attr_node, alt_attr_node_name=alt_attr_node_name)
 
+        # register
         self._register_children_attr_node(
                         model_class=model,
                         attr_name = ReservedAttributeNames.INSTANCE_ATTR_NAME.value,
@@ -425,6 +426,7 @@ class ThisRegistryForValue(IThisRegistry, RegistryBase):
 @dataclass
 class ThisRegistryForChildren(IThisRegistry, RegistryBase):
 
+    container: IContainerBase
     owner: ComponentBase
     children: List[ComponentBase] = field(repr=False)
     # used only for children registration - in component.bind setup
@@ -437,10 +439,12 @@ class ThisRegistryForChildren(IThisRegistry, RegistryBase):
 
     def __post_init__(self):
         # This.Children + This.<all-attributes>
-        self._register_children(setup_session=self.setup_session,
-                                attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME,
-                                owner=self.owner, 
-                                children=self.children)
+        self._register_children(
+                setup_session=self.setup_session,
+                attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME,
+                container=self.container,
+                owner=self.owner, 
+                children=self.children)
         self.setup_session = None
 
     def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
@@ -463,6 +467,7 @@ class ThisRegistryForValueAndChildren(ThisRegistryForChildren):
     " inherits ThisRegistryForChildren + adds .Value"
 
     attr_node: AttrDexpNode
+    container: IContainerBase
     owner: ComponentBase = field(repr=False)
     children: List[ComponentBase] = field(repr=False)
     setup_session: Optional[ISetupSession] = field(repr=False)
@@ -515,6 +520,7 @@ class ThisRegistryForInstance(IThisRegistry, RegistryBase):
 
     model_class: ModelType
 
+    container: IContainerBase
     owner: Optional[ComponentBase] = field(repr=False)
     # if not set then attributes are frmo model_class
     children: Optional[List[ComponentBase]] = field(repr=False)
@@ -531,12 +537,14 @@ class ThisRegistryForInstance(IThisRegistry, RegistryBase):
         if self.children is not None:
             # This.Instance + This.<all-attributes>
             assert self.owner
-            self._register_children(setup_session=self.setup_session,
-                                    attr_name=ReservedAttributeNames.INSTANCE_ATTR_NAME,
-                                    owner=self.owner, 
-                                    children=self.children,
-                                    attr_name_prefix=None,
-                                    )
+            self._register_children(
+                    setup_session=self.setup_session,
+                    attr_name=ReservedAttributeNames.INSTANCE_ATTR_NAME,
+                    container=self.container,
+                    owner=self.owner, 
+                    children=self.children,
+                    attr_name_prefix=None,
+                    )
         else:
             # M.Instance / Models.Instance + # M.<all-attributes>
             self._register_model_nodes(model_class=self.model_class)
@@ -573,6 +581,7 @@ class ThisRegistryForItemsAndChildren(IThisRegistry, RegistryBase):
     # TODO: consider to include Children + attributes too :
     #       -> validation will be runned againts all items
 
+    container: IContainerBase
     owner: ComponentBase
     children: List[ComponentBase] = field(repr=False)
     # TODO: introduce python 3.10: 'kw_only=True'. Until then it is reset after use.
@@ -586,12 +595,13 @@ class ThisRegistryForItemsAndChildren(IThisRegistry, RegistryBase):
         self.register_items_attr_node(owner=self.owner, children=self.children)
 
         # This.Items == ReservedAttributeNames.ITEMS_ATTR_NAME.value
-        self._register_children(setup_session=self.setup_session,
-                                attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME,
-                                owner=self.owner, 
-                                children=self.children,
-                                attr_name_prefix=None,
-                                )
+        self._register_children(
+                setup_session=self.setup_session,
+                attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME,
+                container=self.container,
+                owner=self.owner, 
+                children=self.children,
+                attr_name_prefix=None)
         # TODO: .Children?
         self.setup_session = None
 

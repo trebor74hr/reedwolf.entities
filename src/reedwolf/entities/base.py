@@ -301,30 +301,30 @@ class SetParentMixin:
 
 
 # ------------------------------------------------------------
-# SubcomponentWrapper
+# Subcomponent
 # ------------------------------------------------------------
 @dataclass
-class SubcomponentWrapper:
+class Subcomponent:
     # TODO: strange class - check if really required or explain if yes
     name        : str # orig: dexp_node_name
     path        : str # orig: var_path
     # TODO: can be some other types too
-    subcomponent: Union["ComponentBase", DotExpression]
+    component: Union["ComponentBase", DotExpression]
     th_field    : Optional[ModelField]
 
 
     def __post_init__(self):
-        # subcomponent can have LiteralType
+        # component can have LiteralType
         if not (self.name and self.path and self.th_field):
-            raise EntityInternalError(owner=self, msg=f"name={self.name}, path={self.path}, subcomp={self.subcomponent}, th_field={self.th_field}")
+            raise EntityInternalError(owner=self, msg=f"name={self.name}, path={self.path}, subcomp={self.component}, th_field={self.th_field}")
 
         # TODO: strange - DotExpression in (None, UNDEFINED) returns True??
-        if not bool(self.subcomponent) and self.subcomponent in (None, UNDEFINED):
-            raise EntityInternalError(owner=self, msg=f"name={self.name}, path={self.path}, subcomp={self.subcomponent}, th_field={self.th_field}")
+        if not bool(self.component) and self.component in (None, UNDEFINED):
+            raise EntityInternalError(owner=self, msg=f"name={self.name}, path={self.path}, subcomp={self.component}, th_field={self.th_field}")
 
         # TODO: list all types available and include this check
-        # if not isinstance(self.subcomponent, (ComponentBase, DotExpression)):
-        #     raise EntityInternalError(owner=self, msg=f"wrong type of subcomponent {type(self.subcomponent)} / {self.subcomponent}")
+        # if not isinstance(self.component, (ComponentBase, DotExpression)):
+        #     raise EntityInternalError(owner=self, msg=f"wrong type of subcomponent {type(self.component)} / {self.component}")
 
 
 # ------------------------------------------------------------
@@ -728,10 +728,10 @@ class ComponentBase(SetParentMixin, ABC):
         self._add_component(component=self, components=components)
 
         # includes components, cleaners and all other complex objects
-        for subcomponent_wrapper in self._get_subcomponents_list():
-            component = subcomponent_wrapper.subcomponent
+        for subcomponent in self._get_subcomponents_list():
+            component = subcomponent.component
             if isinstance(component, Namespace):
-                raise EntitySetupValueError(owner=self, msg=f"Subcomponents should not be Namespace instances, got: {subcomponent_wrapper.name} = {subcomponent_wrapper.subcomponent}")
+                raise EntitySetupValueError(owner=self, msg=f"Subcomponents should not be Namespace instances, got: {subcomponent.name} = {subcomponent.component}")
 
             if isinstance(component, DotExpression):
                 pass
@@ -765,13 +765,13 @@ class ComponentBase(SetParentMixin, ABC):
     # ------------------------------------------------------------
 
     def _invoke_component_setup(self, 
-                    subcomponent_name: str, 
-                    subcomponent: Union[Self, DotExpression], 
+                    component_name: str, 
+                    component: Union[Self, DotExpression], 
                     setup_session: ISetupSession):  # noqa: F821
         called = False
 
-        if isinstance(subcomponent, (DotExpression,)):
-            dexp: DotExpression = subcomponent
+        if isinstance(component, (DotExpression,)):
+            dexp: DotExpression = component
             namespace = dexp._namespace
             if dexp.IsFinished():
                 # Setup() was called in container.setup() before or in some
@@ -780,17 +780,18 @@ class ComponentBase(SetParentMixin, ABC):
             else:
                 dexp.Setup(setup_session=setup_session, owner=self)
                 called = True
-        elif isinstance(subcomponent, ComponentBase):
-            assert "Entity(" not in repr(subcomponent)
-            # assert not isinstance(subcomponent, Entity), subcomponent
-            subcomponent.setup(setup_session=setup_session)  # , parent=self)
-            subcomponent.post_setup()
+        elif isinstance(component, ComponentBase):
+            assert "Entity(" not in repr(component)
+            component.setup(setup_session=setup_session)  # , parent=self)
+            component.post_setup()
             called = True
-        elif isinstance(subcomponent, (dict, list, tuple)):
-            raise EntitySetupValueError(owner=self, msg=f"Subcomponents should not be dictionaries, lists or tuples, got: {type(subcomponent)} / {subcomponent}")
+        elif isinstance(component, (dict, list, tuple)):
+            raise EntitySetupValueError(owner=self, msg=f"components should not be dictionaries, lists or tuples, got: {type(component)} / {component}")
         else:
-            assert not hasattr(subcomponent, "Setup"), f"{self.name}.{subcomponent_name} has attribute that is not DotExpression: {type(subcomponent)}"
-            assert not hasattr(subcomponent, "setup"), f"{self.name}.{subcomponent_name} has attribute that is not Component: {type(subcomponent)}"
+            if hasattr(component, "Setup"):
+                raise EntityInternalError(owner=self, msg=f"{self.name}.{component_name} has attribute that is not DotExpression: {type(component)}")
+            if hasattr(component, "setup"): 
+                raise EntityInternalError(owner=self, msg=f"{self.name}.{component_name} has attribute that is not Component: {type(component)}")
         return called
 
 
@@ -809,17 +810,20 @@ class ComponentBase(SetParentMixin, ABC):
                 )):
             # setup this_registry objects must be inside of stack_frame due
             # premature component.bind setup in some ThisRegistryFor* classes.
-            this_registry = container.try_create_this_registry(component=self, setup_session=setup_session)
-            if this_registry:
-                local_setup_session = setup_session.create_local_setup_session(this_registry)
-                setup_session.current_frame.set_local_setup_session(local_setup_session, force=True)
+            if not self.is_subentity():
+                # NOTE: for SubEntity* - this registry must be and is already
+                #       created in ContainerBase.setup()
+                this_registry = container.try_create_this_registry(component=self, setup_session=setup_session)
+                if this_registry:
+                    local_setup_session = setup_session.create_local_setup_session(this_registry)
+                    setup_session.current_frame.set_local_setup_session(local_setup_session, force=True)
 
             ret = self._setup(setup_session=setup_session)
 
         return ret
 
     # ------------------------------------------------------------
-    def _get_subcomponents_list(self) -> List[SubcomponentWrapper]:
+    def _get_subcomponents_list(self) -> List[Subcomponent]:
         """
         Includes components, cleaners and all other complex objects
         to get only children components, use get_children()
@@ -961,27 +965,27 @@ class ComponentBase(SetParentMixin, ABC):
             if isinstance(subcomponent, (list, tuple)):
                 for nr, sub_subcomponent in enumerate(subcomponent):
                     subcomponent_list.append(
-                            SubcomponentWrapper(
+                            Subcomponent(
                                 name=f"{subcomponent_name}__{nr}", 
                                 path=f"{subcomponent_name}[{nr}]", 
-                                subcomponent=sub_subcomponent, 
+                                component=sub_subcomponent, 
                                 th_field=th_field))
             elif isinstance(subcomponent, (dict,)):
                 for ss_name, sub_subcomponent in subcomponent.items():
                     # NOTE: bind_to_models case - key value will be used as
                     #       attr_node name - should be setup_session unique
                     subcomponent_list.append(
-                            SubcomponentWrapper(
+                            Subcomponent(
                                 name=ss_name, 
                                 path=f"{subcomponent_name}.{ss_name}", 
-                                subcomponent=sub_subcomponent, 
+                                component=sub_subcomponent, 
                                 the_field=th_field))
             else:
                 subcomponent_list.append(
-                        SubcomponentWrapper(
+                        Subcomponent(
                             name=subcomponent_name,
                             path=subcomponent_name, 
-                            subcomponent=subcomponent, 
+                            component=subcomponent, 
                             th_field=th_field))
 
         self._subcomponent_list = subcomponent_list
@@ -999,10 +1003,17 @@ class ComponentBase(SetParentMixin, ABC):
         if self.is_finished():
             raise EntityInternalError(owner=self, msg="Setup already called")
 
-        for subcomponent_wrapper in self._get_subcomponents_list():
+        for subcomponent in self._get_subcomponents_list():
+            component = subcomponent.component
+            if isinstance(component, ComponentBase) \
+              and component.is_bound_model() \
+              and component.is_finished():
+                # raise EntityInternalError(owner=self, msg=f"BoundModel.setup() should have been called before ({component})")
+                continue
+
             self._invoke_component_setup(
-                    subcomponent_wrapper.name, 
-                    subcomponent=subcomponent_wrapper.subcomponent, 
+                    subcomponent.name, 
+                    component=component, 
                     setup_session=setup_session)
 
         # if not self.is_finished():

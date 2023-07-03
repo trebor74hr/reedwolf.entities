@@ -205,7 +205,8 @@ class RegistryBase(IRegistry):
     def _register_children(self, 
                            setup_session: ISetupSession,
                            attr_name: ReservedAttributeNames,
-                           owner: IContainerBase, 
+                           container: IContainerBase,
+                           owner: ComponentBase, 
                            children: List[ComponentBase],
                            attr_name_prefix: str = None,
                            ) -> AttrDexpNode:
@@ -216,7 +217,6 @@ class RegistryBase(IRegistry):
 
         if not isinstance(children, (list, tuple)) or len(children)==0:
             raise EntitySetupValueError(owner=self, msg=f"Expected list/tuple of children (components), got: {type(children)} / {to_repr(children)}")
-
 
         for nr, child in enumerate(children, 1):
             if not isinstance(child, ComponentBase):
@@ -234,18 +234,21 @@ class RegistryBase(IRegistry):
                 if not child.bind.IsFinished():
                     # Can setup only fields which are inside the same container
                     # share the same bound_model 
-                    attr_node = child.bind.Setup(setup_session=setup_session, owner=owner)
-
-                else:
-                    attr_node = child.bind._dexp_node
+                    child.bind.Setup(setup_session=setup_session, owner=owner)
+                attr_node = child.bind._dexp_node
                 child_type_info = attr_node.get_type_info()
+            elif child.is_subentity():
+                if not child.bound_model.model.IsFinished():
+                    # This was a lucky guess - it seems to work. for now :)
+                    attr_node = container._setup_bound_model_dot_expression(bound_model=child.bound_model, setup_session=setup_session)
+                    # child.bound_model.model.Setup(setup_session=setup_session, owner=owner)
+
+                child_type_info = child.bound_model.get_type_info()
+                # ALT: attr_node = child.bound_model.model._dexp_node
+                #      child_type_info = attr_node.get_type_info()
             else:
-                # TODO: currently not supported - FieldGroup. SubEntitySingle
+                # TODO: currently not supported - FieldGroup
                 #       if not child_type_info:
-                #       if hasattr(child, "bound_model"):
-                #           # raise EntityInternalError(owner=child, msg=f"get_type_info() is not available") 
-                #           child_type_info = child.bound_model.get_type_info()
-                #       else:
                 #           raise EntityInternalError(owner=child, msg=f"child_type_info could not be extracted, got: {child_type_info}") 
                 continue
 
@@ -386,7 +389,7 @@ class RegistryBase(IRegistry):
             raise EntityInternalError(owner=self, msg=f"Node {dexp_node_name} should not contain . - only first level vars allowed")
 
         if dexp_node_name in self.store:
-            raise EntitySetupNameError(owner=self, msg=f"AttrDexpNode {dexp_node} does not have unique name within this registry, found: {self.store[dexp_node_name]}")
+            raise EntitySetupNameError(owner=self, msg=f"AttrDexpNode '{dexp_node}' does not have unique name '{dexp_node_name}' within this registry, found: {self.store[dexp_node_name]}")
         self.store[dexp_node_name] = dexp_node
 
 
@@ -422,7 +425,6 @@ class RegistryBase(IRegistry):
                 try_create_function(
                     setup_session=setup_session,
                     caller=caller,
-                    # functions_factory_registry=self.functions_factory_registry,
                     attr_node_name=attr_node_name,
                     func_args=func_args,
                     value_arg_type_info=value_arg_type_info,
@@ -435,7 +437,6 @@ class RegistryBase(IRegistry):
     def create_node(self, 
                     dexp_node_name: str, 
                     owner_dexp_node: IDotExpressionNode, 
-                    # func_args: FunctionArgumentsType
                     owner: ComponentBase,
                     ) -> IDotExpressionNode:
         """
@@ -464,7 +465,7 @@ class RegistryBase(IRegistry):
         full_dexp_node_name = get_dexp_node_name(
                                     owner_name=owner_dexp_node.name if owner_dexp_node else None, 
                                     dexp_node_name=dexp_node_name,
-                                    func_args=None # func_args
+                                    func_args=None
                                     )
 
         if owner_dexp_node is None:
@@ -512,8 +513,6 @@ class RegistryBase(IRegistry):
                         extract_type_info(
                             attr_node_name=dexp_node_name,
                             inspect_object=inspect_object, 
-                            # func_args=func_args,
-                            # functions_factory_registry=self.functions_factory_registry
                             )
             except EntitySetupNameNotFoundError as ex:
                 ex.set_msg(f"{owner} / {self.NAMESPACE}-NS: {ex.msg}")
@@ -521,12 +520,6 @@ class RegistryBase(IRegistry):
             except EntityError as ex:
                 ex.set_msg(f"'{owner} / {self.NAMESPACE}-NS: {owner_dexp_node.full_name} -> '.{dexp_node_name}' metadata / type-hints read problem: {ex}")
                 raise 
-
-            # if func_node:
-            #     assert func_args
-            #     assert isinstance(func_node, IFunctionDexpNode)
-            #     dexp_node = func_node
-            # else:
 
             assert type_info
 
@@ -569,9 +562,6 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
     component: ComponentBase
     instance: ModelType
 
-    def __post_init__(self):
-        ...
-
     def get_attribute(self, apply_session:IApplySession, attr_name: str, is_last:bool) -> Self:
         children_dict = apply_session.get_upward_components_dict(self.component)
         if attr_name not in children_dict:
@@ -583,7 +573,6 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
 
         # OLD: 
         #   if is_last:
-
         if not isinstance(component, IFieldBase):
             # ALT: not hasattr(component, "bind")
             raise EntityApplyNameError(owner=self.component,
@@ -667,7 +656,6 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
 
         if self.functions_factory_registry:
             assert not self.functions
-            # self.functions_factory_registry = functions_factory_registry
         else:
             self.functions_factory_registry: FunctionsFactoryRegistry = \
                     FunctionsFactoryRegistry(functions=self.functions, 

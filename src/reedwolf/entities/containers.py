@@ -183,9 +183,9 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         if not self.models:
             raise EntitySetupError(owner=self, msg="Entity(models=List[models]) is required.")
 
-        if not isinstance(self.models, dict):
-            # TODO: this never happens - define new test case, implenet (or drop this logic)
-            self.bound_model.fill_models()
+        # if not isinstance(self.models, dict):
+        #     # TODO: this never happens - define new test case, implenet (or drop this logic)
+        #     self.bound_model.fill_models()
 
         assert isinstance(self.models, dict), self.models
 
@@ -195,38 +195,30 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
     # ------------------------------------------------------------
 
-    def _register_bound_model(self, bound_model:BoundModelBase):
-        # ex. type_info.metadata.get("bind_to_parent_setup_session")
-
-        # Entity can have one main bound_model and optionally some dependent
-        # models nested in tree structure
-        is_main_model = (bound_model==self.bound_model)
-
-        is_subentity_main_model = (self.is_subentity() and is_main_model)
-
-        # is_list = False
-        if not isinstance(bound_model, BoundModelBase):
-            raise EntitySetupError(owner=self, msg=f"{bound_model.name}: Needs to be Boundbound_model* instance, got: {bound_model}")
+    def _setup_bound_model_dot_expression(self, bound_model:BoundModelBase, setup_session: Optional[SetupSession] = None) -> AttrDexpNode:
 
         model = bound_model.model
+        if not isinstance(model, DotExpression):
+            raise EntityInternalError(owner=self, msg=f"Expecting model is DotExpression instance, got: {model}") 
 
-        attr_node = None
+        is_main_model = (bound_model==self.bound_model)
+        is_subentity_main_model = (self.is_subentity() and is_main_model)
         if is_subentity_main_model:
             if not isinstance(model, DotExpression):
                 raise EntitySetupError(owner=self, msg=f"{bound_model.name}: For SubEntityItems/SubEntitySingle main bound_model needs to be DotExpression: {bound_model.model}")
 
-        # alias_saved = False
-        is_list = False
+        # TODO: for functions value expressions need to be stored
+        #       with all parameters (func_args)
+        if not (self.is_subentity() or not is_main_model):
+            raise EntitySetupTypeError(owner=self, msg=f"{bound_model.name}: DotExpression should be used only in SubEntity containers and nested BoundModels")
 
-        if isinstance(model, DotExpression):
-            # TODO: for functions value expressions need to be stored
-            #       with all parameters (func_args)
-            if not (self.is_subentity() or not is_main_model):
-                raise EntitySetupTypeError(owner=self, msg=f"{bound_model.name}: DotExpression should be used only in SubEntity containers and nested BoundModels")
+        if model._namespace!=ModelsNS:
+            raise EntitySetupTypeError(owner=self, msg=f"{bound_model.name}: DotExpression should be in ModelsNS namespace, got: {model._namespace}")
 
-            if model._namespace!=ModelsNS:
-                raise EntitySetupTypeError(owner=self, msg=f"{bound_model.name}: DotExpression should be in ModelsNS namespace, got: {model._namespace}")
-
+        if setup_session:
+            # TODO: not sure if this is the best solution
+            setup_session_from = setup_session
+        else:
             if is_subentity_main_model:
                 # TODO: DRY this - the only difference is setup_session - extract common logic outside / 
                 # bound attr_node
@@ -236,29 +228,54 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
                 # Entity - top parent container / normal case
                 setup_session_from = self.setup_session
 
-            attr_node = setup_session_from.get_dexp_node_by_dexp(dexp=model)
-            if attr_node:
-                raise EntityInternalError(owner=self, msg=f"AttrDexpNode data already in setup_session: {model} -> {attr_node}")
-
+        attr_node = setup_session_from.get_dexp_node_by_dexp(dexp=model)
+        if not attr_node:
+            # TODO: Since This. registry setup processes bound_model.model
+            #       DotExpressions this case maybe does not happen any more?
             attr_node = model.Setup(setup_session=setup_session_from, owner=bound_model)
-            if not attr_node:
-                raise EntityInternalError(owner=self, msg=f"AttrDexpNode not recognized: {model}")
+        else:
+            # NOTE: This. registry setup processes bound_model.model DotExpressions
+            # OLD: raise EntityInternalError(owner=self, msg=f"AttrDexpNode data already in setup_session: {model} -> {attr_node}")
+            ...
 
-            if not isinstance(attr_node.data, TypeInfo):
-                raise EntityInternalError(owner=self, msg=f"AttrDexpNode data is not TypeInfo, got: {type(attr_node.data)} / {attr_node.data}")
+        if not attr_node:
+            raise EntityInternalError(owner=self, msg=f"AttrDexpNode not recognized: {model}")
+
+        if not isinstance(attr_node.data, TypeInfo):
+            raise EntityInternalError(owner=self, msg=f"AttrDexpNode data is not TypeInfo, got: {type(attr_node.data)} / {attr_node.data}")
+
+        return attr_node
+
+    # ------------------------------------------------------------
+
+    def _register_bound_model(self, bound_model:BoundModelBase):
+        # ex. type_info.metadata.get("bind_to_parent_setup_session")
+
+        # Entity can have one main bound_model and optionally some dependent
+        # models nested in tree structure
+
+        if not isinstance(bound_model, BoundModelBase):
+            raise EntitySetupError(owner=self, msg=f"{bound_model.name}: Needs to be Boundbound_model* instance, got: {bound_model}")
+
+        attr_node = None
+        # alias_saved = False
+        is_list = False
+        model = bound_model.model
+
+        if isinstance(model, DotExpression):
+            attr_node = self._setup_bound_model_dot_expression(bound_model)
 
             model   = attr_node.data.type_
             is_list = attr_node.data.is_list
             py_type_hint = attr_node.data.py_type_hint
 
-            if self.is_subentity_single() and is_list :
+            if self.is_subentity_single() and is_list:
                 raise EntitySetupTypeError(owner=self, msg=f"{bound_model.name}: For SubEntitySingle did not expect List model type, got: {py_type_hint}")
             elif self.is_subentity_items() and not is_list:
                 raise EntitySetupTypeError(owner=self, msg=f"{bound_model.name}: For SubEntityItems expected List model type, got: {py_type_hint}")
 
             # TODO: check bound_model cases - list, not list, etc.
             # elif self.is_bound_model() and ...
-
         else:
             if self.is_subentity():
                 raise EntitySetupTypeError(owner=self, msg=f"{bound_model.name}: For SubEntity use DotExpression as model, got: {model}")
@@ -271,15 +288,6 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         self.setup_session[ModelsNS].register_all_nodes(root_attr_node=attr_node, bound_model=bound_model, model=model)
 
         return attr_node
-
-    # ------------------------------------------------------------
-
-    # def _register_data_attr_nodes(self):
-    #     # ------------------------------------------------------------
-    #     # A.2. DATAPROVIDERS - Collect all attr_nodes from dataproviders fieldgroup
-    #     # ------------------------------------------------------------
-    #     for data_var in self.data:
-    #         self.setup_session[DataNS].register(data_var)
 
     # ------------------------------------------------------------
 
@@ -321,16 +329,18 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         # ----------------------------------------
         # A. 1st level attr_nodes
         # ----------------------------------------
-        # ModelsNS
-        self._register_model_attr_nodes()
 
-        # # DataNS
-        # self._register_data_attr_nodes()
+        # ----------------------------------------
+        # ModelsNS setup 1/2 phase -> bound models 
+        # ----------------------------------------
+        #   - direct data models setup (Entity)
+        #   - some standard NS fields (e.g. Instance)
+        self._register_model_attr_nodes()
 
         # FieldsNS
         self._register_fields_components_attr_nodes()
 
-        # NOTE: ThisNS and FunctionsNS - are initialized differently and later
+        # NOTE: ThisNS and FunctionsNS are initialized later
 
         # ----------------------------------------
         # B. other level attr_nodes - recursive
@@ -352,6 +362,17 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
                     component = self, 
                     local_setup_session = None,
                 )):
+
+            # ----------------------------------------
+            # ModelsNS setup 2/2 phase
+            # ----------------------------------------
+            #   bound models setup sets:
+            #       - nested models
+            #       - Dot-expression based models (SubEntity*)
+            #   Must be called before because of This registries - need to have
+            #   M. namespace finished.
+            self.bound_model.setup(setup_session=self.setup_session)
+
             # setup this_registry objects must be inside of stack_frame due
             # premature component.bind setup in some ThisRegistryFor* classes.
             this_registry = self.try_create_this_registry(component=self, setup_session=self.setup_session)
@@ -359,8 +380,13 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             local_setup_session = self.setup_session.create_local_setup_session(this_registry)
             self.setup_session.current_frame.set_local_setup_session(local_setup_session)
 
-            # setup me
+            # ------------------------------------------------------------
+            # setup me and all my children and children's children and ...
+            # ------------------------------------------------------------
+            # RECURSION - goes through all tree nodes
             self._setup(setup_session=self.setup_session)
+            # ------------------------------------------------------------
+
 
         # check all ok?
         for component_name, component in self.components.items():
@@ -427,8 +453,8 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
     # ------------------------------------------------------------
 
-    @staticmethod
     def create_this_registry_for_instance(
+            self,
             model_class: ModelType, 
             owner: Optional[ComponentBase], 
             children: Optional[List[ComponentBase]], 
@@ -440,7 +466,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         - .Instance + <attr-names> is used only in manual setup cases, 
           e.g. ChoiceField()
         """
-        return ThisRegistryForInstance(model_class=model_class, owner=owner, children=children, setup_session=setup_session)
+        return ThisRegistryForInstance(model_class=model_class, container=self, owner=owner, children=children, setup_session=setup_session)
 
 
     def try_create_this_registry(self, component: ComponentBase, setup_session: ISetupSession) -> Optional[IThisRegistry]:
@@ -468,7 +494,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
                 # Field with children (e.g. BooleanField.enables)
                 # Children -> This..Children + This.<all-attributes>
                 # model_class = component.get_type_info().type_
-                this_registry = ThisRegistryForValueAndChildren(attr_node=attr_node, owner=component, children=children, setup_session=setup_session)
+                this_registry = ThisRegistryForValueAndChildren(container=self, attr_node=attr_node, owner=component, children=children, setup_session=setup_session)
             else:
                 this_registry = ThisRegistryForValue(attr_node)
 
@@ -476,14 +502,14 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         elif children:
             if component.is_subentity_items():
                 # Items -> This.Items 
-                this_registry = ThisRegistryForItemsAndChildren(owner=component, children=children, setup_session=setup_session)
+                this_registry = ThisRegistryForItemsAndChildren(container=self, owner=component, children=children, setup_session=setup_session)
             # TODO: add .Instance ==> BoundModel instance
             # elif component.is_subentity_single():
             #     # Children -> This.Children + This.<all-attributes> + This.Instance
-            #     this_registry = ThisRegistryForInstanceAndChildren(owner=component, children=children, setup_session=setup_session)
+            #     this_registry = ThisRegistryForInstanceAndChildren(container=self, owner=component, children=children, setup_session=setup_session)
             else:
                 # Children -> This.Children + This.<all-attributes>
-                this_registry = ThisRegistryForChildren(owner=component, children=children, setup_session=setup_session)
+                this_registry = ThisRegistryForChildren(container=self, owner=component, children=children, setup_session=setup_session)
         else:
             if component.is_container():
                 raise EntityInternalError(owner=self, msg="Container should have local_session created") 
