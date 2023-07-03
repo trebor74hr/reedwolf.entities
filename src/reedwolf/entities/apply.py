@@ -648,29 +648,32 @@ class ApplyResult(IApplySession):
         # one level deeper
         new_frame.depth = depth + 1
 
-        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        # TODO: call try_create_local_setup_session() instead ...
-        #       similar logic in base.py :: ComponentBase.setup()
-        #   MAYBE EVEN BETTER!!!
-        #       store this in dexp_node(s)?
-        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        #    container = self.get_first_parent_container(consider_self=True)
-        #    this_registry = container.try_create_this_registry(component=component)
-        #    local_setup_session = self.setup_session.create_local_setup_session(this_registry)
-        #    if local_setup_session:
-        #        new_frame.set_local_setup_session(local_setup_session)
-
         if isinstance(component, IFieldBase):
             assert getattr(component, "bind", None)
             assert not component.is_container()
-            attr_node = component.bind._dexp_node
-            if not attr_node:
-                raise EntityInternalError(owner=component, msg=f"{attr_node.name}.bind='{component.bind}' is not setup")
 
-            local_setup_session = self.setup_session.create_local_setup_session(
-                                        ThisRegistryForValue(attr_node)
-                                        )
+            # ---------------------------------------------------------------
+            # TODO: in setup phase attach local_setup_session to component -
+            #       and get this cached value
+            # ---------------------------------------------------------------
+            this_registry = comp_container.try_create_this_registry(
+                                    component=component, 
+                                    setup_session=self.setup_session)
+
+            local_setup_session = self.setup_session.create_local_setup_session(this_registry) \
+                                  if this_registry else None
+
+            # newt_frame.set_local_setup_session(local_setup_session, force=True)
             new_frame.set_local_setup_session(local_setup_session)
+
+            # OLD:
+            #   attr_node = component.bind._dexp_node
+            #   if not attr_node:
+            #       raise EntityInternalError(owner=component, msg=f"{attr_node.name}.bind='{component.bind}' is not setup")
+            #   local_setup_session = self.setup_session.create_local_setup_session(
+            #                               ThisRegistryForValue(attr_node)
+            #                               )
+            #   new_frame.set_local_setup_session(local_setup_session)
 
 
         # ------------------------------------------------------------
