@@ -134,7 +134,8 @@ from . import (
 
 class ContainerBase(IContainerBase, ComponentBase, ABC):
 
-    def is_container(self) -> bool:
+    @staticmethod
+    def is_container() -> bool:
         return True
 
     # def is_subentity(self):
@@ -156,7 +157,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             raise EntitySetupError(owner=self, msg=f"FieldGroup {fieldgroup.name} is already added.")
         self.contains.append(fieldgroup)
 
-    def is_top_parent(self):
+    def is_top_parent(self) -> bool:
         return not bool(self.parent)
 
 
@@ -444,7 +445,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
     def try_create_this_registry(self, component: ComponentBase, setup_session: ISetupSession) -> Optional[IThisRegistry]:
 
-        children = component.get_children()
+        children = component.get_children(deep_collect=True)
 
         if isinstance(component, IFieldBase):
             # ==== similar logic in apply.py :: _apply() ====
@@ -910,7 +911,8 @@ class SubEntityItems(SubEntityBase):
         #         raise EntitySetupTypeError(owner=self, msg=f"Cleaners should be instances of ItemsValidationBase, ChildrenValidationBase, ItemsEvaluationBase or ChildrenEvaluationBase, got: {type(cleaner)} / {cleaner}") 
         super().__post_init__()
 
-    def is_subentity_items(self):
+    @staticmethod
+    def is_subentity_items() -> bool:
         return True
 
 # ------------------------------------------------------------
@@ -928,8 +930,16 @@ class SubEntitySingle(SubEntityBase):
         #         raise EntitySetupTypeError(owner=self, msg=f"Cleaners should be instances of SingleValidation, ChildrenValidationBase or ChildrenEvaluationBase, got: {type(cleaner)} / {cleaner}") 
         super().__post_init__()
 
-    def is_subentity_single(self):
+    @staticmethod
+    def is_subentity_single() -> bool:
         return True
+
+    # @staticmethod
+    # def may_collect_my_children() -> bool:
+    #     # currently not possible - sometimes child.bind need to be setup and
+    #     # setup can be done only fields which are inside the same container
+    #     # share the same bound_model 
+    #     return True
 
 # ------------------------------------------------------------
 

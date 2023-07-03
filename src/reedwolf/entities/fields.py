@@ -417,16 +417,14 @@ class BooleanField(FieldBase):
     #       matching like, samo nisam još našao zgodnu sintaksu.
     enables:        Optional[List[ComponentBase]] = field(repr=False, default=None)
 
-    # default:        Optional[Union[bool, DotExpression]] = None
-
     def init_clean(self):
         if self.enables:
             self._allowed_cleaner_base_list.extend([ChildrenValidationBase, ChildrenEvaluationBase])
         super().init_clean()
 
-
-    #     if self.default is not None and not isinstance(self.default, (bool, DotExpression)):
-    #         raise EntitySetupValueError(owner=self, msg=f"'default'={self.default} needs to be bool value  (True/False).")
+    @staticmethod
+    def may_collect_my_children() -> bool:
+        return True
 
 # ------------------------------------------------------------
 # ChoiceField
@@ -464,6 +462,10 @@ class ChoiceField(FieldBase):
     # computed later
     choice_value_attr_node: AttrDexpNode = field(init=False, default=None, repr=False)
     choice_title_attr_node: AttrDexpNode = field(init=False, default=None, repr=False)
+
+    # TODO: možda složiti da radi i za Choice/Enum -> structural pattern
+    #       matching like, samo nisam još našao zgodnu sintaksu.
+    #   enables: Optional[List[ComponentBase]] = field(repr=False, default=None)
 
     def __post_init__(self):
         super().__post_init__()
@@ -639,6 +641,9 @@ class EnumField(FieldBase):
 
     enum_value_py_type: Optional[type] = field(init=False, default=None)
 
+    # TODO: možda složiti da radi i za Choice/Enum -> structural pattern
+    #       matching like, samo nisam još našao zgodnu sintaksu.
+    #   enables: Optional[List[ComponentBase]] = field(repr=False, default=None)
 
     def setup(self, setup_session: ISetupSession):
 
@@ -783,5 +788,9 @@ class FieldGroup(ComponentBase, IFieldGroup):
 
     @staticmethod
     def can_apply_partial() -> bool:
+        return True
+
+    @staticmethod
+    def may_collect_my_children() -> bool:
         return True
 

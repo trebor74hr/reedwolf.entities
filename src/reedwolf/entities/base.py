@@ -447,24 +447,62 @@ class ComponentBase(SetParentMixin, ABC):
     def is_subentity(self) -> bool:
         return self.is_subentity_items() or self.is_subentity_single()
 
+    def may_collect_my_children(self) -> bool:
+        """ 
+        when collecting children - if this sub-component has children, 
+        may they be collected and be referenced e.g. in This. <all-attributess>
+        access (see get_children(deep_collect=True) mode)
+
+        """
+        return False
+
     # ------------------------------------------------------------
 
-    def get_children(self) -> List[Self]:
+    def get_children(self, deep_collect: bool=False) -> List[Self]:
         """
-        CACHED
-        Get only children components. Used in apply() (+unit tests).
-        to get all - components, cleaners and all other complex objects 
-        - use _get_subcomponents_list()
+        in deep_collect mode:
+            CACHED
+            will collect children
+            and children's children for those which have
+                may_collect_my_children
+                Examples:
+                    - FieldGroup
+                    - SubEntitySingle
+
+        in normal mode:
+            CACHED
+            Get only children components. 
+
+        To get all - components, cleaners and all other complex objects => use
+        _get_subcomponents_list()
+
+        NOTE: it will collect all children, not only fields. E.g. will include:
+              including FieldGroup, SubEntity*
         """
         # TODO: cached - be careful not to add new components aferwards
-        if not hasattr(self, "_children"):
-            children = getattr(self, "contains", None)
-            if not children:
-                children = getattr(self, "enables", None)
-            else:
-                assert not hasattr(self, "enables"), self
-            self._children = children if children else []
-        return self._children
+        if deep_collect:
+            if not hasattr(self, "_children_deep"):
+                children = []
+                # RECURSION - 1 level
+                for child in self.get_children():
+                    children.append(child)
+                    if child.may_collect_my_children():
+                        # RECURSION
+                        child_children = child.get_children(deep_collect=True)
+                        if child_children:
+                            children.extend(child_children)
+                self._children_deep = children
+            out = self._children_deep
+        else:
+            if not hasattr(self, "_children"):
+                children = getattr(self, "contains", None)
+                if not children:
+                    children = getattr(self, "enables", None)
+                else:
+                    assert not hasattr(self, "enables"), self
+                self._children = children if children else []
+            out = self._children
+        return out
 
 
     # ------------------------------------------------------------

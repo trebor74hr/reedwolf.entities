@@ -216,6 +216,7 @@ class RegistryBase(IRegistry):
         if not isinstance(children, (list, tuple)) or len(children)==0:
             raise EntitySetupValueError(owner=self, msg=f"Expected list/tuple of children (components), got: {type(children)} / {to_repr(children)}")
 
+
         for nr, child in enumerate(children, 1):
             if not isinstance(child, ComponentBase):
                 raise EntitySetupValueError(owner=self, msg=f"Child {nr}: Expected ComponentBase, got: {type(child)} / {to_repr(child)}")
@@ -229,7 +230,10 @@ class RegistryBase(IRegistry):
                     raise EntityInternalError(owner=child, msg=f"setup_session.current_frame.component={setup_session.current_frame.component} <> owner={owner}") 
 
                 if not child.bind.IsFinished():
+                    # Can setup only fields which are inside the same container
+                    # share the same bound_model 
                     attr_node = child.bind.Setup(setup_session=setup_session, owner=owner)
+
                 else:
                     attr_node = child.bind._dexp_node
                 child_type_info = attr_node.get_type_info()
@@ -721,7 +725,6 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
         if registry is UNDEFINED:
             if strict:
                 avail_names = self._get_avail_registry_names(namespace, is_internal_use)
-                import pdb;pdb.set_trace() 
                 raise EntitySetupNameError(owner=self, msg=f"Registry '{namespace._name}' not found. Available: {avail_names}")
             return UNDEFINED
 
