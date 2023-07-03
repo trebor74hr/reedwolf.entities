@@ -1251,11 +1251,7 @@ class IFieldGroup(ABC):
 class IContainerBase(ABC):
 
     @abstractmethod
-    def create_this_registry_for_instance(self, 
-            model_class: ModelType, 
-            owner: Optional[ComponentBase], 
-            setup_session: ISetupSession
-            ) -> IThisRegistry:
+    def create_this_registry_for_instance(self, model_class: ModelType) -> IThisRegistry:
         ...
 
     @abstractmethod

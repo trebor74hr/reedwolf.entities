@@ -2,6 +2,7 @@ import inspect
 from dataclasses import (
         dataclass, 
         field,
+        InitVar,
         )
 from typing import (
         Any,
@@ -427,21 +428,17 @@ class ThisRegistryForValue(IThisRegistry, RegistryBase):
 class ThisRegistryForChildren(IThisRegistry, RegistryBase):
 
     owner: ComponentBase
-
-    # TODO: introduce python 3.10: 'kw_only=True'. Until then it is reset after use.
-    # used only for children registration - in component.bind setup
-    setup_session: Optional[ISetupSession] = field(repr=False)
+    setup_session: InitVar[Optional[ISetupSession]] = field(repr=False)
 
     NAMESPACE: ClassVar[Namespace] = ThisNS
 
-    def __post_init__(self):
+    def __post_init__(self, setup_session: Optional[ISetupSession]):
         # This.Children + This.<all-attributes>
         self._register_children(
-                setup_session=self.setup_session,
+                setup_session=setup_session,
                 attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME,
                 owner=self.owner, 
                 )
-        self.setup_session = None
 
     def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
         if not isinstance(apply_session.current_frame.instance, self.model_class):
@@ -464,13 +461,13 @@ class ThisRegistryForValueAndChildren(ThisRegistryForChildren):
 
     attr_node: AttrDexpNode
     owner: ComponentBase = field(repr=False)
-    setup_session: Optional[ISetupSession] = field(repr=False)
+    setup_session: InitVar[Optional[ISetupSession]] = field(repr=False)
 
     # autocomputed
     attr_name: Optional[str] = field(init=False, repr=False, default=None)
 
-    def __post_init__(self):
-        super().__post_init__()
+    def __post_init__(self, setup_session: Optional[ISetupSession]):
+        super().__post_init__(setup_session=setup_session)
         # TODO: DRY this
         if not isinstance(self.attr_node, AttrDexpNode):
             raise EntitySetupValueError(owner=self, msg=f"Expected AttrDexpNode, got: {type(self.attr_node)} / {self.attr_node}")
@@ -513,10 +510,6 @@ class ThisRegistryForInstance(IThisRegistry, RegistryBase):
     """
 
     model_class: ModelType
-    setup_session: ISetupSession = field(repr=False)
-
-    # TODO: introduce python 3.10: 'kw_only=True'. Until then it is reset after use.
-    # used only for children registration - in component.bind setup
 
     NAMESPACE: ClassVar[Namespace] = ThisNS
 
@@ -527,7 +520,6 @@ class ThisRegistryForInstance(IThisRegistry, RegistryBase):
                         model_class=self.model_class,
                         attr_name=ReservedAttributeNames.INSTANCE_ATTR_NAME,
                         attr_name_prefix=None)
-        self.setup_session = None
 
 
     def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
@@ -558,24 +550,21 @@ class ThisRegistryForItemsAndChildren(IThisRegistry, RegistryBase):
     #       -> validation will be runned againts all items
 
     owner: ComponentBase
-    # TODO: introduce python 3.10: 'kw_only=True'. Until then it is reset after use.
-    # used only for children registration - in component.bind setup
-    setup_session: ISetupSession = field(repr=False)
+    setup_session: InitVar[ISetupSession] = field(repr=False)
 
     NAMESPACE: ClassVar[Namespace] = ThisNS
 
-    def __post_init__(self):
+    def __post_init__(self, setup_session: ISetupSession):
         # Children + <attributes>
         self.register_items_attr_node(owner=self.owner)
 
         # This.Items == ReservedAttributeNames.ITEMS_ATTR_NAME.value
         self._register_children(
-                setup_session=self.setup_session,
+                setup_session=setup_session,
                 attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME,
                 owner=self.owner, 
                 )
         # TODO: .Children?
-        self.setup_session = None
 
     def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
         raise NotImplementedError("todo")
@@ -586,9 +575,7 @@ class ThisRegistryForItemsAndChildren(IThisRegistry, RegistryBase):
 
 class SetupSession(SetupSessionBase):
 
-    def create_local_setup_session(self, 
-            this_registry: IThisRegistry,
-            ) -> Self:
+    def create_local_setup_session(self, this_registry: IThisRegistry) -> Self:
         """ Currently creates only local ThisNS registry, which is used for
         some local context, e.g. Component This. dexps 
         Args:

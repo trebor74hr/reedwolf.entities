@@ -453,23 +453,6 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
     # ------------------------------------------------------------
 
-    def create_this_registry_for_instance(
-            self,
-            model_class: Optional[ModelType], 
-            setup_session: ISetupSession
-            ) -> IThisRegistry:
-        """ 
-        - ThisRegistryForInstance it is unavailable to low-level modules -
-          e.g. func_args -> setup.
-        - .Instance + <attr-names> is used only in manual setup cases, 
-          e.g. ChoiceField()
-        """
-        return ThisRegistryForInstance(
-                    model_class=model_class, 
-                    setup_session=setup_session,
-                    )
-
-
     def try_create_this_registry(self, component: ComponentBase, setup_session: ISetupSession) -> Optional[IThisRegistry]:
 
         # Besides direct children, collect all FieldGroup and
@@ -521,6 +504,23 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
         return this_registry
 
+    # ------------------------------------------------------------
+
+    @staticmethod
+    def create_this_registry_for_instance(
+            model_class: Optional[ModelType], 
+            ) -> IThisRegistry:
+        # NOTE: must be here since:
+        #   - expressions.py don't see ThisRegistryForInstance
+        #   - setup.py does not see registries
+        #   - registries - needed by setup.py which can not see registries
+        """ 
+        - ThisRegistryForInstance it is unavailable to low-level modules -
+          e.g. func_args -> setup.
+        - .Instance + <attr-names> is used only in manual setup cases, 
+          e.g. ChoiceField()
+        """
+        return ThisRegistryForInstance(model_class=model_class)
 
 # ------------------------------------------------------------
 

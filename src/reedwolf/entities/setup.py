@@ -773,9 +773,10 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
     def create_local_setup_session_for_this_instance(self, 
                                                      model_class: ModelType, 
                                                      ) -> IThisRegistry:
+        # NOTE: must be placed here since:
+        #   expressions 
         this_registry = self.container.create_this_registry_for_instance(
-                                model_class=model_class, 
-                                setup_session=self)
+                                model_class=model_class)
         local_setup_session = self.create_local_setup_session(this_registry)
         return local_setup_session
 
