@@ -875,7 +875,7 @@ class ComponentBase(SetParentMixin, ABC):
                 attr_node = child.bind._dexp_node
                 child_type_info = attr_node.get_type_info()
 
-            elif child.is_subentity():
+            elif child.is_subentity() or child.is_fieldgroup():
                 # ------------------------------------------------------------
                 # NOTE: this is a bit complex chain of setup() actions: 
                 #           entity -> this -> subentity -> subentity ...
@@ -895,23 +895,27 @@ class ComponentBase(SetParentMixin, ABC):
 
                 # NOTE: "make_component_fields_dataclass()" works recuresively to
                 #       enable access only to registered fields.
+
                 with setup_session.use_stack_frame(
                         # used only to change component/container
                         SetupStackFrame(
-                            container = child, 
+                            container = container 
+                                        if child.is_fieldgroup() 
+                                        else child, 
                             component = child, 
                             # should not be used 
                             local_setup_session = None,
                         )):
                     # RECURSION x 2
-                    child.setup(setup_session=setup_session)
+                    if child.is_subentity():
+                        child.setup(setup_session=setup_session)
                     child_component_fields_dataclass, _ = child.get_component_fields_dataclass(setup_session=setup_session) 
 
                 child_type_info = TypeInfo.get_or_create_by_type(child_component_fields_dataclass)
 
-            elif child.is_fieldgroup():
-                # TODO: currently not supported, need custom type_info
-                continue
+            # elif child.is_fieldgroup():
+            #     # TODO: currently not supported, need custom type_info
+            #     continue
             else:
                 raise EntityInternalError(owner=child, msg=f"child_type_info could not be extracted, unsuppoerted component's type, got: {type(child)}") 
 

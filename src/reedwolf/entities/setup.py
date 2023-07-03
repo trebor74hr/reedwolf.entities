@@ -434,7 +434,7 @@ class RegistryBase(IRegistry):
             # --------------------------------------------------
             # e.g. M.company Predefined before in Entity.setup() function.
             if full_dexp_node_name not in self.store:
-                names_avail = get_available_names_example(full_dexp_node_name, self.store.keys())
+                names_avail = get_available_names_example(full_dexp_node_name, self.store.keys(), max_display=7)
                 valid_names = f"Valid attributes: {names_avail}" if self.store.keys() else "Namespace has no attributes at all."
                 raise EntitySetupNameNotFoundError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': Invalid attribute name '{full_dexp_node_name}'. {valid_names}")
 
