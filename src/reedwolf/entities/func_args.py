@@ -232,8 +232,6 @@ class FunctionArguments:
                 #       session -> container -> ... 
                 local_setup_session = setup_session.create_local_setup_session_for_this_instance(
                                                             model_class=model_class,
-                                                            owner=None,
-                                                            children=None,
                                                             )
             elif model_class in STANDARD_TYPE_LIST:
                 local_setup_session = None 

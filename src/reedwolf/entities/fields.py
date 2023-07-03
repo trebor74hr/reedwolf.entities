@@ -562,8 +562,6 @@ class ChoiceField(FieldBase):
 
             local_setup_session = setup_session.create_local_setup_session_for_this_instance(
                                         model_class=model_class,
-                                        owner=self,
-                                        children=None,
                                         )
 
             with setup_session.use_stack_frame(

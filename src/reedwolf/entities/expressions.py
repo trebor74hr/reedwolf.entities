@@ -158,8 +158,6 @@ class ISetupSession(ABC):
     @abstractmethod
     def create_local_setup_session_for_this_instance(self, 
                                                      model_class: ModelType, 
-                                                     owner: Optional[Any], 
-                                                     children: Optional[List[Any]]
                                                      ) -> Self:
         " creates Session with ThisRegistryForInstance "
         # TODO: ugly name :(

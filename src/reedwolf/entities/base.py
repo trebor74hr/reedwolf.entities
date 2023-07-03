@@ -832,6 +832,109 @@ class ComponentBase(SetParentMixin, ABC):
 
     # ------------------------------------------------------------
 
+    def get_component_fields_dataclass(self, setup_session: ISetupSession) -> Tuple[IComponentFields, List[ChildField]]:
+        # TODO: not happy that this is 
+        """
+        CACHED
+        RECURSIVE
+
+        Will call SubEntity* . setup() in order to create recursive dataclass
+        that contains fields only for components (not all model fields are
+        available).
+        """
+        component = self
+
+        if hasattr(component, "_component_fields_dataclass_and_child_field_list"):
+            return component._component_fields_dataclass_and_child_field_list
+
+        # TODO: to have deep_collect or not??
+        children = component.get_children(deep_collect=True)
+
+        container = setup_session.current_frame.container
+
+        assert setup_session and setup_session.current_frame
+        if not setup_session.current_frame.component == component:
+            raise EntityInternalError(owner=component, msg=f"setup_session.current_frame.component={setup_session.current_frame.component} <> component={component}") 
+
+        child_field_list = []
+        for nr, child in enumerate(children, 1):
+
+            if child.is_bound_model():
+                continue
+
+            child_type_info = None
+            if isinstance(child, IFieldBase):
+                # ALT: not hasattr(child, "bind")
+                # NOTE: check that sessino is setup correctly for this field?
+
+                if not child.bind.IsFinished():
+                    # Can setup only fields which are inside the same container
+                    # share the same bound_model 
+                    child.bind.Setup(setup_session=setup_session, owner=component)
+
+                attr_node = child.bind._dexp_node
+                child_type_info = attr_node.get_type_info()
+
+            elif child.is_subentity():
+                # ------------------------------------------------------------
+                # NOTE: this is a bit complex chain of setup() actions: 
+                #           entity -> this -> subentity -> subentity ...
+                #       find some easier way how to to it
+                #       
+                # ------------------------------------------------------------
+                # ALT: when all model fields are available:
+                #       if not child.bound_model.model.IsFinished():
+                #           # ALT: more complex way - it seems to work, but I prefer
+                #           #      simplier solution:
+                #           attr_node = container._setup_bound_model_dot_expression(bound_model=child.bound_model, setup_session=setup_session)
+                #           # ORIG: child.bound_model.model.Setup(setup_session=setup_session, owner=component)
+                #
+                #       # ALT: attr_node = child.bound_model.model._dexp_node
+                #       #      child_type_info = attr_node.get_type_info()
+                #       child_type_info = child.bound_model.get_type_info()
+
+                # NOTE: "make_component_fields_dataclass()" works recuresively to
+                #       enable access only to registered fields.
+                with setup_session.use_stack_frame(
+                        # used only to change component/container
+                        SetupStackFrame(
+                            container = child, 
+                            component = child, 
+                            # should not be used 
+                            local_setup_session = None,
+                        )):
+                    # RECURSION x 2
+                    child.setup(setup_session=setup_session)
+                    child_component_fields_dataclass, _ = child.get_component_fields_dataclass(setup_session=setup_session) 
+
+                child_type_info = TypeInfo.get_or_create_by_type(child_component_fields_dataclass)
+
+            elif child.is_fieldgroup():
+                # TODO: currently not supported, need custom type_info
+                continue
+            else:
+                raise EntityInternalError(owner=child, msg=f"child_type_info could not be extracted, unsuppoerted component's type, got: {type(child)}") 
+
+            child_field_list.append(
+                    ChildField(
+                        name=child.name,
+                        type_info=child_type_info,
+                    ))
+
+        class_name_camel = snake_case_to_camel(component.name)
+        component_fields_dataclass = make_component_fields_dataclass(
+                                class_name=f"{class_name_camel}Fields",
+                                child_field_list=child_field_list,
+                                )
+
+        component._component_fields_dataclass_and_child_field_list = component_fields_dataclass, child_field_list
+
+        return component._component_fields_dataclass_and_child_field_list
+
+
+
+    # ------------------------------------------------------------
+
 
     def setup(self, setup_session: ISetupSession):  # noqa: F821
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(self)
@@ -1151,7 +1254,6 @@ class IContainerBase(ABC):
     def create_this_registry_for_instance(self, 
             model_class: ModelType, 
             owner: Optional[ComponentBase], 
-            children: Optional[List[ComponentBase]], 
             setup_session: ISetupSession
             ) -> IThisRegistry:
         ...

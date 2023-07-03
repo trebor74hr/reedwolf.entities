@@ -455,9 +455,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
     def create_this_registry_for_instance(
             self,
-            model_class: ModelType, 
-            owner: Optional[ComponentBase], 
-            children: Optional[List[ComponentBase]], 
+            model_class: Optional[ModelType], 
             setup_session: ISetupSession
             ) -> IThisRegistry:
         """ 
@@ -466,14 +464,18 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         - .Instance + <attr-names> is used only in manual setup cases, 
           e.g. ChoiceField()
         """
-        return ThisRegistryForInstance(model_class=model_class, container=self, owner=owner, children=children, setup_session=setup_session)
+        return ThisRegistryForInstance(
+                    model_class=model_class, 
+                    setup_session=setup_session,
+                    )
 
 
     def try_create_this_registry(self, component: ComponentBase, setup_session: ISetupSession) -> Optional[IThisRegistry]:
 
         # Besides direct children, collect all FieldGroup and
         # BooleanField+enables fields too (recursively)
-        children = component.get_children(deep_collect=True)
+
+        has_children = bool(component.get_children())
 
         if isinstance(component, IFieldBase):
             # ==== similar logic in apply.py :: _apply() ====
@@ -490,26 +492,27 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             if not attr_node:
                 raise EntitySetupNameError(owner=component, msg=f"{attr_node.name}.bind='{component.bind}' could not be evaluated")
 
-            if children:
+            if has_children:
                 # Field with children (e.g. BooleanField.enables)
                 # Children -> This..Children + This.<all-attributes>
                 # model_class = component.get_type_info().type_
-                this_registry = ThisRegistryForValueAndChildren(container=self, attr_node=attr_node, owner=component, children=children, setup_session=setup_session)
+                this_registry = ThisRegistryForValueAndChildren(attr_node=attr_node, owner=component, setup_session=setup_session)
             else:
                 this_registry = ThisRegistryForValue(attr_node)
 
 
-        elif children:
+        elif has_children:
             if component.is_subentity_items():
                 # Items -> This.Items 
-                this_registry = ThisRegistryForItemsAndChildren(container=self, owner=component, children=children, setup_session=setup_session)
+                this_registry = ThisRegistryForItemsAndChildren(owner=component, setup_session=setup_session)
+
             # TODO: add .Instance ==> BoundModel instance
             # elif component.is_subentity_single():
             #     # Children -> This.Children + This.<all-attributes> + This.Instance
-            #     this_registry = ThisRegistryForInstanceAndChildren(container=self, owner=component, children=children, setup_session=setup_session)
+            #     this_registry = ThisRegistryForInstanceAndChildren(owner=component, setup_session=setup_session)
             else:
                 # Children -> This.Children + This.<all-attributes>
-                this_registry = ThisRegistryForChildren(container=self, owner=component, children=children, setup_session=setup_session)
+                this_registry = ThisRegistryForChildren(owner=component, setup_session=setup_session)
         else:
             if component.is_container():
                 raise EntityInternalError(owner=self, msg="Container should have local_session created") 

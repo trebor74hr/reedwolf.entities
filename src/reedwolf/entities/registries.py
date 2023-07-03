@@ -426,10 +426,7 @@ class ThisRegistryForValue(IThisRegistry, RegistryBase):
 @dataclass
 class ThisRegistryForChildren(IThisRegistry, RegistryBase):
 
-    container: IContainerBase
     owner: ComponentBase
-    children: List[ComponentBase] = field(repr=False)
-    # used only for children registration - in component.bind setup
 
     # TODO: introduce python 3.10: 'kw_only=True'. Until then it is reset after use.
     # used only for children registration - in component.bind setup
@@ -442,9 +439,8 @@ class ThisRegistryForChildren(IThisRegistry, RegistryBase):
         self._register_children(
                 setup_session=self.setup_session,
                 attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME,
-                container=self.container,
                 owner=self.owner, 
-                children=self.children)
+                )
         self.setup_session = None
 
     def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
@@ -467,9 +463,7 @@ class ThisRegistryForValueAndChildren(ThisRegistryForChildren):
     " inherits ThisRegistryForChildren + adds .Value"
 
     attr_node: AttrDexpNode
-    container: IContainerBase
     owner: ComponentBase = field(repr=False)
-    children: List[ComponentBase] = field(repr=False)
     setup_session: Optional[ISetupSession] = field(repr=False)
 
     # autocomputed
@@ -519,39 +513,20 @@ class ThisRegistryForInstance(IThisRegistry, RegistryBase):
     """
 
     model_class: ModelType
-
-    container: IContainerBase
-    owner: Optional[ComponentBase] = field(repr=False)
-    # if not set then attributes are frmo model_class
-    children: Optional[List[ComponentBase]] = field(repr=False)
+    setup_session: ISetupSession = field(repr=False)
 
     # TODO: introduce python 3.10: 'kw_only=True'. Until then it is reset after use.
     # used only for children registration - in component.bind setup
-    setup_session: ISetupSession = field(repr=False)
-
-    # attr_name_prefix: str = field(repr=False)
 
     NAMESPACE: ClassVar[Namespace] = ThisNS
 
     def __post_init__(self):
-        if self.children is not None:
-            # This.Instance + This.<all-attributes>
-            assert self.owner
-            self._register_children(
-                    setup_session=self.setup_session,
-                    attr_name=ReservedAttributeNames.INSTANCE_ATTR_NAME,
-                    container=self.container,
-                    owner=self.owner, 
-                    children=self.children,
-                    attr_name_prefix=None,
-                    )
-        else:
-            # M.Instance / Models.Instance + # M.<all-attributes>
-            self._register_model_nodes(model_class=self.model_class)
-            self._register_children_attr_node(
-                            model_class=self.model_class,
-                            attr_name=ReservedAttributeNames.INSTANCE_ATTR_NAME,
-                            attr_name_prefix=None)
+        # M.Instance / Models.Instance + # M.<all-attributes>
+        self._register_model_nodes(model_class=self.model_class)
+        self._register_children_attr_node(
+                        model_class=self.model_class,
+                        attr_name=ReservedAttributeNames.INSTANCE_ATTR_NAME,
+                        attr_name_prefix=None)
         self.setup_session = None
 
 
@@ -559,6 +534,7 @@ class ThisRegistryForInstance(IThisRegistry, RegistryBase):
         " TODO: explain: when 2nd param is not None, then ... "
         if not isinstance(apply_session.current_frame.instance, self.model_class):
             raise EntityInternalError(owner=self, msg=f"Type of apply session's instance expected to be '{self.model_class}, got: {apply_session.current_frame.instance}") 
+
         if attr_name == ReservedAttributeNames.INSTANCE_ATTR_NAME:
             # with 2nd param == None -> do not fetch further
             atrr_name_to_fetch = None
@@ -581,9 +557,7 @@ class ThisRegistryForItemsAndChildren(IThisRegistry, RegistryBase):
     # TODO: consider to include Children + attributes too :
     #       -> validation will be runned againts all items
 
-    container: IContainerBase
     owner: ComponentBase
-    children: List[ComponentBase] = field(repr=False)
     # TODO: introduce python 3.10: 'kw_only=True'. Until then it is reset after use.
     # used only for children registration - in component.bind setup
     setup_session: ISetupSession = field(repr=False)
@@ -592,16 +566,14 @@ class ThisRegistryForItemsAndChildren(IThisRegistry, RegistryBase):
 
     def __post_init__(self):
         # Children + <attributes>
-        self.register_items_attr_node(owner=self.owner, children=self.children)
+        self.register_items_attr_node(owner=self.owner)
 
         # This.Items == ReservedAttributeNames.ITEMS_ATTR_NAME.value
         self._register_children(
                 setup_session=self.setup_session,
                 attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME,
-                container=self.container,
                 owner=self.owner, 
-                children=self.children,
-                attr_name_prefix=None)
+                )
         # TODO: .Children?
         self.setup_session = None
 

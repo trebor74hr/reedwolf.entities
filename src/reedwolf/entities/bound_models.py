@@ -175,8 +175,6 @@ class NestedBoundModelMixin:
         local_setup_session = apply_session.setup_session \
                                 .create_local_setup_session_for_this_instance(
                                         model_class=self.model,
-                                        owner=self,
-                                        children=None,
                                         )
 
         container = self.get_first_parent_container(consider_self=False)
