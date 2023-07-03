@@ -859,51 +859,51 @@ class ComponentBase(SetParentMixin, ABC):
         #      expressions. In the same group order by name
 
         # NOTE: with vars() not the best way, other is to put metadata in field()
-        subcomponent_items = []
+        sub_component_items = []
         for sc_pair in vars(self).items():
             if isinstance(sc_pair[1], DotExpression):
                 priority = 0
             else:
                 priority = getattr(sc_pair[1], "SETUP_PRIORITY", 1)
-            subcomponent_items.append((priority, sc_pair))
-        subcomponent_items = sorted(subcomponent_items, reverse=True)
-        subcomponent_items = [sc_pair for _, sc_pair in subcomponent_items]
+            sub_component_items.append((priority, sc_pair))
+        sub_component_items = sorted(sub_component_items, reverse=True)
+        sub_component_items = [sc_pair for _, sc_pair in sub_component_items]
 
 
         # ==== Iterate all components and setup() each
 
         subcomponent_list = []
 
-        for subcomponent_name, subcomponent in subcomponent_items:
+        for sub_component_name, sub_component in sub_component_items:
 
-            if not isinstance(subcomponent, DotExpression):
-                if subcomponent_name.startswith("_"):
+            if not isinstance(sub_component, DotExpression):
+                if sub_component_name.startswith("_"):
                     continue
 
-                if subcomponent in (None, (), {}, []):
+                if sub_component in (None, (), {}, []):
                     continue
 
-                # TODO: can be class or some simple type too - remove them from subcomponent list 
-                if inspect.isclass(subcomponent):
+                # TODO: can be class or some simple type too - remove them from sub_component list 
+                if inspect.isclass(sub_component):
                     continue 
 
                 # TODO: see in meta.py there is a standard types ... use this
-                if isinstance(subcomponent, STANDARD_TYPE_LIST):
+                if isinstance(sub_component, STANDARD_TYPE_LIST):
                     continue
 
             # Skip procesing only following
             # TODO: do this better - check type hint (init=False) and then decide
             # TODO: collect names once and store it internally on class instance level?
-            # type_hint = type_hints.get(subcomponent_name)
-            th_field = fields.get(subcomponent_name)
+            # type_hint = type_hints.get(sub_component_name)
+            th_field = fields.get(sub_component_name)
 
             if th_field and th_field.metadata.get("skip_traverse", False):
                 continue
 
 
-            if is_function(subcomponent):
+            if is_function(sub_component):
                 # TODO: check that this is not class too
-                raise EntitySetupValueError(owner=subcomponent, msg=f"Functions/callables could not be used directly - wrap with Function() and try again. Details: ({subcomponent_name}: {th_field})")
+                raise EntitySetupValueError(owner=sub_component, msg=f"Functions/callables could not be used directly - wrap with Function() and try again. Details: ({sub_component_name}: {th_field})")
 
             # -------------------------------------------------------------
             # Attribute names that are not included in a subcomponents list
@@ -911,7 +911,7 @@ class ComponentBase(SetParentMixin, ABC):
             # -------------------------------------------------------------
             # "autocomplete", "evaluate",
             # TODO: not the smartest way how to do this ...
-            if (subcomponent_name in ("parent", "parent_name", "parent_container", "parent_setup_session",
+            if (sub_component_name in ("parent", "parent_name", "parent_container", "parent_setup_session",
                                       "name", "title", "datatype", "components", "type", "autocomputed",
                                       "setup_session", "meta",
                                       # NOTE: maybe in the future will have value expressions too
@@ -926,16 +926,16 @@ class ComponentBase(SetParentMixin, ABC):
                                       # "value", 
                                       # "enum",
                                       )
-               or subcomponent_name[0] == "_"):
+               or sub_component_name[0] == "_"):
                 # TODO: this should be main way how to check ...
-                if subcomponent_name not in ("parent", "parent_container") and \
-                  (hasattr(subcomponent, "setup") or hasattr(subcomponent, "setup")):
-                    raise EntityInternalError(f"ignored attribute name '{subcomponent_name}' has setup()/Setup(). Is attribute list ok or value is not proper class (got component='{subcomponent}').")
+                if sub_component_name not in ("parent", "parent_container") and \
+                  (hasattr(sub_component, "setup") or hasattr(sub_component, "setup")):
+                    raise EntityInternalError(f"ignored attribute name '{sub_component_name}' has setup()/Setup(). Is attribute list ok or value is not proper class (got component='{sub_component}').")
                 continue
 
             if not th_field or getattr(th_field, "init", True) is False:
-                # warn(f"TODO: _get_subcomponents_list: {self} -> {subcomponent_name} -> {th_field}")
-                raise EntityInternalError(owner=subcomponent, msg=f"Should '{subcomponent_name}' field be excluded from processing: {th_field}")
+                # warn(f"TODO: _get_subcomponents_list: {self} -> {sub_component_name} -> {th_field}")
+                raise EntityInternalError(owner=sub_component, msg=f"Should '{sub_component_name}' field be excluded from processing: {th_field}")
 
             # ----------------------------------------------------------------------
             # Classes of attribute members that are included in a subcomponents list 
@@ -945,7 +945,7 @@ class ComponentBase(SetParentMixin, ABC):
             # TODO: this is not nice - do it better
             # TODO: models should not be dict()
             # TODO: added Self for BoundModelWithHandlers
-            if subcomponent_name not in ("models", "data", "functions", "enum") \
+            if sub_component_name not in ("models", "data", "functions", "enum") \
                     and th_field \
                     and "Component" not in str(th_field.type) \
                     and "Container" not in str(th_field.type) \
@@ -956,36 +956,36 @@ class ComponentBase(SetParentMixin, ABC):
                     and "[Self]" not in str(th_field.type) \
                     :
                 # TODO: Validation should be extended to test isinstance(.., ValidationBase) ... or similar to include Required(), MaxLength etc.
-                raise EntityInternalError(owner=subcomponent, msg=f"Should '{subcomponent_name}' attribute be excluded from processing." 
+                raise EntityInternalError(owner=sub_component, msg=f"Should '{sub_component_name}' attribute be excluded from processing." 
                         + f"\n  == {th_field})"
                         + f"\n  == parent := {self}"
-                        + f"\n  == {type(subcomponent)}"
-                        + f"\n  == {subcomponent}")
+                        + f"\n  == {type(sub_component)}"
+                        + f"\n  == {sub_component}")
 
-            if isinstance(subcomponent, (list, tuple)):
-                for nr, sub_subcomponent in enumerate(subcomponent):
+            if isinstance(sub_component, (list, tuple)):
+                for nr, sub_sub_component in enumerate(sub_component):
                     subcomponent_list.append(
                             Subcomponent(
-                                name=f"{subcomponent_name}__{nr}", 
-                                path=f"{subcomponent_name}[{nr}]", 
-                                component=sub_subcomponent, 
+                                name=f"{sub_component_name}__{nr}", 
+                                path=f"{sub_component_name}[{nr}]", 
+                                component=sub_sub_component, 
                                 th_field=th_field))
-            elif isinstance(subcomponent, (dict,)):
-                for ss_name, sub_subcomponent in subcomponent.items():
+            elif isinstance(sub_component, (dict,)):
+                for ss_name, sub_sub_component in sub_component.items():
                     # NOTE: bind_to_models case - key value will be used as
                     #       attr_node name - should be setup_session unique
                     subcomponent_list.append(
                             Subcomponent(
                                 name=ss_name, 
-                                path=f"{subcomponent_name}.{ss_name}", 
-                                component=sub_subcomponent, 
+                                path=f"{sub_component_name}.{ss_name}", 
+                                component=sub_sub_component, 
                                 the_field=th_field))
             else:
                 subcomponent_list.append(
                         Subcomponent(
-                            name=subcomponent_name,
-                            path=subcomponent_name, 
-                            component=subcomponent, 
+                            name=sub_component_name,
+                            path=sub_component_name, 
+                            component=sub_component, 
                             th_field=th_field))
 
         self._subcomponent_list = subcomponent_list
