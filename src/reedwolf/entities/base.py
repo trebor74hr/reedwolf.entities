@@ -26,6 +26,7 @@ from types import (
         )
 
 from .utils import (
+        to_repr,
         add_yaml_indent_to_strlist,
         YAML_INDENT,
         varname_to_title,
@@ -349,10 +350,14 @@ class ComponentBase(SetParentMixin, ABC):
 
     def _check_cleaners(self, allowed_cleaner_base_list: List[type]):
         allowed_cleaner_base_list = tuple(allowed_cleaner_base_list)
-        for cleaner in self.cleaners:
-            if not isinstance(cleaner, allowed_cleaner_base_list):
-                cl_names = ", ".join([cl.__name__ for cl in allowed_cleaner_base_list])
-                raise EntitySetupTypeError(owner=self, msg=f"Cleaners should be instances of {cl_names}, got: {type(cleaner)} / {cleaner}") 
+        if self.cleaners is not None:
+            cl_names = ", ".join([cl.__name__ for cl in allowed_cleaner_base_list])
+            if not isinstance(self.cleaners, (list, tuple)):
+                raise EntitySetupTypeError(owner=self, msg=f"Cleaners should be None or list of {cl_names}, got: {type(self.cleaners)} / {to_repr(self.cleaners)}") 
+            for cleaner in self.cleaners:
+                if not isinstance(cleaner, allowed_cleaner_base_list):
+                    raise EntitySetupTypeError(owner=self, msg=f"Cleaners should be instances of {cl_names}, got: {type(cleaner)} / {cleaner}") 
+
 
     @staticmethod
     def can_apply_partial() -> bool:
