@@ -20,12 +20,14 @@ from dataclasses import (
         field as DcField,
         fields,
         MISSING as DC_MISSING,
+        make_dataclass,
         )
 from types import (
         MappingProxyType,
         )
 
 from .utils import (
+        snake_case_to_camel,
         to_repr,
         add_yaml_indent_to_strlist,
         YAML_INDENT,
@@ -328,6 +330,31 @@ class Subcomponent:
 
 
 # ------------------------------------------------------------
+# IComponentFields
+# ------------------------------------------------------------
+
+@dataclass
+class ChildField:
+    name: str
+    type_info: TypeInfo
+
+
+class IComponentFields:
+    ...
+
+
+def make_component_fields_dataclass(class_name: str, child_field_list: List[ChildField]) -> IComponentFields:
+    # name, type, optional[field]
+    # ('z', int, field(default=5))],
+    children_fields = [(child_field.name, child_field.type_info.type_) 
+                        for child_field in child_field_list]
+    return make_dataclass(
+                cls_name=class_name, 
+                fields=children_fields, 
+                bases=(IComponentFields,))
+
+
+# ------------------------------------------------------------
 # ComponentBase
 # ------------------------------------------------------------
 
@@ -432,21 +459,29 @@ class ComponentBase(SetParentMixin, ABC):
 
     # ------------------------------------------------------------
 
-    def is_container(self) -> bool:
+    @staticmethod
+    def is_container() -> bool:
         return False
 
-    def is_bound_model(self) -> bool:
-        # currently not used
+    @staticmethod
+    def is_bound_model() -> bool:
         return False
 
-    def is_subentity_items(self) -> bool:
+    @staticmethod
+    def is_subentity_items() -> bool:
         return False
 
-    def is_subentity_single(self) -> bool:
+    @staticmethod
+    def is_subentity_single() -> bool:
         return False
 
     def is_subentity(self) -> bool:
         return self.is_subentity_items() or self.is_subentity_single()
+
+    @staticmethod
+    def is_fieldgroup() -> bool:
+        return False
+
 
     def may_collect_my_children(self) -> bool:
         """ 
@@ -1006,7 +1041,7 @@ class ComponentBase(SetParentMixin, ABC):
         for subcomponent in self._get_subcomponents_list():
             component = subcomponent.component
             if isinstance(component, ComponentBase) \
-              and component.is_bound_model() \
+              and (component.is_bound_model() or component.is_subentity()) \
               and component.is_finished():
                 # raise EntityInternalError(owner=self, msg=f"BoundModel.setup() should have been called before ({component})")
                 continue
@@ -1321,8 +1356,10 @@ class SetupStackFrame:
     # type_info: TypeInfo
 
     def __post_init__(self):
-        assert isinstance(self.container, IContainerBase)
-        assert isinstance(self.component, ComponentBase)
+        if not isinstance(self.container, IContainerBase):
+            raise EntityInternalError(owner=self, msg=f"Expected IContainerBase, got: {self.container}") 
+        if not isinstance(self.component, ComponentBase):
+            raise EntityInternalError(owner=self, msg=f"Expected ComponentBase, got: {self.component}") 
 
         if self.local_setup_session:
             assert isinstance(self.local_setup_session, ISetupSession)

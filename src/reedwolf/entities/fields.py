@@ -794,3 +794,8 @@ class FieldGroup(ComponentBase, IFieldGroup):
     def may_collect_my_children() -> bool:
         return True
 
+    @staticmethod
+    def is_fieldgroup() -> bool:
+        return True
+
+

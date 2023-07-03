@@ -306,14 +306,14 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
     def setup(self) -> Self:
         # components are flat list, no recursion/hierarchy browsing needed
+        if self.is_finished():
+            raise EntitySetupError(owner=self, msg="setup() should be called only once")
+
         if self.bound_model is None:
             raise EntitySetupError(owner=self, msg="bound_model not set. Initialize in constructor or call bind_to() first.")
 
         if not self.contains:
             raise EntitySetupError(owner=self, msg="'contains' attribute is required with list of components")
-
-        if self.is_finished():
-            raise EntitySetupError(owner=self, msg="setup() should be called only once")
 
         if self.setup_session is not None:
             raise EntitySetupError(owner=self, msg="SetupSession.setup() should be called only once")

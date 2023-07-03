@@ -237,7 +237,7 @@ def varname_to_title(varname:str) -> str:
     return out.capitalize()
 
 
-def format_arg_name_list(arg_name_list: List[str]):
+def format_arg_name_list(arg_name_list: List[str]) -> str:
     if not arg_name_list:
         return "<no arguments>"
     arg_name_list = [f"'{arg_name}'" for arg_name in arg_name_list]
@@ -345,3 +345,4 @@ def dynamic_import(module_path:str, member_name: Optional[str] = None) -> Any:
         out = module_instance
 
     return out
+

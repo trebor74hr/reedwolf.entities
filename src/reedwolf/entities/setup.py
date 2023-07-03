@@ -8,6 +8,7 @@ from typing import (
         ClassVar,
         Tuple,
         Dict,
+        Type,
         )
 
 from .utils import (
@@ -16,6 +17,7 @@ from .utils import (
         UndefinedType,
         check_identificator_name,
         to_repr,
+        snake_case_to_camel,
         )
 from .exceptions import (
         EntityError,
@@ -49,6 +51,9 @@ from .meta import (
         get_model_fields,
         )
 from .base import (
+        IComponentFields,
+        make_component_fields_dataclass,
+        ChildField,
         IFieldBase,
         IStackOwnerSession,
         ComponentBase,
@@ -102,27 +107,6 @@ def get_dexp_node_name(owner_name: Optional[str],
 
     return dexp_node_name
 
-
-# ------------------------------------------------------------
-
-@dataclass
-class RegistryChildValueAccessor:
-    Value : Any
-
-@dataclass
-class RegistryChildrenAccessor:
-    children : List[RegistryChildValueAccessor]
-
-# --------------------
-
-@dataclass
-class RegistryItemValueAccessor:
-    Value : Any
-
-
-@dataclass
-class RegistryItemsAccessor:
-    children : List[RegistryItemValueAccessor]
 
 # ------------------------------------------------------------
 
@@ -218,72 +202,56 @@ class RegistryBase(IRegistry):
         if not isinstance(children, (list, tuple)) or len(children)==0:
             raise EntitySetupValueError(owner=self, msg=f"Expected list/tuple of children (components), got: {type(children)} / {to_repr(children)}")
 
-        for nr, child in enumerate(children, 1):
-            if not isinstance(child, ComponentBase):
-                raise EntitySetupValueError(owner=self, msg=f"Child {nr}: Expected ComponentBase, got: {type(child)} / {to_repr(child)}")
+        component_fields_dataclass, child_field_list = setup_session.get_component_fields_dataclass(
+                                                            component=owner,
+                                                            # setup_session=setup_session,
+                                                            # children=children,
+                                                            )
 
-            child_type_info = None
-            if isinstance(child, IFieldBase):
-                # ALT: not hasattr(child, "bind")
-                # NOTE: check that sessino is setup correctly for this field?
-                assert setup_session and setup_session.current_frame
-
-                if not setup_session.current_frame.component == owner:
-                    raise EntityInternalError(owner=child, msg=f"setup_session.current_frame.component={setup_session.current_frame.component} <> owner={owner}") 
-
-                if not child.bind.IsFinished():
-                    # Can setup only fields which are inside the same container
-                    # share the same bound_model 
-                    child.bind.Setup(setup_session=setup_session, owner=owner)
-                attr_node = child.bind._dexp_node
-                child_type_info = attr_node.get_type_info()
-            elif child.is_subentity():
-                if not child.bound_model.model.IsFinished():
-                    # This was a lucky guess - it seems to work. for now :)
-                    attr_node = container._setup_bound_model_dot_expression(bound_model=child.bound_model, setup_session=setup_session)
-                    # child.bound_model.model.Setup(setup_session=setup_session, owner=owner)
-
-                child_type_info = child.bound_model.get_type_info()
-                # ALT: attr_node = child.bound_model.model._dexp_node
-                #      child_type_info = attr_node.get_type_info()
-            else:
-                # TODO: currently not supported - FieldGroup
-                #       if not child_type_info:
-                #           raise EntityInternalError(owner=child, msg=f"child_type_info could not be extracted, got: {child_type_info}") 
-                continue
-
-
+        for nr, child_field in enumerate(child_field_list, 1):
             attr_node = AttrDexpNode(
-                            name=child.name,
-                            data=child_type_info,
+                            name=child_field.name,
+                            data=child_field.type_info,
                             namespace=self.NAMESPACE,
-                            type_info=child_type_info, 
+                            type_info=child_field.type_info, 
                             th_field=None,
                             )
             self.register_attr_node(attr_node)
 
         if attr_name == ReservedAttributeNames.CHILDREN_ATTR_NAME.value:
-            owner_model_class = RegistryChildrenAccessor
+            # assert child_field_list
+            owner_model_class = List[ChildField]
         elif attr_name == ReservedAttributeNames.ITEMS_ATTR_NAME.value:
-            owner_model_class = RegistryItemsAccessor
+            # assert child_field_list
+            owner_model_class = List[component_fields_dataclass]
         else:
             raise EntityInternalError(owner=self, msg=f"Unsupported attr_name={attr_name}") 
 
-        return self._register_children_attr_node(
+        children_atr_node = self._register_children_attr_node(
                         model_class = owner_model_class,
                         attr_name = attr_name,
-                        attr_name_prefix = attr_name_prefix)
+                        attr_name_prefix = attr_name_prefix,
+                        # TODO: missusing
+                        th_field = component_fields_dataclass,
+                        )
+        return children_atr_node
 
     # --------------------
 
     def _register_children_attr_node(self, 
                     model_class: ModelType, 
                     attr_name = ReservedAttributeNames,
-                    attr_name_prefix: Optional[str]=None) -> AttrDexpNode:
-        if not is_model_class(model_class):
-            raise EntitySetupValueError(owner=self, msg=f"Expected model class (DC/PYD), got: {type(model_class)} / {model_class} ")
+                    attr_name_prefix: Optional[str]=None,
+                    th_field: Optional[Any] = None,
+                    ) -> AttrDexpNode:
 
-        th_field = None
+        if not (
+          # usual case
+          is_model_class(model_class) 
+          # custom created class that have only list of component fields 
+          or issubclass(th_field, IComponentFields)):
+            raise EntitySetupValueError(owner=self, msg=f"Expected model class (DC/PYD) or th_field is IComponentFields, got: {type(model_class)} / {model_class} ")
+
         type_info = TypeInfo.get_or_create_by_type(
                         py_type_hint=model_class,
                         caller=None,
@@ -744,6 +712,106 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
 
         if with_functions:
             self.functions_factory_registry.dump_all()
+
+    # ------------------------------------------------------------
+
+    def get_component_fields_dataclass(self, 
+                            component: ComponentBase,
+                            # setup_session: ISetupSession,
+                            # children: List["ComponentBase"],
+                            ) -> Tuple[IComponentFields, List[ChildField]]:
+        """
+        CACHED
+        RECURSIVE
+        """
+        owner = component
+        setup_session = self
+
+        if hasattr(component, "_component_fields_dataclass_and_child_field_list"):
+            return component._component_fields_dataclass_and_child_field_list
+
+        children = component.get_children(deep_collect=True)
+        # children = .get_children(deep_collect=True)
+        container = self.current_frame.container
+
+        assert setup_session and setup_session.current_frame
+        if not setup_session.current_frame.component == owner:
+            raise EntityInternalError(owner=owner, msg=f"setup_session.current_frame.component={setup_session.current_frame.component} <> owner={owner}") 
+
+        child_field_list = []
+        for nr, child in enumerate(children, 1):
+
+            if child.is_bound_model():
+                continue
+
+            child_type_info = None
+            if isinstance(child, IFieldBase):
+                # ALT: not hasattr(child, "bind")
+                # NOTE: check that sessino is setup correctly for this field?
+
+                if not child.bind.IsFinished():
+                    # Can setup only fields which are inside the same container
+                    # share the same bound_model 
+                    child.bind.Setup(setup_session=setup_session, owner=owner)
+
+                attr_node = child.bind._dexp_node
+                child_type_info = attr_node.get_type_info()
+
+            elif child.is_subentity():
+                # ------------------------------------------------------------
+                # NOTE: this is a bit complex chain of setup() actions: 
+                #           entity -> this -> subentity -> subentity ...
+                #       find some easier way how to to it
+                #       
+                # ------------------------------------------------------------
+                # ALT: when all model fields are available:
+                #       if not child.bound_model.model.IsFinished():
+                #           # ALT: more complex way - it seems to work, but I prefer
+                #           #      simplier solution:
+                #           attr_node = container._setup_bound_model_dot_expression(bound_model=child.bound_model, setup_session=setup_session)
+                #           # ORIG: child.bound_model.model.Setup(setup_session=setup_session, owner=owner)
+                #
+                #       # ALT: attr_node = child.bound_model.model._dexp_node
+                #       #      child_type_info = attr_node.get_type_info()
+                #       child_type_info = child.bound_model.get_type_info()
+
+                # NOTE: "make_component_fields_dataclass()" works recuresively to
+                #       enable access only to registered fields.
+                with self.use_stack_frame(
+                        # used only to change component/container
+                        SetupStackFrame(
+                            container = child, 
+                            component = child, 
+                            # should not be used 
+                            local_setup_session = None,
+                        )):
+                    child.setup(setup_session=setup_session)
+                    child_component_fields_dataclass, _ = self.get_component_fields_dataclass(component=child)
+
+                child_type_info = TypeInfo.get_or_create_by_type(child_component_fields_dataclass)
+
+            elif child.is_fieldgroup():
+                # TODO: currently not supported, need custom type_info
+                continue
+            else:
+                raise EntityInternalError(owner=child, msg=f"child_type_info could not be extracted, unsuppoerted component's type, got: {type(child)}") 
+
+            child_field_list.append(
+                    ChildField(
+                        name=child.name,
+                        type_info=child_type_info,
+                    ))
+
+        class_name_camel = snake_case_to_camel(owner.name)
+        component_fields_dataclass = make_component_fields_dataclass(
+                                class_name=f"{class_name_camel}Fields",
+                                child_field_list=child_field_list,
+                                )
+
+        component._component_fields_dataclass_and_child_field_list = component_fields_dataclass, child_field_list
+
+        return component._component_fields_dataclass_and_child_field_list
+
 
     # ------------------------------------------------------------
 
