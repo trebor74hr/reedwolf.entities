@@ -277,7 +277,8 @@ class SetParentMixin:
                 parent_name = parent._getset_name()
                 keys.append(parent_name)
 
-            if getattr(self, "bind", None): 
+            if isinstance(self, IFieldBase):
+                assert getattr(self, "bind", None)
                 # ModelsNs.person.surname -> surname
                 this_name = get_name_from_bind(self.bind)
             else:

@@ -44,6 +44,7 @@ from .registries import (
         ThisRegistryForValue,
         )
 from .base import (
+        IFieldBase,
         UndefinedType,
         MAX_RECURSIONS,
         AttrValue,
@@ -659,7 +660,8 @@ class ApplyResult(IApplySession):
         #    if local_setup_session:
         #        new_frame.set_local_setup_session(local_setup_session)
 
-        if getattr(component, "bind", None):
+        if isinstance(component, IFieldBase):
+            assert getattr(component, "bind", None)
             assert not component.is_container()
             attr_node = component.bind._dexp_node
             if not attr_node:
@@ -1081,7 +1083,8 @@ class ApplyResult(IApplySession):
             if not_available_dexp_result: 
                 return False, None
 
-        if getattr(component, "bind", None):
+        if isinstance(component, IFieldBase):
+            assert getattr(component, "bind", None)
             # --- 1. Fill initial value from instance 
             key_str = self.get_key_string(component)
 
@@ -1513,7 +1516,9 @@ class ApplyResult(IApplySession):
         values_dict["name"] = component.name
         # DEBUG: values_dict["filler"] = filler
         attr_current_value_instance = None
-        if getattr(component, "bind", None):
+
+        if isinstance(component, IFieldBase):
+            assert getattr(component, "bind", None)
             # can trigger recursion - filling tree 
             attr_current_value_instance = \
                     self.get_current_value_instance(

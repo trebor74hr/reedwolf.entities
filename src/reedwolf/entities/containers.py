@@ -445,6 +445,8 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
     def try_create_this_registry(self, component: ComponentBase, setup_session: ISetupSession) -> Optional[IThisRegistry]:
 
+        # Besides direct children, collect all FieldGroup and
+        # BooleanField+enables fields too (recursively)
         children = component.get_children(deep_collect=True)
 
         if isinstance(component, IFieldBase):
@@ -475,7 +477,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             if component.is_subentity_items():
                 # Items -> This.Items 
                 this_registry = ThisRegistryForItemsAndChildren(owner=component, children=children, setup_session=setup_session)
-            # TODO: add Instance - to BoundModel instance
+            # TODO: add .Instance ==> BoundModel instance
             # elif component.is_subentity_single():
             #     # Children -> This.Children + This.<all-attributes> + This.Instance
             #     this_registry = ThisRegistryForInstanceAndChildren(owner=component, children=children, setup_session=setup_session)

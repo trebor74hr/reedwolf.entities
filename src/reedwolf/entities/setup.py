@@ -49,6 +49,7 @@ from .meta import (
         get_model_fields,
         )
 from .base import (
+        IFieldBase,
         IStackOwnerSession,
         ComponentBase,
         IContainerBase,
@@ -222,7 +223,8 @@ class RegistryBase(IRegistry):
                 raise EntitySetupValueError(owner=self, msg=f"Child {nr}: Expected ComponentBase, got: {type(child)} / {to_repr(child)}")
 
             child_type_info = None
-            if hasattr(child, "bind"):
+            if isinstance(child, IFieldBase):
+                # ALT: not hasattr(child, "bind")
                 # NOTE: check that sessino is setup correctly for this field?
                 assert setup_session and setup_session.current_frame
 
@@ -582,7 +584,8 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
         # OLD: 
         #   if is_last:
 
-        if not hasattr(component, "bind"):
+        if not isinstance(component, IFieldBase):
+            # ALT: not hasattr(component, "bind")
             raise EntityApplyNameError(owner=self.component,
                     msg=f"Attribute '{attr_name}' is '{type(component)}' type which has no binding, therefore can not extract value. Use standard *Field components instead.")
         # TODO: needs some class wrapper and caching ...
@@ -695,15 +698,6 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
             raise EntityInternalError(owner=self, msg=f"Registry {registry} already in registry")
         self._registry_dict[ns_name] = registry
         registry.set_setup_session(self)
-
-
-    # ------------------------------------------------------------
-
-    # def use_stack_frame(self, frame: SetupStackFrame) -> UseSetupStackFrameCtxManager:
-    #     if not isinstance(frame, SetupStackFrame):
-    #         raise EntityInternalError(owner=self, msg=f"Expected SetupStackFrame, got frame: {frame}") 
-
-    #     return UseSetupStackFrameCtxManager(owner_session=self, frame=frame)
 
     # ------------------------------------------------------------
 
@@ -833,6 +827,9 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
                                                      owner: Optional[ComponentBase],
                                                      children: Optional[List[ComponentBase]]
                                                      ) -> IThisRegistry:
+        if children is not None:
+            # In first use case use: children = component.get_children(deep_collect=True) 
+            raise EntityInternalError(owner=self, msg=f"Not implemented currently.") 
         this_registry = self.container.create_this_registry_for_instance(
                                 model_class=model_class, 
                                 owner=owner, 
