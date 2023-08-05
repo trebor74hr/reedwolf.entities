@@ -107,7 +107,7 @@ ERR_MSG_SUPPORTED = "Supporting custom and standard python types, and typing: Op
 
 
 # e.g. list, int, dict, Person, List, Dict[str, Optional[Union[str, float]]
-PyTypeHint              = Union[type, Type] # or typing._GenericAlias
+PyTypeHint              = Any # TODO: Union[type, Type] # or typing._GenericAlias
 
 TransMessageType        = str
 
@@ -394,7 +394,7 @@ def extract_model_field_meta(inspect_object: Any, attr_node_name: str) -> Tuple[
 
 # ------------------------------------------------------------
 
-def extract_py_type_hints(inspect_object: Any, caller_name: str, strict: bool = True) -> Dict[str, Union[PyTypeHint, Exception]]:
+def extract_py_type_hints(inspect_object: Any, caller_name: str = "", strict: bool = True) -> Dict[str, Union[PyTypeHint, Exception]]:
     """
         - type_hint = function.__annotations__ - will not evaluate types
         - .get("return", None) - will get return function type hint
