@@ -42,7 +42,7 @@ try:
     # ----------------------------------------
     # Pydantic found
     # ----------------------------------------
-    # imported and used in other modules - e.g. base.py
+    # imported and used in other modules - e.g. dropthis
     from pydantic import BaseModel as PydBaseModel
     from pydantic.main import ModelMetaclass as PydModelMetaclass
     # not used here directly, used in other modules

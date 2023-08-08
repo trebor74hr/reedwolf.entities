@@ -297,7 +297,7 @@ class IFunction(IFunctionDexpNode):
         return arg_value
 
 
-    # TODO: IApplySession is in base.py which imports .functions just for one case ...
+    # TODO: IApplySession is in dropthis which imports .functions just for one case ...
     def execute_node(self, 
             apply_session: "IApplySession", # noqa: F821
             dexp_result: ExecResult, 

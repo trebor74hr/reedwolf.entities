@@ -346,3 +346,31 @@ def dynamic_import(module_path:str, member_name: Optional[str] = None) -> Any:
 
     return out
 
+def pluralize(word: str) -> str:
+    # Inspired by https://stackoverflow.com/questions/18902608/generating-the-plural-form-of-a-noun
+    if not (word and word[-1].isalpha()):
+        return word
+
+    word_lower = word.lower()
+    case_fun = str.upper if word[-1].isupper() else str.lower
+    if word_lower.endswith('f'):
+        # knife -> knives
+        return word[:-1] + case_fun('ves')
+    elif word_lower.endswith('o'):
+        # potato -> potatoes
+        return word + case_fun('es')
+    elif word_lower.endswith('us'):
+        # cactus -> cacti
+        return word[:-2] + case_fun('i')
+    elif word_lower.endswith('on'):
+        # criterion -> criteria
+        return word[:-2] + case_fun('a')
+    elif word_lower.endswith('y'):
+        # community -> communities
+        return word[:-1] + case_fun('ies')
+    elif word[-1] in 'sx' or word[-2:] in ['sh', 'ch']:
+        return word + case_fun('es')
+    elif word_lower.endswith('an'):
+        return word[:-2] + case_fun('en')
+    return word + case_fun('s')
+
