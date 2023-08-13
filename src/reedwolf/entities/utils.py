@@ -374,3 +374,15 @@ def pluralize(word: str) -> str:
         return word[:-2] + case_fun('en')
     return word + case_fun('s')
 
+
+def list_to_str_limited(value_list: List[str], max_str_length=80, prefix: str = "", delimiter=", ", ellipsis: str = "...") -> str:
+    """ """
+    out: str = prefix
+    for nr, value in enumerate(value_list, 1):
+        new_value = f"{delimiter}{value}" if nr > 1 else value
+        if (len(out) + len(new_value)) > max_str_length:
+            out = out[:max_str_length-len(ellipsis)] + ellipsis
+            break
+        out += new_value
+    return out[:max_str_length]
+
