@@ -1,6 +1,7 @@
 import re
 import keyword
 import json
+from pathlib import Path
 from enum import Enum
 from typing import (
         Callable, 
@@ -385,4 +386,29 @@ def list_to_str_limited(value_list: List[str], max_str_length=80, prefix: str = 
             break
         out += new_value
     return out[:max_str_length]
+
+
+def find_folder_upwards(start_folder: str, folder_name: str) -> Optional[str]:
+    """ 
+    starts from start_folder - tries to find subfolder with folder_name, if found, exits. 
+    If not found, goes one folder up (parent of start_folder) and repeats
+    stops on top folder. 
+    Btw. In similar manner works git when tries to find .git folder.
+    """
+    # TODO: do unit test
+    result: Optional[str] = None
+    start_root = Path(start_folder)
+    assert start_root.is_dir()
+    current_root = start_root
+    while True:
+        if len(current_root.parents) <= 1:
+            break
+        path = current_root / folder_name
+        if Path(path).exists():
+            assert path.is_dir()
+            result = str(path)
+            break
+        current_root = current_root.parent
+
+    return result
 

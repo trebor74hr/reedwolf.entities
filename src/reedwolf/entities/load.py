@@ -100,6 +100,7 @@ class DotExpressionLoader(CallTraceMixin):
     def load_dot_expression(self, expr_code: str) -> DotExpression:
         with self.use_call_trace(f"load_dot_expr({ast_node_repr(expr_code)})") as call_repr:
             try:
+                # ATL: ast.comppile() ?
                 module_node = ast.parse(expr_code)
             except Exception as ex:
                 raise EntityLoadTypeError(owner=call_repr, msg=f"Parsing failed: {ex}")

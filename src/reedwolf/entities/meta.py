@@ -18,7 +18,7 @@ from typing import (
         Tuple,
         Type,
         Union,
-        _GenericAlias,
+        # _GenericAlias,
         get_type_hints,
         TypeVar,
         Sequence as SequenceType,
@@ -277,8 +277,9 @@ def is_function(maybe_function: Any) -> bool:
     # TODO: maybe check not is_class(maybe_function)
     # type() == type - to exclude list, dict etc.
     # TODO: type() == _GenericAlias to exclude typing.* e.g. List/Optional - any better way?
+    #       py 3.10 has no _GenericAlias, so this doesn't work: and not type(maybe_function) in (type, _GenericAlias) \
     return callable(maybe_function) \
-           and not type(maybe_function) in (type, _GenericAlias) \
+           and not type(maybe_function) in (type, ) \
            and not is_enum(maybe_function) \
            and not is_pydantic(maybe_function) \
            and not is_dataclass(maybe_function) \
@@ -473,9 +474,10 @@ class TypeInfo:
     is_fieldname:   bool = field(init=False, repr=False, default=UNDEFINED)
 
     # list of python type underneath - e.g. int, str, list, dict, Person, or list of accepted types
-    types:          List[type] = field(init=False, default=UNDEFINED)
+    types:          List[Type] = field(init=False, default=UNDEFINED)
     # first one - get rid of this one or leave?
-    type_:          Union[type, List[type]] = field(init=False, repr=False, default=UNDEFINED)
+    # ex. Union[type, List[type]]
+    type_:          Type = field(init=False, repr=False, default=UNDEFINED)
 
     # ------------------------------------------------------------
 
