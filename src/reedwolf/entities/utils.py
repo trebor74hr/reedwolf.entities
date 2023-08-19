@@ -22,13 +22,14 @@ try:
 except ImportError:
     yaml = None
 
-PY_INDENT : str  = "    "
-YAML_INDENT :str = "  "
+PY_INDENT: str = "    "
+YAML_INDENT: str = "  "
 
 
 class Singleton(type):
-    " https://stackoverflow.com/questions/6760685/creating-a-singleton-in-python "
+    """ https://stackoverflow.com/questions/6760685/creating-a-singleton-in-python """
     _instances = {}
+
     def __call__(cls, *args, **kwargs):
         if args:
             raise ValueError(f"only kwargs are supported, got args: {args}")
@@ -40,7 +41,8 @@ class Singleton(type):
 # UNDEFINED
 # ------------------------------------------------------------
 
-class UndefinedType: # (metaclass=Singleton):
+
+class UndefinedType:  # (metaclass=Singleton):
 
     instance_dict: ClassVar[Dict[str, 'UndefinedType']] = {}
 
@@ -57,10 +59,11 @@ class UndefinedType: # (metaclass=Singleton):
         return False
 
     def __eq__(self, other):
-        " same only to same or other UNDEFINED - since it is Singleton "
+        """ same only to same or other UNDEFINED - since it is Singleton """
         # this function is called many times but is fast enough
         # did not disallowed this since it is handy to have "not in (None, UNDEFINED)
-        #   raise ValueError(f"Not allowed to use operators '==' and '!=' with {self.__class__.__name__}. Use 'is' and 'is not' instead.")
+        #   raise ValueError(f"Not allowed to use operators '==' and '!='
+        #           with {self.__class__.__name__}. Use 'is' and 'is not' instead.")
         return other.__class__ == self.__class__
 
     def __ne__(self, other):
@@ -71,7 +74,7 @@ class UndefinedType: # (metaclass=Singleton):
 
 
 UNDEFINED = UndefinedType(name="UNDEFINED")
-MISSING   = UndefinedType(name="MISSING")
+MISSING = UndefinedType(name="MISSING")
 
 # not available while in defaults_mode - used in entity.dump_defaults()
 NA_DEFAULTS_MODE = UndefinedType(name="NA_DEFAULTS_MODE")
@@ -91,37 +94,40 @@ class DumpFormatEnum(str, Enum):
     JSON = "json"
     YAML = "yaml"
 
-def dump_to_format(instance: Union[dict, list], format: DumpFormatEnum) -> str:
-    if format==DumpFormatEnum.JSON:
+
+def dump_to_format(instance: Union[dict, list], format_: DumpFormatEnum) -> str:
+    if format_ == DumpFormatEnum.JSON:
         out = json.dumps(instance, indent=2)
-    elif format==DumpFormatEnum.YAML:
+    elif format_ == DumpFormatEnum.YAML:
         if yaml is None:
-            raise TypeError(f"Format '{format}' not available. Install PyYaml and try again.")
+            raise TypeError(f"Format '{format_}' not available. Install PyYaml and try again.")
         # NOTE: safe_dump produces only standard YAML tags and cannot represent
         #   an arbitrary Python object. Unsafe (standard) alternative:
         #       out = yaml.dump(instance)
+        # noinspection PyUnresolvedReferences
         out = yaml.safe_dump(instance)
     else:
         aval_formats = ", ".join([str(v) for v in DumpFormatEnum.__members__.keys()])
-        raise TypeError(f"Format '{format}' not supported. Available are: {aval_formats}")
+        raise TypeError(f"Format '{format_}' not supported. Available are: {aval_formats}")
     return out
 
 
-def load_from_format(input_str: str, format: DumpFormatEnum) -> Union[dict, list]:
-    if format==DumpFormatEnum.JSON:
+def load_from_format(input_str: str, format_: DumpFormatEnum) -> Union[dict, list]:
+    if format_==DumpFormatEnum.JSON:
         out = json.loads(input_str)
-    elif format==DumpFormatEnum.YAML:
+    elif format_==DumpFormatEnum.YAML:
         if yaml is None:
-            raise TypeError(f"Format '{format}' not available. Install PyYaml and try again.")
+            raise TypeError(f"Format '{format_}' not available. Install PyYaml and try again.")
 
         # NOTE: safe_load recognizes only standard YAML tags and cannot
         #   construct an arbitrary Python object. Unsafe (standard) alternative:
         #       out = yaml.load(input_str)
         #   https://pyyaml.org/wiki/PyYAMLDocumentation
+        # noinspection PyUnresolvedReferences
         out = yaml.safe_load(input_str)
     else:
         aval_formats = ", ".join([str(v) for v in DumpFormatEnum.__members__.keys()])
-        raise TypeError(f"Format '{format}' not supported. Available are: {aval_formats}")
+        raise TypeError(f"Format '{format_}' not supported. Available are: {aval_formats}")
     return out
 
 
@@ -353,7 +359,7 @@ def pluralize(word: str) -> str:
         return word
 
     word_lower = word.lower()
-    case_fun = str.upper if word[-1].isupper() else str.lower
+    case_fun: Callable[[str], str] = str.upper if word[-1].isupper() else str.lower
     if word_lower.endswith('f'):
         # knife -> knives
         return word[:-1] + case_fun('ves')

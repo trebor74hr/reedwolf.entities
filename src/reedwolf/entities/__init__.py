@@ -60,6 +60,7 @@ from .valid_field import (
         ExactLength,
         MinLength,
         HourFieldValidation,
+        RangeLength,
         )
 from .valid_items import (
         ItemsValidation,
@@ -105,7 +106,7 @@ from .apply import ApplyResult
 from .load import load
 
 
-# what to import in case "reedwolf.entities import *"
+# what to import in case "from reedwolf import *"
 __all__ = [
     # utils
     UNDEFINED,
@@ -141,7 +142,6 @@ __all__ = [
     "AutocomputedEnum",
     "StringField",
     "SizedStringField",
-    "TextField",
     "BooleanField",
     "IntegerField",
     "PositiveIntegerField",
@@ -187,7 +187,7 @@ __all__ = [
     "KeyFields",
 
     # containers
-    "SubEntitySingle"
+    "SubEntitySingle",
     "SubEntityItems",
     # top container
     "Entity",
@@ -213,4 +213,3 @@ __all__ = [
     "load",
 
     ]
-

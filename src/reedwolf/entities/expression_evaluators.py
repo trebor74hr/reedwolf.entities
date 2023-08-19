@@ -12,7 +12,7 @@ Process:
 
         # there is OperationDexpNode() e.g. M.x + M.y
 
-    what is saved inside of (last) value expression (and owner):
+    what is saved inside (last) value expression (and owner):
         dexp_evaluator = DotExpressionEvaluator()
             [AttrDexpNode(), AttrDexpNode(), Function(), AttrDexpNode()]
 
@@ -42,11 +42,12 @@ from .expressions import (
 
 # ------------------------------------------------------------
 
+
 @dataclass
 class DotExpressionEvaluator:
 
-    attr_node_list : List[IDotExpressionNode] = field(repr=False, init=False, default_factory=list)
-    finished: bool = field(repr=False, init=False, default= False)
+    attr_node_list: List[IDotExpressionNode] = field(repr=False, init=False, default_factory=list)
+    finished: bool = field(repr=False, init=False, default=False)
     failed_reasons: List[str] = field(repr=False, init=False, default_factory=list)
 
     def __str__(self):
@@ -54,7 +55,7 @@ class DotExpressionEvaluator:
         return f"{self.__class__.__name__}({ok},nodes={'.'.join(str(dn) for dn in self.attr_node_list)})"
     __repr__ = __str__
 
-    def add(self, node:IDotExpressionNode):
+    def add(self, node: IDotExpressionNode):
         if self.finished:
             raise EntityInternalError(owner=self, msg="Already finished.")
         if not isinstance(node, IDotExpressionNode):
@@ -62,14 +63,14 @@ class DotExpressionEvaluator:
         self.attr_node_list.append(node)
 
     def is_all_ok(self) -> bool:
-        return (self.finished and bool(self.attr_node_list) and not bool(self.failed_reasons))
+        return self.finished and bool(self.attr_node_list) and not bool(self.failed_reasons)
 
     def last_node(self) -> IDotExpressionNode:
         if not self.finished:
             raise EntityInternalError(owner=self, msg="Not finished.")
         return self.attr_node_list[-1]
 
-    def failed(self, reason:str):
+    def failed(self, reason: str):
         if self.finished:
             raise EntityInternalError(owner=self, msg="Already finished.")
         self.failed_reasons.append(reason)
@@ -84,7 +85,7 @@ class DotExpressionEvaluator:
         # TODO:     raise EntityInternalError(owner=self, msg=f"Empty attr_node_list.")
         self.finished = True
 
-    def execute_dexp(self, apply_session: "IApplySession") -> ExecResult: # noqa: F821
+    def execute_dexp(self, apply_session: "IApplySession") -> ExecResult:  # noqa: F821
         if not self.finished:
             raise EntityInternalError(owner=self, msg="Not yet finished.")
         if self.failed_reasons:
@@ -106,11 +107,9 @@ class DotExpressionEvaluator:
                 dexp_result = node.execute_node(
                                     apply_session, 
                                     dexp_result, 
-                                    is_last=(idx_last==idx),
+                                    is_last=(idx_last == idx),
                                     prev_node_type_info=prev_node_type_info,
                                     )
                 prev_node_type_info = node.get_type_info()
 
-
         return dexp_result
-

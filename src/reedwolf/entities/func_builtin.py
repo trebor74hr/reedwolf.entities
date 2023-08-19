@@ -35,8 +35,9 @@ from .utils import (
         )
 # from .base import ()
 
+
 def get_builtin_function_factories_dict() -> Dict[str, BuiltinFunctionFactory]:
-    out : Dict[str, BuiltinFunctionFactory] = {}
+    out: Dict[str, BuiltinFunctionFactory] = {}
     for func_name, global_var in globals().copy().items():
         if not (global_var and isinstance(global_var, BuiltinFunctionFactory)):
             continue
@@ -66,11 +67,11 @@ def EnumMembers(
         raise EntitySetupValueError(msg=f"Expecting enum type, got: {enum} / {type(enum)}")
     if not name:
         name = enum.__name__
-    kwargs: Dict[str, Enum] = {"enum" : enum}
+    kwargs: Dict[str, Enum] = {"enum": enum}
     return CustomFunctionFactory(
                 py_function=enum_members,
                 name=name,
-                fixed_args=FunctionArgumentsType((), kwargs),
+                fixed_args=FunctionArgumentsType([], kwargs),
                 data=enum,
                 )
 
@@ -81,11 +82,12 @@ def EnumMembers(
 
 T = TypeVar("T", bound=Any)
 
+
 def children(value: Any, inject_component_tree: ComponentTreeWValuesType) -> List[ItemType]:
     """ Component's list of children """
     return inject_component_tree["contains"]
 
-Children = create_builtin_function_factory( # noqa: E305
+Children = create_builtin_function_factory(  # noqa: E305
             children, name="Children", 
             # arg_validators={"component": ensure_is_component},
             )
@@ -93,20 +95,20 @@ Children = create_builtin_function_factory( # noqa: E305
 
 def single_bool_selected(children_list: List[ItemType]) -> int:
     """ for objects from datastores - e.g. rows, iterables """
-    return len([child for child in children_list if child["attr_current_value_instance"].get_value(strict=False) is True])==1
+    return len(
+        [child for child in children_list if child["attr_current_value_instance"].get_value(strict=False) is True]
+    ) == 1
 
-SingleBoolSelected = create_builtin_function_factory( # noqa: E305
+SingleBoolSelected = create_builtin_function_factory(  # noqa: E305
             single_bool_selected, name="SingleBoolSelected", 
             )
-
-
 
 
 def count(value_list: List[ItemType]) -> int:
     """ for objects from datastores - e.g. rows, iterables """
     return len(value_list)
 
-Count = create_builtin_function_factory( # noqa: E305
+Count = create_builtin_function_factory(  # noqa: E305
             count, name="Count", 
             # arg_validators={"value_list": ensure_is_list},
             )

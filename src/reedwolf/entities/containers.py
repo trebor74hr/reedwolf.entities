@@ -167,7 +167,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
     def __getitem__(self, name):
         if name not in self.components:
-            vars_avail = get_available_names_example(name, self.components.keys())
+            vars_avail = get_available_names_example(name, list(self.components.keys()))
             raise KeyError(f"{self.name}: Component name '{name}' not found, available: {vars_avail}")
         return self.components[name]
 

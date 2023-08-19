@@ -1,6 +1,6 @@
 """
 Validations for Children fields.
-In SubEntityItems case, this will be runned against every SubEntity in list.
+In SubEntityItems case, this will be running against every SubEntity in list.
 """
 from abc import ABC
 from typing import (
@@ -13,7 +13,7 @@ from .meta import (
         TransMessageType,
         NoneType,
         )
-from .expressions   import (
+from .expressions import (
         DotExpression,
         )
 from .valid_base import (
@@ -27,6 +27,7 @@ from .base import (
 
 class ChildrenValidationBase(ValidationBase, ABC):
     ...
+
 
 @dataclass
 class ChildrenValidation(ChildrenValidationBase):
@@ -48,4 +49,3 @@ class ChildrenValidation(ChildrenValidationBase):
             #       return output
             raise NotImplementedError()
         return self._validate_common_impl(apply_session=apply_session)
-

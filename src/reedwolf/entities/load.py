@@ -105,18 +105,19 @@ class DotExpressionLoader(CallTraceMixin):
             except Exception as ex:
                 raise EntityLoadTypeError(owner=call_repr, msg=f"Parsing failed: {ex}")
 
-            if type(module_node)!=ast.Module:
+            if type(module_node) != ast.Module:
                 raise EntityLoadTypeError(owner=call_repr, msg=f"Expected ast.Module type, got: {type(module_node)}")
 
-            if len(module_node.body)!=1:
-                raise EntityLoadTypeError(owner=call_repr, msg=f"Start ast.Module node should have only single body (expression) , got: {module_node.body}")
+            if len(module_node.body) != 1:
+                raise EntityLoadTypeError(owner=call_repr,
+                                          msg=f"Start ast.Module node should have only single body (expression) , "
+                                              f"got: {module_node.body}")
 
             ast_node = module_node.body[0]
 
             dexp_node = self._parse_expression_node(ast_node, depth=0) 
 
             return dexp_node
-
 
     # ------------------------------------------------------------
 
@@ -127,7 +128,7 @@ class DotExpressionLoader(CallTraceMixin):
         with self.use_call_trace(f"parse({ast_node_repr(ast_node)})") as call_repr:
 
             processed = False
-            if type(ast_node)==ast.UnaryOp:
+            if type(ast_node) == ast.UnaryOp:
                 # recursion
                 dexp_node = self._process_ast_unaryop(node=ast_node, call_repr=call_repr, depth=depth+1)
                 processed = True
@@ -135,7 +136,7 @@ class DotExpressionLoader(CallTraceMixin):
                 # recursion
                 dexp_node = self._process_ast_binop(node=ast_node, call_repr=call_repr, depth=depth+1)
                 processed = True
-            elif type(ast_node)==ast.Call:
+            elif type(ast_node) == ast.Call:
                 # skip case: M.name.Length() ?
                 if not (type(ast_node.func) == ast.Attribute and ast_node.func.value):
                     dexp_node = self._process_ast_start_node_call(ast_node, call_repr=call_repr)
@@ -153,9 +154,9 @@ class DotExpressionLoader(CallTraceMixin):
                     if len(ast_node_list) != 1:
                         # TODO: if this happens, then do not call _ast_nodes_prepare() due reverse ...
                         raise NotImplementedError()
-                    dexp_node = self._process_constant(node = start_node, call_repr=call_repr)
+                    dexp_node = self._process_constant(node=start_node, call_repr=call_repr)
 
-                elif type(start_node)==ast.UnaryOp:
+                elif type(start_node) == ast.UnaryOp:
                     if len(ast_node_list) != 1:
                         # TODO: if this happens, then do not call _ast_nodes_prepare() due reverse ...
                         raise NotImplementedError()
@@ -169,9 +170,9 @@ class DotExpressionLoader(CallTraceMixin):
                     # recursion
                     dexp_node = self._process_ast_binop(node=start_node, call_repr=call_repr, depth=depth+1)
 
-                elif type(start_node)==ast.Name:
+                elif type(start_node) == ast.Name:
                     # --- check start node - must be namespace
-                    if len(ast_node_list)>=2 and type(start_node)==ast.Name and type(ast_node_list[1])==ast.Call:
+                    if len(ast_node_list) >= 2 and type(start_node) == ast.Name and type(ast_node_list[1]) == ast.Call:
                         # Just("Peter").Lower() ...
                         ast_node = ast_node_list[1]
                         dexp_node = self._process_ast_start_node_call(ast_node, call_repr=call_repr)
@@ -474,10 +475,10 @@ def load_dot_expression(code_string: str) -> DotExpression:
     return DotExpressionLoader().load_dot_expression(code_string)
 
 
-def load(input: Union[dict, str], format: DumpFormatEnum = None) -> ComponentBase:
-    if format is not None:
+def load(input: Union[dict, str], format_: DumpFormatEnum = None) -> ComponentBase:
+    if format_ is not None:
         assert isinstance(input , str)
-        input_dict = load_from_format(input, format=format)
+        input_dict = load_from_format(input, format_=format_)
         assert isinstance(input, dict)
     else:
         assert isinstance(input, dict)

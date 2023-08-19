@@ -5,15 +5,15 @@ import inspect
 from contextlib import AbstractContextManager
 from enum import Enum
 from typing import (
-        List, 
-        Any, 
-        Dict, 
-        Union, 
-        Optional, 
-        Tuple,
-        ClassVar,
-        Callable,
-        )
+    List,
+    Any,
+    Dict,
+    Union,
+    Optional,
+    Tuple,
+    ClassVar,
+    Callable, Type,
+)
 from dataclasses import (
         dataclass,
         field,
@@ -35,9 +35,7 @@ from .utils import (
         UNDEFINED,
         NA_DEFAULTS_MODE,
         UndefinedType,
-        MISSING,
         get_available_names_example,
-        # ThreadSafeCounter,
         DumpFormatEnum,
         dump_to_format,
         )
@@ -52,7 +50,6 @@ from .exceptions import (
         )
 from .namespaces import (
         DynamicAttrsBase,
-        ModelsNS,
         Namespace,
         )
 from .meta import (
@@ -111,7 +108,9 @@ def repr_obj(obj, limit=100):
 
 
 
-def obj_to_strlist(obj, path=[]):
+def obj_to_strlist(obj, path:Optional[List]=None):
+    if path is None:
+        path = []
     return obj.to_strlist(path) if not isinstance(obj, DynamicAttrsBase) and getattr(obj, "to_strlist", None) else [str(obj)]
 
 
@@ -343,15 +342,17 @@ class IComponentFields:
     ...
 
 
-def make_component_fields_dataclass(class_name: str, child_field_list: List[ChildField]) -> IComponentFields:
+def make_component_fields_dataclass(class_name: str, child_field_list: List[ChildField]) -> Type[IComponentFields]:
     # name, type, optional[field]
     # ('z', int, field(default=5))],
     children_fields = [(child_field.name, child_field.type_info.type_) 
                         for child_field in child_field_list]
-    return make_dataclass(
+    new_dataclass: Type = make_dataclass(
                 cls_name=class_name, 
                 fields=children_fields, 
                 bases=(IComponentFields,))
+    assert issubclass(new_dataclass, IComponentFields)
+    return new_dataclass
 
 
 # ------------------------------------------------------------
@@ -427,7 +428,9 @@ class ComponentBase(SetParentMixin, ABC):
         # vars(self.kwargs).items():
         if len(path) > MAX_RECURSIONS:
             raise EntitySetupError(f"Maximum object tree depth reached, not allowed depth more than {MAX_RECURSIONS}.")
-        for name, field in self.__dataclass_fields__.items():  # noqa: F402
+        # NOTE: ALT: for name, field in self.__dataclass_fields__.items():  # noqa: F402
+        for field in fields(self):  # noqa: F402
+            name = field.name
             # if name.startswith("_") or callable(k):
             #     continue
             value = getattr(self, name)
@@ -623,7 +626,7 @@ class ComponentBase(SetParentMixin, ABC):
         # tree: ComponentTreeType = self.get_children_tree()
         out = self._dump_meta()
         if format:
-            out = dump_to_format(out, format=format)
+            out = dump_to_format(out, format_=format)
         return out
 
     # ------------------------------------------------------------
@@ -1121,7 +1124,7 @@ class ComponentBase(SetParentMixin, ABC):
                                 name=ss_name, 
                                 path=f"{sub_component_name}.{ss_name}", 
                                 component=sub_sub_component, 
-                                the_field=th_field))
+                                th_field=th_field))
             else:
                 subcomponent_list.append(
                         Subcomponent(
@@ -1210,7 +1213,7 @@ class ComponentBase(SetParentMixin, ABC):
 
     # ------------------------------------------------------------
 
-    def get_dexp_result_from_instance(self, apply_session: "IApplySession", strict:bool = True) -> ExecResult:
+    def get_dexp_result_from_instance(self, apply_session: "IApplySession", strict:bool = True) -> Optional[ExecResult]:
         """ Fetch ExecResult from component.bind from INSTANCE (storage)
             by executing bind._evaluator.execute() fetch value process
             Work on stored fields only.
@@ -1438,7 +1441,7 @@ class IStackOwnerSession(ABC):
 
 
 @dataclass
-class SetupStackFrame:
+class SetupStackFrame(IStackFrame):
     # current container
     container: IContainerBase = field(repr=False)
 
@@ -1570,7 +1573,7 @@ class InstanceAttrCurrentValue:
 # ------------------------------------------------------------
 
 @dataclass
-class ApplyStackFrame:
+class ApplyStackFrame(IStackFrame):
     """
 
     IMPORTANT NOTE: When adding new fields, consider adding to 

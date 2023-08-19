@@ -45,7 +45,6 @@ from .base import (
 # ------------------------------------------------------------
 
 
-
 @dataclass
 class AttrDexpNode(IDotExpressionNode):
     """
@@ -137,7 +136,7 @@ class AttrDexpNode(IDotExpressionNode):
 
 
     def finish(self):
-        " fill type_info, must be available for all nodes - with exceptions those with .denied don't have it "
+        """ fill type_info, must be available for all nodes - with exceptions those with .denied don't have it """
         super().finish()
 
         if self.type_info is None:
@@ -176,7 +175,7 @@ class AttrDexpNode(IDotExpressionNode):
                  apply_session: IApplySession, 
                  # previous - can be undefined too
                  dexp_result: Union[ExecResult, UndefinedType],
-                 prev_node_type_info: TypeInfo,
+                 prev_node_type_info: Optional[TypeInfo],
                  is_last: bool,
                  ) -> ExecResult:
 

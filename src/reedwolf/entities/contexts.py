@@ -22,7 +22,7 @@ class IContext(ABC):
     """
     The IContext instances will be passed to Entity evaluation 
     instances/or subcomponents with concrete data.
-    Context will be available as ContextNS namespace (Ctx.) and beloinging
+    Context will be available as ContextNS namespace (Ctx.) and belonging
     Value expressions.
     Context-s are not obligatory in definition and evaluation. 
 
@@ -30,9 +30,11 @@ class IContext(ABC):
     This class is abstract and one should inherit and override methods.
     """
 
+    # noinspection PyMethodMayBeStatic
     def get_user(self) -> NoneType:
         return None
 
+    # noinspection PyMethodMayBeStatic
     def get_session(self) -> NoneType:
         return None
 
@@ -40,6 +42,7 @@ class IContext(ABC):
     # def is_debug(self) -> bool:
     #     return False
 
+    # noinspection PyMethodMayBeStatic
     def get_now(self) -> datetime:
         return datetime.now()
 
@@ -50,9 +53,8 @@ class IContext(ABC):
     @classmethod
     def get_dexp_attrname_dict(cls) -> Dict[str, Callable[[], Any]]:
         return {
-            "User" : cls.get_user,
-            "Session" : cls.get_session,
+            "User": cls.get_user,
+            "Session": cls.get_session,
             # "IsDebug" : cls.is_debug_mode,
-            "Now" : cls.get_now,
+            "Now": cls.get_now,
             }
-

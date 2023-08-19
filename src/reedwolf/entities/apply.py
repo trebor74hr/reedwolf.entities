@@ -40,9 +40,6 @@ from .meta import (
         ComponentTreeWValuesType,
         LiteralType,
         )
-from .registries import (
-        ThisRegistryForValue,
-        )
 from .base import (
         IFieldBase,
         UndefinedType,

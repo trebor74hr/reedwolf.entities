@@ -4,7 +4,7 @@ Evaluations - used to automatically calculate
 ------------------------------------------------------------
 
 Evaluation-s are used in cleaners.
-Base is value:DotExpression which shuuld return value compatible with
+Base is value:DotExpression which should return value compatible with
 Field type.
 
 TODO: demo Evaluation - created/updated by/at: current user, timestamp
@@ -70,10 +70,10 @@ class FieldEvaluation(FieldEvaluationBase):
 
     def __post_init__(self):
         if not isinstance(self.value, DotExpression):
-            raise EntitySetupTypeError(owner=self, msg=f"Argument 'value' needs to be DotExpression, got: {type(self.value)} / {self.value}")
+            raise EntitySetupTypeError(owner=self, msg=f"Argument 'value' needs to be DotExpression, "
+                                                       f"got: {type(self.value)} / {self.value}")
         # self._fill_name_when_missing()
         super().__post_init__()
-
 
     def execute(self, apply_session: IApplySession) -> Optional[ExecResult]:
         not_available_dexp_result = execute_available_dexp(self.available, apply_session=apply_session)
@@ -83,12 +83,13 @@ class FieldEvaluation(FieldEvaluationBase):
 
 # ------------------------------------------------------------
 
+
 @dataclass
 class Default(FieldEvaluationBase):
     """ used for generated classes, dynamically created objects or SQL or other
         storage generated code
         for existing bound models - needs hook to ensure good value on object creation (__init__)
-        in simmple cases - can be used to ensure good default value
+        in simple cases - can be used to ensure good default value
         for EnumField should have default within enum values.
     """
 
@@ -110,4 +111,3 @@ class Default(FieldEvaluationBase):
         else:
             value = self.value
         return ExecResult.create(value)
-

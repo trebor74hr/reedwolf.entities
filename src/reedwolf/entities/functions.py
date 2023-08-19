@@ -302,7 +302,7 @@ class IFunction(IFunctionDexpNode):
             apply_session: "IApplySession", # noqa: F821
             dexp_result: ExecResult, 
             is_last:bool,
-            prev_node_type_info: TypeInfo,
+            prev_node_type_info: Optional[TypeInfo],
             ) -> Any:
         """
         will be called when actual function logic needs to be executed. Input

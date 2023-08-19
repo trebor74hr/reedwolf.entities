@@ -30,6 +30,7 @@ from .eval_base import (
 class ItemsEvaluationBase(EvaluationBase, ABC):
     ...
 
+
 @dataclass
 class ItemsEvaluation(ItemsEvaluationBase):
     ensure:         DotExpression

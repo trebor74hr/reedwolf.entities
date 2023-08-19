@@ -1,4 +1,4 @@
-# TODO: this module probably should be merged into expressions - since there is circular depencdency - see __getattr__
+# TODO: this module probably should be merged into expressions - since there is circular dependency - see __getattr__
 from abc import ABC, abstractmethod
 from typing import (
         Optional,
@@ -26,7 +26,7 @@ class Namespace(DynamicAttrsBase):
     RESERVED_ATTR_NAMES = {"_name", "_is_for_internal_use_only", "_alias", "_GetNameWithAlias"}
     
     # manual_setup: bool = False, 
-    def __init__(self, name:str, alias: Optional[str] = None, is_for_internal_use_only: bool = False):
+    def __init__(self, name: str, alias: Optional[str] = None, is_for_internal_use_only: bool = False):
         self._name = name
         # namespace can be used for internal use only, should not be used directly
         self._is_for_internal_use_only: bool = is_for_internal_use_only
@@ -36,19 +36,17 @@ class Namespace(DynamicAttrsBase):
     def __str__(self):
         return f"{self._name}"
 
-    def __str__(self):
-        return f"{self._name}"
-
     def _GetNameWithAlias(self):
         return f"{self._name}{ f' / {self._alias}' if self._alias else ''}"
 
-    def __getattr__(self, aname):
-        if aname in self.RESERVED_ATTR_NAMES: # , "%r -> %s" % (self._node, aname):
+    def __getattr__(self, attr_name):
+        if attr_name in self.RESERVED_ATTR_NAMES:  # , "%r -> %s" % (self._node, attr_name):
             from .exceptions import EntitySetupNameError
-            raise EntitySetupNameError(owner=self, msg=f"Namespace attribute {aname} is reserved, choose another name.")
+            raise EntitySetupNameError(owner=self, msg=f"Namespace attribute {attr_name} is reserved, "
+                                                       "choose another name.")
 
         from .expressions import DotExpression
-        return DotExpression(node=aname, namespace=self)
+        return DotExpression(node=attr_name, namespace=self)
 
 
 # Instances - should be used as singletons
@@ -65,12 +63,12 @@ ModelsNS = Namespace("Models", alias="M")
 # #   evaluated from functions or Expressions
 # DataNS = Namespace("D")
 
-# Field/F - all componenents in current container - including chain
+# Field/F - all components in current container - including chain
 #           from current parent to top parent, including all their children (e.g.
-#           FieldGroups and their Fields, Validations etc.
+#           FieldGroups and their Fields, Validations etc.)
 #
 #           Difference to ModelsNS:
-#             - entity struct could be diifferent from storage models (ModelsNS)
+#             - entity struct could be different from storage models (ModelsNS)
 #             - Fields are more suitable for embedding - e.g. when other model could be
 #               injected into component or component to be reused in other entity-struct
 
@@ -108,7 +106,6 @@ ALL_NS_OBJECTS.update({
         })
 
 
-# # Context - Direct access to managed models underneath and global Entity objects like Validation/FieldGroup etc
+# # Context - Direct access to managed models underneath and global Entity objects like Validation/FieldGroup etc.
 # ContextNS = Namespace("Context")
 # Ctx  = ContextNS
-

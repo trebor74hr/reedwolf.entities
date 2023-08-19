@@ -1,8 +1,9 @@
-from dataclasses  import dataclass
+from dataclasses import dataclass
 
 # ------------------------------------------------------------
 # IConfig
 # ------------------------------------------------------------
+
 
 @dataclass
 class Config:
@@ -12,9 +13,7 @@ class Config:
     Config will be available in ConfigNS namespace (Cfg.).
     For values only literal / plain callables (python functions) are accepted,
     no DotExpression or Function() instances allowed.
-    and beloinging.
+    and belonging.
     This is plain class, no setup()/Setup() process.
     """
     debug: bool = False
-
-

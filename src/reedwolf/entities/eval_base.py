@@ -17,14 +17,13 @@ from .expressions import (
         )
 
 
-
 # ------------------------------------------------------------
-# Clenaers (cleaners) == Validations OR Evaluations
+# Cleaners == Validations OR Evaluations
 # ------------------------------------------------------------
 
 
 @dataclass
-class EvaluationBase(ComponentBase, ABC): # TODO: make it abstract
+class EvaluationBase(ComponentBase, ABC):  # TODO: make it abstract
     """ Auto-compute logic - executes 'value' expression, stores into field of
         current instance/object. The execution should not fail.
     """
@@ -33,9 +32,7 @@ class EvaluationBase(ComponentBase, ABC): # TODO: make it abstract
     @abstractmethod
     def execute(self, apply_session: IApplySession) -> Optional[ExecResult]:
         """
-        returns value wrapped in ExecResult which will be used to update instance.attribute
+        returns value wrapped in ExecResult which will be used to update instance.<attribute>
         if returns None, update won't be done
         """
         ...
-
-

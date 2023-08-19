@@ -1,6 +1,6 @@
 """
-ChildrenEvaluations - used to automatically update some of Children fields
-In SubEntityItems case, this will be runned against every SubEntity in list.
+ChildrenEvaluations - used to automatically update some Children fields
+In SubEntityItems case, this will be running against every SubEntity in list.
 """
 from abc import ABC
 from typing import (
@@ -29,6 +29,7 @@ from .eval_base import (
 
 class ChildrenEvaluationBase(EvaluationBase, ABC):
     ...
+
 
 @dataclass
 class ChildrenEvaluation(ChildrenEvaluationBase):

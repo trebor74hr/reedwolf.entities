@@ -24,7 +24,6 @@ from typing import (
 from .utils import (
         UNDEFINED,
         UndefinedType,
-        to_repr,
         )
 from .exceptions import (
         EntitySetupValueError,
@@ -48,9 +47,7 @@ from .meta import (
         LiteralType,
         AttrName,
         Self,
-        get_model_fields,
         ModelType,
-        is_model_class,
         )
 # ------------------------------------------------------------
 # interfaces / base classes / internal structs
@@ -110,7 +107,7 @@ class IDotExpressionNode(ABC):
                  # previous - can be undefined too
                  dexp_result: Union[ExecResult, UndefinedType],
                  is_last: bool,
-                 prev_node_type_info: TypeInfo,
+                 prev_node_type_info: Optional[TypeInfo],
                  ) -> ExecResult:
         ...
 
@@ -637,7 +634,7 @@ class LiteralDexpNode(IDotExpressionNode):
                  apply_session: "IApplySession", # noqa: F821
                  dexp_result: ExecResult,
                  is_last: bool,
-                 prev_node_type_info: TypeInfo,
+                 prev_node_type_info: Optional[TypeInfo],
                  ) -> ExecResult:
         assert not dexp_result
         return self.dexp_result
@@ -841,7 +838,7 @@ class OperationDexpNode(IDotExpressionNode):
                  apply_session: "IApplySession", # noqa: F821
                  dexp_result: ExecResult,
                  is_last: bool,
-                 prev_node_type_info: TypeInfo,
+                 prev_node_type_info: Optional[TypeInfo],
                  ) -> ExecResult:
 
         if is_last and not self.is_finished:

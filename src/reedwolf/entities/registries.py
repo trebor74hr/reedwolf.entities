@@ -466,6 +466,7 @@ class ThisRegistryForValueAndChildren(ThisRegistryForChildren):
     # autocomputed
     attr_name: Optional[str] = field(init=False, repr=False, default=None)
 
+    # TODO: not good!!!
     def __post_init__(self, setup_session: Optional[ISetupSession]):
         super().__post_init__(setup_session=setup_session)
         # TODO: DRY this

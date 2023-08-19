@@ -17,11 +17,11 @@ from .namespaces import (
 
 class EntityError(Exception, ABC):
     # TODO: validate that every call is marked for translations, check in constructor or using mypy
-    def __init__(self, msg:str, owner:Optional['ComponentBase'] = None, item: Optional['Item'] = None):  # noqa: F821
+    def __init__(self, msg: str, owner: Optional['ComponentBase'] = None, item: Optional['Item'] = None):  # noqa: F821
         self.parent, self.item = owner, item
         self.set_msg(msg)
 
-    def set_msg(self, msg:str):
+    def set_msg(self, msg: str):
         self.msg = msg
         self.full_msg = self._get_full_msg() + (f" (item={repr(self.item)[:50]})" if self.item else "")
 
@@ -31,7 +31,7 @@ class EntityError(Exception, ABC):
 
         if self.parent and isinstance(self.parent, str):
             out.append(f"{self.parent} -> ")
-        elif self.parent:
+        elif self.parent is not None:
             out.append(f"{self.parent.__class__.__name__}")
             if not isinstance(self.parent, DynamicAttrsBase) and getattr(self.parent, "name", None):
                 out.append(f"('{self.parent.name}') -> ")
@@ -46,14 +46,17 @@ class EntityError(Exception, ABC):
     def __repr__(self):
         return f"{self.full_msg}"
 
+
 # ------------------------------------------------------------
 # General and internal errors
 # ------------------------------------------------------------
 class EntityInternalError(EntityError):
     pass
 
+
 class EntityNameNotFoundError(EntityError):
     pass
+
 
 # ------------------------------------------------------------
 # Entity Setup phase (boot time) validation errors
@@ -61,14 +64,18 @@ class EntityNameNotFoundError(EntityError):
 class EntitySetupError(EntityError):
     pass
 
+
 class EntitySetupValueError(EntitySetupError):
     pass
+
 
 class EntitySetupNameError(EntitySetupError):
     pass
 
+
 class EntitySetupNameNotFoundError(EntitySetupNameError):
     pass
+
 
 class EntitySetupTypeError(EntitySetupError):
     pass
@@ -80,17 +87,22 @@ class EntitySetupTypeError(EntitySetupError):
 class EntityApplyError(EntityError):
     pass
 
+
 class EntityApplyValueError(EntityApplyError):
     pass
+
 
 class EntityApplyNameError(EntityApplyError):
     pass
 
+
 class EntityApplyNameNotFoundError(EntityApplyNameError):
     pass
 
+
 class EntityApplyTypeError(EntityApplyError):
     pass
+
 
 # ------------------------------------------------------------
 # Entity Load phase validation errors
@@ -98,14 +110,18 @@ class EntityApplyTypeError(EntityApplyError):
 class EntityLoadError(EntityError):
     pass
 
+
 class EntityLoadValueError(EntityLoadError):
     pass
+
 
 class EntityLoadNameError(EntityLoadError):
     pass
 
+
 class EntityLoadNameNotFoundError(EntityLoadNameError):
     pass
+
 
 class EntityLoadTypeError(EntityLoadError):
     pass
@@ -130,7 +146,6 @@ class EntityCodegenError(EntityError):
 #     pass
 
 
-
 # ------------------------------------------------------------
 # Validations
 # ------------------------------------------------------------
@@ -140,7 +155,7 @@ class EntityValidationError(EntityError):
     MAX_ERR_DESC_ALL = 1000
 
     def __init__(self, errors: Dict[str, 'ValidationFailure'], owner: 'ComponentBase'):  # noqa: F821
-        " owner is required "
+        """owner is required """
         self.errors = errors
         msg = []
         for component_key, validation_failure_list in self.errors.items():
@@ -160,6 +175,6 @@ class EntityValidationError(EntityError):
 # class EntityValidationValueError(EntityValidationError):
 #     pass
 
+
 class EntityValidationCardinalityError(EntityValidationError):
     pass
-
