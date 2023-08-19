@@ -412,3 +412,8 @@ def find_folder_upwards(start_folder: str, folder_name: str) -> Optional[str]:
 
     return result
 
+def fix_print(line: str) -> str:
+    if " print " in line:
+        line = line.replace(" print ", " print(").rstrip() + ")"
+    return line
+

@@ -288,9 +288,7 @@ def parse_item(item, outputs, nrs, indent_depth, objects, parents=None):  # noqa
             raise ValueError(f"{name} '{type}' is not valid, not one of: {ALL_TYPES}")
 
         if len(nrs) > 5 and (
-            "stock_tracking" not in parents_str
-            and "prekitting_machine_fieldgroup" not in parents_str
-            and "prekitting_route_fieldgroup" not in parents_str
+            "some-exception-name" not in parents_str
         ):  # iznimka
             warn(f"Too deep, remove fieldgroup? {parents_str} / {name} / / {item_repr}")  # noqa: T001
 

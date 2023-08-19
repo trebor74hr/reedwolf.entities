@@ -5,11 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Dict
 
-from ..base import (
+from .base import (
         ComponentBase,
         )
-from ..components import Field, FieldGroup, FieldTypeEnum, ValidationBase, EvaluationBase
-from ..containers import SubEntityItems, Entitiy
+from ...components import Field, FieldGroup, FieldTypeEnum, ValidationBase, EvaluationBase
+from ...containers import SubEntityItems, Entitiy
 
 
 HTML_INDENT = "  "
