@@ -9,10 +9,10 @@ from typing import (
         Tuple,
         )
 
-from ..utils import (
+from ...utils import (
         PY_INDENT,
         )
-from ..base import (
+from ...base import (
         ComponentBase,
         )
 
@@ -33,8 +33,7 @@ class ClassDeclaration(ClassDeclarationBase):
 
     def dump_to_strlist(self) -> List[str]:
         lines = []
-        lines.append("@dataclass")
-        lines.append(f"class {self.name}:")
+        lines.append(f"class {self.name}(BaseModel):")
         if self.title:
             lines.append(f'{PY_INDENT}""" {self.title} """')
         return lines
@@ -46,7 +45,7 @@ class VariableDeclaration(VariableDeclarationBase):
     def dump_to_str(self) -> str:
         out = f"{self.name}: {self.class_name}"
         if self.title:
-            out = f'{out} = field(metadata=dict(title="{self.title}"))'
+            out = f'{out} = Field(title="{self.title}")'
         if self.comment:
             out = f"{out}  # {self.comment}"
         return out
@@ -54,40 +53,40 @@ class VariableDeclaration(VariableDeclarationBase):
 
 # ------------------------------------------------------------
 
-class ComponentDataclassDump(ComponentDumpBase):
+class ComponentPydanticDump(ComponentDumpBase):
     ...
 
 # ------------------------------------------------------------
 
 @dataclass 
-class FileDataclassDump(FileDumpBase):
+class FilePydanticDump(FileDumpBase):
 
     def dump_to_str_fill_imports(self) -> List[str]:
         return [
-            "from dataclasses import dataclass, field",
+            "from pydantic import BaseModel, Field",
             ]
 
 
 # ------------------------------------------------------------
 
 @dataclass
-class DumpToDataclass(DumpToBase):
+class DumpToPydantic(DumpToBase):
 
     KlassClassDeclaration       : ClassVar[type] = ClassDeclaration       
     KlassVariableDeclaration    : ClassVar[type] = VariableDeclaration    
-    KlassComponentDump          : ClassVar[type] = ComponentDataclassDump  
-    KlassFileDump               : ClassVar[type] = FileDataclassDump       
+    KlassComponentDump          : ClassVar[type] = ComponentPydanticDump  
+    KlassFileDump               : ClassVar[type] = FilePydanticDump       
 
 # ------------------------------------------------------------
 
-def dump_to_dataclass_models_as_dict(
+def dump_to_pydantic_models_as_dict(
         component:ComponentBase, 
         file_split_to_depth: Optional[int] = 1,
         flatten: bool = False,
         deps_order: bool = False,
         ) -> Tuple[DumpToBase, Dict[str, CodeStringType]]:
     return dump_to_models_as_dict(
-        KlassDumpTo=DumpToDataclass,
+        KlassDumpTo=DumpToPydantic,
         component=component,
         file_split_to_depth=file_split_to_depth,
         flatten=flatten,
@@ -97,7 +96,7 @@ def dump_to_dataclass_models_as_dict(
 
 # ------------------------------------------------------------
 
-def dump_to_dataclass_models(
+def dump_to_pydantic_models(
         component:ComponentBase, 
         fname_or_dname:str,
         file_split_to_depth: Optional[int] = 1,
@@ -106,7 +105,7 @@ def dump_to_dataclass_models(
         add_init_py: bool = False,
         ) -> Tuple[DumpToBase, Dict[str, CodeStringType]]:
     return dump_to_models(
-        KlassDumpTo=DumpToDataclass,
+        KlassDumpTo=DumpToPydantic,
         fname_or_dname=fname_or_dname,
         component=component,
         file_split_to_depth=file_split_to_depth,

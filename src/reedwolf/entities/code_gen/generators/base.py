@@ -17,11 +17,11 @@ from typing import (
         Union,
         )
 
-from ..exceptions import (
+from ...exceptions import (
         EntityInternalError,
         EntityCodegenError,
         )
-from ..utils import (
+from ...utils import (
         snake_case_to_camel,
         to_repr,
         get_available_names_example,
@@ -30,25 +30,25 @@ from ..utils import (
         UNDEFINED,
         PY_INDENT,
         )
-from ..meta import (
+from ...meta import (
         STANDARD_TYPE_LIST,
         Self,
         NoneType,
         )
-from ..base import (
+from ...base import (
         IStackOwnerSession,
         IStackFrame,
         UseStackFrameCtxManagerBase,
         ComponentBase,
         MAX_RECURSIONS,
         )
-from ..fields import (
+from ...fields import (
         FieldBase, 
         FieldGroup, 
         ChoiceField,
         EnumField,
         )
-from ..containers import (
+from ...containers import (
         SubEntityBase, 
         SubEntityItems, 
         Entity,
@@ -293,7 +293,11 @@ class FileDumpBase:
     def get_this_module(cls):
         module = inspect.getmodule(cls)
         # {cls.__class__.__name__}
-        return module.__name__
+        module_name_list: list[str] = module.__name__.split(".")
+        # reedwolf.entities.code_gen.generators.to_pydantic -> reedwolf.entities.code_gen.to_pydantic
+        module_name_list = [mn for mn in module_name_list if mn not in ("generators",)]
+        return ".".join(module_name_list)
+
 
     def dump_to_str(self) -> str:
         all_lines = []
@@ -884,7 +888,7 @@ def dump_to_models(
         if add_init_py:
             code = dumper.dump_init_py_to_str_list()
             code = "\n".join(code)
-            fname_abs = os.path.join(root, "__init__.py")
+            fname_abs = os.path.join(root, "../__init__.py")
             with open(fname_abs, "w") as fout:
                 fout.write(code)
 
