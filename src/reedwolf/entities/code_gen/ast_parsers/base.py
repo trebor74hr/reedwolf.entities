@@ -1,7 +1,7 @@
 import ast
 from abc import abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, List, Dict, Tuple
 
 from ..utils import error, info, warn
 from .ast_models import FunctionFromCode, ModelAttrFromCode, SourceCode, process_node
@@ -12,8 +12,8 @@ class ModelFromCode:
     name: str
     sourcecode: SourceCode
     node: ast.AST
-    attrs: list[ModelAttrFromCode] = field(default_factory=list, init=False, repr=False)
-    attrs_dict: dict[str, ModelAttrFromCode] = field(init=False, repr=False, default_factory=dict)
+    attrs: List[ModelAttrFromCode] = field(default_factory=list, init=False, repr=False)
+    attrs_dict: Dict[str, ModelAttrFromCode] = field(init=False, repr=False, default_factory=dict)
     finished: bool = field(init=False, default=False, repr=False)
 
     def add_attr(self, attr: ModelAttrFromCode) -> None:
@@ -36,20 +36,20 @@ class ModelsParserBase:
     @classmethod
     @abstractmethod
     def parse_cls_attr(
-        cls, attr_node: ast.AST, class_name: str, lines: list[str]
-    ) -> Optional[list[ModelAttrFromCode]]:
+        cls, attr_node: ast.AST, class_name: str, lines: List[str]
+    ) -> Optional[List[ModelAttrFromCode]]:
         pass
 
     @classmethod
     def extract_class_model_source_dict_from_code_by_filepath(  # noqa: C901
         cls,
-        module_path_list: list[str],
+        module_path_list: List[str],
         file_path: str,
         verbose: bool = False,
-    ) -> dict[str, ModelFromCode]:
+    ) -> Dict[str, ModelFromCode]:
         assert file_path
-        with open(file_path) as fout:
-            code = fout.read()
+        with open(file_path) as file_in:
+            code = file_in.read()
         return cls.extract_class_model_source_dict_from_code(
             module_path_list=module_path_list,
             code=code,
@@ -60,11 +60,11 @@ class ModelsParserBase:
     @classmethod
     def extract_class_model_source_dict_from_code(  # noqa: C901
         cls,
-        module_path_list: list[str],
+        module_path_list: List[str],
         code: str,
         file_path: str,
         verbose: bool = False,
-    ) -> dict[str, ModelFromCode]:
+    ) -> Dict[str, ModelFromCode]:
         assert module_path_list
 
         # head_node, lines = cls.parse_code_by_filepath(file_path)
@@ -120,14 +120,14 @@ class ModelsParserBase:
         return class_model_source_dict
 
     @classmethod
-    def parse_code_by_filepath(cls, file_path: str) -> tuple[ast.Module, list[str]]:
+    def parse_code_by_filepath(cls, file_path: str) -> Tuple[ast.Module, List[str]]:
         """returns head AST node and sourcecode as list of strings"""
-        with open(file_path) as fout:
-            code = fout.read()
+        with open(file_path) as file_in:
+            code = file_in.read()
         return cls.parse_code(code, name=file_path)
 
     @staticmethod
-    def parse_code(code: str, name: str) -> tuple[ast.Module, list[str]]:
+    def parse_code(code: str, name: str) -> Tuple[ast.Module, List[str]]:
         """returns head AST node and sourcecode as list of strings"""
         try:
             # ALT: ast.compile()
@@ -140,18 +140,18 @@ class ModelsParserBase:
     @staticmethod
     def match_base_class(
         cls_node: ast.ClassDef,
-        class_bases_to_match: list[str],
-        ignore_bases: Optional[list[str]],
-        lines: list[str],
-    ) -> tuple[bool, bool]:
+        class_bases_to_match: List[str],
+        ignore_bases: Optional[List[str]],
+        lines: List[str],
+    ) -> Tuple[bool, bool]:
         """
         Returns:
             found_model_base
             ignored_base - should be interpreted only when found_model_base
         """
         assert class_bases_to_match
-        for acnp in class_bases_to_match:
-            assert isinstance(acnp, str)
+        for class_name in class_bases_to_match:
+            assert isinstance(class_name, str)
 
         found_model_base = False
         ignored_base = False
@@ -171,7 +171,7 @@ class ModelsParserBase:
         return found_model_base, ignored_base
 
     @staticmethod
-    def has_dataclass_decorator(cls_node: ast.ClassDef, lines: list[str]) -> bool:
+    def has_dataclass_decorator(cls_node: ast.ClassDef, lines: List[str]) -> bool:
         # check @dataclass decorator exists?
         found_model_base = False
         if cls_node.decorator_list:
@@ -186,7 +186,7 @@ class ModelsParserBase:
 
     @staticmethod
     @abstractmethod
-    def should_process_class(cls_node: ast.ClassDef, lines: list[str]) -> tuple[bool, bool]:
+    def should_process_class(cls_node: ast.ClassDef, lines: List[str]) -> Tuple[bool, bool]:
         """
         Returns:
             found_model_base

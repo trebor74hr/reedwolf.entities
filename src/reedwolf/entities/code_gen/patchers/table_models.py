@@ -189,14 +189,16 @@ class Column:
         if self.default is not MISSING:
             if self.default_factory:
                 raise ValueError(
-                    f"{self.name}: invalid defaults, default/default_factory - both defined: {self.default} / {self.default_factory}"
+                    f"{self.name}: invalid defaults, default/default_factory - both defined: "
+                    f"{self.default} / {self.default_factory}"
                 )
             if (
                 not isinstance(self.default, (type(None), int, str))
                 and self.source != TableSourceEnum.FROM_DJANGO
             ):
                 raise ValueError(
-                    f"{self.name}: invalid default, expecting simple types, got: {self.default} : {type(self.default)}"
+                    f"{self.name}: invalid default, expecting simple types, "
+                    f"got: {self.default} : {type(self.default)}"
                 )
 
     def set_fk_column_raw(self, column: Column) -> None:
@@ -232,7 +234,8 @@ class Column:
                 out = False  # do update
             elif not target.meta.get("sm_default_factory_ok", False):
                 warn(
-                    f"{self.name}: default_factory is diff but defined on both sides: {self.default_factory} != {target.default_factory}, ignored."
+                    f"{self.name}: default_factory is diff but defined on both sides: {self.default_factory} "
+                    f"!= {target.default_factory}, ignored."
                 )
 
         if (
@@ -248,7 +251,8 @@ class Column:
                 out = False  # do update
             elif not target.meta.get("sm_default_ok", False):
                 warn(
-                    f"{self.name}: default is diff but defined on both sides: {self.default} != {target.default}, ignored."
+                    f"{self.name}: default is diff but defined on both sides: {self.default} "
+                    f"!= {target.default}, ignored."
                 )
 
         if self.nullable != target.nullable:
@@ -258,7 +262,8 @@ class Column:
                 out = False  # do update
             elif not target.meta.get("sm_nullable_ok", False):
                 warn(
-                    f"{self.name}: nullable is diff but defined on both sides: {self.nullable} != {target.nullable}, ignored."
+                    f"{self.name}: nullable is diff but defined on both sides: {self.nullable} "
+                    f"!= {target.nullable}, ignored."
                 )
 
         if not out and verbose >= 2:
@@ -510,7 +515,8 @@ class Column:
             )
             if verbose >= 2:
                 info(
-                    f"{model_name}.{name} -> Ignoring FK unknown referenced type: {fk_type_name}, available: {names_avail}"
+                    f"{model_name}.{name} -> Ignoring FK unknown referenced type: {fk_type_name}, "
+                    f"available: {names_avail}"
                 )
             return None
 
@@ -519,7 +525,7 @@ class Column:
         fk_column = "id"
         # find python type -> type_map
         all_fields = fields(fk_dc_type)
-        id_cols = [field for field in all_fields if field.name == fk_column]
+        id_cols = [fld for fld in all_fields if fld.name == fk_column]
         if len(id_cols) == 0:
             py_type: Type = int
         else:
@@ -557,7 +563,7 @@ class Column:
         fk_table: Optional[str] = None
         fk_column: Optional[str] = None
 
-        type_map: Optional[TypeMap] = None
+        # type_map: Optional[TypeMap] = None
 
         if dj_type_name in cls.FK_DJ_TYPE_NAMES:
             result = cls._from_dj_model_attr_fk(

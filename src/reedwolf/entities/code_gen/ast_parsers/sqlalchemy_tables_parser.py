@@ -1,6 +1,6 @@
 import ast
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, List, Dict, Tuple
 
 from ..utils import error, info
 from .ast_models import FunctionFromCode, ModelAttrFromCode, SourceCode
@@ -12,10 +12,10 @@ class SqlalchemyTablesParser(ModelsParserBase):
     @classmethod
     def extract_sa_table_model_source_dict_from_code(  # noqa: C901
         cls,
-        model_path_list: list[str],
+        model_path_list: List[str],
         file_path: str,
         verbose: bool = False,
-    ) -> dict[str, ModelFromCode]:
+    ) -> Dict[str, ModelFromCode]:
         """
         Example:
         COMPANY_TABLE = Table(
@@ -65,7 +65,8 @@ class SqlalchemyTablesParser(ModelsParserBase):
                         isinstance(table_arg, ast.Constant) and isinstance(table_arg.value, str)
                     ):
                         raise ValueError(
-                            f"{table_func}: Expecting table name string argument ast first Table() argument, got: {table_arg}.\n  File: {file_path} "
+                            f"{table_func}: Expecting table name string argument ast first Table() argument, "
+                            f"got: {table_arg}.\n  File: {file_path} "
                         )
                     sa_table_name = table_arg.value.lower()
                     continue
@@ -113,7 +114,7 @@ class SqlalchemyTablesParser(ModelsParserBase):
         return class_model_source_dict
 
     @classmethod
-    def should_process_class(cls, cls_node: ast.ClassDef, lines: list[str]) -> tuple[bool, bool]:
+    def should_process_class(cls, cls_node: ast.ClassDef, lines: List[str]) -> Tuple[bool, bool]:
         """
         returns found_model_base, ignored_base
         return True, False
@@ -122,6 +123,6 @@ class SqlalchemyTablesParser(ModelsParserBase):
 
     @classmethod
     def parse_cls_attr(
-        cls, node: ast.AST, class_name: str, lines: list[str]
-    ) -> Optional[list[ModelAttrFromCode]]:
+        cls, node: ast.AST, class_name: str, lines: List[str]
+    ) -> Optional[List[ModelAttrFromCode]]:
         raise Exception("Should not be used")

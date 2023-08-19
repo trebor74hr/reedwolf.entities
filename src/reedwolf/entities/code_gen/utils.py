@@ -1,7 +1,7 @@
 import os
 import re
 import sys
-from typing import Any
+from typing import Any, Tuple, List
 
 DataclassModel = Any
 
@@ -50,7 +50,7 @@ def warn(msg: str) -> None:
     print(indent_str_lines("WARN: ", msg))  # noqa: T201
 
 
-def ensure_python_version(version_gte: tuple[int, int]) -> None:
+def ensure_python_version(version_gte: Tuple[int, int]) -> None:
     # TODO: make decorator of this
     if sys.version_info[:2] < version_gte:
         error(
@@ -58,13 +58,12 @@ def ensure_python_version(version_gte: tuple[int, int]) -> None:
         )
 
 
-
 def is_unit_test_session() -> bool:
     # https://stackoverflow.com/questions/25188119/test-if-code-is-executed-from-within-a-py-test-session
     return (
         "PYTEST_CURRENT_TEST"
         in os.environ
-        # These ones could be tricky
+        # Following could be tricky:
         #   or "pytest" in sys.modules
         #   or "unittest" in sys.modules
     )
@@ -74,16 +73,16 @@ def right_strip(value: str, extension: str, strict: bool = False) -> str:
     if value.endswith(extension):
         value = value[: -len(extension)]
     elif strict:
-        raise ValueError(f"Value '{value}' does not endswwith '{extension}'")
+        raise ValueError(f"Value '{value}' does not ends with '{extension}'")
     return value
 
 
 def extract_lines_that_match(
-    lines: list[str], regex_expr: str, all_when_not_matched: bool = False
-) -> list[str]:
-    matched_iidx_list = [nr for nr, line in enumerate(lines) if re.search(regex_expr, line)]
-    if matched_iidx_list:
-        lines = lines[matched_iidx_list[0] :]
+    lines: List[str], regex_expr: str, all_when_not_matched: bool = False
+) -> List[str]:
+    matched_idx_list = [nr for nr, line in enumerate(lines) if re.search(regex_expr, line)]
+    if matched_idx_list:
+        lines = lines[matched_idx_list[0]:]
     elif not all_when_not_matched:
         lines = []
     return lines

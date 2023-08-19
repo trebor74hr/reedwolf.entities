@@ -10,7 +10,7 @@ except ImportError:
     SATable = Any
     SATypeEngine = Any
 else:
-    from sqlalchemy.sql.schema import Column as SAColumn, Table as SATable
+    from sqlalchemy import Column as SAColumn, Table as SATable
     from sqlalchemy.sql.type_api import TypeEngine as SATypeEngine
 
 from ...utils import list_to_str_limited
@@ -86,7 +86,8 @@ class PatcherBase:
         diff_dict: Dict[str, Tuple[Column, Column]] = {}
 
         for col_name in target_col_names.intersection(source_col_names):
-            # Column("access_id", ForeignKey("administration_companyaccess.id", deferrable=True, initially="DEFERRED"), nullable=False),
+            # Column("access_id", ForeignKey("access.id", deferrable=True, initially="DEFERRED"),
+            # nullable=False),
             source_column = source_table.columns_dict[col_name]
             target_column = target_table.columns_dict[col_name]
             # NOTE: source must be first, target must be second
@@ -112,7 +113,8 @@ class PatcherBase:
                 )
             if diff_dict:
                 msg.append(
-                    f"DIFFS** ({len(diff_dict.keys()):2d}): {list_to_str_limited(list(diff_dict.keys()), max_cols_str_len)}"
+                    f"DIFFS** ({len(diff_dict.keys()):2d}): "
+                    f"{list_to_str_limited(list(diff_dict.keys()), max_cols_str_len)}"
                 )
             if msg:
                 msg.insert(0, f"==== Model '{self.name}' - diff result:")
@@ -214,6 +216,7 @@ class PatcherBase:
         """returns number of column processed"""
         raise NotImplementedError()
 
+
 @dataclass()
 class PatcherStats:
     files_processed: int
@@ -225,10 +228,9 @@ class PatcherStats:
     columns_patched: int
 
     def report_as_str_list(self) -> List[str]:
-        out: List[str] = []
-        out.append("-------- patched / processed")
-        out.append(f"Files  : {self.files_patched} / {self.files_processed}")
-        out.append(f"Models : {self.models_patched} / {self.models_processed}")
-        out.append(f"Columns: {self.columns_patched} / {self.columns_processed}")
+        out: List[str] = [
+            "-------- patched / processed", f"Files  : {self.files_patched} / {self.files_processed}",
+            f"Models : {self.models_patched} / {self.models_processed}",
+            f"Columns: {self.columns_patched} / {self.columns_processed}",
+        ]
         return out
-

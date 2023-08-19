@@ -1,6 +1,6 @@
 import ast
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, List, Tuple
 
 from ..utils import warn
 from .ast_models import (
@@ -16,8 +16,8 @@ from .base import ModelsParserBase
 @dataclass
 class DataclassModelsParser(ModelsParserBase):
     @classmethod
-    def should_process_class(cls, cls_node: ast.ClassDef, lines: list[str]) -> tuple[bool, bool]:
-        dc_model_allowed_name_paths: list[str] = [
+    def should_process_class(cls, cls_node: ast.ClassDef, lines: List[str]) -> Tuple[bool, bool]:
+        dc_model_allowed_name_paths: List[str] = [
             "Base",
             "IsoHeader",
         ]
@@ -36,8 +36,8 @@ class DataclassModelsParser(ModelsParserBase):
 
     @classmethod
     def parse_cls_attr(
-        cls, attr_node: ast.AST, class_name: str, lines: list[str]
-    ) -> Optional[list[ModelAttrFromCode]]:
+        cls, attr_node: ast.AST, class_name: str, lines: List[str]
+    ) -> Optional[List[ModelAttrFromCode]]:
         """
         Parses CWA Domain @dataclass class attributes.
 
@@ -66,14 +66,17 @@ class DataclassModelsParser(ModelsParserBase):
         elif isinstance(attr_node.annotation, ast.Attribute):
             # AnnAssign(target=Name(id='last_login', ctx=Store()),
             #           annotation=Attribute(value=Name(id='datetime', ctx=Load()), attr='datetime', ctx=Load()),
-            #           value=Call(func=Name(id='field', ctx=Load()), args=[], keywords=[keyword(arg='default_factory', value=Lambda(args=arguments(posonlyargs=[], args=[], kwonlyargs=[], kw_defaults=[], defaults=[]), body=Constant(value=None)))]),
+            #           value=Call(func=Name(id='field', ctx=Load()), args=[],
+            #           keywords=[keyword(arg='default_factory', value=Lambda(args=arguments(posonlyargs=[],
+            #           args=[], kwonlyargs=[], kw_defaults=[], defaults=[]), body=Constant(value=None)))]),
             result_list = process_node(attr_node.annotation, lines)
             assert len(result_list) == 1
             attr_ann_type = result_list[0]
         elif isinstance(attr_node.annotation, ast.Subscript):
             # AnnAssign(target=Name(id='company_packing_models', ctx=Store()),
-            #           annotation=Subscript(value=Name(id='list', ctx=Load()), slice=Name(id='CompanyPackingModel', ctx=Load()), ctx=Load()),
-            #           value=Call(func=Name(id='field', ctx=Load()), args=[], keywords=[keyword(arg='default_factory', value=Name(id='list', ctx=Load()))]),
+            #           annotation=Subscript(value=Name(id='list', ctx=Load()), slice=Name(id='CompanyPackingModel',
+            #           ctx=Load()), ctx=Load()), value=Call(func=Name(id='field', ctx=Load()), args=[],
+            #           keywords=[keyword(arg='default_factory', value=Name(id='list', ctx=Load()))]),
             attr_ann_type = extract_code(attr_node.annotation, lines, verbose=False)
         elif isinstance(attr_node.annotation, ast.Constant):
             # annotation=Constant(value='Company'), simple=1)

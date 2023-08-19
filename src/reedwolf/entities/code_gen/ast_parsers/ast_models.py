@@ -9,6 +9,7 @@ from typing import Any, ClassVar, Optional, Union
 from ...utils import MISSING
 from ..utils import ensure_python_version, info_debug, right_strip, warn
 
+
 def extract_code(node: ast.AST, code_lines: list[str], verbose: bool = False) -> str:
     # NOTE: 3.9 ast.object.end_*lineno - required
     # NOTE: 3.10 has ast.unparse - interesting
@@ -22,7 +23,7 @@ def extract_code(node: ast.AST, code_lines: list[str], verbose: bool = False) ->
         if lnr == node.end_lineno:
             line = line[: node.end_col_offset]
         if lnr == node.lineno:
-            line = line[node.col_offset :]
+            line = line[node.col_offset:]
         if verbose:
             line = "%03d: %s" % (lnr, line)
         code.append(line)
@@ -137,7 +138,9 @@ def ast_single_expr_from_code(code: str) -> ast.AST:
     ast_module: ast.Module = ast.parse(code)
     assert len(ast_module.body) == 1, code
     assert isinstance(ast_module.body[0], ast.Expr), f"{code} -> {ast_module.body[0]}"
-    ast_expr: ast.Expr = ast_module.body[0]
+    ast_stmt: ast.stmt = ast_module.body[0]
+    assert isinstance(ast_stmt, ast.Expr), ast_stmt
+    ast_expr: ast.Expr = ast_stmt
     ast_result: ast.AST = ast_expr.value
     return ast_result
 
