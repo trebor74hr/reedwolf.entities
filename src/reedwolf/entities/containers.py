@@ -157,9 +157,6 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             raise EntitySetupError(owner=self, msg=f"FieldGroup {fieldgroup.name} is already added.")
         self.contains.append(fieldgroup)
 
-    def is_top_parent(self) -> bool:
-        return not bool(self.parent)
-
 
     @staticmethod
     def can_apply_partial() -> bool:
