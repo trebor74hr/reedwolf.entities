@@ -215,7 +215,8 @@ class ModelsRegistry(RegistryBase):
                 instance_to_test = instance
 
             # == M.name case
-            if instance_to_test and not isinstance(instance_to_test, expected_type):
+            if not apply_result.instance_none_mode and instance_to_test \
+              and not isinstance(instance_to_test, expected_type):
                 raise EntityApplyTypeError(owner=self, msg=f"Wrong type, expected '{expected_type}', got '{instance}'")
 
         return instance, None

@@ -462,6 +462,9 @@ class ComponentBase(SetParentMixin, ABC):
 
     # ------------------------------------------------------------
 
+    def is_top_parent(self) -> bool:
+        return not bool(self.parent)
+
     @staticmethod
     def is_container() -> bool:
         return False

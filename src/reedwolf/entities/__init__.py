@@ -31,6 +31,7 @@ from .base import (  # noqa: F401
         #   from <> import _, msg
         _,
         msg,
+        IApplyResult,
         )
 from .fields import (
         AutocomputedEnum,
@@ -207,6 +208,7 @@ __all__ = [
     "Config",
 
     # apply
+    "IApplyResult", # from base.py
     "ApplyResult",
 
     # load

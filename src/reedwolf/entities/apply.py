@@ -1,4 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import (
+        dataclass,
+        field,
+        asdict,
+        )
 from typing import (
         Any,
         Dict,
@@ -39,6 +43,7 @@ from .meta import (
         ValuesTree,
         ComponentTreeWValuesType,
         LiteralType,
+        make_dataclass_with_optional_fields,
         )
 from .base import (
     IFieldBase,
@@ -137,6 +142,9 @@ class ApplyResult(IApplyResult):
     Similar is Function -> IFunctionFactory.
     """
 
+    instance_none_mode:bool = field(init=False, default=False)
+
+
     STACK_FRAME_CLASS = ApplyStackFrame
     STACK_FRAME_CTX_MANAGER_CLASS = UseApplyStackFrameCtxManager
 
@@ -171,7 +179,19 @@ class ApplyResult(IApplyResult):
             if not (self.instance is NA_DEFAULTS_MODE and self.instance_new is None and not self.component_name_only):
                 raise EntityInternalError(owner=self, msg=f"Defaults mode does not expect instance or instance_new or component_name_only, got: {self.instance} / {self.instance_new} / {self.component_name_only}") 
         else:
-            if self.instance is None or not isinstance(self.instance, self.bound_model.model):
+            if self.instance is None:
+                if not (self.entity.is_top_parent()):
+                    raise EntityInternalError(owner=self, msg=f"Currently implemented only for  top container objects, got: {self.entity}")
+                if self.instance_new is None:
+                    raise EntityApplyError(owner=self, msg=f"Both 'instance' and 'instance_new' is None, at least one should be set.")
+
+                self.instance_none_mode = True
+                # TODO: maybe this could/should be cached by dc_model?
+                temp_dataclass_model = make_dataclass_with_optional_fields(self.bound_model.model)
+                # all fields are made optional and will have value == None (from field's default)
+                self.instance = temp_dataclass_model()
+
+            elif not isinstance(self.instance, self.bound_model.model):
                 raise EntityApplyError(owner=self, msg=f"Object '{self.instance}' is not instance of bound model '{self.bound_model.model}'.")
 
             if self.instance_new is not None and not self.component_name_only:
@@ -367,10 +387,11 @@ class ApplyResult(IApplyResult):
 
             if parent_instance is not NA_DEFAULTS_MODE:
                 # TODO: not sure if this validation is ok
-                if not isinstance(parent_instance, 
-                        self.current_frame.container.bound_model.get_type_info().type_):
+                # NOTE: bound_model.model could be VExpr
+                model = self.current_frame.container.bound_model.get_type_info().type_
+                if not self.instance_none_mode \
+                  and not isinstance(parent_instance, model):
                     raise EntityInternalError(owner=self, msg=f"Parent instance {parent_instance} has wrong type")
-
 
                 # -- attr_name - fetch from initial bind dexp (very first)
                 init_instance_attr_value = self.update_history[key_str][0]
@@ -489,7 +510,8 @@ class ApplyResult(IApplyResult):
                     if self.current_frame.instance is not NA_DEFAULTS_MODE:
                         raise EntityInternalError(owner=self, msg=f"Defaults mode - current frame's instance's model must be NA_DEFAULTS_MODE, got: {type(self.instance)}") 
                 else:
-                    if not isinstance(self.current_frame.instance, comp_container_model):
+                    if not self.instance_none_mode \
+                      and not isinstance(self.current_frame.instance, comp_container_model):
                         raise EntityInternalError(owner=self, msg=f"Current frame's instance's model does not corresponds to component's container's model. Expected: {comp_container_model}, got: {type(self.instance)}") 
 
             # TODO: for subentity() any need to check this at all in this phase?
@@ -503,7 +525,8 @@ class ApplyResult(IApplyResult):
                 if self.instance is not NA_DEFAULTS_MODE:
                     raise EntityInternalError(owner=self, msg=f"Defaults mode - instance must be NA_DEFAULTS_MODE, got: {type(self.instance)}") 
             else:
-                if not isinstance(self.instance, comp_container_model):
+                if not self.instance_none_mode \
+                  and not isinstance(self.instance, comp_container_model):
                     raise EntityInternalError(owner=self, msg=f"Entity instance's model does not corresponds to component's container's model. Expected: {comp_container_model}, got: {type(self.instance)}") 
 
         # TODO: in partial mode this raises RecursionError:
@@ -791,6 +814,13 @@ class ApplyResult(IApplyResult):
                         ))
 
         # TODO: logger: apply_result.config.logger.debug(f"depth={depth}, comp={component.name}, bind={bind} => {dexp_result}")
+
+        if self.instance_none_mode \
+          and component.is_top_parent():
+            # create new instance of bound_model.model class
+            # based on temporary created dataclass
+            kwargs = asdict(self.instance)
+            self.instance = self.bound_model.model(**kwargs)
 
         return
 

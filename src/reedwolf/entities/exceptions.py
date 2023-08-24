@@ -57,6 +57,8 @@ class EntityInternalError(EntityError):
 class EntityNameNotFoundError(EntityError):
     pass
 
+class EntityTypeError(EntityError):
+    pass
 
 # ------------------------------------------------------------
 # Entity Setup phase (boot time) validation errors
