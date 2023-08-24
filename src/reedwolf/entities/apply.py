@@ -171,9 +171,8 @@ class ApplyResult(IApplySession):
             if not (self.instance is NA_DEFAULTS_MODE and self.instance_new is None and not self.component_name_only):
                 raise EntityInternalError(owner=self, msg=f"Defaults mode does not expect instance or instance_new or component_name_only, got: {self.instance} / {self.instance_new} / {self.component_name_only}") 
         else:
-            if not isinstance(self.instance, self.bound_model.model):
+            if self.instance is None or not isinstance(self.instance, self.bound_model.model):
                 raise EntityApplyError(owner=self, msg=f"Object '{self.instance}' is not instance of bound model '{self.bound_model.model}'.")
-
 
             if self.instance_new is not None and not self.component_name_only:
                 self._detect_instance_new_struct_type(self.entity)

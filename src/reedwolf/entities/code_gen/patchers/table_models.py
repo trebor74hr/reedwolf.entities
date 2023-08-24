@@ -221,29 +221,26 @@ class Column:
             )
 
         # type check
-        out = True
+        are_equal = True
         if is_enum(target.py_type) and not is_enum(self.py_type):
-            out = out and issubclass(target.py_type, self.py_type)
+            are_equal = are_equal and issubclass(target.py_type, self.py_type)
         elif not is_enum(target.py_type) and is_enum(self.py_type):
-            out = out and issubclass(self.py_type, target.py_type)
+            are_equal = are_equal and issubclass(self.py_type, target.py_type)
         else:
-            out = self.pytype_name == target.pytype_name
+            are_equal = self.pytype_name == target.pytype_name
 
         # check subtype if any
         if self.item_type_map or target.item_type_map:
-            out = out and bool(
+            are_equal = are_equal and bool(
                 # compare item type only by py_type
                 (self.item_type_map.py_type if self.item_type_map else None)
                 == (target.item_type_map.py_type if target.item_type_map else None)
             )
 
-        if not out:
-            print()
-
         # TODO: DRY this
         if self.default_factory != target.default_factory:
             if self.default_factory is not None and target.default_factory is None:
-                out = False  # do update
+                are_equal = False  # do update
             elif not target.meta.get("sm_default_factory_ok", False):
                 warn(
                     f"{self.name}: default_factory is diff but defined on both sides: {self.default_factory} "
@@ -259,9 +256,11 @@ class Column:
             # ignore this case: DC generates default=None, when missing and nullable
             pass
         elif self.default != target.default:
-            if self.default is not MISSING and target.default is MISSING:
-                out = False  # do update
-            elif not target.meta.get("sm_default_ok", False):
+            if target.meta.get("sm_default_ok", False):
+                pass
+            elif self.default is not MISSING and target.default is MISSING:
+                are_equal = False  # do update
+            else:
                 warn(
                     f"{self.name}: default is diff but defined on both sides: {self.default} "
                     f"!= {target.default}, ignored."
@@ -271,14 +270,14 @@ class Column:
             if (target.source == TableSourceEnum.FROM_DATACLASS) or (
                 self.nullable is not MISSING and target.nullable is MISSING
             ):
-                out = False  # do update
+                are_equal = False  # do update
             elif not target.meta.get("sm_nullable_ok", False):
                 warn(
                     f"{self.name}: nullable is diff but defined on both sides: {self.nullable} "
                     f"!= {target.nullable}, ignored."
                 )
 
-        if not out and verbose >= 2:
+        if not are_equal and verbose >= 2:
             msg: list[str] = []
             if self.pytype_name != target.pytype_name:
                 msg.append(f"pytype_name: {self.pytype_name} != { target.pytype_name}")
@@ -292,7 +291,7 @@ class Column:
                 msg.append(f"default(*): {self.default} != {target.default}")
             info(f"{self.name}: diff detected: {', '.join(msg)}")
 
-        return out
+        return are_equal
 
     @classmethod
     def columns_from_dc_model(cls, dc_model: Any, verbose: int = 1) -> list[Column]:
