@@ -41,24 +41,24 @@ from .meta import (
         LiteralType,
         )
 from .base import (
-        IFieldBase,
-        UndefinedType,
-        MAX_RECURSIONS,
-        AttrValue,
-        AttrName,
-        GlobalConfig,
-        KeyString,
-        ComponentBase,
-        IApplySession,
-        ApplyStackFrame,
-        ValidationFailure,
-        StructEnum,
-        ChangeOpEnum,
-        InstanceAttrValue,
-        InstanceChange,
-        InstanceAttrCurrentValue,
-        get_instance_key_string_attrname_pair,
-        UseStackFrameCtxManagerBase, 
+    IFieldBase,
+    UndefinedType,
+    MAX_RECURSIONS,
+    AttrValue,
+    AttrName,
+    GlobalConfig,
+    KeyString,
+    ComponentBase,
+    IApplyResult,
+    ApplyStackFrame,
+    ValidationFailure,
+    StructEnum,
+    ChangeOpEnum,
+    InstanceAttrValue,
+    InstanceChange,
+    InstanceAttrCurrentValue,
+    get_instance_key_string_attrname_pair,
+    UseStackFrameCtxManagerBase,
         )
 from .fields import (
         FieldBase,
@@ -129,7 +129,7 @@ class UseApplyStackFrameCtxManager(UseStackFrameCtxManagerBase):
 
 
 @dataclass
-class ApplyResult(IApplySession):
+class ApplyResult(IApplyResult):
     """ 
     ApplyResult is ApplySession (variable apply_session) - but is renamed to
     result since it is name exposed to external API.
@@ -178,7 +178,7 @@ class ApplyResult(IApplySession):
                 self._detect_instance_new_struct_type(self.entity)
 
         # ----------------------------------------
-        # see IApplySession for description 
+        # see IApplyResult for description
         self.binary_operations_type_adapters[(str, int)] = str
 
 
@@ -1282,7 +1282,7 @@ class ApplyResult(IApplySession):
     # ------------------------------------------------------------
 
     def get_key_string_by_instance(self, component: ComponentBase, instance: ModelType, parent_instance: ModelType, index0: Optional[int], force:bool=False) -> str:
-        # apply_session:IApplySession,  -> self
+        # apply_session:IApplyResult,  -> self
         """
         Two cases - component has .keys or not:
 
@@ -1402,7 +1402,7 @@ class ApplyResult(IApplySession):
     # ------------------------------------------------------------
 
     def get_current_value(self, component: ComponentBase, strict:bool) -> LiteralType:
-        # apply_session:IApplySession
+        # apply_session:IApplyResult
         """ Could work on non-stored fields.
             Probaly a bit faster, only dict queries.
         """

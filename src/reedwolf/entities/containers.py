@@ -49,16 +49,16 @@ from .meta import (
         Self,
         )
 from .base import (
-        get_name_from_bind,
-        ComponentBase,
-        IContainerBase,
-        BoundModelBase,
-        GlobalConfig,
-        KeyPairs,
-        IApplySession,
-        SetupStackFrame,
-        ISetupSession,
-        IFieldBase,
+    get_name_from_bind,
+    ComponentBase,
+    IContainerBase,
+    BoundModelBase,
+    GlobalConfig,
+    KeyPairs,
+    IApplyResult,
+    SetupStackFrame,
+    ISetupSession,
+    IFieldBase,
         )
 from .expressions import (
         DotExpression,
@@ -437,7 +437,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
                                 index0: int, 
                                 ) -> Union[Tuple[(str, Any)], int]:
         " index0 is 0 based index of item in the list"
-        # TODO: move to ApplyResult:IApplySession?
+        # TODO: move to ApplyResult:IApplyResult?
         if self.keys:
             ret = self.get_key_pairs(instance)
         else:
@@ -561,7 +561,7 @@ class KeysBase(ABC):
         """ returns list of (key-name, key-value) """
         ...
 
-    # def get_keys(self, apply_session:IApplySession) -> List[Any]:
+    # def get_keys(self, apply_session:IApplyResult) -> List[Any]:
     #     return [key for name,key in self.get_keys_tuple(apply_session)]
 
 
@@ -612,7 +612,7 @@ class KeyFields(KeysBase):
 
 
     def get_key_pairs(self, instance: ModelType, container: IContainerBase) -> KeyPairs:
-        # apply_session:IApplySession
+        # apply_session:IApplyResult
         # frame = apply_session.current_frame
         # instance = frame.instance
 
@@ -757,7 +757,7 @@ class Entity(ContainerBase):
               instance: DataclassType, 
               instance_new: Optional[ModelType] = None,
               context: Optional[IContext] = None, 
-              raise_if_failed:bool = True) -> IApplySession:
+              raise_if_failed:bool = True) -> IApplyResult:
         return self._apply(
                   instance=instance,
                   instance_new=instance_new,
@@ -769,7 +769,7 @@ class Entity(ContainerBase):
               instance: DataclassType, 
               instance_new: Optional[ModelType] = None,
               context: Optional[IContext] = None, 
-              raise_if_failed:bool = True) -> IApplySession:
+              raise_if_failed:bool = True) -> IApplyResult:
         return self._apply(
                   instance=instance,
                   instance_new=instance_new,
@@ -783,7 +783,7 @@ class Entity(ContainerBase):
               instance_new: Optional[ModelType] = None,
               component_name_only:Optional[str] = None,
               context: Optional[IContext] = None, 
-              raise_if_failed:bool = True) -> IApplySession:
+              raise_if_failed:bool = True) -> IApplyResult:
         """
         create and config ApplyResult() and call apply_session.apply()
         """
@@ -812,7 +812,7 @@ class Entity(ContainerBase):
 
     def dump_defaults(self, 
               context: Optional[IContext] = None, 
-              ) -> IApplySession:
+              ) -> IApplyResult:
         """
         In defaults mode:
             - context should be applied if Entity have (same as in apply())

@@ -66,11 +66,11 @@ from .func_args import (
         PreparedArguments,
         )
 from .base import (
-        AttrDexpNodeTypeEnum,
-        ReservedArgumentNames,
-        IFieldBase,
-        IApplySession,
-        ComponentBase,
+    AttrDexpNodeTypeEnum,
+    ReservedArgumentNames,
+    IFieldBase,
+    IApplyResult,
+    ComponentBase,
         )
 
 
@@ -280,7 +280,7 @@ class IFunction(IFunctionDexpNode):
     #       this will need new input parameter: contexts/attr_node/...
     @staticmethod
     def execute_arg(
-            apply_session: "IApplySession", # noqa: F821
+            apply_session: "IApplyResult", # noqa: F821
             arg_value: ValueOrDexp,
             prev_node_type_info:TypeInfo, 
             ) -> Any:
@@ -297,13 +297,13 @@ class IFunction(IFunctionDexpNode):
         return arg_value
 
 
-    # TODO: IApplySession is in dropthis which imports .functions just for one case ...
-    def execute_node(self, 
-            apply_session: "IApplySession", # noqa: F821
-            dexp_result: ExecResult, 
-            is_last:bool,
-            prev_node_type_info: Optional[TypeInfo],
-            ) -> Any:
+    # TODO: IApplyResult is in dropthis which imports .functions just for one case ...
+    def execute_node(self,
+                     apply_session: "IApplyResult",  # noqa: F821
+                     dexp_result: ExecResult,
+                     is_last:bool,
+                     prev_node_type_info: Optional[TypeInfo],
+                     ) -> Any:
         """
         will be called when actual function logic needs to be executed. Input
         is/are function argument(s).
@@ -367,7 +367,7 @@ class IFunction(IFunctionDexpNode):
 
     # ------------------------------------------------------------
 
-    def _process_inject_pargs(self, apply_session: IApplySession, kwargs: Dict[str, ValueOrDexp]):
+    def _process_inject_pargs(self, apply_session: IApplyResult, kwargs: Dict[str, ValueOrDexp]):
 
         prep_arg = self.prepared_args.get(ReservedArgumentNames.INJECT_COMPONENT_TREE)
         if not prep_arg:

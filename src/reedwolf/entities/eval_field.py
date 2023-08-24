@@ -31,7 +31,7 @@ from .meta import (
         LiteralType,
         )
 from .base import (
-        IApplySession,
+    IApplyResult,
         )
 from .eval_base import (
         EvaluationBase,
@@ -75,7 +75,7 @@ class FieldEvaluation(FieldEvaluationBase):
         # self._fill_name_when_missing()
         super().__post_init__()
 
-    def execute(self, apply_session: IApplySession) -> Optional[ExecResult]:
+    def execute(self, apply_session: IApplyResult) -> Optional[ExecResult]:
         not_available_dexp_result = execute_available_dexp(self.available, apply_session=apply_session)
         if not_available_dexp_result: 
             return not_available_dexp_result
@@ -104,7 +104,7 @@ class Default(FieldEvaluationBase):
         # assert isinstance(self.value, DotExpression), self.value
         pass
 
-    def execute(self, apply_session: IApplySession) -> Optional[ExecResult]:
+    def execute(self, apply_session: IApplyResult) -> Optional[ExecResult]:
         if isinstance(self.value, DotExpression):
             dexp_result = self.value._evaluator.execute_dexp(apply_session=apply_session)
             value = dexp_result.value

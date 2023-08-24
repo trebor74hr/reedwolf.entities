@@ -20,8 +20,8 @@ from .valid_base import (
         ValidationBase,
         )
 from .base import (
-        ValidationFailure,
-        IApplySession,
+    ValidationFailure,
+    IApplyResult,
         )
 
 
@@ -37,7 +37,7 @@ class ChildrenValidation(ChildrenValidationBase):
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
     title:          Optional[TransMessageType] = field(repr=False, default=None)
 
-    def validate(self, apply_session: IApplySession) -> Union[NoneType, ValidationFailure]:
+    def validate(self, apply_session: IApplyResult) -> Union[NoneType, ValidationFailure]:
         # TODO: check which namespaces are used, ...
         if apply_session.current_frame.component.is_subentity_items():
             # TODO: in items case - run validation against every item and 

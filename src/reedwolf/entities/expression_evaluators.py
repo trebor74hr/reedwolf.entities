@@ -85,7 +85,7 @@ class DotExpressionEvaluator:
         # TODO:     raise EntityInternalError(owner=self, msg=f"Empty attr_node_list.")
         self.finished = True
 
-    def execute_dexp(self, apply_session: "IApplySession") -> ExecResult:  # noqa: F821
+    def execute_dexp(self, apply_session: "IApplyResult") -> ExecResult:  # noqa: F821
         if not self.finished:
             raise EntityInternalError(owner=self, msg="Not yet finished.")
         if self.failed_reasons:

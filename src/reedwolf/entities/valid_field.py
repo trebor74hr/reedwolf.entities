@@ -56,9 +56,9 @@ from .expressions import (
         DotExpression,
         )
 from .base import (
-        IApplySession,
-        ValidationFailure,
-        _,
+    IApplyResult,
+    ValidationFailure,
+    _,
         )
 from .valid_base import (
         ValidationBase,
@@ -78,7 +78,7 @@ class FieldValidation(FieldValidationBase):
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
     title:          Optional[TransMessageType] = field(repr=False, default=None)
 
-    def validate(self, apply_session: IApplySession) -> Union[NoneType, ValidationFailure]:
+    def validate(self, apply_session: IApplyResult) -> Union[NoneType, ValidationFailure]:
         return self._validate_common_impl(apply_session=apply_session)
 
     # def __repr__(self):
@@ -98,7 +98,7 @@ class Required(FieldValidationBase):
             self.error = "The value is required"
         super().__post_init__()
 
-    def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
+    def validate(self, apply_session: IApplyResult) -> Optional[ValidationFailure]:
         component = apply_session.current_frame.component
         value = apply_session.get_current_value(component, strict=False)
         if value is None:
@@ -134,7 +134,7 @@ class Readonly(FieldValidationBase):
         super().__post_init__()
 
 
-    def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
+    def validate(self, apply_session: IApplyResult) -> Optional[ValidationFailure]:
         component = apply_session.current_frame.component
 
         if isinstance(self.value, DotExpression):
@@ -186,7 +186,7 @@ class MinValue(FieldValidationBase):
             self.error = "The value it too big"
         super().__post_init__()
 
-    def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
+    def validate(self, apply_session: IApplyResult) -> Optional[ValidationFailure]:
         # TODO: evaluate self.value when DotExpression
         component = apply_session.current_frame.component
         value = apply_session.get_current_value(component, strict=False)
@@ -214,7 +214,7 @@ class ExactLength(FieldValidationBase):
             self.error = f"Provide value with length at most {self.value}"
         super().__post_init__()
 
-    def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
+    def validate(self, apply_session: IApplyResult) -> Optional[ValidationFailure]:
         # TODO: evaluate self.value when DotExpression
         component = apply_session.current_frame.component
         value = apply_session.get_current_value(component, strict=False)
@@ -243,7 +243,7 @@ class MaxLength(FieldValidationBase):
             self.error = f"Provide value with length at most {self.value}"
         super().__post_init__()
 
-    def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
+    def validate(self, apply_session: IApplyResult) -> Optional[ValidationFailure]:
         # TODO: evaluate self.value when DotExpression
         component = apply_session.current_frame.component
         value = apply_session.get_current_value(component, strict=False)
@@ -273,7 +273,7 @@ class MinLength(FieldValidationBase):
 
         super().__post_init__()
 
-    def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
+    def validate(self, apply_session: IApplyResult) -> Optional[ValidationFailure]:
         # TODO: evaluate self.value when DotExpression
         component = apply_session.current_frame.component
         value = apply_session.get_current_value(component, strict=False)
@@ -320,7 +320,7 @@ class RangeLength(FieldValidationBase):
         super().__post_init__()
 
     # value: Any, component: "ComponentBase", 
-    def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
+    def validate(self, apply_session: IApplyResult) -> Optional[ValidationFailure]:
         # TODO: evaluate self.value when DotExpression
         component = apply_session.current_frame.component
         value = apply_session.get_current_value(component, strict=False)

@@ -51,19 +51,19 @@ from .meta import (
         get_model_fields,
         )
 from .base import (
-        IComponentFields,
-        make_component_fields_dataclass,
-        ChildField,
-        IFieldBase,
-        IStackOwnerSession,
-        ComponentBase,
-        IContainerBase,
-        extract_type_info,
-        IApplySession,
-        BoundModelBase,
-        ReservedAttributeNames,
-        SetupStackFrame,
-        UseStackFrameCtxManagerBase,
+    IComponentFields,
+    make_component_fields_dataclass,
+    ChildField,
+    IFieldBase,
+    IStackOwnerSession,
+    ComponentBase,
+    IContainerBase,
+    extract_type_info,
+    IApplyResult,
+    BoundModelBase,
+    ReservedAttributeNames,
+    SetupStackFrame,
+    UseStackFrameCtxManagerBase,
         )
 from .functions import (
         FunctionsFactoryRegistry,
@@ -131,7 +131,7 @@ class RegistryBase(IRegistry):
 
 
     @abstractmethod
-    def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
+    def get_root_value(self, apply_session: IApplyResult, attr_name: str) -> Any:
         """ 
         Apply phase - Namespace.<attr_name> - 
         function returns the instance (root value) from which attr_name will be read from 
@@ -509,7 +509,7 @@ class RegistryBase(IRegistry):
 
 class RegistryUseDenied(RegistryBase):
 
-    def get_root_value(self, apply_session: IApplySession, attr_name: str) -> Any:
+    def get_root_value(self, apply_session: IApplyResult, attr_name: str) -> Any:
         raise EntityInternalError(owner=self, msg="Registry should not be used to get root value.")
 
 
@@ -522,7 +522,7 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
     component: ComponentBase
     instance: ModelType
 
-    def get_attribute(self, apply_session:IApplySession, attr_name: str, is_last:bool) -> Self:
+    def get_attribute(self, apply_session:IApplyResult, attr_name: str, is_last:bool) -> Self:
         children_dict = apply_session.get_upward_components_dict(self.component)
         if attr_name not in children_dict:
             avail_names = get_available_names_example(attr_name, children_dict.keys())

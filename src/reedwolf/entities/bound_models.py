@@ -46,11 +46,11 @@ from .functions import (
         IFunction,
         )
 from .base import (
-        get_name_from_bind,
-        BoundModelBase,
-        SetupStackFrame,
-        IApplySession,
-        ApplyStackFrame,
+    get_name_from_bind,
+    BoundModelBase,
+    SetupStackFrame,
+    IApplyResult,
+    ApplyStackFrame,
         )
 
 # ------------------------------------------------------------
@@ -156,12 +156,12 @@ class NestedBoundModelMixin:
     # ------------------------------------------------------------
 
 
-    def _apply_nested_models(self, apply_session: IApplySession, instance: ModelType):
+    def _apply_nested_models(self, apply_session: IApplyResult, instance: ModelType):
         children_bound_models = self.get_children()
         if not children_bound_models:
             return 
 
-        if not isinstance(apply_session, IApplySession):
+        if not isinstance(apply_session, IApplyResult):
             raise EntityInternalError(owner=self, msg=f"apply_session is not IApplySession, got: {apply_session}")
 
         if not isinstance(instance, self.model):

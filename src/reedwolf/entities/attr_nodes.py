@@ -32,14 +32,14 @@ from .meta import (
         )
 # TODO: remove this dependency
 from .base import (
-        UndefinedType,
-        ComponentBase,
-        IContainerBase,
-        IFieldBase,
-        IApplySession,
-        ExecResult,
-        ReservedAttributeNames,
-        AttrDexpNodeTypeEnum,
+    UndefinedType,
+    ComponentBase,
+    IContainerBase,
+    IFieldBase,
+    IApplyResult,
+    ExecResult,
+    ReservedAttributeNames,
+    AttrDexpNodeTypeEnum,
         )
 
 # ------------------------------------------------------------
@@ -171,13 +171,13 @@ class AttrDexpNode(IDotExpressionNode):
         return self.type_info
 
 
-    def execute_node(self, 
-                 apply_session: IApplySession, 
-                 # previous - can be undefined too
-                 dexp_result: Union[ExecResult, UndefinedType],
-                 prev_node_type_info: Optional[TypeInfo],
-                 is_last: bool,
-                 ) -> ExecResult:
+    def execute_node(self,
+                     apply_session: IApplyResult,
+                     # previous - can be undefined too
+                     dexp_result: Union[ExecResult, UndefinedType],
+                     prev_node_type_info: Optional[TypeInfo],
+                     is_last: bool,
+                     ) -> ExecResult:
 
         if is_last and not self.is_finished:
             raise EntityInternalError(owner=self, msg="Last dexp node is not finished.") 

@@ -51,14 +51,14 @@ from .meta import (
         AttrName,
         )
 from .base import (
-        ReservedAttributeNames,
-        ComponentBase,
-        IFieldBase, 
-        IContainerBase,
-        IApplySession,
-        BoundModelBase,
-        IFieldGroup,
-        ISetupSession,
+    ReservedAttributeNames,
+    ComponentBase,
+    IFieldBase,
+    IContainerBase,
+    IApplyResult,
+    BoundModelBase,
+    IFieldGroup,
+    ISetupSession,
         )
 from .attr_nodes import (
         AttrDexpNode,
@@ -191,7 +191,7 @@ class ModelsRegistry(RegistryBase):
 
     # ------------------------------------------------------------
 
-    def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
+    def get_root_value(self, apply_session: IApplyResult, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
         # ROOT_VALUE_NEEDS_FETCH_BY_NAME = False
         # component = apply_session.current_frame.component
         instance = apply_session.current_frame.instance
@@ -280,7 +280,7 @@ class FieldsRegistry(RegistryBase):
         return attr_node
 
 
-    def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
+    def get_root_value(self, apply_session: IApplyResult, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
         # container = apply_session.current_frame.component.get_first_parent_container(consider_self=True)
         component = apply_session.current_frame.component
         instance  = apply_session.current_frame.instance
@@ -349,7 +349,7 @@ class ContextRegistry(RegistryBase):
             self.register_attr_node(attr_node, attr_name)
 
 
-    def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
+    def get_root_value(self, apply_session: IApplyResult, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
         context = apply_session.context
         if context in (UNDEFINED, None):
             component = apply_session.current_frame.component
@@ -385,7 +385,7 @@ class ConfigRegistry(RegistryBase):
             attr_node = self._create_attr_node_for_model_attr(config_class, attr_name)
             self.register_attr_node(attr_node)
 
-    def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
+    def get_root_value(self, apply_session: IApplyResult, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
         # ALT: config = apply_session.entity.config
         config = self.config
         if config in (UNDEFINED, None):
@@ -414,7 +414,7 @@ class ThisRegistryForValue(IThisRegistry, RegistryBase):
         # This.Value == ReservedAttributeNames.VALUE_ATTR_NAME
         self.register_value_attr_node(attr_node=self.attr_node)
 
-    def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
+    def get_root_value(self, apply_session: IApplyResult, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
         if attr_name != ReservedAttributeNames.VALUE_ATTR_NAME.value:
             raise EntityInternalError(owner=self, msg=f"Expected attribute name: {ReservedAttributeNames.VALUE_ATTR_NAME.value}, got: {attr_name}") 
 
@@ -440,7 +440,7 @@ class ThisRegistryForChildren(IThisRegistry, RegistryBase):
                 owner=self.owner, 
                 )
 
-    def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
+    def get_root_value(self, apply_session: IApplyResult, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
         if not isinstance(apply_session.current_frame.instance, self.model_class):
             raise EntityInternalError(owner=self, msg=f"Type of apply session's instance expected to be '{self.model_class}, got: {apply_session.current_frame.instance}") 
 
@@ -477,7 +477,7 @@ class ThisRegistryForValueAndChildren(ThisRegistryForChildren):
         self.register_value_attr_node(attr_node=self.attr_node)
         # TODO: .Children?
 
-    def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
+    def get_root_value(self, apply_session: IApplyResult, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
         instance, atrr_name_to_fetch = super().get_root_value(apply_session=apply_session, attr_name=attr_name)
 
         if atrr_name_to_fetch and attr_name == ReservedAttributeNames.VALUE_ATTR_NAME:
@@ -523,7 +523,7 @@ class ThisRegistryForInstance(IThisRegistry, RegistryBase):
                         attr_name_prefix=None)
 
 
-    def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
+    def get_root_value(self, apply_session: IApplyResult, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
         " TODO: explain: when 2nd param is not None, then ... "
         if not isinstance(apply_session.current_frame.instance, self.model_class):
             raise EntityInternalError(owner=self, msg=f"Type of apply session's instance expected to be '{self.model_class}, got: {apply_session.current_frame.instance}") 
@@ -567,7 +567,7 @@ class ThisRegistryForItemsAndChildren(IThisRegistry, RegistryBase):
                 )
         # TODO: .Children?
 
-    def get_root_value(self, apply_session: IApplySession, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
+    def get_root_value(self, apply_session: IApplyResult, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
         raise NotImplementedError("todo")
 
 

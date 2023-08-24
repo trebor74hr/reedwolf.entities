@@ -103,7 +103,7 @@ class IDotExpressionNode(ABC):
 
     @abstractmethod
     def execute_node(self, 
-                 apply_session: "IApplySession", # noqa: F821
+                 apply_session: "IApplyResult", # noqa: F821
                  # previous - can be undefined too
                  dexp_result: Union[ExecResult, UndefinedType],
                  is_last: bool,
@@ -127,7 +127,7 @@ class IDotExpressionNode(ABC):
 class IRegistry:
 
     @abstractmethod
-    def get_root_value(self, apply_session: "IApplySession", attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]: # noqa: F821
+    def get_root_value(self, apply_session: "IApplyResult", attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]: # noqa: F821
         """ 
         Used in apply phase. returns instance or instance attribute value + a
         different attribute name when different attribute needs to be retrieved
@@ -184,7 +184,7 @@ class IAttributeAccessorBase(ABC):
     " used in registry "
 
     @abstractmethod
-    def get_attribute(self, apply_session: 'IApplySession', attr_name:str, is_last:bool) -> Self: # noqa: F821
+    def get_attribute(self, apply_session: 'IApplyResult', attr_name:str, is_last:bool) -> Self: # noqa: F821
         """ 
         is_last -> True - need to get final literal value from object
         (usually primitive type like int/str/date ...) 
@@ -631,7 +631,7 @@ class LiteralDexpNode(IDotExpressionNode):
         return self.type_info
 
     def execute_node(self, 
-                 apply_session: "IApplySession", # noqa: F821
+                 apply_session: "IApplyResult", # noqa: F821
                  dexp_result: ExecResult,
                  is_last: bool,
                  prev_node_type_info: Optional[TypeInfo],
@@ -835,7 +835,7 @@ class OperationDexpNode(IDotExpressionNode):
 
 
     def execute_node(self, 
-                 apply_session: "IApplySession", # noqa: F821
+                 apply_session: "IApplyResult", # noqa: F821
                  dexp_result: ExecResult,
                  is_last: bool,
                  prev_node_type_info: Optional[TypeInfo],
@@ -901,7 +901,7 @@ class OperationDexpNode(IDotExpressionNode):
 
 def execute_available_dexp(
         available_dexp: Optional[Union[bool, DotExpression]], 
-        apply_session: "IApplySession") \
+        apply_session: "IApplyResult") \
                 -> Optional[NotAvailableExecResult]: # noqa: F821
     " returns NotAvailableExecResult when not available with details in instance, if all ok -> returns None "
     if isinstance(available_dexp, DotExpression):
@@ -924,7 +924,7 @@ def execute_dexp_or_node(
         dexp_node: Union[IDotExpressionNode, Any], 
         prev_node_type_info: TypeInfo,
         dexp_result: ExecResult,
-        apply_session: "IApplySession" # noqa: F821
+        apply_session: "IApplyResult" # noqa: F821
         ) -> ExecResult:
 
     # TODO: this function has ugly interface - solve this better

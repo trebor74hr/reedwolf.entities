@@ -1213,7 +1213,7 @@ class ComponentBase(SetParentMixin, ABC):
 
     # ------------------------------------------------------------
 
-    def get_dexp_result_from_instance(self, apply_session: "IApplySession", strict:bool = True) -> Optional[ExecResult]:
+    def get_dexp_result_from_instance(self, apply_session: "IApplyResult", strict:bool = True) -> Optional[ExecResult]:
         """ Fetch ExecResult from component.bind from INSTANCE (storage)
             by executing bind._evaluator.execute() fetch value process
             Work on stored fields only.
@@ -1724,7 +1724,7 @@ class StructEnum(str, Enum):
 # ------------------------------------------------------------
 
 @dataclass
-class IApplySession(IStackOwnerSession):
+class IApplyResult(IStackOwnerSession):
     # TODO: možda bi ovo trebalo izbaciti ... - link na IRegistry u dexp node-ovima 
     setup_session: ISetupSession = field(repr=False)
     entity: IContainerBase = field(repr=False) 

@@ -18,9 +18,9 @@ from .meta import (
         NoneType,
         )
 from .base import (
-        ComponentBase,
-        IApplySession,
-        ValidationFailure,
+    ComponentBase,
+    IApplyResult,
+    ValidationFailure,
         )
 from .expressions import (
         DotExpression,
@@ -70,7 +70,7 @@ class ValidationBase(ComponentBase, ABC): # TODO: make it abstract
         if not isinstance(attr_value, DotExpression) and not to_int(attr_value, 0) >= 0:
             raise EntitySetupError(owner=self, msg="Argument '{attr_name}' must be integer >= 0 or DotExpression, got: {attr_value}")
 
-    def _validate_common_impl(self, apply_session: IApplySession) -> Union[NoneType, ValidationFailure]:
+    def _validate_common_impl(self, apply_session: IApplyResult) -> Union[NoneType, ValidationFailure]:
         not_available_dexp_result: NotAvailableExecResult  = execute_available_dexp(self.available, apply_session=apply_session)
         if not_available_dexp_result: 
             # TODO: log ...
@@ -91,7 +91,7 @@ class ValidationBase(ComponentBase, ABC): # TODO: make it abstract
 
 
     @abstractmethod
-    def validate(self, apply_session: IApplySession) -> Union[NoneType, ValidationFailure]:
+    def validate(self, apply_session: IApplyResult) -> Union[NoneType, ValidationFailure]:
         """ if all ok returns None, else returns ValidationFailure
         containing all required information about failure(s).
         """

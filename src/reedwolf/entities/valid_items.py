@@ -37,8 +37,8 @@ from .valid_base import (
         ValidationBase,
         )
 from .base import (
-        ValidationFailure,
-        IApplySession,
+    ValidationFailure,
+    IApplyResult,
         )
 
 
@@ -64,7 +64,7 @@ class ItemsValidation(ItemsValidationBase):
     error           : Optional[TransMessageType] = field(repr=False, default=None)
     title           : Optional[TransMessageType] = field(repr=False, default=None)
 
-    def validate(self, apply_session: IApplySession) -> Union[NoneType, ValidationFailure]:
+    def validate(self, apply_session: IApplyResult) -> Union[NoneType, ValidationFailure]:
         raise NotImplementedError()
         # TODO: check which namespaces are used, ...
         # TODO: items case - run on items ... 
@@ -205,7 +205,7 @@ class Unique: # namespace holder
         parent          : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
         parent_name     : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
-        def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
+        def validate(self, apply_session: IApplyResult) -> Optional[ValidationFailure]:
             raise NotImplementedError()
 
     @dataclass
@@ -224,7 +224,7 @@ class Unique: # namespace holder
         parent          : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
         parent_name     : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
-        def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
+        def validate(self, apply_session: IApplyResult) -> Optional[ValidationFailure]:
             raise NotImplementedError()
 
 # ------------------------------------------------------------
@@ -248,7 +248,7 @@ class SingleValidation(ValidationBase):
         if model_attr_node.islist():
             raise EntitySetupTypeError(owner=self, msg="Type hint is List and should be single instance. Change to Range/Multi or remove type hint List[]")
 
-    def validate(self, apply_session: IApplySession) -> Optional[ValidationFailure]:
+    def validate(self, apply_session: IApplyResult) -> Optional[ValidationFailure]:
         return None
         # TODO:implement this 
         #   raise NotImplementedError()

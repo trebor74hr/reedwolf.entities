@@ -19,8 +19,8 @@ from .expressions import (
         DotExpression,
         )
 from .base import (
-        IApplySession,
-        ExecResult,
+    IApplyResult,
+    ExecResult,
         )
 from .eval_base import (
         EvaluationBase,
@@ -39,5 +39,5 @@ class ChildrenEvaluation(ChildrenEvaluationBase):
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
     title:          Optional[TransMessageType] = field(repr=False, default=None)
 
-    def execute(self, apply_session: IApplySession) -> Optional[ExecResult]:
+    def execute(self, apply_session: IApplyResult) -> Optional[ExecResult]:
         raise NotImplementedError()

@@ -62,14 +62,14 @@ from .meta import (
         Self,
         )
 from .base import (
-        get_name_from_bind,
-        warn,
-        IFieldBase,
-        IFieldGroup,
-        IApplySession,
-        ValidationFailure,
-        SetupStackFrame,
-        ComponentBase,
+    get_name_from_bind,
+    warn,
+    IFieldBase,
+    IFieldGroup,
+    IApplyResult,
+    ValidationFailure,
+    SetupStackFrame,
+    ComponentBase,
         )
 from .expressions   import (
         DotExpression,
@@ -344,7 +344,7 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
         return value
 
 
-    def validate_type(self, apply_session: IApplySession, strict:bool, value: Any = UNDEFINED) -> Optional[ValidationFailure]:
+    def validate_type(self, apply_session: IApplyResult, strict:bool, value: Any = UNDEFINED) -> Optional[ValidationFailure]:
         """
         returns None if all ok, otherwise ValidationFailure()
         """
