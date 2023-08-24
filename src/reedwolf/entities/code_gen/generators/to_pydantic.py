@@ -35,7 +35,7 @@ class ClassDeclaration(ClassDeclarationBase):
         lines = []
         lines.append(f"class {self.name}(BaseModel):")
         if self.title:
-            lines.append(f'{PY_INDENT}""" {self.title} """')
+            lines.append(f'{PY_INDENT}"""{self.title}"""')
         return lines
 
 # ------------------------------------------------------------

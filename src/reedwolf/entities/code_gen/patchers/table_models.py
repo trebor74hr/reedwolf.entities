@@ -221,12 +221,24 @@ class Column:
             )
 
         # type check
-        out = bool(
-            self.pytype_name == target.pytype_name
-            # compare item type only by py_type
-            and (self.item_type_map.py_type if self.item_type_map else None)
-            == (target.item_type_map.py_type if target.item_type_map else None)
-        )
+        out = True
+        if is_enum(target.py_type) and not is_enum(self.py_type):
+            out = out and issubclass(target.py_type, self.py_type)
+        elif not is_enum(target.py_type) and is_enum(self.py_type):
+            out = out and issubclass(self.py_type, target.py_type)
+        else:
+            out = self.pytype_name == target.pytype_name
+
+        # check subtype if any
+        if self.item_type_map or target.item_type_map:
+            out = out and bool(
+                # compare item type only by py_type
+                (self.item_type_map.py_type if self.item_type_map else None)
+                == (target.item_type_map.py_type if target.item_type_map else None)
+            )
+
+        if not out:
+            print()
 
         # TODO: DRY this
         if self.default_factory != target.default_factory:
@@ -309,9 +321,13 @@ class Column:
             type_map = cls._get_type_map_by_py_type(
                 model_name=dc_model.__name__, name=dc_field.name, py_type=py_type
             )
+            meta = dict(dc_field.metadata)
+            if meta.get("sm_skip"):
+                continue
+
             column = Column(
                 name=dc_field.name,
-                meta=dict(dc_field.metadata),
+                meta=meta,
                 verbose=verbose,
                 source=TableSourceEnum.FROM_DATACLASS,
                 py_type=py_type,
@@ -336,7 +352,7 @@ class Column:
         sa_name_to_dc_model_dict: dict[str, DataclassModel],
         verbose: int = 1,
         fk_raw_column: bool = False,
-    ) -> Column:
+    ) -> Optional[Column]:
         name: str = sa_column.name
         if not fk_raw_column and sa_column.foreign_keys:
             assert len(sa_column.foreign_keys) == 1
@@ -398,6 +414,8 @@ class Column:
 
         assert sa_column.info is None or isinstance(sa_column.info, dict)
         meta = sa_column.info if sa_column.info else {}
+        if meta.get("sm_skip"):
+            return None
 
         return Column(
             name=name,
@@ -909,6 +927,8 @@ class Table:
             column = Column.from_sa_column(
                 name, sa_column, sa_name_to_dc_model_dict, verbose=verbose
             )
+            if not column:
+                continue
             columns.append(column)
             if column.fk_column:
                 # FK access_id => access + access_id
@@ -919,6 +939,7 @@ class Table:
                     fk_raw_column=True,
                     verbose=verbose,
                 )
+                assert fk_raw_column
                 columns.append(fk_raw_column)
                 column.set_fk_column_raw(fk_raw_column)
 

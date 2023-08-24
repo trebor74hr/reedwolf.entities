@@ -36,7 +36,7 @@ class ClassDeclaration(ClassDeclarationBase):
         lines.append("@dataclass")
         lines.append(f"class {self.name}:")
         if self.title:
-            lines.append(f'{PY_INDENT}""" {self.title} """')
+            lines.append(f'{PY_INDENT}"""{self.title}"""')
         return lines
 
 # ------------------------------------------------------------
