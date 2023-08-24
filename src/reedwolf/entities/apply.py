@@ -131,7 +131,7 @@ class UseApplyStackFrameCtxManager(UseStackFrameCtxManagerBase):
 @dataclass
 class ApplyResult(IApplyResult):
     """ 
-    ApplyResult is ApplySession (variable apply_session) - but is renamed to
+    ApplyResult is IApplyResult (variable apply_result) - but is renamed to
     result since it is name exposed to external API.
 
     Similar is Function -> IFunctionFactory.
@@ -262,8 +262,8 @@ class ApplyResult(IApplyResult):
 
         # evaluation_dexp = evaluation.value
         # assert isinstance(evaluation_dexp, DotExpression)
-        # eval_dexp_result  = evaluation_dexp._evaluator.execute(apply_session=self)
-        eval_dexp_result  = evaluation.execute(apply_session=self)
+        # eval_dexp_result  = evaluation_dexp._evaluator.execute(apply_result=self)
+        eval_dexp_result  = evaluation.execute(apply_result=self)
 
         if eval_dexp_result.is_not_available():
             return eval_dexp_result
@@ -273,7 +273,7 @@ class ApplyResult(IApplyResult):
         if isinstance(component, FieldBase):
             eval_value = component.try_adapt_value(eval_value)
 
-        # ALT: bind_dexp_result = component.get_dexp_result_from_instance(apply_session)
+        # ALT: bind_dexp_result = component.get_dexp_result_from_instance(apply_result)
         orig_value = self.get_current_value(component, strict=False)
 
         if (orig_value != eval_value):
@@ -301,7 +301,7 @@ class ApplyResult(IApplyResult):
                     msg=f"Component in frame {self.current_frame.component} must match component: {component}") 
 
         # value=value, 
-        validation_failure = validation.validate(apply_session=self)
+        validation_failure = validation.validate(apply_result=self)
         if validation_failure:
             self.register_instance_validation_failed(component, validation_failure)
 
@@ -321,7 +321,7 @@ class ApplyResult(IApplyResult):
         if new_value is UNDEFINED:
             raise EntityInternalError(owner=component, msg="New value should not be UNDEFINED, fix the caller")
 
-        # key_str = component.get_key_string(apply_session=self)
+        # key_str = component.get_key_string(apply_result=self)
         key_str = self.get_key_string(component)
 
         if self.update_history.get(key_str, UNDEFINED) == UNDEFINED:
@@ -535,7 +535,7 @@ class ApplyResult(IApplyResult):
             # NOTE: frame not set so 'self.current_frame.instance' is not available
             #       thus sending 'instance' param
             component.bound_model._apply_nested_models(
-                                        apply_session=self, 
+                                        apply_result=self, 
                                         instance=self.instance
                                         )
 
@@ -560,7 +560,7 @@ class ApplyResult(IApplyResult):
 
             # original instance
             dexp_result: ExecResult = component.bound_model.model \
-                                        ._evaluator.execute_dexp(apply_session=self)
+                                        ._evaluator.execute_dexp(apply_result=self)
             instance = dexp_result.value
 
             # new instance if any
@@ -710,7 +710,7 @@ class ApplyResult(IApplyResult):
                     value = self.get_current_value(component, strict=False)
 
                     # OLD: delete this - not good in mode_dexp_dependency mode
-                    #       bind_dexp_result = component.get_dexp_result_from_instance(apply_session=self)
+                    #       bind_dexp_result = component.get_dexp_result_from_instance(apply_result=self)
                     #       value = bind_dexp_result.value
                     if not self.defaults_mode:
                         if not isinstance(value, (bool, NoneType)):
@@ -790,7 +790,7 @@ class ApplyResult(IApplyResult):
                             updated_values = updated_values,
                         ))
 
-        # TODO: logger: apply_session.config.logger.debug(f"depth={depth}, comp={component.name}, bind={bind} => {dexp_result}")
+        # TODO: logger: apply_result.config.logger.debug(f"depth={depth}, comp={component.name}, bind={bind} => {dexp_result}")
 
         return
 
@@ -936,8 +936,8 @@ class ApplyResult(IApplyResult):
         for attr_name, attr_value in vars(component).items():
             if isinstance(attr_value, DotExpression):
                 # dexp_result: ExecResult = 
-                attr_value._evaluator.execute_dexp(apply_session=self)
-                # TODO: apply_session.config.logger.debug(f"{parent.name if parent else ''}.{component.name}.{attr_name} = DExp[{attr_value}] -> {dexp_result}")
+                attr_value._evaluator.execute_dexp(apply_result=self)
+                # TODO: apply_result.config.logger.debug(f"{parent.name if parent else ''}.{component.name}.{attr_name} = DExp[{attr_value}] -> {dexp_result}")
 
     # ------------------------------------------------------------
 
@@ -1034,7 +1034,7 @@ class ApplyResult(IApplyResult):
                                         .bound_model \
                                         .model \
                                         ._evaluator.execute_dexp(
-                                                apply_session=self, 
+                                                apply_result=self, 
                                                 )
                 # set new value
                 current_instance_new = dexp_result.value
@@ -1078,7 +1078,7 @@ class ApplyResult(IApplyResult):
         if getattr(component, "available", None):
             not_available_dexp_result = execute_available_dexp(
                                                 component.available, 
-                                                apply_session=self)
+                                                apply_result=self)
             if not_available_dexp_result: 
                 return False, None
 
@@ -1155,7 +1155,7 @@ class ApplyResult(IApplyResult):
         if not isinstance(component, FieldBase):
             raise EntityInternalError(owner=self, msg=f"Expected FieldBase field, got: {component}")
 
-        bind_dexp_result = component.get_dexp_result_from_instance(apply_session=self)
+        bind_dexp_result = component.get_dexp_result_from_instance(apply_result=self)
         init_value = bind_dexp_result.value
 
         self.register_instance_attr_change(
@@ -1193,7 +1193,7 @@ class ApplyResult(IApplyResult):
                                    instance_new=UNDEFINED, 
                         )):
                     instance_new_bind_dexp_result = \
-                            component.get_dexp_result_from_instance(apply_session=self)
+                            component.get_dexp_result_from_instance(apply_result=self)
                     new_value = instance_new_bind_dexp_result.value
 
             elif self.instance_new_struct_type == StructEnum.ENTITY_LIKE:
@@ -1282,7 +1282,7 @@ class ApplyResult(IApplyResult):
     # ------------------------------------------------------------
 
     def get_key_string_by_instance(self, component: ComponentBase, instance: ModelType, parent_instance: ModelType, index0: Optional[int], force:bool=False) -> str:
-        # apply_session:IApplyResult,  -> self
+        # apply_result:IApplyResult,  -> self
         """
         Two cases - component has .keys or not:
 
@@ -1402,17 +1402,17 @@ class ApplyResult(IApplyResult):
     # ------------------------------------------------------------
 
     def get_current_value(self, component: ComponentBase, strict:bool) -> LiteralType:
-        # apply_session:IApplyResult
+        # apply_result:IApplyResult
         """ Could work on non-stored fields.
             Probaly a bit faster, only dict queries.
         """
         # ALT: from update_history: 
-        #       instance_attr_value = apply_session.update_history[key_str][-1]
+        #       instance_attr_value = apply_result.update_history[key_str][-1]
         #       return instance_attr_value.value
         # ALT: fetch from:
         #       bind_dexp: DotExpression = getattr(component, "bind", None)
         #       bind_dexp._evaluator.execute()
-        # key_str = component.get_key_string(apply_session=self)
+        # key_str = component.get_key_string(apply_result=self)
         key_str = self.get_key_string(component)
         if key_str not in self.current_values:
             raise EntityInternalError(owner=component, msg=f"{key_str} not found in current values") 

@@ -37,15 +37,15 @@ class ChildrenValidation(ChildrenValidationBase):
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
     title:          Optional[TransMessageType] = field(repr=False, default=None)
 
-    def validate(self, apply_session: IApplyResult) -> Union[NoneType, ValidationFailure]:
+    def validate(self, apply_result: IApplyResult) -> Union[NoneType, ValidationFailure]:
         # TODO: check which namespaces are used, ...
-        if apply_session.current_frame.component.is_subentity_items():
+        if apply_result.current_frame.component.is_subentity_items():
             # TODO: in items case - run validation against every item and 
             #   output = []
-            #   for item in apply_session.current_frame.get_subentity_items():
-            #       out = self._validate_common_impl(apply_session=apply_session)
+            #   for item in apply_result.current_frame.get_subentity_items():
+            #       out = self._validate_common_impl(apply_result=apply_result)
             #       if out:
             #           output.append(out)
             #       return output
             raise NotImplementedError()
-        return self._validate_common_impl(apply_session=apply_session)
+        return self._validate_common_impl(apply_result=apply_result)

@@ -280,18 +280,18 @@ class IFunction(IFunctionDexpNode):
     #       this will need new input parameter: contexts/attr_node/...
     @staticmethod
     def execute_arg(
-            apply_session: "IApplyResult", # noqa: F821
+            apply_result: "IApplyResult", # noqa: F821
             arg_value: ValueOrDexp,
             prev_node_type_info:TypeInfo, 
             ) -> Any:
         if isinstance(arg_value, (DotExpression, IDotExpressionNode)):
-            # arg_value._evaluator.execute(apply_session=apply_session)
+            # arg_value._evaluator.execute(apply_result=apply_result)
             dexp_result = execute_dexp_or_node(
                             arg_value,
                             arg_value,
                             dexp_result = UNDEFINED,
                             prev_node_type_info=prev_node_type_info,
-                            apply_session=apply_session)
+                            apply_result=apply_result)
             arg_value = dexp_result.value
 
         return arg_value
@@ -299,7 +299,7 @@ class IFunction(IFunctionDexpNode):
 
     # TODO: IApplyResult is in dropthis which imports .functions just for one case ...
     def execute_node(self,
-                     apply_session: "IApplyResult",  # noqa: F821
+                     apply_result: "IApplyResult",  # noqa: F821
                      dexp_result: ExecResult,
                      is_last:bool,
                      prev_node_type_info: Optional[TypeInfo],
@@ -334,7 +334,7 @@ class IFunction(IFunctionDexpNode):
                 else:
                     args.insert(0, input_value)
 
-            self._process_inject_pargs(apply_session=apply_session, kwargs=kwargs)
+            self._process_inject_pargs(apply_result=apply_result, kwargs=kwargs)
 
 
         if self.func_args:
@@ -351,9 +351,9 @@ class IFunction(IFunctionDexpNode):
             if self.fixed_args.kwargs:
                 kwargs.update(self.fixed_args.kwargs)
 
-        args   = [self.execute_arg(apply_session, arg_value, prev_node_type_info=prev_node_type_info) 
+        args   = [self.execute_arg(apply_result, arg_value, prev_node_type_info=prev_node_type_info) 
                   for arg_value in args]
-        kwargs = {arg_name: self.execute_arg(apply_session, arg_value,prev_node_type_info=prev_node_type_info) 
+        kwargs = {arg_name: self.execute_arg(apply_result, arg_value,prev_node_type_info=prev_node_type_info) 
                   for arg_name, arg_value in kwargs.items()}
 
         try:
@@ -367,7 +367,7 @@ class IFunction(IFunctionDexpNode):
 
     # ------------------------------------------------------------
 
-    def _process_inject_pargs(self, apply_session: IApplyResult, kwargs: Dict[str, ValueOrDexp]):
+    def _process_inject_pargs(self, apply_result: IApplyResult, kwargs: Dict[str, ValueOrDexp]):
 
         prep_arg = self.prepared_args.get(ReservedArgumentNames.INJECT_COMPONENT_TREE)
         if not prep_arg:
@@ -384,12 +384,12 @@ class IFunction(IFunctionDexpNode):
             raise EntityInternalError(owner=self, msg=f"INJECT_COMPONENT_TREE :: PrepArg '{prep_arg.name}' expected DExp(F.<field>) -> Field(),  got: '{dexp_node}' -> '{dexp_node.data}' ") 
 
         component: ComponentBase = dexp_node.data
-        assert component == apply_session.current_frame.component
+        assert component == apply_result.current_frame.component
 
-        key_string = apply_session.get_key_string(component)
+        key_string = apply_result.get_key_string(component)
 
         # get complete tree with values
-        output = apply_session.get_values_tree(key_string=key_string)
+        output = apply_result.get_values_tree(key_string=key_string)
 
         assert ReservedArgumentNames.INJECT_COMPONENT_TREE not in kwargs
         kwargs[ReservedArgumentNames.INJECT_COMPONENT_TREE] = output

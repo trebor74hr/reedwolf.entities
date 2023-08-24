@@ -1213,7 +1213,7 @@ class ComponentBase(SetParentMixin, ABC):
 
     # ------------------------------------------------------------
 
-    def get_dexp_result_from_instance(self, apply_session: "IApplyResult", strict:bool = True) -> Optional[ExecResult]:
+    def get_dexp_result_from_instance(self, apply_result: "IApplyResult", strict:bool = True) -> Optional[ExecResult]:
         """ Fetch ExecResult from component.bind from INSTANCE (storage)
             by executing bind._evaluator.execute() fetch value process
             Work on stored fields only.
@@ -1228,7 +1228,7 @@ class ComponentBase(SetParentMixin, ABC):
                 # TODO: move this to Setup phase
                 raise EntityApplyError(owner=self, msg=f"Component '{self.name}' has no bind")
             return None
-        bind_dexp_result = bind_dexp._evaluator.execute_dexp(apply_session=apply_session)
+        bind_dexp_result = bind_dexp._evaluator.execute_dexp(apply_result=apply_result)
         return bind_dexp_result
 
 
@@ -1400,7 +1400,7 @@ class UseStackFrameCtxManagerBase(AbstractContextManager):
                     raise EntityInternalError(owner=self, 
                         msg=f"Attribute '{attr_name}' value in previous frame is non-empty and current frame has empty value:\n  {previous_frame}\n    = {prev_frame_attr_value}\n<>\n  {self.frame}\n    = {this_frame_attr_value} ") 
                 # Copy from previous frame
-                # apply_session.config.loggeer.debugf"setattr '{attr_name}' current_frame <= previous_frame := {prev_frame_attr_value} (frame={self.frame})")
+                # apply_result.config.loggeer.debugf"setattr '{attr_name}' current_frame <= previous_frame := {prev_frame_attr_value} (frame={self.frame})")
                 setattr(self.frame, attr_name, prev_frame_attr_value)
         else:
             # in some cases id() / is should be used?
@@ -1485,7 +1485,7 @@ class SetupStackFrame(IStackFrame):
 
 # ------------------------------------------------------------
 
-# TODO: put in Config and use only in ApplySession.config ...
+# TODO: put in Config and use only in IApplyResult.config ...
 class GlobalConfig:
     ID_NAME_SEPARATOR: ClassVar[str] = "::"
 
@@ -1826,7 +1826,7 @@ class IApplyResult(IStackOwnerSession):
 
     # def get_current_component_bind_value(self):
     #     component = self.current_frame.component
-    #     bind_dexp_result = component.get_dexp_result_from_instance(apply_session=self)
+    #     bind_dexp_result = component.get_dexp_result_from_instance(apply_result=self)
     #     return bind_dexp_result.value
 
     def validate_type(self, component: ComponentBase, strict:bool, value: Any = UNDEFINED):
@@ -1835,12 +1835,12 @@ class IApplyResult(IStackOwnerSession):
 
         if isinstance(component, IFieldBase):
             if self.defaults_mode:
-                validation_failure = component.validate_type(apply_session=self, strict=strict, value=value)
+                validation_failure = component.validate_type(apply_result=self, strict=strict, value=value)
                 if validation_failure:
                     raise EntityInternalError(owner=self, msg="TODO: Type validation failed in defaults_mode - probably should default value to None ") 
                 validation_failure = None
             else:
-                validation_failure = component.validate_type(apply_session=self, strict=strict, value=value)
+                validation_failure = component.validate_type(apply_result=self, strict=strict, value=value)
                 if validation_failure:
                     self.register_instance_validation_failed(component, validation_failure)
 

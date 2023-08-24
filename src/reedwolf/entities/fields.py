@@ -344,17 +344,17 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
         return value
 
 
-    def validate_type(self, apply_session: IApplyResult, strict:bool, value: Any = UNDEFINED) -> Optional[ValidationFailure]:
+    def validate_type(self, apply_result: IApplyResult, strict:bool, value: Any = UNDEFINED) -> Optional[ValidationFailure]:
         """
         returns None if all ok, otherwise ValidationFailure()
         """
-        component = apply_session.current_frame.component
+        component = apply_result.current_frame.component
 
         if component is not self:
             raise EntityInternalError(owner=self, msg=f"Current frame component should match current objects (self), got:\n  {component}\n  !=\n  {self}") 
 
         if value is UNDEFINED:
-            value = apply_session.get_current_value(component, strict=strict)
+            value = apply_result.get_current_value(component, strict=strict)
 
         # NA_DEFAULTS_MODE - no value is evaluated in defaults_mode -> no
         # validation 
@@ -365,7 +365,7 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
             error = f"Value type '{type(value)}' is not compoatible with '{self.PYTHON_TYPE}' " \
                     f"(value is '{message_truncate(value)}')"
             return ValidationFailure(
-                            component_key_string = apply_session.get_key_string(component),
+                            component_key_string = apply_result.get_key_string(component),
                             error=error, 
                             validation_name=self.name,
                             validation_title="Type validation",

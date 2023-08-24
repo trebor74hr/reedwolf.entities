@@ -561,8 +561,8 @@ class KeysBase(ABC):
         """ returns list of (key-name, key-value) """
         ...
 
-    # def get_keys(self, apply_session:IApplyResult) -> List[Any]:
-    #     return [key for name,key in self.get_keys_tuple(apply_session)]
+    # def get_keys(self, apply_result:IApplyResult) -> List[Any]:
+    #     return [key for name,key in self.get_keys_tuple(apply_result)]
 
 
 # def get_new_unique_id() -> int:
@@ -612,8 +612,8 @@ class KeyFields(KeysBase):
 
 
     def get_key_pairs(self, instance: ModelType, container: IContainerBase) -> KeyPairs:
-        # apply_session:IApplyResult
-        # frame = apply_session.current_frame
+        # apply_result:IApplyResult
+        # frame = apply_result.current_frame
         # instance = frame.instance
 
         keys = []
@@ -785,12 +785,12 @@ class Entity(ContainerBase):
               context: Optional[IContext] = None, 
               raise_if_failed:bool = True) -> IApplyResult:
         """
-        create and config ApplyResult() and call apply_session.apply()
+        create and config ApplyResult() and call apply_result.apply()
         """
         from .apply import ApplyResult
         container = self.get_first_parent_container(consider_self=True)
 
-        apply_session = \
+        apply_result = \
                 ApplyResult(setup_session=container.setup_session, 
                       entity=self, 
                       component_name_only=component_name_only,
@@ -800,13 +800,13 @@ class Entity(ContainerBase):
                       )\
                   .apply()
 
-        if not apply_session.finished:
+        if not apply_result.finished:
             raise EntityInternalError(owner=self, msg="Apply process is not finished")
 
         if raise_if_failed:
-            apply_session.raise_if_failed()
+            apply_result.raise_if_failed()
 
-        return apply_session
+        return apply_result
 
     # ------------------------------------------------------------
 
@@ -821,7 +821,7 @@ class Entity(ContainerBase):
         from .apply import ApplyResult
         container = self.get_first_parent_container(consider_self=True)
 
-        apply_session = \
+        apply_result = \
                 ApplyResult(
                     defaults_mode=True,
                     setup_session=container.setup_session, 
@@ -833,14 +833,14 @@ class Entity(ContainerBase):
                     )\
                   .apply()
 
-        if not apply_session.finished:
+        if not apply_result.finished:
             raise EntityInternalError(owner=self, msg="Apply process is not finished")
 
-        if apply_session.errors:
-            validation_error = EntityValidationError(owner=apply_session.entity, errors=apply_session.errors)
+        if apply_result.errors:
+            validation_error = EntityValidationError(owner=apply_result.entity, errors=apply_result.errors)
             raise EntityInternalError(owner=self, msg=f"Internal issue, apply process should not yield validation error(s), got: {validation_error}")
 
-        output = apply_session._dump_defaults()
+        output = apply_result._dump_defaults()
 
         return output
 

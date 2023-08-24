@@ -75,11 +75,11 @@ class FieldEvaluation(FieldEvaluationBase):
         # self._fill_name_when_missing()
         super().__post_init__()
 
-    def execute(self, apply_session: IApplyResult) -> Optional[ExecResult]:
-        not_available_dexp_result = execute_available_dexp(self.available, apply_session=apply_session)
+    def execute(self, apply_result: IApplyResult) -> Optional[ExecResult]:
+        not_available_dexp_result = execute_available_dexp(self.available, apply_result=apply_result)
         if not_available_dexp_result: 
             return not_available_dexp_result
-        return self.value._evaluator.execute_dexp(apply_session=apply_session)
+        return self.value._evaluator.execute_dexp(apply_result=apply_result)
 
 # ------------------------------------------------------------
 
@@ -104,9 +104,9 @@ class Default(FieldEvaluationBase):
         # assert isinstance(self.value, DotExpression), self.value
         pass
 
-    def execute(self, apply_session: IApplyResult) -> Optional[ExecResult]:
+    def execute(self, apply_result: IApplyResult) -> Optional[ExecResult]:
         if isinstance(self.value, DotExpression):
-            dexp_result = self.value._evaluator.execute_dexp(apply_session=apply_session)
+            dexp_result = self.value._evaluator.execute_dexp(apply_result=apply_result)
             value = dexp_result.value
         else:
             value = self.value

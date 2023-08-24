@@ -30,7 +30,7 @@ class EvaluationBase(ComponentBase, ABC):  # TODO: make it abstract
     REQUIRES_AUTOCOMPUTE: ClassVar[bool] = field(default=True)
 
     @abstractmethod
-    def execute(self, apply_session: IApplyResult) -> Optional[ExecResult]:
+    def execute(self, apply_result: IApplyResult) -> Optional[ExecResult]:
         """
         returns value wrapped in ExecResult which will be used to update instance.<attribute>
         if returns None, update won't be done

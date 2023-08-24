@@ -85,18 +85,18 @@ class DotExpressionEvaluator:
         # TODO:     raise EntityInternalError(owner=self, msg=f"Empty attr_node_list.")
         self.finished = True
 
-    def execute_dexp(self, apply_session: "IApplyResult") -> ExecResult:  # noqa: F821
+    def execute_dexp(self, apply_result: "IApplyResult") -> ExecResult:  # noqa: F821
         if not self.finished:
             raise EntityInternalError(owner=self, msg="Not yet finished.")
         if self.failed_reasons:
             raise EntityApplyError(owner=self, msg=f"Failed in creation: {'; '.join(self.failed_reasons)}.")
 
         dexp_result = UNDEFINED
-        if apply_session.current_frame.on_component_only:
+        if apply_result.current_frame.on_component_only:
             # M.address_set -> process only address_set 
             node = self.attr_node_list[-1]
             dexp_result = node.execute_node(
-                                apply_session, 
+                                apply_result, 
                                 dexp_result, 
                                 is_last=True, 
                                 prev_node_type_info=None)
@@ -105,7 +105,7 @@ class DotExpressionEvaluator:
             prev_node_type_info = None
             for idx, node in enumerate(self.attr_node_list, 1):
                 dexp_result = node.execute_node(
-                                    apply_session, 
+                                    apply_result, 
                                     dexp_result, 
                                     is_last=(idx_last == idx),
                                     prev_node_type_info=prev_node_type_info,

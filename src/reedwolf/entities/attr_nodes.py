@@ -172,7 +172,7 @@ class AttrDexpNode(IDotExpressionNode):
 
 
     def execute_node(self,
-                     apply_session: IApplyResult,
+                     apply_result: IApplyResult,
                      # previous - can be undefined too
                      dexp_result: Union[ExecResult, UndefinedType],
                      prev_node_type_info: Optional[TypeInfo],
@@ -194,7 +194,7 @@ class AttrDexpNode(IDotExpressionNode):
         if dexp_result in (UNDEFINED, None):
             # ==== Initial / first value - get from registry / namespace, e.g. M
             dexp_result = ExecResult()
-            frame = apply_session.current_frame
+            frame = apply_result.current_frame
 
             if frame.container.is_subentity() or frame.on_component_only:
                 if not len(names)==1:
@@ -206,21 +206,21 @@ class AttrDexpNode(IDotExpressionNode):
                     raise EntityInternalError(owner=self, msg=f"Initial evaluation step for non-subentity_items failed, expected single name member (e.g. M), got: {self.name}\n  == Compoonent: {frame.container}")
 
             registry = None
-            if apply_session.current_frame.local_setup_session:
-                # take from apply_session's current local_setup_session
-                registry = apply_session.current_frame.local_setup_session.get_registry(self.namespace, strict=False)
+            if apply_result.current_frame.local_setup_session:
+                # take from apply_result's current local_setup_session
+                registry = apply_result.current_frame.local_setup_session.get_registry(self.namespace, strict=False)
 
             if not registry:
                 # take from setup_session
-                registry = apply_session.setup_session.get_registry(self.namespace)
+                registry = apply_result.setup_session.get_registry(self.namespace)
 
-            value_previous, attr_name_new = registry.get_root_value(apply_session=apply_session, attr_name=attr_name)
+            value_previous, attr_name_new = registry.get_root_value(apply_result=apply_result, attr_name=attr_name)
             if attr_name_new:
                 # e.g. case ReservedAttributeNames.VALUE_ATTR_NAME, i.e. .Value
                 attr_name = attr_name_new
 
             # == M.name mode
-            if apply_session.current_frame.on_component_only and registry.ROOT_VALUE_NEEDS_FETCH_BY_NAME:
+            if apply_result.current_frame.on_component_only and registry.ROOT_VALUE_NEEDS_FETCH_BY_NAME:
                 # TODO: not nice solution
                 do_fetch_by_name = False
             else:
@@ -260,7 +260,7 @@ class AttrDexpNode(IDotExpressionNode):
                 if isinstance(value_prev, IAttributeAccessorBase):
                     # NOTE: if this is last in chain - fetch final value
                     value_new = value_prev.get_attribute(
-                                    apply_session=apply_session, 
+                                    apply_result=apply_result, 
                                     attr_name=attr_name, 
                                     is_last=is_last)
                 else:
@@ -287,7 +287,7 @@ class AttrDexpNode(IDotExpressionNode):
             value_new = value_previous
 
         # TODO: check type_info match too - and put in all types of nodes - functions/operators
-        if apply_session.component_name_only and apply_session.instance_new == value_new:
+        if apply_result.component_name_only and apply_result.instance_new == value_new:
             # TODO: this is workaround when single instance is passed to update single item in SubEntityItems[List]
             #       not good solution
             ...
@@ -300,7 +300,7 @@ class AttrDexpNode(IDotExpressionNode):
             # if not self.get_type_info().is_optional:
             #     raise EntityApplyValueError(owner=self, msg=f"Attribute '{attr_name}' has 'None' value and type is not 'Optional'.")
         elif self.islist():
-            # apply_session.entity.get_component(apply_session.component_name_only)
+            # apply_result.entity.get_component(apply_result.component_name_only)
             raise EntityApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should be a list, got: '{to_repr(value_new)}' : '{type(value_new)}'")
 
         # TODO: hm, changer_name is equal to attr_name, any problem / check / fix ... 

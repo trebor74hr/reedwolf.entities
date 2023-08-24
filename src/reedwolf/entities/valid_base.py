@@ -70,18 +70,18 @@ class ValidationBase(ComponentBase, ABC): # TODO: make it abstract
         if not isinstance(attr_value, DotExpression) and not to_int(attr_value, 0) >= 0:
             raise EntitySetupError(owner=self, msg="Argument '{attr_name}' must be integer >= 0 or DotExpression, got: {attr_value}")
 
-    def _validate_common_impl(self, apply_session: IApplyResult) -> Union[NoneType, ValidationFailure]:
-        not_available_dexp_result: NotAvailableExecResult  = execute_available_dexp(self.available, apply_session=apply_session)
+    def _validate_common_impl(self, apply_result: IApplyResult) -> Union[NoneType, ValidationFailure]:
+        not_available_dexp_result: NotAvailableExecResult  = execute_available_dexp(self.available, apply_result=apply_result)
         if not_available_dexp_result: 
             # TODO: log ...
             return None
 
-        component = apply_session.current_frame.component
-        dexp_result: ExecResult = self.ensure._evaluator.execute_dexp(apply_session)
+        component = apply_result.current_frame.component
+        dexp_result: ExecResult = self.ensure._evaluator.execute_dexp(apply_result)
         if not bool(dexp_result.value):
             error = self.error if self.error else "Validation failed"
             return ValidationFailure(
-                            component_key_string = apply_session.get_key_string(component),
+                            component_key_string = apply_result.get_key_string(component),
                             error=error, 
                             validation_name=self.name,
                             validation_title=self.title,
@@ -91,7 +91,7 @@ class ValidationBase(ComponentBase, ABC): # TODO: make it abstract
 
 
     @abstractmethod
-    def validate(self, apply_session: IApplyResult) -> Union[NoneType, ValidationFailure]:
+    def validate(self, apply_result: IApplyResult) -> Union[NoneType, ValidationFailure]:
         """ if all ok returns None, else returns ValidationFailure
         containing all required information about failure(s).
         """

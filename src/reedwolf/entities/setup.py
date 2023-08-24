@@ -131,7 +131,7 @@ class RegistryBase(IRegistry):
 
 
     @abstractmethod
-    def get_root_value(self, apply_session: IApplyResult, attr_name: str) -> Any:
+    def get_root_value(self, apply_result: IApplyResult, attr_name: str) -> Any:
         """ 
         Apply phase - Namespace.<attr_name> - 
         function returns the instance (root value) from which attr_name will be read from 
@@ -509,7 +509,7 @@ class RegistryBase(IRegistry):
 
 class RegistryUseDenied(RegistryBase):
 
-    def get_root_value(self, apply_session: IApplyResult, attr_name: str) -> Any:
+    def get_root_value(self, apply_result: IApplyResult, attr_name: str) -> Any:
         raise EntityInternalError(owner=self, msg="Registry should not be used to get root value.")
 
 
@@ -522,8 +522,8 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
     component: ComponentBase
     instance: ModelType
 
-    def get_attribute(self, apply_session:IApplyResult, attr_name: str, is_last:bool) -> Self:
-        children_dict = apply_session.get_upward_components_dict(self.component)
+    def get_attribute(self, apply_result:IApplyResult, attr_name: str, is_last:bool) -> Self:
+        children_dict = apply_result.get_upward_components_dict(self.component)
         if attr_name not in children_dict:
             avail_names = get_available_names_example(attr_name, children_dict.keys())
             raise EntityApplyNameError(owner=self.component, 
@@ -538,7 +538,7 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
             raise EntityApplyNameError(owner=self.component,
                     msg=f"Attribute '{attr_name}' is '{type(component)}' type which has no binding, therefore can not extract value. Use standard *Field components instead.")
         # TODO: needs some class wrapper and caching ...
-        dexp_result = component.bind._evaluator.execute_dexp(apply_session)
+        dexp_result = component.bind._evaluator.execute_dexp(apply_result)
         out = dexp_result.value
 
         return out

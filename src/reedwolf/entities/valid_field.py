@@ -78,8 +78,8 @@ class FieldValidation(FieldValidationBase):
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
     title:          Optional[TransMessageType] = field(repr=False, default=None)
 
-    def validate(self, apply_session: IApplyResult) -> Union[NoneType, ValidationFailure]:
-        return self._validate_common_impl(apply_session=apply_session)
+    def validate(self, apply_result: IApplyResult) -> Union[NoneType, ValidationFailure]:
+        return self._validate_common_impl(apply_result=apply_result)
 
     # def __repr__(self):
     #     # due multiple inheritance - to force calling ComponentBase implementation
@@ -98,12 +98,12 @@ class Required(FieldValidationBase):
             self.error = "The value is required"
         super().__post_init__()
 
-    def validate(self, apply_session: IApplyResult) -> Optional[ValidationFailure]:
-        component = apply_session.current_frame.component
-        value = apply_session.get_current_value(component, strict=False)
+    def validate(self, apply_result: IApplyResult) -> Optional[ValidationFailure]:
+        component = apply_result.current_frame.component
+        value = apply_result.get_current_value(component, strict=False)
         if value is None:
             return ValidationFailure(
-                            component_key_string = apply_session.get_key_string(component),
+                            component_key_string = apply_result.get_key_string(component),
                             error=self.error, 
                             validation_name=self.name,
                             validation_title=self.title,
@@ -134,11 +134,11 @@ class Readonly(FieldValidationBase):
         super().__post_init__()
 
 
-    def validate(self, apply_session: IApplyResult) -> Optional[ValidationFailure]:
-        component = apply_session.current_frame.component
+    def validate(self, apply_result: IApplyResult) -> Optional[ValidationFailure]:
+        component = apply_result.current_frame.component
 
         if isinstance(self.value, DotExpression):
-            dexp_result = self.value._evaluator.execute_dexp(apply_session)
+            dexp_result = self.value._evaluator.execute_dexp(apply_result)
             is_readonly = dexp_result.value
         else:
             is_readonly = self.value
@@ -146,8 +146,8 @@ class Readonly(FieldValidationBase):
         if not is_readonly:
             return None
 
-        key_string = apply_session.get_key_string(component)
-        update_history = apply_session.update_history.get(key_string)
+        key_string = apply_result.get_key_string(component)
+        update_history = apply_result.update_history.get(key_string)
         if update_history and len(update_history) > 1:
             initial_value = update_history[0].value
             last_value = update_history[-1].value
@@ -186,13 +186,13 @@ class MinValue(FieldValidationBase):
             self.error = "The value it too big"
         super().__post_init__()
 
-    def validate(self, apply_session: IApplyResult) -> Optional[ValidationFailure]:
+    def validate(self, apply_result: IApplyResult) -> Optional[ValidationFailure]:
         # TODO: evaluate self.value when DotExpression
-        component = apply_session.current_frame.component
-        value = apply_session.get_current_value(component, strict=False)
+        component = apply_result.current_frame.component
+        value = apply_result.get_current_value(component, strict=False)
         if not is_none_value(value) and value < self.value:
             return ValidationFailure(
-                            component_key_string = apply_session.get_key_string(component),
+                            component_key_string = apply_result.get_key_string(component),
                             error=self.error, 
                             validation_name=self.name,
                             validation_title=self.title,
@@ -214,13 +214,13 @@ class ExactLength(FieldValidationBase):
             self.error = f"Provide value with length at most {self.value}"
         super().__post_init__()
 
-    def validate(self, apply_session: IApplyResult) -> Optional[ValidationFailure]:
+    def validate(self, apply_result: IApplyResult) -> Optional[ValidationFailure]:
         # TODO: evaluate self.value when DotExpression
-        component = apply_session.current_frame.component
-        value = apply_session.get_current_value(component, strict=False)
+        component = apply_result.current_frame.component
+        value = apply_result.get_current_value(component, strict=False)
         if value and hasattr(value, "__len__") and len(value) != self.value:
             return ValidationFailure(
-                            component_key_string = apply_session.get_key_string(component),
+                            component_key_string = apply_result.get_key_string(component),
                             error=self.error, 
                             validation_name=self.name,
                             validation_title=self.title,
@@ -243,13 +243,13 @@ class MaxLength(FieldValidationBase):
             self.error = f"Provide value with length at most {self.value}"
         super().__post_init__()
 
-    def validate(self, apply_session: IApplyResult) -> Optional[ValidationFailure]:
+    def validate(self, apply_result: IApplyResult) -> Optional[ValidationFailure]:
         # TODO: evaluate self.value when DotExpression
-        component = apply_session.current_frame.component
-        value = apply_session.get_current_value(component, strict=False)
+        component = apply_result.current_frame.component
+        value = apply_result.get_current_value(component, strict=False)
         if value and hasattr(value, "__len__") and len(value) > self.value:
             return ValidationFailure(
-                            component_key_string = apply_session.get_key_string(component),
+                            component_key_string = apply_result.get_key_string(component),
                             error=self.error, 
                             validation_name=self.name,
                             validation_title=self.title,
@@ -273,13 +273,13 @@ class MinLength(FieldValidationBase):
 
         super().__post_init__()
 
-    def validate(self, apply_session: IApplyResult) -> Optional[ValidationFailure]:
+    def validate(self, apply_result: IApplyResult) -> Optional[ValidationFailure]:
         # TODO: evaluate self.value when DotExpression
-        component = apply_session.current_frame.component
-        value = apply_session.get_current_value(component, strict=False)
+        component = apply_result.current_frame.component
+        value = apply_result.get_current_value(component, strict=False)
         if value and hasattr(value, "__len__") and len(value) < self.value:
             return ValidationFailure(
-                            component_key_string = apply_session.get_key_string(component),
+                            component_key_string = apply_result.get_key_string(component),
                             error=self.error, 
                             validation_name=self.name,
                             validation_title=self.title,
@@ -320,14 +320,14 @@ class RangeLength(FieldValidationBase):
         super().__post_init__()
 
     # value: Any, component: "ComponentBase", 
-    def validate(self, apply_session: IApplyResult) -> Optional[ValidationFailure]:
+    def validate(self, apply_result: IApplyResult) -> Optional[ValidationFailure]:
         # TODO: evaluate self.value when DotExpression
-        component = apply_session.current_frame.component
-        value = apply_session.get_current_value(component, strict=False)
+        component = apply_result.current_frame.component
+        value = apply_result.get_current_value(component, strict=False)
         if hasattr(value, "__len__"):
             if self.min and value and len(value) < self.min:
                 return ValidationFailure(
-                                component_key_string = apply_session.get_key_string(component),
+                                component_key_string = apply_result.get_key_string(component),
                                 error=self.error, 
                                 validation_name=self.name,
                                 validation_title=self.title,
@@ -335,7 +335,7 @@ class RangeLength(FieldValidationBase):
                                         f"({message_truncate(value)})")
             elif self.max and value and len(value) > self.max:
                 return ValidationFailure(
-                                component_key_string = apply_session.get_key_string(component),
+                                component_key_string = apply_result.get_key_string(component),
                                 error=self.error, 
                                 validation_name=self.name,
                                 validation_title=self.title,

@@ -156,13 +156,13 @@ class NestedBoundModelMixin:
     # ------------------------------------------------------------
 
 
-    def _apply_nested_models(self, apply_session: IApplyResult, instance: ModelType):
+    def _apply_nested_models(self, apply_result: IApplyResult, instance: ModelType):
         children_bound_models = self.get_children()
         if not children_bound_models:
             return 
 
-        if not isinstance(apply_session, IApplyResult):
-            raise EntityInternalError(owner=self, msg=f"apply_session is not IApplySession, got: {apply_session}")
+        if not isinstance(apply_result, IApplyResult):
+            raise EntityInternalError(owner=self, msg=f"apply_result is not IApplyResult, got: {apply_result}")
 
         if not isinstance(instance, self.model):
             raise EntityInternalError(owner=self, msg=f"Type of instance is not '{self.model}', got: {to_repr(instance)}")
@@ -172,14 +172,14 @@ class NestedBoundModelMixin:
                 for child_bound_model in children_bound_models
                 }
 
-        local_setup_session = apply_session.setup_session \
+        local_setup_session = apply_result.setup_session \
                                 .create_local_setup_session_for_this_instance(
                                         model_class=self.model,
                                         )
 
         container = self.get_first_parent_container(consider_self=False)
 
-        with apply_session.use_stack_frame(
+        with apply_result.use_stack_frame(
                 ApplyStackFrame(
                     container = container, 
                     component = self, 
@@ -199,14 +199,14 @@ class NestedBoundModelMixin:
                 # NOTE: can check 'model_with_handler.type_info'
 
                 rh_dexp_result = model_with_handler.read_handler_dexp.execute_node(
-                                    apply_session=apply_session, 
+                                    apply_result=apply_result, 
                                     dexp_result=ExecResult(),
                                     prev_node_type_info=None,
                                     is_last=True)
 
                 child_instances = rh_dexp_result.value
 
-                # apply_session.config.logger.warn(f"set bound model read_handler to instance: {to_repr(instance)}.{model_with_handler.name} = {to_repr(rh_dexp_result.value)}")
+                # apply_result.config.logger.warn(f"set bound model read_handler to instance: {to_repr(instance)}.{model_with_handler.name} = {to_repr(rh_dexp_result.value)}")
                 setattr(instance, model_with_handler.name, child_instances)
 
                 if child_instances:
@@ -225,7 +225,7 @@ class NestedBoundModelMixin:
 
                     for child_instance in child_instances:
                         child_bound_model._apply_nested_models(
-                                                apply_session=apply_session, 
+                                                apply_result=apply_result, 
                                                 instance=child_instance)
 
 

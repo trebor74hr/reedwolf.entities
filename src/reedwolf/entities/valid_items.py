@@ -64,14 +64,14 @@ class ItemsValidation(ItemsValidationBase):
     error           : Optional[TransMessageType] = field(repr=False, default=None)
     title           : Optional[TransMessageType] = field(repr=False, default=None)
 
-    def validate(self, apply_session: IApplyResult) -> Union[NoneType, ValidationFailure]:
+    def validate(self, apply_result: IApplyResult) -> Union[NoneType, ValidationFailure]:
         raise NotImplementedError()
         # TODO: check which namespaces are used, ...
         # TODO: items case - run on items ... 
-        # assert apply_session.current_frame.component.is_subentity_items():
+        # assert apply_result.current_frame.component.is_subentity_items():
         #   output = []
-        #   for item in apply_session.current_frame.get_subentity_items():
-        #       out = self._validate_common_impl(apply_session=apply_session)
+        #   for item in apply_result.current_frame.get_subentity_items():
+        #       out = self._validate_common_impl(apply_result=apply_result)
         #       if out:
         #           output.append(out)
         #       return output
@@ -205,7 +205,7 @@ class Unique: # namespace holder
         parent          : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
         parent_name     : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
-        def validate(self, apply_session: IApplyResult) -> Optional[ValidationFailure]:
+        def validate(self, apply_result: IApplyResult) -> Optional[ValidationFailure]:
             raise NotImplementedError()
 
     @dataclass
@@ -224,7 +224,7 @@ class Unique: # namespace holder
         parent          : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
         parent_name     : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
-        def validate(self, apply_session: IApplyResult) -> Optional[ValidationFailure]:
+        def validate(self, apply_result: IApplyResult) -> Optional[ValidationFailure]:
             raise NotImplementedError()
 
 # ------------------------------------------------------------
@@ -248,7 +248,7 @@ class SingleValidation(ValidationBase):
         if model_attr_node.islist():
             raise EntitySetupTypeError(owner=self, msg="Type hint is List and should be single instance. Change to Range/Multi or remove type hint List[]")
 
-    def validate(self, apply_session: IApplyResult) -> Optional[ValidationFailure]:
+    def validate(self, apply_result: IApplyResult) -> Optional[ValidationFailure]:
         return None
         # TODO:implement this 
         #   raise NotImplementedError()

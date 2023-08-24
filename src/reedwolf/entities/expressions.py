@@ -103,7 +103,7 @@ class IDotExpressionNode(ABC):
 
     @abstractmethod
     def execute_node(self, 
-                 apply_session: "IApplyResult", # noqa: F821
+                 apply_result: "IApplyResult", # noqa: F821
                  # previous - can be undefined too
                  dexp_result: Union[ExecResult, UndefinedType],
                  is_last: bool,
@@ -127,7 +127,7 @@ class IDotExpressionNode(ABC):
 class IRegistry:
 
     @abstractmethod
-    def get_root_value(self, apply_session: "IApplyResult", attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]: # noqa: F821
+    def get_root_value(self, apply_result: "IApplyResult", attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]: # noqa: F821
         """ 
         Used in apply phase. returns instance or instance attribute value + a
         different attribute name when different attribute needs to be retrieved
@@ -184,7 +184,7 @@ class IAttributeAccessorBase(ABC):
     " used in registry "
 
     @abstractmethod
-    def get_attribute(self, apply_session: 'IApplyResult', attr_name:str, is_last:bool) -> Self: # noqa: F821
+    def get_attribute(self, apply_result: 'IApplyResult', attr_name:str, is_last:bool) -> Self: # noqa: F821
         """ 
         is_last -> True - need to get final literal value from object
         (usually primitive type like int/str/date ...) 
@@ -631,7 +631,7 @@ class LiteralDexpNode(IDotExpressionNode):
         return self.type_info
 
     def execute_node(self, 
-                 apply_session: "IApplyResult", # noqa: F821
+                 apply_result: "IApplyResult", # noqa: F821
                  dexp_result: ExecResult,
                  is_last: bool,
                  prev_node_type_info: Optional[TypeInfo],
@@ -835,7 +835,7 @@ class OperationDexpNode(IDotExpressionNode):
 
 
     def execute_node(self, 
-                 apply_session: "IApplyResult", # noqa: F821
+                 apply_result: "IApplyResult", # noqa: F821
                  dexp_result: ExecResult,
                  is_last: bool,
                  prev_node_type_info: Optional[TypeInfo],
@@ -852,7 +852,7 @@ class OperationDexpNode(IDotExpressionNode):
                                 self._first_dexp_node, 
                                 prev_node_type_info=prev_node_type_info,
                                 dexp_result=dexp_result,
-                                apply_session=apply_session)
+                                apply_result=apply_result)
 
         # if self.second is not in (UNDEFINED, None):
         if self._second_dexp_node is not None:
@@ -861,12 +861,12 @@ class OperationDexpNode(IDotExpressionNode):
                                     self._second_dexp_node, 
                                     prev_node_type_info=prev_node_type_info,
                                     dexp_result=dexp_result,
-                                    apply_session=apply_session)
+                                    apply_result=apply_result)
             # binary operation second argument adaption?
             #   string + number -> string + str(int)
             first_value = first_dexp_result.value
             second_value = second_dexp_result.value
-            type_adapter = apply_session\
+            type_adapter = apply_result\
                     .binary_operations_type_adapters\
                     .get((type(first_value), type(second_value)), None)
 
@@ -876,14 +876,14 @@ class OperationDexpNode(IDotExpressionNode):
             try:
                 new_value = self.op_function(first_value, second_value)
             except Exception as ex:
-                raise EntityApplyError(owner=apply_session, msg=f"{self} := {self.op_function}({first_dexp_result.value}, {second_dexp_result.value}) raised error: {ex}")
+                raise EntityApplyError(owner=apply_result, msg=f"{self} := {self.op_function}({first_dexp_result.value}, {second_dexp_result.value}) raised error: {ex}")
         else:
             # unary operation
             try:
                 new_value = self.op_function(first_dexp_result.value)
             except Exception as ex:
                 # raise
-                raise EntityApplyError(owner=apply_session, msg=f"{self} := {self.op_function}({first_dexp_result.value}) raised error: {ex}")
+                raise EntityApplyError(owner=apply_result, msg=f"{self} := {self.op_function}({first_dexp_result.value}) raised error: {ex}")
 
         op_dexp_result = ExecResult()
 
@@ -901,11 +901,11 @@ class OperationDexpNode(IDotExpressionNode):
 
 def execute_available_dexp(
         available_dexp: Optional[Union[bool, DotExpression]], 
-        apply_session: "IApplyResult") \
+        apply_result: "IApplyResult") \
                 -> Optional[NotAvailableExecResult]: # noqa: F821
     " returns NotAvailableExecResult when not available with details in instance, if all ok -> returns None "
     if isinstance(available_dexp, DotExpression):
-        available_dexp_result = available_dexp._evaluator.execute_dexp(apply_session=apply_session)
+        available_dexp_result = available_dexp._evaluator.execute_dexp(apply_result=apply_result)
         if not bool(available_dexp_result.value):
             return NotAvailableExecResult.create(available_dexp_result=available_dexp_result)
     elif isinstance(available_dexp, bool):
@@ -924,21 +924,21 @@ def execute_dexp_or_node(
         dexp_node: Union[IDotExpressionNode, Any], 
         prev_node_type_info: TypeInfo,
         dexp_result: ExecResult,
-        apply_session: "IApplyResult" # noqa: F821
+        apply_result: "IApplyResult" # noqa: F821
         ) -> ExecResult:
 
     # TODO: this function has ugly interface - solve this better
 
     if isinstance(dexp_or_value, DotExpression):
         dexp_result = dexp_or_value._evaluator.execute_dexp(
-                            apply_session=apply_session,
+                            apply_result=apply_result,
                             )
     # AttrDexpNode, OperationDexpNode, IFunctionDexpNode, LiteralDexpNode,
     elif isinstance(dexp_node, (
             IDotExpressionNode,
             )):
         dexp_result = dexp_node.execute_node(
-                            apply_session=apply_session, 
+                            apply_result=apply_result, 
                             dexp_result=dexp_result,
                             prev_node_type_info=prev_node_type_info,
                             is_last=True,
