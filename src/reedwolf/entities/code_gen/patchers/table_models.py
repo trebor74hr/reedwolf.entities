@@ -221,26 +221,42 @@ class Column:
             )
 
         # type check
+        msg_diffs: list[str] = []
         are_equal = True
         if is_enum(target.py_type) and not is_enum(self.py_type):
-            are_equal = are_equal and issubclass(target.py_type, self.py_type)
+            term = issubclass(target.py_type, self.py_type)
+            are_equal = are_equal and term
+            if not term and verbose >= 2:
+                msg_diffs.append(f"py_type: {self.py_type} -> {target.py_type}")
         elif not is_enum(target.py_type) and is_enum(self.py_type):
-            are_equal = are_equal and issubclass(self.py_type, target.py_type)
+            term = issubclass(self.py_type, target.py_type)
+            are_equal = are_equal and term
+            if not term and verbose >= 2:
+                msg_diffs.append(f"enum: {self.py_type} -> {target.py_type}")
         else:
-            are_equal = self.pytype_name == target.pytype_name
+            term = self.pytype_name == target.pytype_name
+            are_equal = are_equal and term
+            if not term and verbose >= 2:
+                msg_diffs.append(f"pytype_name: {self.pytype_name} -> {target.pytype_name}")
 
         # check subtype if any
         if self.item_type_map or target.item_type_map:
-            are_equal = are_equal and bool(
+            term = bool(
                 # compare item type only by py_type
                 (self.item_type_map.py_type if self.item_type_map else None)
                 == (target.item_type_map.py_type if target.item_type_map else None)
             )
+            are_equal = are_equal and term
+            if not term and verbose >= 2:
+                msg_diffs.append(f"item_type_map: {self.item_type_map} -> {target.item_type_map}")
 
         # TODO: DRY this
         if self.default_factory != target.default_factory:
             if self.default_factory is not None and target.default_factory is None:
-                are_equal = False  # do update
+                term = False  # do update
+                are_equal = are_equal and term
+                if not term and verbose >= 2:
+                    msg_diffs.append(f"default_factory: {self.default_factory} -> {target.default_factory}")
             elif not target.meta.get("sm_default_factory_ok", False):
                 warn(
                     f"{self.name}: default_factory is diff but defined on both sides: {self.default_factory} "
@@ -259,7 +275,10 @@ class Column:
             if target.meta.get("sm_default_ok", False):
                 pass
             elif self.default is not MISSING and target.default is MISSING:
-                are_equal = False  # do update
+                term = False  # do update
+                are_equal = are_equal and term
+                if not term and verbose >= 2:
+                    msg_diffs.append(f"default: {self.default} -> {target.default}")
             else:
                 warn(
                     f"{self.name}: default is diff but defined on both sides: {self.default} "
@@ -267,29 +286,26 @@ class Column:
                 )
 
         if self.nullable != target.nullable:
-            if (target.source == TableSourceEnum.FROM_DATACLASS) or (
+            if target.meta.get("sm_nullable_ok", False):
+                pass
+            elif ((target.source == TableSourceEnum.FROM_DATACLASS) or (
                 self.nullable is not MISSING and target.nullable is MISSING
-            ):
-                are_equal = False  # do update
-            elif not target.meta.get("sm_nullable_ok", False):
+            )):
+                term = False  # do update
+                are_equal = are_equal and term
+                if not term and verbose >= 2:
+                    msg_diffs.append(f"nullable: {self.nullable} -> {target.nullable}")
+            else:
                 warn(
                     f"{self.name}: nullable is diff but defined on both sides: {self.nullable} "
                     f"!= {target.nullable}, ignored."
                 )
 
-        if not are_equal and verbose >= 2:
-            msg: list[str] = []
-            if self.pytype_name != target.pytype_name:
-                msg.append(f"pytype_name: {self.pytype_name} != { target.pytype_name}")
-            if self.item_type_map != target.item_type_map:
-                msg.append(f"item_type_map: {self.item_type_map} != {target.item_type_map}")
-            if self.default_factory != target.default_factory:
-                msg.append(f"default_factory: {self.default_factory} != {target.default_factory}")
-            if self.nullable != target.nullable:
-                msg.append(f"nullable(*): {self.nullable} != {target.nullable}")
-            if self.default != target.default:
-                msg.append(f"default(*): {self.default} != {target.default}")
-            info(f"{self.name}: diff detected: {', '.join(msg)}")
+        if not are_equal:
+            if verbose >= 2:
+                info(f"{self.name}: diffs ({len(msg_diffs)}) detected - will be updated: {', '.join(msg_diffs)}")
+        else:
+            assert not msg_diffs
 
         return are_equal
 
