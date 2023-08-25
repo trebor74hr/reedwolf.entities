@@ -851,7 +851,7 @@ class ApplyResult(IApplyResult):
 
             new_instances_by_key = {}
             for index0, item_instance_new in enumerate(current_instance_list_new, 0):
-                key = component.get_key_pairs_or_index0(instance=item_instance_new, index0=index0)
+                key = component.get_key_pairs_or_index0(instance=item_instance_new, index0=index0, apply_result=self)
                 if key in new_instances_by_key:
                     raise EntityApplyValueError(owner=self, msg=f"{component}: Duplicate key {key}, first item is: {new_instances_by_key[key]}")
                 new_instances_by_key[key] = item_instance_new
@@ -864,7 +864,7 @@ class ApplyResult(IApplyResult):
         #       https://stackoverflow.com/questions/39980323/are-dictionaries-ordered-in-python-3-6
         instances_by_key = OrderedDict()
         for index0, instance in enumerate(instance_list, 0):
-            key = component.get_key_pairs_or_index0(instance=instance, index0=index0)
+            key = component.get_key_pairs_or_index0(instance=instance, index0=index0, apply_result=self)
             if component.keys:
                 missing_keys = [kn for kn, kv in key if isinstance(kv, MissingKey)]
                 if missing_keys:
@@ -1338,7 +1338,7 @@ class ApplyResult(IApplyResult):
 
             if component.keys:
                 assert component.is_container()
-                key_pairs = component.get_key_pairs(instance)
+                key_pairs = component.get_key_pairs(instance, apply_result=self)
                 assert key_pairs
                 key_string = "{}[{}]".format(
                                 component.name, 

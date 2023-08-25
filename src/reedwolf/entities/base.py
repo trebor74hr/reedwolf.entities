@@ -1824,6 +1824,12 @@ class IApplyResult(IStackOwnerSession):
     values_tree: Optional[ComponentTreeWValuesType] = field(init=False, repr=False, default=None)
     values_tree_by_key_string: Optional[Dict[KeyString, ComponentTreeWValuesType]] = field(init=False, repr=False, default=None)
 
+    new_id_counter: int = field(init=False, repr=False, default=0)
+
+    def _get_new_id(self) -> str:
+        self.new_id_counter+=1
+        return self.new_id_counter
+
     def init_update_history_for_key(self, key_str: str) -> None:
         if key_str in self.update_history:
             raise EntityInternalError(owner=self, msg=f"key_str={key_str} already set in update_history")

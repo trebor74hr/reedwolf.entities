@@ -429,23 +429,24 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
     # ------------------------------------------------------------
 
-    def get_key_pairs_or_index0(self, 
-                                instance: ModelType, 
-                                index0: int, 
+    def get_key_pairs_or_index0(self,
+                                apply_result: IApplyResult,
+                                instance: ModelType,
+                                index0: int,
                                 ) -> Union[Tuple[(str, Any)], int]:
         " index0 is 0 based index of item in the list"
         # TODO: move to ApplyResult:IApplyResult?
         if self.keys:
-            ret = self.get_key_pairs(instance)
+            ret = self.get_key_pairs(instance, apply_result=apply_result)
         else:
             ret = index0
         return ret
 
 
-    def get_key_pairs(self, instance: ModelType) -> Tuple[(str, Any)]:
+    def get_key_pairs(self, instance: ModelType, apply_result: IApplyResult) -> Tuple[(str, Any)]:
         if not self.keys:
             raise EntityInternalError(msg="get_key_pairs() should be called only when 'keys' are defined")
-        key_pairs = self.keys.get_key_pairs(instance, container=self)
+        key_pairs = self.keys.get_key_pairs(instance, apply_result=apply_result)
         return key_pairs
 
     # ------------------------------------------------------------
@@ -608,7 +609,8 @@ class KeyFields(KeysBase):
                 raise EntitySetupNameNotFoundError(f"Field name '{field_name}' not found in list of attributes of '{model}'. Available names: {available_names}")
 
 
-    def get_key_pairs(self, instance: ModelType, container: IContainerBase) -> KeyPairs:
+    def get_key_pairs(self, instance: ModelType, apply_result: IApplyResult) -> KeyPairs:
+        # container: IContainerBase
         # apply_result:IApplyResult
         # frame = apply_result.current_frame
         # instance = frame.instance
@@ -621,7 +623,8 @@ class KeyFields(KeysBase):
             key = getattr(instance, field_name)
             if key is None:
                 # if missing then setup temp unique id
-                missing_key_id = container._get_new_id_by_parent_name(GlobalConfig.ID_KEY_PREFIX_FOR_MISSING)
+                missing_key_id = apply_result._get_new_id()
+                # container._get_new_id_by_parent_name(GlobalConfig.ID_KEY_PREFIX_FOR_MISSING)
                 key = MissingKey(id=missing_key_id)
             else:
                 assert not str(key).startswith(GlobalConfig.ID_KEY_PREFIX_FOR_MISSING), key
