@@ -294,11 +294,9 @@ class SetParentMixin:
         return self.name 
 
     def _get_new_id_by_parent_name(self, key: str) -> int:
-        if key not in self.name_counter_by_parent_name:
-            self.name_counter_by_parent_name[key] = 1
-        out = self.name_counter_by_parent_name[key] 
+        self.name_counter_by_parent_name.setdefault(key, 0)
         self.name_counter_by_parent_name[key] += 1
-        return out
+        return self.name_counter_by_parent_name[key]
 
 
 # ------------------------------------------------------------
@@ -1545,15 +1543,13 @@ class InstanceAttrValue:
     # is from bind
     is_from_bind: bool = field(repr=False, compare=False, default=False)
 
-    def as_dict(self, simple: bool = False) -> Dict[str, Any]:
-        output : Dict[str, Any] = {"value" : self.value}
-        if not simple:
-            output.update({
+    def as_dict(self) -> Dict[str, Any]:
+        return {
+                "value" : self.value,
                 "dexp_result" : self.dexp_result,
                 "value_from_parent": self.value_parent_name,
                 "is_from_bind": self.is_from_bind,
-                })
-        return output
+                }
 
 @dataclass
 class InstanceAttrCurrentValue:
@@ -1923,7 +1919,8 @@ class IApplyResult(IStackOwnerSession):
 
     def get_update_history_as_dict(self) -> Dict[str, List[str]]:
         return {
-            key: [iav.as_dict(simple=True) for iav in inst_attr_list]
+            key: [instance_attr_value.value
+                  for instance_attr_value in inst_attr_list]
             for key, inst_attr_list in self.update_history.items()
         }
 
