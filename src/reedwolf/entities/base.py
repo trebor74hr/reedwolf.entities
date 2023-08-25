@@ -12,7 +12,7 @@ from typing import (
     Optional,
     Tuple,
     ClassVar,
-    Callable, Type,
+    Callable, Type
 )
 from dataclasses import (
         dataclass,
@@ -710,7 +710,7 @@ class ComponentBase(SetParentMixin, ABC):
     @staticmethod
     def _dump_meta_process_node(node: Any, depth: int) -> Any:
         if isinstance(node, DotExpression):
-            # string representation contains all data 
+            # string representation contains all data
             node = f"{DEXP_PREFIX}{str(node)}"
         else:
             if hasattr(node, "_dump_meta"):
@@ -981,7 +981,7 @@ class ComponentBase(SetParentMixin, ABC):
               RL 230422 
 
         TODO: document and make it better, pretty hackish.
-              the logic behind is to collect all attributes (recurseively) that 
+              the logic behind is to collect all attributes (recurseively) that
               are:
                 1. component (ComponentBase)
                 2. have parent set (SetParentMixin)
@@ -1545,6 +1545,16 @@ class InstanceAttrValue:
     # is from bind
     is_from_bind: bool = field(repr=False, compare=False, default=False)
 
+    def as_dict(self, simple: bool = False) -> Dict[str, Any]:
+        output : Dict[str, Any] = {"value" : self.value}
+        if not simple:
+            output.update({
+                "dexp_result" : self.dexp_result,
+                "value_from_parent": self.value_parent_name,
+                "is_from_bind": self.is_from_bind,
+                })
+        return output
+
 @dataclass
 class InstanceAttrCurrentValue:
     key_string: KeyString = field()
@@ -1818,6 +1828,18 @@ class IApplyResult(IStackOwnerSession):
     values_tree: Optional[ComponentTreeWValuesType] = field(init=False, repr=False, default=None)
     values_tree_by_key_string: Optional[Dict[KeyString, ComponentTreeWValuesType]] = field(init=False, repr=False, default=None)
 
+    def init_update_history_for_key(self, key_str: str) -> None:
+        if key_str in self.update_history:
+            raise EntityInternalError(owner=self, msg=f"key_str={key_str} already set in update_history")
+        self.update_history[key_str] = []
+
+    def register_instance_attr_value_change(self, key_str: str, instance_attr_value: InstanceAttrValue) -> None:
+        if key_str not in self.update_history:
+            raise EntityInternalError(owner=self, msg=f"key_str={key_str} not set in update_history")
+        self.update_history[key_str].append(instance_attr_value)
+        # set current value
+        self.current_values[key_str].set_value(instance_attr_value.value)
+
     @abstractmethod
     def apply(self) -> Self:
         ...
@@ -1898,6 +1920,12 @@ class IApplyResult(IStackOwnerSession):
             self._component_children_upward_dict[component.name] = children_dict
 
         return self._component_children_upward_dict[component.name]
+
+    def get_update_history_as_dict(self) -> Dict[str, List[str]]:
+        return {
+            key: [iav.as_dict(simple=True) for iav in inst_attr_list]
+            for key, inst_attr_list in self.update_history.items()
+        }
 
 
 # ------------------------------------------------------------

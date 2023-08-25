@@ -348,7 +348,7 @@ class ApplyResult(IApplyResult):
             if not is_from_init_bind:
                 raise EntityInternalError(owner=component, msg=f"key_str '{key_str}' not found in update_history and this is not initialization")
 
-            self.update_history[key_str] = []
+            self.init_update_history_for_key(key_str)
 
             # Can be various UndefinedType: NA_IN_PROGRESS, NOT_APPLIABLE
             if self.current_values.get(key_str):
@@ -423,9 +423,7 @@ class ApplyResult(IApplyResult):
                                 # TODO: source of change ...
                                 )
 
-        self.update_history[key_str].append(instance_attr_value)
-        # set current value 
-        self.current_values[key_str].set_value(new_value)
+        self.register_instance_attr_value_change(key_str=key_str, instance_attr_value = instance_attr_value)
 
         return instance_attr_value
 
