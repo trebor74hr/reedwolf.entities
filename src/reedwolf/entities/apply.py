@@ -326,8 +326,6 @@ class ApplyResult(IApplyResult):
         assert not self.defaults_mode
 
         if not component == self.current_frame.component:
-            # TODO: 
-            import pdb;pdb.set_trace() 
             raise EntityInternalError(owner=self.current_frame.component, 
                     msg=f"Component in frame {self.current_frame.component} must match component: {component}") 
 
@@ -661,10 +659,35 @@ class ApplyResult(IApplyResult):
                         depth=depth,
                         )
 
-                all_ok = self._execute_cleaners(component,
-                        validation_class=ItemsValidationBase,
-                        evaluation_class=ItemsEvaluationBase,
-                        )
+                # self.current_frame.container
+                with self.use_stack_frame(
+                        ApplyStackFrame(
+                            component = component, 
+                            # instance is a list of items
+                            instance = instance, 
+                            instance_is_list = True,
+                            container = component,
+                            parent_instance=self.current_frame.instance,
+                            in_component_only_tree=in_component_only_tree,
+                            # NOTE: instance_new skipped - (contains list of
+                            #       new items) are already applied
+                            )) as current_frame:
+                    # setup this registry
+                    this_registry = comp_container.try_create_this_registry(
+                                            component=component, 
+                                            setup_session=self.setup_session)
+
+                    local_setup_session = self.setup_session.create_local_setup_session(this_registry) \
+                                          if this_registry else None
+
+                    # newt_frame.set_local_setup_session(local_setup_session, force=True)
+                    current_frame.set_local_setup_session(local_setup_session)
+
+                    # finally apply validations on list of items
+                    all_ok = self._execute_cleaners(component,
+                            validation_class=ItemsValidationBase,
+                            evaluation_class=ItemsEvaluationBase,
+                            )
 
                 # ========================================
                 # Finished, processed all children items

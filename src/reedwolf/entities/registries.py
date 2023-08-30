@@ -49,16 +49,17 @@ from .meta import (
         get_model_fields,
         TypeInfo,
         AttrName,
+        AttrValue,
         )
 from .base import (
-    ReservedAttributeNames,
-    ComponentBase,
-    IFieldBase,
-    IContainerBase,
-    IApplyResult,
-    BoundModelBase,
-    IFieldGroup,
-    ISetupSession,
+        ReservedAttributeNames,
+        ComponentBase,
+        IFieldBase,
+        IContainerBase,
+        IApplyResult,
+        BoundModelBase,
+        IFieldGroup,
+        ISetupSession,
         )
 from .attr_nodes import (
         AttrDexpNode,
@@ -91,6 +92,13 @@ class FunctionsRegistry(RegistryUseDenied):
 @dataclass
 class OperationsRegistry(RegistryUseDenied):
     NAMESPACE: ClassVar[Namespace] = OperationsNS
+
+
+@dataclass
+class RootValue:
+    value_previous: AttrValue
+    attr_name_new : Optional[AttrName]
+    do_fetch_by_name: Union[bool, UndefinedType] = UNDEFINED
 
 # ------------------------------------------------------------
 
@@ -191,7 +199,7 @@ class ModelsRegistry(RegistryBase):
 
     # ------------------------------------------------------------
 
-    def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
+    def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
         # ROOT_VALUE_NEEDS_FETCH_BY_NAME = False
         # component = apply_result.current_frame.component
         instance = apply_result.current_frame.instance
@@ -219,7 +227,7 @@ class ModelsRegistry(RegistryBase):
               and not isinstance(instance_to_test, expected_type):
                 raise EntityApplyTypeError(owner=self, msg=f"Wrong type, expected '{expected_type}', got '{instance}'")
 
-        return instance, None
+        return RootValue(instance, None)
 
 
 # ------------------------------------------------------------
@@ -281,12 +289,12 @@ class FieldsRegistry(RegistryBase):
         return attr_node
 
 
-    def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
+    def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
         # container = apply_result.current_frame.component.get_first_parent_container(consider_self=True)
         component = apply_result.current_frame.component
         instance  = apply_result.current_frame.instance
         top_attr_accessor = ComponentAttributeAccessor(component, instance)
-        return top_attr_accessor, None
+        return RootValue(top_attr_accessor, None)
 
 
 # ------------------------------------------------------------
@@ -350,13 +358,13 @@ class ContextRegistry(RegistryBase):
             self.register_attr_node(attr_node, attr_name)
 
 
-    def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
+    def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
         context = apply_result.context
         if context in (UNDEFINED, None):
             component = apply_result.current_frame.component
             raise EntityApplyNameError(owner=self, msg=f"ContextNS attribute '{component.name}' can not be fetched since context is not set ({type(context)}).")
         # if attr_name in self.context_class.get_dexp_attrname_dict():
-        return context, None
+        return RootValue(context, None)
 
 
 # ------------------------------------------------------------
@@ -386,14 +394,14 @@ class ConfigRegistry(RegistryBase):
             attr_node = self._create_attr_node_for_model_attr(config_class, attr_name)
             self.register_attr_node(attr_node)
 
-    def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
+    def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
         # ALT: config = apply_result.entity.config
         config = self.config
         if config in (UNDEFINED, None):
             component = apply_result.current_frame.component
             raise EntityInternalError(owner=self, 
                 msg=f"ConfigNS attribute '{component.name}' can not be fetched since config is not set ({type(config)}).")
-        return config, None
+        return RootValue(config, None)
 
 
 # ------------------------------------------------------------
@@ -415,13 +423,13 @@ class ThisRegistryForValue(IThisRegistry, RegistryBase):
         # This.Value == ReservedAttributeNames.VALUE_ATTR_NAME
         self.register_value_attr_node(attr_node=self.attr_node)
 
-    def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
+    def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
         if attr_name != ReservedAttributeNames.VALUE_ATTR_NAME.value:
             raise EntityInternalError(owner=self, msg=f"Expected attribute name: {ReservedAttributeNames.VALUE_ATTR_NAME.value}, got: {attr_name}") 
 
         # with 2nd param -> instead of fetching .Value, instruct caller to
         #                   fetch component's bound attribute
-        return apply_result.current_frame.instance, self.attr_name
+        return RootValue(apply_result.current_frame.instance, self.attr_name)
 
 # --------------------
 
@@ -441,7 +449,7 @@ class ThisRegistryForChildren(IThisRegistry, RegistryBase):
                 owner=self.owner, 
                 )
 
-    def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
+    def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
         if not isinstance(apply_result.current_frame.instance, self.model_class):
             raise EntityInternalError(owner=self, msg=f"Type of apply session's instance expected to be '{self.model_class}, got: {apply_result.current_frame.instance}") 
 
@@ -452,7 +460,7 @@ class ThisRegistryForChildren(IThisRegistry, RegistryBase):
             # with 2nd param like this -> fetch further by attr_name
             atrr_name_to_fetch = attr_name
 
-        return apply_result.current_frame.instance, atrr_name_to_fetch
+        return RootValue(apply_result.current_frame.instance, atrr_name_to_fetch)
 
 # ------------------------------------------------------------
 
@@ -478,14 +486,14 @@ class ThisRegistryForValueAndChildren(ThisRegistryForChildren):
         self.register_value_attr_node(attr_node=self.attr_node)
         # TODO: .Children?
 
-    def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
+    def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
         instance, atrr_name_to_fetch = super().get_root_value(apply_result=apply_result, attr_name=attr_name)
 
         if atrr_name_to_fetch and attr_name == ReservedAttributeNames.VALUE_ATTR_NAME:
             instance = apply_result.current_frame.instance
             atrr_name_to_fetch = self.attr_name
 
-        return apply_result.current_frame.instance, atrr_name_to_fetch
+        return RootValue(apply_result.current_frame.instance, atrr_name_to_fetch)
 
 # ------------------------------------------------------------
 
@@ -524,7 +532,7 @@ class ThisRegistryForInstance(IThisRegistry, RegistryBase):
                         attr_name_prefix=None)
 
 
-    def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
+    def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
         " TODO: explain: when 2nd param is not None, then ... "
         if not isinstance(apply_result.current_frame.instance, self.model_class):
             raise EntityInternalError(owner=self, msg=f"Type of apply session's instance expected to be '{self.model_class}, got: {apply_result.current_frame.instance}") 
@@ -535,7 +543,7 @@ class ThisRegistryForInstance(IThisRegistry, RegistryBase):
         else:
             # with 2nd param like this -> fetch further by attr_name
             atrr_name_to_fetch = attr_name
-        return apply_result.current_frame.instance, atrr_name_to_fetch
+        return RootValue(apply_result.current_frame.instance, atrr_name_to_fetch)
 
 
 
@@ -557,19 +565,34 @@ class ThisRegistryForItemsAndChildren(IThisRegistry, RegistryBase):
     NAMESPACE: ClassVar[Namespace] = ThisNS
 
     def __post_init__(self, setup_session: ISetupSession):
-        # Children + <attributes>
+        # This.Items == ReservedAttributeNames.ITEMS_ATTR_NAME.value
         self.register_items_attr_node(owner=self.owner)
 
-        # This.Items == ReservedAttributeNames.ITEMS_ATTR_NAME.value
+        # TODO: Children + <attributes> - explain case when this will be used
+        #       This.Children.age >= 18 ==> every item should be at least 18 years old
         self._register_children(
                 setup_session=setup_session,
                 attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME,
                 owner=self.owner, 
                 )
-        # TODO: .Children?
 
-    def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]:
-        raise NotImplementedError("todo")
+    def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
+        assert isinstance(apply_result.current_frame.instance, (list, tuple))
+        if attr_name == ReservedAttributeNames.ITEMS_ATTR_NAME.value:
+            root_value = RootValue(
+                            value_previous=apply_result.current_frame.instance,
+                            attr_name_new=None, 
+                            do_fetch_by_name=False)
+        elif attr_name == ReservedAttributeNames.CHILDREN_ATTR_NAME.value:
+            # TODO: .Children?
+            root_value = RootValue(
+                            value_previous=apply_result.current_frame.instance,
+                            attr_name_new=None, 
+                            )
+        else:
+            raise EntityInternalError(owner=self, msg=f"Expected attribute name: {ReservedAttributeNames.ITEMS_ATTR_NAME.value} or {ReservedAttributeNames.CHILDREN_ATTR_NAME.value} , got: {attr_name}") 
+        return root_value
+
 
 
 # ------------------------------------------------------------

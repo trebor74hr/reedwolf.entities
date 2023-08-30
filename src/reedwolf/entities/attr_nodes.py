@@ -206,6 +206,7 @@ class AttrDexpNode(IDotExpressionNode):
                     raise EntityInternalError(owner=self, msg=f"Initial evaluation step for non-subentity_items failed, expected single name member (e.g. M), got: {self.name}\n  == Compoonent: {frame.container}")
 
             registry = None
+
             if apply_result.current_frame.local_setup_session:
                 # take from apply_result's current local_setup_session
                 registry = apply_result.current_frame.local_setup_session.get_registry(self.namespace, strict=False)
@@ -214,13 +215,19 @@ class AttrDexpNode(IDotExpressionNode):
                 # take from setup_session
                 registry = apply_result.setup_session.get_registry(self.namespace)
 
-            value_previous, attr_name_new = registry.get_root_value(apply_result=apply_result, attr_name=attr_name)
+            # get starting instance
+            root_value = registry.get_root_value(apply_result=apply_result, attr_name=attr_name)
+            value_previous = root_value.value_previous
+            attr_name_new = root_value.attr_name_new
+
             if attr_name_new:
                 # e.g. case ReservedAttributeNames.VALUE_ATTR_NAME, i.e. .Value
                 attr_name = attr_name_new
 
-            # == M.name mode
-            if apply_result.current_frame.on_component_only and registry.ROOT_VALUE_NEEDS_FETCH_BY_NAME:
+            if root_value.do_fetch_by_name != UNDEFINED:
+                do_fetch_by_name = root_value.do_fetch_by_name
+            elif apply_result.current_frame.on_component_only and registry.ROOT_VALUE_NEEDS_FETCH_BY_NAME:
+                # == M.name mode
                 # TODO: not nice solution
                 do_fetch_by_name = False
             else:

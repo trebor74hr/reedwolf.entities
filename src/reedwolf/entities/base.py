@@ -1636,6 +1636,9 @@ class ApplyStackFrame(IStackFrame):
     # Usually used for ThisNS / This. namespace 
     local_setup_session: Optional[ISetupSession] = field(repr=False, default=None)
 
+    # currently used only for cleaners
+    instance_is_list: bool = field(repr=False, default=False)
+
     # --------------------
     # -- autocomputed
     # --------------------
@@ -1658,12 +1661,18 @@ class ApplyStackFrame(IStackFrame):
                                     ).bound_model
             # can be list in this case
             # TODO: check if list only: if self.bound_model_root.type_info.is_list:
+            # TODO: use self.current_frame.instance_is_list for list case
             instance_to_test = self.instance[0] \
                                if isinstance(self.instance, (list, tuple)) \
                                else self.instance
         else:
             self.bound_model_root = self.container.bound_model
-            instance_to_test = self.instance
+            if self.instance_is_list:
+                if not isinstance(self.instance, (list, tuple)):
+                    raise EntityInternalError(owner=self, msg=f"Expected list of model instances: {instance_to_test.__class__}, got: {self.instance}")
+                instance_to_test = self.instance[0] if self.instance else None
+            else:
+                instance_to_test = self.instance
 
         if instance_to_test is NA_DEFAULTS_MODE:
             # defaults_mode
@@ -1672,7 +1681,7 @@ class ApplyStackFrame(IStackFrame):
             # TODO: explain when this happens ...
             pass
         elif not is_model_class(instance_to_test.__class__):
-            raise EntityInternalError(owner=self, msg=f"Expected model instance or list[instances], got: {self.instance}")
+            raise EntityInternalError(owner=self, msg=f"Expected model instance: {instance_to_test.__class__} or list[instances], got: {self.instance}")
 
         if self.local_setup_session:
             assert isinstance(self.local_setup_session, ISetupSession)

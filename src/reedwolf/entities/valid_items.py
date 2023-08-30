@@ -65,16 +65,16 @@ class ItemsValidation(ItemsValidationBase):
     title           : Optional[TransMessageType] = field(repr=False, default=None)
 
     def validate(self, apply_result: IApplyResult) -> Union[NoneType, ValidationFailure]:
-        raise NotImplementedError()
         # TODO: check which namespaces are used, ...
-        # TODO: items case - run on items ... 
-        # assert apply_result.current_frame.component.is_subentity_items():
-        #   output = []
-        #   for item in apply_result.current_frame.get_subentity_items():
-        #       out = self._validate_common_impl(apply_result=apply_result)
-        #       if out:
-        #           output.append(out)
-        #       return output
+        if not (apply_result.current_frame.component.is_subentity_items()
+          and apply_result.current_frame.instance_is_list
+          and isinstance(apply_result.current_frame.instance, (list, tuple))):
+            raise EntityInternalError(owner=apply_result, msg=f"Internal check failed: {apply_result.current_frame.instance}") 
+
+        # apply_result.current_frame.instance ?= apply_result.current_frame.get_subentity_items
+
+        output = self._validate_common_impl(apply_result=apply_result)
+        return output
 
 
 

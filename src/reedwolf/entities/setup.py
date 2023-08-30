@@ -132,6 +132,7 @@ class RegistryBase(IRegistry):
 
     @abstractmethod
     def get_root_value(self, apply_result: IApplyResult, attr_name: str) -> Any:
+        # TODO: same method declared in IRegistry
         """ 
         Apply phase - Namespace.<attr_name> - 
         function returns the instance (root value) from which attr_name will be read from 
@@ -668,6 +669,7 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
             if strict:
                 avail_names = self._get_avail_registry_names(namespace, is_internal_use)
                 raise EntitySetupNameError(owner=self, msg=f"Registry '{namespace._name}' not found. Available: {avail_names}")
+
             return UNDEFINED
 
         if not is_internal_use and namespace._is_for_internal_use_only:
