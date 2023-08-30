@@ -189,8 +189,15 @@ class ApplyResult(IApplyResult):
 
                 self.instance_none_mode = True
                 # TODO: maybe this could/should be cached by dc_model?
+                #
+                # Instead of making new dataclass, filling original dataclass
+                # with all fields having None would be alternative, but thiw
+                # way __post_init__, __init__ and similar methods that could
+                # change instance state are avoided.
                 temp_dataclass_model = make_dataclass_with_optional_fields(self.bound_model.model)
-                # all fields are made optional and will have value == None (from field's default)
+
+                # All fields are made optional and will have value == None
+                # (from field's default)
                 self.instance = temp_dataclass_model()
 
             elif not isinstance(self.instance, self.bound_model.model):
