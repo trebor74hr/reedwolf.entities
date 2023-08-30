@@ -755,6 +755,12 @@ class TypeInfo:
         return output
 
 
+def get_dataclass_field_type_info(dc_model: DataclassType, field_name: str) -> Optional[TypeInfo]:
+    all_fields = {field.name: field for field in dc_fields(dc_model)}
+    dc_field = all_fields.get(field_name)
+    return TypeInfo.get_or_create_by_type(dc_field.type) if dc_field else None
+
+
 def make_dataclass_with_optional_fields(dc_model: DataclassType) -> DataclassType:
     """
     will clone the type and make all fields optinonal with None as default

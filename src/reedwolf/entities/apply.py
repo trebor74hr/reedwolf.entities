@@ -2,6 +2,7 @@ from dataclasses import (
         dataclass,
         field,
         asdict,
+        is_dataclass,
         )
 from typing import (
         Any,
@@ -44,6 +45,7 @@ from .meta import (
         ComponentTreeWValuesType,
         LiteralType,
         make_dataclass_with_optional_fields,
+        get_dataclass_field_type_info,
         )
 from .base import (
     IFieldBase,
@@ -317,6 +319,8 @@ class ApplyResult(IApplyResult):
         assert not self.defaults_mode
 
         if not component == self.current_frame.component:
+            # TODO: 
+            import pdb;pdb.set_trace() 
             raise EntityInternalError(owner=self.current_frame.component, 
                     msg=f"Component in frame {self.current_frame.component} must match component: {component}") 
 
@@ -399,16 +403,60 @@ class ApplyResult(IApplyResult):
                     raise EntityInternalError(owner=self, msg=f"{init_instance_attr_value} is not from bind")
                 init_bind_dexp_result = init_instance_attr_value.dexp_result
                 # attribute name is in the last item
-                init_raw_attr_value = init_bind_dexp_result.value_history[-1]
-                attr_name = init_raw_attr_value.attr_name
 
-                if not hasattr(parent_instance, attr_name):
-                    raise EntityInternalError(owner=self, msg=f"Missing {parent_instance}.{attr_name}")
+                # "for" loop is required for attributes from substructure that
+                # is not done as SubEntity rather direct reference, like: 
+                #   bind=M.access.alive
+                # OLD - very simple logic: 
+                #   init_raw_attr_value = init_bind_dexp_result.value_history[-1]
+                #   attr_name = attr_name_path[-1]
+                #   if not hasattr(parent_instance, attr_name):
+                #       raise EntityInternalError(owner=self, msg=f"Missing {parent_instance}.{attr_name}")
+                attr_name_path = [init_raw_attr_value.attr_name 
+                        for init_raw_attr_value in init_bind_dexp_result.value_history
+                        ]
+                if not attr_name_path:
+                    raise EntityInternalError(owner=self, msg=f"{component}: attr_name_path is empty") 
+
+                current_instance_parent = None
+                current_instance = parent_instance
+                for anr, attr_name in  enumerate(attr_name_path,0):
+                    if current_instance is None:
+                        if self.instance_none_mode:
+                            # Create all missing intermediate empty dataclass objects 
+                            assert anr > 0
+                            attr_name_prev = attr_name_path[anr-1]
+
+                            current_instance_type_info = get_dataclass_field_type_info(current_instance_parent, attr_name_prev)
+                            if current_instance_type_info is None:
+                                raise EntityInternalError(owner=self, msg=f"Attribute {attr_name} not found in dataclass definition of {current_instance_parent}.") 
+                            if current_instance_type_info.is_list:
+                                raise EntityInternalError(owner=self, msg=f"Attribute {attr_name} of {current_instance_parent} is a list: {current_instance_type_info}.") 
+
+                            current_instance_model = current_instance_type_info.type_
+                            if not is_dataclass(current_instance_model):
+                                raise EntityInternalError(owner=self, msg=f"Attribute {attr_name} of {type(current_instance_parent)} is not a dataclass instance, got: {current_instance_model}") 
+
+                            # set new value of temp instance attribute
+                            # all attrs of a new instance will have None value (dc default)
+                            temp_dataclass_model = make_dataclass_with_optional_fields(current_instance_model)
+                            current_instance = temp_dataclass_model()
+                            setattr(current_instance_parent, attr_name_prev, current_instance)
+                        else:
+                            attr_name_path_prev = ".".join(attr_name_path[:anr])
+                            # TODO: fix this ugly validation message
+                            raise EntityApplyValueError(owner=self, msg=f"Attribute '{attr_name}' can not be set while '{parent_instance}.{attr_name_path_prev}' is not set. Is '{attr_name_path_prev}' obligatory?")
+
+                    if not hasattr(current_instance, attr_name):
+                        raise EntityInternalError(owner=self, msg=f"Missing attribute:\n  Current: {current_instance}.{attr_name}\n Parent: {parent_instance}.{'.'.join(attr_name_path)}")
+
+                    current_instance_parent = current_instance
+                    current_instance = getattr(current_instance_parent, attr_name)
 
                 # ----------------------------------------
                 # Finally change instance value
                 # ----------------------------------------
-                setattr(parent_instance, attr_name, new_value)
+                setattr(current_instance_parent, attr_name, new_value)
 
             # NOTE: bind_dexp_result last value is not changed
             #       maybe should be changed but ... 
