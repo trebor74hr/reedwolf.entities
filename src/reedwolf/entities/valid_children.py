@@ -39,13 +39,13 @@ class ChildrenValidation(ChildrenValidationBase):
 
     def validate(self, apply_result: IApplyResult) -> Union[NoneType, ValidationFailure]:
         # TODO: check which namespaces are used, ...
-        if apply_result.current_frame.component.is_subentity_items():
-            # TODO: in items case - run validation against every item and 
-            #   output = []
-            #   for item in apply_result.current_frame.get_subentity_items():
-            #       out = self._validate_common_impl(apply_result=apply_result)
-            #       if out:
-            #           output.append(out)
-            #       return output
-            raise NotImplementedError()
+        # if apply_result.current_frame.component.is_subentity_items():
+        #     #   output = []
+        #     #   for item in apply_result.current_frame.get_subentity_items():
+        #     #       out = self._validate_common_impl(apply_result=apply_result)
+        #     #       if out:
+        #     #           output.append(out)
+        #     #       return output
+        #     # RT: raise NotImplementedError()
+        #     return False
         return self._validate_common_impl(apply_result=apply_result)

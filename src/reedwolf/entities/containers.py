@@ -372,8 +372,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
             # setup this_registry objects must be inside of stack_frame due
             # premature component.bind setup in some ThisRegistryFor* classes.
-            this_registry = self.try_create_this_registry(component=self, setup_session=self.setup_session)
-            assert this_registry
+            this_registry = self.create_this_registry(component=self, setup_session=self.setup_session)
             local_setup_session = self.setup_session.create_local_setup_session(this_registry)
             self.setup_session.current_frame.set_local_setup_session(local_setup_session)
 
@@ -450,6 +449,11 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         return key_pairs
 
     # ------------------------------------------------------------
+    def create_this_registry(self, component: ComponentBase, setup_session: ISetupSession) -> IThisRegistry:
+        maybe_this_registry = self.try_create_this_registry(component=component, setup_session=setup_session)
+        if maybe_this_registry is None:
+            raise EntityInternalError(owner=self, msg=f"create_this_registry() failed for component {component}")
+        return maybe_this_registry
 
     def try_create_this_registry(self, component: ComponentBase, setup_session: ISetupSession) -> Optional[IThisRegistry]:
 

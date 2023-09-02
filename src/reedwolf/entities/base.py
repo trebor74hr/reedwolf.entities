@@ -12,84 +12,86 @@ from typing import (
     Optional,
     Tuple,
     ClassVar,
-    Callable, Type
+    Callable, 
+    Type as TypingType,
 )
 from dataclasses import (
-        dataclass,
-        field,
-        field as DcField,
-        fields,
-        MISSING as DC_MISSING,
-        make_dataclass,
-        )
+    dataclass,
+    field,
+    field as DcField,
+    fields,
+    MISSING as DC_MISSING,
+    make_dataclass,
+)
 from types import (
-        MappingProxyType,
-        )
+    MappingProxyType,
+)
 
 from .utils import (
-        snake_case_to_camel,
-        to_repr,
-        add_yaml_indent_to_strlist,
-        YAML_INDENT,
-        varname_to_title,
-        UNDEFINED,
-        NA_DEFAULTS_MODE,
-        UndefinedType,
-        get_available_names_example,
-        DumpFormatEnum,
-        dump_to_format,
-        )
+    snake_case_to_camel,
+    to_repr,
+    add_yaml_indent_to_strlist,
+    YAML_INDENT,
+    varname_to_title,
+    UNDEFINED,
+    NA_DEFAULTS_MODE,
+    UndefinedType,
+    get_available_names_example,
+    DumpFormatEnum,
+    dump_to_format,
+)
 from .exceptions import (
-        EntityInternalError,
-        EntitySetupTypeError,
-        EntitySetupError,
-        EntitySetupNameError,
-        EntitySetupValueError,
-        EntitySetupNameNotFoundError,
-        EntityApplyError,
-        )
+    EntityInternalError,
+    EntitySetupTypeError,
+    EntitySetupError,
+    EntitySetupNameError,
+    EntitySetupValueError,
+    EntitySetupNameNotFoundError,
+    EntityApplyError, 
+    EntityApplyValueError,
+)
 from .namespaces import (
-        DynamicAttrsBase,
-        Namespace,
-        )
+    DynamicAttrsBase,
+    Namespace,
+)
 from .meta import (
-        Self,
-        MetaTree,
-        ComponentNameType,
-        ComponentTreeType,
-        ComponentTreeWValuesType,
-        NoneType,
-        ModelField,
-        TypeInfo,
-        LiteralType,
-        get_model_fields,
-        is_function,
-        is_method_by_name,
-        is_model_class,
-        ModelType,
-        DataclassType,
-        extract_model_field_meta,
-        extract_py_type_hints,
-        STANDARD_TYPE_LIST,
-        TransMessageType,
-        get_dataclass_fields,
-        KeyPairs,
-        InstanceId,
-        KeyString,
-        AttrName,
-        AttrValue,
-        )
+    Self,
+    MetaTree,
+    ComponentNameType,
+    ComponentTreeType,
+    ComponentTreeWValuesType,
+    NoneType,
+    ModelField,
+    TypeInfo,
+    LiteralType,
+    get_model_fields,
+    is_function,
+    is_method_by_name,
+    is_model_class,
+    ModelType,
+    DataclassType,
+    extract_model_field_meta,
+    extract_py_type_hints,
+    STANDARD_TYPE_LIST,
+    TransMessageType,
+    get_dataclass_fields,
+    KeyPairs,
+    InstanceId,
+    KeyString,
+    AttrName,
+    AttrValue,
+)
 from .expressions import (
-        DotExpression,
-        ExecResult,
-        IDotExpressionNode,
-        IFunctionDexpNode,
-        ISetupSession,
-        IThisRegistry,
-        )
+    DotExpression,
+    ExecResult,
+    IDotExpressionNode,
+    IFunctionDexpNode,
+    ISetupSession,
+    IThisRegistry,
+)
 from .contexts import (
-        IContext,
-        )
+    IContext,
+)
 
 # ------------------------------------------------------------
 
@@ -213,7 +215,7 @@ def _(message: str) -> TransMessageType:
 #       use .format() ... (not f"", btw. should not be possible anyway)
 
 def msg(message: Union[str, TransMessageType]) -> Union[str, TransMessageType]:
-    # TODO: should fill arguments {} and {name} 
+    # TODO: should fill arguments {} and {name}
     return message
 
 
@@ -332,20 +334,44 @@ class Subcomponent:
 
 @dataclass
 class ChildField:
-    name: str
-    type_info: TypeInfo
+    """ 
+    Will be used and exposed in ChildrenValidation - where List[ChildField]
+    will be put available to dot-chain and validation functions.
+    Following fields will be available to these functions using This.
+    namespacee:
+        - Name - model class attribute name
+        - Value - current model instance attribute value
+        - Type - model class attribute python type
+    """
+    Name: AttrName
+    _type_info: TypeInfo = field(repr=False)
+    Type: TypingType = field(init=False)
+    Value: AttrValue = field(init=False, default=UNDEFINED)
+
+    def __post_init__(self):
+        self.Type = self._type_info.type_
+
+    def set_value(self, value: AttrValue):
+        if self.Value != UNDEFINED:
+            raise EntityApplyValueError(owner=self, msg=f"Value already set to '{self.Value}', got: '{value}'")
+        self.Value = value
 
 
 class IComponentFields:
     ...
 
 
-def make_component_fields_dataclass(class_name: str, child_field_list: List[ChildField]) -> Type[IComponentFields]:
+def make_component_fields_dataclass(class_name: str, child_field_list: List[ChildField]) -> TypingType[IComponentFields]:
+    """ 
+    Dynamically create Dataclass from List[ChildField] based on origin model.
+    It is basedd for SubentitySingle and FieldGroup to create TypeInfo instance
+    based only on the fields for which there are Field
+    """
     # name, type, optional[field]
     # ('z', int, field(default=5))],
-    children_fields = [(child_field.name, child_field.type_info.type_) 
+    children_fields = [(child_field.Name, child_field.Type)
                         for child_field in child_field_list]
-    new_dataclass: Type = make_dataclass(
+    new_dataclass: TypingType = make_dataclass(
                 cls_name=class_name, 
                 fields=children_fields, 
                 bases=(IComponentFields,))
@@ -365,6 +391,10 @@ class ComponentBase(SetParentMixin, ABC):
     parent       : Union[Self, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     parent_name  : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
+    # lazy init - done in Setup phase
+    _component_fields_dataclass: Optional[TypingType[IComponentFields]] = field(init=False, repr=False, default=None)
+    _child_field_list: Optional[List[ChildField]] = field(init=False, repr=False, default=None)
+
     def __post_init__(self):
         self.init_clean_base()
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
@@ -375,7 +405,7 @@ class ComponentBase(SetParentMixin, ABC):
             if not self.name.isidentifier():
                 raise EntitySetupValueError(owner=self, msg="Attribute name needs to be valid python identifier name")
 
-    def _check_cleaners(self, allowed_cleaner_base_list: List[type]):
+    def _check_cleaners(self, allowed_cleaner_base_list: List[TypingType]):
         allowed_cleaner_base_list = tuple(allowed_cleaner_base_list)
         if self.cleaners is not None:
             cl_names = ", ".join([cl.__name__ for cl in allowed_cleaner_base_list])
@@ -836,8 +866,9 @@ class ComponentBase(SetParentMixin, ABC):
 
     # ------------------------------------------------------------
 
-    def get_component_fields_dataclass(self, setup_session: ISetupSession) -> Tuple[IComponentFields, List[ChildField]]:
-        # TODO: not happy that this is 
+    def get_component_fields_dataclass(self, setup_session: ISetupSession) \
+            -> Tuple[TypingType[IComponentFields], List[ChildField]]:
+        # TODO: not happy with this
         """
         CACHED
         RECURSIVE
@@ -846,21 +877,21 @@ class ComponentBase(SetParentMixin, ABC):
         that contains fields only for components (not all model fields are
         available).
         """
-        component = self
-
-        if hasattr(component, "_component_fields_dataclass_and_child_field_list"):
-            return component._component_fields_dataclass_and_child_field_list
+        if self._component_fields_dataclass is not None:
+            assert self._child_field_list is not None
+            return self._component_fields_dataclass, self._child_field_list
 
         # TODO: to have deep_collect or not??
-        children = component.get_children(deep_collect=True)
+        children = self.get_children(deep_collect=True)
 
         container = setup_session.current_frame.container
 
         assert setup_session and setup_session.current_frame
-        if not setup_session.current_frame.component == component:
-            raise EntityInternalError(owner=component, msg=f"setup_session.current_frame.component={setup_session.current_frame.component} <> component={component}") 
+        if not setup_session.current_frame.component == self:
+            raise EntityInternalError(owner=self, msg=f"setup_session.current_frame.component={setup_session.current_frame.component} <> component={self}")
 
-        child_field_list = []
+        child_field_list: List[ChildField] = []
+
         for nr, child in enumerate(children, 1):
 
             if child.is_bound_model():
@@ -874,7 +905,7 @@ class ComponentBase(SetParentMixin, ABC):
                 if not child.bind.IsFinished():
                     # Can setup only fields which are inside the same container
                     # share the same bound_model 
-                    child.bind.Setup(setup_session=setup_session, owner=component)
+                    child.bind.Setup(setup_session=setup_session, owner=self)
 
                 attr_node = child.bind._dexp_node
                 child_type_info = attr_node.get_type_info()
@@ -925,24 +956,23 @@ class ComponentBase(SetParentMixin, ABC):
 
             child_field_list.append(
                     ChildField(
-                        name=child.name,
-                        type_info=child_type_info,
+                        Name=child.name,
+                        _type_info=child_type_info,
                     ))
 
-        class_name_camel = snake_case_to_camel(component.name)
+        class_name_camel = snake_case_to_camel(self.name)
+
+        # TODO: this really needs some explanation - looks like hack
         component_fields_dataclass = make_component_fields_dataclass(
                                 class_name=f"{class_name_camel}Fields",
                                 child_field_list=child_field_list,
                                 )
+        self._component_fields_dataclass = component_fields_dataclass
+        self._child_field_list = child_field_list
 
-        component._component_fields_dataclass_and_child_field_list = component_fields_dataclass, child_field_list
-
-        return component._component_fields_dataclass_and_child_field_list
-
-
+        return self._component_fields_dataclass, self._child_field_list
 
     # ------------------------------------------------------------
-
 
     def setup(self, setup_session: ISetupSession):  # noqa: F821
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(self)
@@ -1993,13 +2023,13 @@ def extract_type_info(
     th_field = None
     # func_node = None
 
-    is_dexp = isinstance(parent_object, DotExpression)
-    if is_dexp:
+    is_parent_dot_expr = isinstance(parent_object, DotExpression)
+    if is_parent_dot_expr:
         raise EntitySetupNameNotFoundError(item=inspect_object, msg=f"Attribute '{attr_node_name}' is not member of expression '{parent_object}'.")
 
     # when parent virtual expression is not assigned to data-type/data-attr_node, 
     # then it is sent directly what will later raise error "attribute not found" 
-    if not is_dexp:
+    if not is_parent_dot_expr:
         if is_method_by_name(parent_object, attr_node_name):
             # parent_object, attr_node_name
             raise EntitySetupNameError(item=inspect_object,

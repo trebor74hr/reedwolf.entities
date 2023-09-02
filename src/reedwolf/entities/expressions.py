@@ -660,6 +660,10 @@ def _op_apply_and(first, second):
 def _op_apply_or(first, second):
     return bool(first) or bool(second)
 
+class OutputTypeInfoTypeEnum(str, Enum):
+    FROM_FIRST_DEXP = "FROM_1ST"
+    BOOL_TYPE = "BOOL"
+
 @dataclass
 class Operation:
     code: str
@@ -667,6 +671,9 @@ class Operation:
     ast_node_type : ast.AST
     apply_function: Callable
     load_function : Callable
+    output_type_info_type: OutputTypeInfoTypeEnum \
+        = OutputTypeInfoTypeEnum.FROM_FIRST_DEXP
+
 
 
 # https://florian-dahlitz.de/articles/introduction-to-pythons-operator-module
@@ -675,12 +682,18 @@ OPCODE_TO_FUNCTION = {
     # NOTE: no need to check unary/binary vs have 1 or 2 params
     #       python parser/interpretor will ensure this
     # binary operatorsy - buultin
-      "=="  : Operation(code="==" , dexp_code="==" , ast_node_type= ast.Eq      , apply_function= operator.eq      , load_function= operator.eq) # noqa: E131
-    , "!="  : Operation(code="!=" , dexp_code="!=" , ast_node_type= ast.NotEq   , apply_function= operator.ne      , load_function= operator.ne)
-    , ">"   : Operation(code=">"  , dexp_code=">"  , ast_node_type= ast.Gt      , apply_function= operator.gt      , load_function= operator.gt)
-    , ">="  : Operation(code=">=" , dexp_code=">=" , ast_node_type= ast.GtE     , apply_function= operator.ge      , load_function= operator.ge)
-    , "<"   : Operation(code="<"  , dexp_code="<"  , ast_node_type= ast.Lt      , apply_function= operator.lt      , load_function= operator.lt)
-    , "<="  : Operation(code="<=" , dexp_code="<=" , ast_node_type= ast.LtE     , apply_function= operator.le      , load_function= operator.le)
+      "=="  : Operation(code="==" , dexp_code="==" , ast_node_type= ast.Eq      , apply_function= operator.eq      , load_function= operator.eq,  # noqa: E131
+                        output_type_info_type=OutputTypeInfoTypeEnum.BOOL_TYPE)
+    , "!="  : Operation(code="!=" , dexp_code="!=" , ast_node_type= ast.NotEq   , apply_function= operator.ne      , load_function= operator.ne,  # noqa: E131
+                        output_type_info_type=OutputTypeInfoTypeEnum.BOOL_TYPE)
+    , ">"   : Operation(code=">"  , dexp_code=">"  , ast_node_type= ast.Gt      , apply_function= operator.gt      , load_function= operator.gt,
+                        output_type_info_type=OutputTypeInfoTypeEnum.BOOL_TYPE)
+    , ">="  : Operation(code=">=" , dexp_code=">=" , ast_node_type= ast.GtE     , apply_function= operator.ge      , load_function= operator.ge,
+                        output_type_info_type=OutputTypeInfoTypeEnum.BOOL_TYPE)
+    , "<"   : Operation(code="<"  , dexp_code="<"  , ast_node_type= ast.Lt      , apply_function= operator.lt      , load_function= operator.lt,
+                        output_type_info_type=OutputTypeInfoTypeEnum.BOOL_TYPE)
+    , "<="  : Operation(code="<=" , dexp_code="<=" , ast_node_type= ast.LtE     , apply_function= operator.le      , load_function= operator.le,
+                        output_type_info_type=OutputTypeInfoTypeEnum.BOOL_TYPE)
 
     , "+"   : Operation(code="+"  , dexp_code="+"  , ast_node_type= ast.Add     , apply_function= operator.add     , load_function= operator.add)
     , "-"   : Operation(code="-"  , dexp_code="-"  , ast_node_type= ast.Sub     , apply_function= operator.sub     , load_function= operator.sub)
@@ -688,15 +701,17 @@ OPCODE_TO_FUNCTION = {
     , "/"   : Operation(code="/"  , dexp_code="/"  , ast_node_type= ast.Div     , apply_function= operator.truediv , load_function= operator.truediv)
     , "//"  : Operation(code="//" , dexp_code="//" , ast_node_type= ast.FloorDiv, apply_function= operator.floordiv, load_function= operator.floordiv)
 
-    , "in"  : Operation(code="in" , dexp_code="in" , ast_node_type= ast.In      , apply_function= operator.contains, load_function= operator.contains)
+    , "in"  : Operation(code="in" , dexp_code="in" , ast_node_type= ast.In      , apply_function= operator.contains, load_function= operator.contains,
+                        output_type_info_type = OutputTypeInfoTypeEnum.BOOL_TYPE)
 
-    # binary operatorsy                            
+    # TODO: logicaal operators - work as python OR -> returns non-bool or not?
     , "and" : Operation(code="and", dexp_code="&"  , ast_node_type= ast.BitAnd  , apply_function= _op_apply_and    , load_function= operator.iand)
     , "or"  : Operation(code="or" , dexp_code="|"  , ast_node_type= ast.BitOr   , apply_function= _op_apply_or     , load_function= operator.ior)
 
     # unary operators                              
-    , "not" : Operation(code="not", dexp_code="~"  , ast_node_type= ast.Invert  , apply_function= operator.not_    , load_function= operator.invert)
-    }
+    , "not" : Operation(code="not", dexp_code="~"  , ast_node_type= ast.Invert  , apply_function= operator.not_    , load_function= operator.invert,
+                        output_type_info_type = OutputTypeInfoTypeEnum.BOOL_TYPE)
+}
 
 
 # Other:
@@ -783,7 +798,13 @@ class OperationDexpNode(IDotExpressionNode):
         #       argumnent will persist to result
         # TODO: consider also last node if available
         if self._output_type_info is UNDEFINED:
-            self._output_type_info = self._first_dexp_node.get_type_info()
+            # TODO: treba biti bool
+            if self.operation.output_type_info_type == OutputTypeInfoTypeEnum.BOOL_TYPE:
+                self._output_type_info = TypeInfo.get_or_create_by_type(bool, caller=self)
+            elif self.operation.output_type_info_type == OutputTypeInfoTypeEnum.FROM_FIRST_DEXP:
+                self._output_type_info = self._first_dexp_node.get_type_info()
+            else:
+                raise EntityInternalError(owner=self, msg=f"Unsupported operation.output_type_info_type={self.operation.output_type_info_type}")
         return self._output_type_info
 
     @staticmethod

@@ -4,50 +4,51 @@ from collections import OrderedDict
 from functools import partial
 
 from typing import (
-        Dict,
-        Optional,
-        Any,
-        List,
-        Callable,
-        Union,
-        )
+    Dict,
+    Optional,
+    Any,
+    List,
+    Callable,
+    Union,
+)
 from .utils import (
-        UNDEFINED,
-        format_arg_name_list,
-        be_conjugate,
-        plural_suffix,
-        )
+    UNDEFINED,
+    format_arg_name_list,
+    be_conjugate,
+    plural_suffix,
+)
 from .namespaces import ( 
-        ThisNS,
-        FieldsNS,
-        Namespace,
-        )
+    ThisNS,
+    FieldsNS,
+    Namespace,
+)
 from .exceptions import (
-        EntitySetupValueError,
-        EntitySetupTypeError,
-        EntityInternalError,
-        )
+    EntitySetupValueError,
+    EntitySetupTypeError,
+    EntityInternalError,
+    )
 from .meta import (
-        FunctionArgumentsType,
-        TypeInfo,
-        extract_function_arguments_default_dict,
-        is_model_class,
-        STANDARD_TYPE_LIST,
-        is_function,
-        ComponentTreeWValuesType,
-        )
+    FunctionArgumentsType,
+    TypeInfo,
+    extract_function_arguments_default_dict,
+    is_model_class,
+    STANDARD_TYPE_LIST,
+    is_function,
+    ComponentTreeWValuesType, 
+    FUNC_ARG_DOT_EXPR_TYPE_MAP,
+)
 from .expressions import (
-        DotExpression,
-        IDotExpressionNode,
-        ISetupSession,
-        )
+    DotExpression,
+    IDotExpressionNode,
+    ISetupSession,
+)
 from .attr_nodes import (
-        AttrDexpNode,
-        )
+    AttrDexpNode,
+)
 from .base import (
-        SetupStackFrame,
-        ReservedArgumentNames,
-        )
+    SetupStackFrame,
+    ReservedArgumentNames,
+)
 
 TypeInfoCallable = Callable[[], TypeInfo]
 
@@ -69,9 +70,14 @@ class PrepArg:
     # Used in ReservedArgumentNames.INJECT_COMPONENT_TREE case / in apply() phase only
     caller: Union[Namespace, IDotExpressionNode] = field(repr=False)
 
+    # autocomputed
+    # TODO: maybe drop: compare=False and rerp=False + adjust tests
+    is_dot_expr: bool = field(init=False, compare=False, repr=False)
+
     def __post_init__(self):
         if self.type_info_or_callable is None:
             raise EntityInternalError(owner=self, msg="type_info / 'callable() -> type_info' not supplied")
+        self.is_dot_expr = isinstance(self.value_or_dexp, DotExpression)
 
         # TODO:
         # if self.is_none_type():
@@ -530,9 +536,19 @@ def check_prepared_arguments(
         if prep_arg.type_info is None:
             raise EntityInternalError(f"{prepared_args.parent_name} -> Argument '{prep_arg}' type_info is not set")
 
-        err_msg = exp_arg.type_info.check_compatible(prep_arg.type_info)
+        if prep_arg.is_dot_expr and exp_arg.type_info.is_dot_expr:
+            # can not use type_ since it is: DynamicAttrsBase
+            # TODO: ovo bolje riješi - da se snimi ovaj podatak u TypeInfo i da onda ga koristi u usporedbi za .dexpr_return_type
+            exp_type_orig = exp_arg.type_info.py_type_hint
+            exp_type = FUNC_ARG_DOT_EXPR_TYPE_MAP.get(exp_type_orig)
+            if not exp_type:
+                raise EntityInternalError(owner=exp_arg, msg=f"Invalid type for FUNC_ARG_DOT_EXPR_TYPE_MAP, got: {exp_type_orig}")
+            exp_type_info = TypeInfo.get_or_create_by_type(exp_type, caller=exp_arg)
+        else:
+            exp_type_info = exp_arg.type_info
+
+        err_msg = exp_type_info.check_compatible(prep_arg.type_info)
         if err_msg:
-            exp_arg.type_info.check_compatible(prep_arg.type_info)
             # prepared_args.any_prep_arg_lack_type_info() / setup_session.add_hook_on_finished_all()
             msg = f"[{prep_arg.name}]: {err_msg}"
             err_messages.append(msg)
@@ -541,10 +557,7 @@ def check_prepared_arguments(
         msg = ', '.join(err_messages)
         raise EntitySetupTypeError(f"{prepared_args.parent_name}: {len(err_messages)} data type issue(s) => {msg}")
 
-
-
 # ------------------------------------------------------------
-
 
 def create_function_arguments(
         py_function: Callable

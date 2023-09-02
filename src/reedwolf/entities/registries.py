@@ -96,7 +96,7 @@ class OperationsRegistry(RegistryUseDenied):
 
 @dataclass
 class RootValue:
-    value_previous: AttrValue
+    value_root: AttrValue
     attr_name_new : Optional[AttrName]
     do_fetch_by_name: Union[bool, UndefinedType] = UNDEFINED
 
@@ -577,17 +577,22 @@ class ThisRegistryForItemsAndChildren(IThisRegistry, RegistryBase):
                 )
 
     def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
-        assert isinstance(apply_result.current_frame.instance, (list, tuple))
         if attr_name == ReservedAttributeNames.ITEMS_ATTR_NAME.value:
+            assert isinstance(apply_result.current_frame.instance, (list, tuple))
             root_value = RootValue(
-                            value_previous=apply_result.current_frame.instance,
+                            value_root=apply_result.current_frame.instance,
                             attr_name_new=None, 
                             do_fetch_by_name=False)
         elif attr_name == ReservedAttributeNames.CHILDREN_ATTR_NAME.value:
+            assert not isinstance(apply_result.current_frame.instance, (list, tuple))
+            if not isinstance(apply_result.current_frame.component._child_field_list, (list, tuple)):
+                raise EntityInternalError(owner=apply_result.current_frame.component, msg=f"_child_field_list not a list, got: {apply_result.current_frame.component._child_field_list}")
+
             # TODO: .Children?
             root_value = RootValue(
-                            value_previous=apply_result.current_frame.instance,
-                            attr_name_new=None, 
+                            value_root=apply_result.current_frame.component._child_field_list,
+                            attr_name_new=None,
+                            do_fetch_by_name=False,
                             )
         else:
             raise EntityInternalError(owner=self, msg=f"Expected attribute name: {ReservedAttributeNames.ITEMS_ATTR_NAME.value} or {ReservedAttributeNames.CHILDREN_ATTR_NAME.value} , got: {attr_name}") 

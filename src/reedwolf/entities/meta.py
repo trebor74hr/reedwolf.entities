@@ -9,41 +9,41 @@ from collections.abc import Sequence
 from functools import partial
 from collections.abc import Sized
 from typing import (
-        Any,
-        NewType,
-        ClassVar,
-        Callable,
-        Dict,
-        List,
-        Optional,
-        Tuple,
-        Type,
-        Union,
-        # _GenericAlias,
-        get_type_hints,
-        TypeVar,
-        Sequence as SequenceType,
-        )
+    Any,
+    NewType,
+    ClassVar,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+    get_type_hints,
+    TypeVar,
+    Sequence as SequenceType,
+)
 from enum import Enum
 from decimal import Decimal
 from datetime import date, datetime, time, timedelta
 from dataclasses import (
-        is_dataclass,
-        dataclass,
-        Field as DcField,
-        field,
-        fields as dc_fields,
-        make_dataclass,
-        )
+    is_dataclass,
+    dataclass,
+    Field as DcField,
+    field,
+    fields as dc_fields,
+    make_dataclass,
+)
 
 try:
     from typing import Self
 except ImportError:
     # TODO: consider using typing_extensions for python version < 3.11
     Self = NewType("Self", Any)
+
 try:
     # ----------------------------------------
-    # Pydantic found
+    # Pydantic available
     # ----------------------------------------
     # imported and used in other modules - e.g. dropthis
     from pydantic import BaseModel as PydBaseModel
@@ -66,23 +66,50 @@ except ImportError:
 # ------------------------------------------------------------
 
 from .utils import (
-        UNDEFINED,
-        format_arg_name_list,
-        )
+    UNDEFINED,
+    format_arg_name_list,
+)
 from .exceptions import (
-        EntityTypeError,
-        )
+    EntityTypeError, 
+    EntityInternalError,
+)
 from .namespaces import (
-        DynamicAttrsBase,
-        )
+    DynamicAttrsBase,
+)
 
 # ------------------------------------------------------------
 # SPECIAL DATATYPES
 # ------------------------------------------------------------
 NoneType                = type(None) # or None.__class__
 
+# TODO: to use NewType or TypeVar it is the question.
+#
+#           - TypeVar is used when type can be different and in concrete case
+#             to match used type (type variable). Example:
+#
+#               NumT = TypeVar("NumT", bound=Union[int, float])
+#               def max_num(num_list: List[NumT]) -> NumT:
+#                   ...
+#               max_num([1,2,3])
+#
+#             used only in declaration, no constructor.
+#             list of underlying types is in __constraints__ 
+#             OR __bound__ when "bound=" is used.
+#
+#           - NewType() provides constructor (with bad repr) to mark values
+#             with new type name. constructor does not add any meta-information
+#             to produced instance. Example:
+#               NumberType = NewType("NumberType", Union[int, float])
+#               def max_num(num_list: List[NumberType]) -> NumberType:
+#                   ...
+#               max_num([NumberType(1), NumberType(2)])
+#             can be used in declaration and in instance
+#             construction. underlying type is in __supertype__
+#
+#       MyPy will have the last word.
+
 # NOTE: for dataclass there is no base type, so using Any
-DataclassType = Any
+DataclassType = TypeVar("DataclassType", bound=Any)
 
 if PydBaseModel:
     ModelType  = Union[DataclassType, PydBaseModel]
@@ -91,95 +118,110 @@ else:
     ModelType  = DataclassType
     ModelField = DcField
 
-# e.g. [(1,"test"), ("C2", "test2")]
 STANDARD_TYPE_LIST      = (str, int, float, bool, Decimal, date, datetime, timedelta, time)
 STANDARD_TYPE_W_NONE_LIST = (NoneType,) + STANDARD_TYPE_LIST 
-
 StandardType            = Union[str, int, float, bool, Decimal, date, datetime, timedelta, time]
 
-LiteralType             = Any
-
 NUMBER_TYPES            = (int, float, Decimal)
-
 NumberType              = Union[int, float, Decimal]
+
+LiteralType             = TypeVar("LiteralType", bound=Any)
 
 ERR_MSG_SUPPORTED = "Supporting custom and standard python types, and typing: Optional, Union[..., NoneType] and Sequence/List[ py-types | Union[py-types, NoneType]]."
 
-
 # e.g. list, int, dict, Person, List, Dict[str, Optional[Union[str, float]]
-PyTypeHint              = Any # TODO: Union[type, Type] # or typing._GenericAlias
+PyTypeHint                 = TypeVar("PyTypeHint", bound=Type)
 
-TransMessageType        = str
+RuleDatatype               = TypeVar("RuleDatatype", bound=Union[StandardType, List[StandardType,], Dict[str, StandardType]])
 
-# ChoiceValueType        = Tuple[StandardType, TransMessageType]
+FunctionArgumentsTupleType = TypeVar("FunctionArgumentsTupleType", bound=Tuple[List[Any], Dict[str, Any]])
 
-RuleDatatype            = Union[StandardType, List[StandardType,], Dict[str, StandardType,]]
+HookOnFinishedAllCallable = TypeVar("HookOnFinishedAllCallable", bound=Callable[[], None])
 
-FunctionArgumentsTupleType = Tuple[List[Any], Dict[str, Any]]
+# ------------ NewType-s ------------
 
-HookOnFinishedAllCallable = Callable[[], None]
+# A good example of NewType use-case, will require construction e.g. _("test")
+TransMessageType        = NewType("TransMessageType", str)
+_ = TransMessageType
 
-# ---
+KeyPairs = NewType("KeyPairs", SequenceType[Tuple[str, Any]])
 
-KeyPairs = SequenceType[Tuple[str, Any]]
+InstanceId = NewType("InstanceId", int)
 
-InstanceId = int
-KeyString = str
+KeyString = NewType("KeyString", str)
 
-AttrName = str
-AttrValue = Any
+# used for matching rows types, e.g. std_types map, filter etc.
+ItemType = NewType("ItemType", dict)
+
+ComponentNameType = NewType("ComponentNameType", str)
 
 # ------------------------------------------------------------
 # Commonly/Internally used type symbols
 # ------------------------------------------------------------
 
-# used for matching rows types, e.g. std_types map, filter etc.
-ItemType = TypeVar("ItemType")
+# Currently find no way on describing complex Dict-s
+TreeNode = NewType("TreeNode", Any)
 
-ComponentNameType = TypeVar("ComponentNameType", bound=str) 
-
-# Naming convention instead of class inheritance
-TYPE_FIELDNAME_SUFFIX = "AttrNameType"
-
-AttrNameType = TypeVar(f"{TYPE_FIELDNAME_SUFFIX}", bound=Any) 
-NumberAttrNameType = TypeVar(f"Number{TYPE_FIELDNAME_SUFFIX}", bound=Union[NumberType]) 
-StringAttrNameType = TypeVar(f"String{TYPE_FIELDNAME_SUFFIX}", bound=str) 
-
-# # https://stackoverflow.com/questions/61568462/python-typing-what-does-typevara-b-covariant-true-mean
-# NumberAttrNameType = TypeVar("NumberAttrNameType") 
-# # NOTE: *NUMBER_TYPES # self.type_.__constraints__
-# #   (<class 'int'>, <class 'float'>, <class 'decimal.Decimal'>)
-
-# Currently find no way on describing Dict-s
-TreeNode = Any
-
-# TreeNode :: 
+# TreeNode ::
 #   name: str self.name
 #   component: ComponentBase
 #   children: List[Self]
-ComponentTreeType = Dict[ComponentNameType, TreeNode]
+ComponentTreeType = NewType("ComponentTreeType", Dict[ComponentNameType, TreeNode])
 
-# TreeNode :: 
+# TreeNode ::
 #   name: str self.name
 #   component: ComponentBase
 #   children: List[Self]
 #   attr_current_value_instance: InstanceAttrCurrentValue
-ComponentTreeWValuesType = Dict[ComponentNameType, TreeNode]
+ComponentTreeWValuesType = NewType("ComponentTreeWValuesType", Dict[ComponentNameType, TreeNode])
 
-# TreeNode :: 
+# TreeNode ::
 #   name: str self.name
 #   Optional[value: LiteralValue]
 #   Optional[contains: List[TreeNode]]
-ValuesTree = Dict[ComponentNameType, TreeNode]
+ValuesTree = NewType("ValuesTree", Dict[ComponentNameType, TreeNode])
 
-# TreeNode :: 
+# TreeNode ::
 #   name: str self.name
 #   Optional[contains: List[TreeNode]]
-MetaTree = Dict[ComponentNameType, TreeNode]
+MetaTree = NewType("MetaTree", Dict[ComponentNameType, TreeNode])
 
+# -- Following are used just to have type declaration for names
+AttrName = NewType("AttrName", str)
+AttrValue = NewType("AttrValue", Any)
 
 # ------------------------------------------------------------
+# Following are used for functions to control type of function arguments
+# Naming convention instead of class inheritance
+# ------------------------------------------------------------
 
+# -- Type hints for attribute name declarations e.g.
+#   def Sum(fieldname: FuncArgAttrNameNumberType)
+
+FUNC_ARG_ATTR_NAME_TYPE_PREFIX: str = "FuncArgAttrName"
+
+FuncArgAttrNameType = TypeVar(f"{FUNC_ARG_ATTR_NAME_TYPE_PREFIX}Type", bound=Any)
+FuncArgAttrNameNumberType = TypeVar(f"{FUNC_ARG_ATTR_NAME_TYPE_PREFIX}NumberType", bound=Union[NumberType])
+# NOTE: *NUMBER_TYPES # self.type_.__constraints__
+#       (<class 'int'>, <class 'float'>, <class 'decimal.Decimal'>)
+FuncArgAttrNameStringType = TypeVar(f"{FUNC_ARG_ATTR_NAME_TYPE_PREFIX}StringType", bound=str)
+
+# -- Type hints for delayed DotExpression-s - dot-expression will have delayed evaluation,
+#    will be evaluated in a function for every function call e.g.
+#        def Filter(term: FuncArgDotExpression)
+#        This.Items.Filter(This.value > 10)
+
+FUNC_ARG_DOT_EXPR_TYPE_PREFIX: str = "FuncArgDotExpr"
+
+FuncArgDotExprType = TypeVar(f"{FUNC_ARG_DOT_EXPR_TYPE_PREFIX}Type", bound=DynamicAttrsBase)
+FuncArgDotExprBoolType = TypeVar(f"{FUNC_ARG_DOT_EXPR_TYPE_PREFIX}BoolType", bound=DynamicAttrsBase)
+
+FUNC_ARG_DOT_EXPR_TYPE_MAP : Dict[Type, Type] = {
+    FuncArgDotExprType: Any,
+    FuncArgDotExprBoolType: bool,
+}
+
+# ------------------------------------------------------------
 
 @dataclass
 class FunctionArgumentsType:
@@ -214,6 +256,8 @@ EmptyFunctionArguments  = FunctionArgumentsType([], {})
 # ------------------------------------------------------------
 
 def get_underlying_types(type_: type):
+    if not hasattr(type_, "__mro__"):
+        return ()
     underlying_types = inspect.getmro(type_)
     idx = underlying_types.index(object)
     if idx>=0:
@@ -278,12 +322,14 @@ def is_function(maybe_function: Any) -> bool:
     # type() == type - to exclude list, dict etc.
     # TODO: type() == _GenericAlias to exclude typing.* e.g. List/Optional - any better way?
     #       py 3.10 has no _GenericAlias, so this doesn't work: and not type(maybe_function) in (type, _GenericAlias) \
+    # NOTE: typing.NewType has __supertype__ - base class
     return callable(maybe_function) \
            and not type(maybe_function) in (type, ) \
            and not is_enum(maybe_function) \
            and not is_pydantic(maybe_function) \
            and not is_dataclass(maybe_function) \
            and not inspect.isclass(maybe_function) \
+           and not hasattr(maybe_function, "__supertype__") \
            and not repr(maybe_function).startswith("typing.")
 
 
@@ -471,7 +517,8 @@ class TypeInfo:
     is_optional:    bool = field(init=False, repr=False, default=UNDEFINED)
     is_enum:        bool = field(init=False, repr=False, default=UNDEFINED)
     is_union:       bool = field(init=False, repr=False, default=UNDEFINED)
-    is_fieldname:   bool = field(init=False, repr=False, default=UNDEFINED)
+    is_attrname:    bool = field(init=False, repr=False, default=UNDEFINED)
+    is_dot_expr:    bool = field(init=False, repr=False, default=UNDEFINED)
 
     # list of python type underneath - e.g. int, str, list, dict, Person, or list of accepted types
     types:          List[Type] = field(init=False, default=UNDEFINED)
@@ -495,14 +542,33 @@ class TypeInfo:
 
         self._extract_type_hint_details()
 
+        if isinstance(self.type_, DcField):
+            raise EntityTypeError(owner=self, msg=f"py_type_hint={self.type_} is a dataclass.Field() instance")
+
         # TODO: raise error: if self.is_none_type():
 
         # if not self.is_list and not self.is_optional:
         #     if self.py_type_hint != self.type_:
         #         raise EntityTypeError(item=self, msg=f"Unsupported type hint, got: {self.py_type_hint}. {ERR_MSG_SUPPORTED}")
 
+
     def is_none_type(self):
         return self.types == [NoneType]
+
+    def _extract_bound_inner_type(self, inner_type_name_prefix: str, inner_type: Type) -> Tuple[bool, Type]:
+        if inner_type and getattr(inner_type, "__name__", "").startswith(inner_type_name_prefix):
+            is_matched = True
+            if hasattr(inner_type, "__bound__"):
+                # TypeVar("Name", bound=some_type)
+                inner_type = inner_type.__bound__ if inner_type.__bound__ else Any
+            # elif hasattr(inner_type, "__supertype__"):
+            #     # NewType("Name", some_type)
+            #     inner_type = inner_type.__supertype__
+            else:
+                raise EntityInternalError(owner=self, msg=f"inner_type '{inner_type.__name__}' is not bound TypeVar, got: {inner_type}")
+        else:
+            is_matched = False
+        return is_matched, inner_type
 
     def _extract_type_hint_details(self):
         py_type_hint = self.py_type_hint
@@ -539,17 +605,14 @@ class TypeInfo:
             if len(py_type_hint.__args__) != 1:
                 raise EntityTypeError(item=py_type_hint, msg=f"AttrDexpNode's annotation should have single List argument, got: {py_type_hint.__args__}.")
             inner_type = py_type_hint.__args__[0]
-
         elif origin_type is not None:
             inner_type = origin_type
         else:
             inner_type = py_type_hint
 
-
-        is_fieldname = False
-        if inner_type and getattr(inner_type, "__name__", "").endswith(TYPE_FIELDNAME_SUFFIX):
-            is_fieldname = True
-            inner_type = inner_type.__bound__ if inner_type.__bound__ else Any
+        self.is_attrname, inner_type = self._extract_bound_inner_type(FUNC_ARG_ATTR_NAME_TYPE_PREFIX, inner_type)
+        if not self.is_attrname:
+            self.is_dot_expr, inner_type = self._extract_bound_inner_type(FUNC_ARG_DOT_EXPR_TYPE_PREFIX, inner_type)
 
         # Another Union layer allowed, e.g.:  List[Union[str, int, NoneType]]
         if getattr(inner_type, "__origin__", inner_type) == Union: 
@@ -560,7 +623,6 @@ class TypeInfo:
         # normalize
         self.is_list = is_list
         self.is_optional = is_optional
-        self.is_fieldname = is_fieldname 
 
         # TODO: probably it will need extra attribute to hold Enum internal type (int, str, etc.)
         # if self.is_enum:
@@ -653,8 +715,11 @@ class TypeInfo:
         if self.is_union:
             out.insert(0, "Union[")
             out.append("]")
-        if self.is_fieldname:
+        if self.is_attrname:
             out.insert(0, "AttrName[")
+            out.append("]")
+        if self.is_dot_expr:
+            out.insert(0, "DotExpr[")
             out.append("]")
 
         return "".join(out)

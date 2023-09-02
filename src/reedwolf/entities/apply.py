@@ -65,8 +65,9 @@ from .base import (
     InstanceChange,
     InstanceAttrCurrentValue,
     get_instance_key_string_attrname_pair,
-    UseStackFrameCtxManagerBase,
-        )
+    UseStackFrameCtxManagerBase, 
+    ChildField,
+)
 from .fields import (
         FieldBase,
         )
@@ -125,7 +126,9 @@ class UseApplyStackFrameCtxManager(UseStackFrameCtxManagerBase):
                 self._copy_attr_from_previous_frame(previous_frame, "key_string", may_be_copied=False)
 
                 # NOTE: not this for now:
-                self._copy_attr_from_previous_frame(previous_frame, "local_setup_session")
+                self._copy_attr_from_previous_frame(previous_frame, "local_setup_session",
+                                                    # for Apply -> ChildrenValidation setup can be different
+                                                    if_set_must_be_same=False)
 
             # check / init again 
             self.frame.clean()
@@ -659,21 +662,22 @@ class ApplyResult(IApplyResult):
                         depth=depth,
                         )
 
-                # self.current_frame.container
                 with self.use_stack_frame(
                         ApplyStackFrame(
                             component = component, 
                             # instance is a list of items
                             instance = instance, 
                             instance_is_list = True,
+                            # ALT: self.current_frame.container
                             container = component,
                             parent_instance=self.current_frame.instance,
                             in_component_only_tree=in_component_only_tree,
                             # NOTE: instance_new skipped - (contains list of
                             #       new items) are already applied
                             )) as current_frame:
+
                     # setup this registry
-                    this_registry = comp_container.try_create_this_registry(
+                    this_registry = comp_container.create_this_registry(
                                             component=component, 
                                             setup_session=self.setup_session)
 
@@ -751,7 +755,7 @@ class ApplyResult(IApplyResult):
             # TODO: in setup phase attach local_setup_session to component -
             #       and get this cached value
             # ---------------------------------------------------------------
-            this_registry = comp_container.try_create_this_registry(
+            this_registry = comp_container.create_this_registry(
                                     component=component, 
                                     setup_session=self.setup_session)
 
@@ -835,7 +839,8 @@ class ApplyResult(IApplyResult):
                 # ------------------------------------------------------------
                 # --- Recursive walk down - for each child call _apply
                 # ------------------------------------------------------------
-                for child in component.get_children():
+                children = component.get_children()
+                for child in children:
                     # TODO: self.config.logger.warning(f"{'  ' * self.current_frame.depth} _apply: {component.name} -> {child.name}")
                     self._apply(
                                 # parent=component, 
@@ -843,15 +848,49 @@ class ApplyResult(IApplyResult):
                                 component=child, 
                                 # depth=depth+1,
                                 )
+
                 # TODO: consider to reset - although should not influence since stack_frame will be disposed
-                # self.current_frame.set_parent_values_subtree(parent_values_subtree)
+                #           self.current_frame.set_parent_values_subtree(parent_values_subtree)
                 # NOTE: bind_dexp_result not used
 
-                all_ok = self._execute_cleaners(component,
-                        validation_class=ChildrenValidationBase,
-                        evaluation_class=ChildrenEvaluationBase,
-                        )
-                process_further = all_ok
+                if children:
+                    # NOTE: even in mode_subentity_items need to run ChildrenValidation
+                    #       on every instance in the list - what is this moment
+
+                    # == Create This. registry and put in local setup session
+                    #
+                    # TODO: fill child_field_list or reuse from setup_session. 
+                    #       and pass it:
+                    #
+                    #   child_field_list: List[ChildField] = []
+                    #   for child_component in children:
+                    #       value = self.get_current_value(child_component, strict=False)
+                    #       child_field = ChildField(Name=child_component.name, _type_info=child_component.)
+                    #       child_component._
+                    #       child_component.
+                    this_registry = self.current_frame.container.create_this_registry(
+                                            component=component,
+                                            setup_session=self.setup_session)
+                    local_setup_session = self.setup_session.create_local_setup_session(
+                                            this_registry)
+
+                    with self.use_stack_frame(
+                            ApplyStackFrame(
+                                component=self.current_frame.component,
+                                # instance is a single item
+                                instance=self.current_frame.instance,
+                                container=self.current_frame.container,
+                                local_setup_session=local_setup_session,
+                                # parent_instance=self.current_frame.parent_instance,
+                                # in_component_only_tree=in_component_only_tree,
+                            )) as current_frame:
+                        all_ok = self._execute_cleaners(component,
+                                validation_class=ChildrenValidationBase,
+                                evaluation_class=ChildrenEvaluationBase,
+                                )
+
+                    # TODO: not used later
+                    process_further = all_ok
 
             # if self.current_frame.component.is_container():
             # Fill internal cache for possible later use by some `dump_` functions

@@ -52,7 +52,6 @@ from .meta import (
         )
 from .base import (
     IComponentFields,
-    make_component_fields_dataclass,
     ChildField,
     IFieldBase,
     IStackOwnerSession,
@@ -202,10 +201,10 @@ class RegistryBase(IRegistry):
 
         for nr, child_field in enumerate(child_field_list, 1):
             attr_node = AttrDexpNode(
-                            name=child_field.name,
-                            data=child_field.type_info,
+                            name=child_field.Name,
+                            data=child_field._type_info,
                             namespace=self.NAMESPACE,
-                            type_info=child_field.type_info, 
+                            type_info=child_field._type_info,
                             th_field=None,
                             )
             self.register_attr_node(attr_node)

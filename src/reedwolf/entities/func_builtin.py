@@ -1,39 +1,39 @@
 from enum import Enum
 from collections.abc import Sized
 from typing import (
-        TypeVar,
-        Tuple,
-        Dict,
-        Optional,
-        List,
-        Sequence,
-        Union,
-        Callable,
-        Any,
-        )
-
+    TypeVar,
+    Tuple,
+    Dict,
+    Optional,
+    List,
+    Sequence,
+    Union,
+    Callable,
+    Any,
+)
 from .exceptions import (
-        EntityApplyValueError,
-        EntitySetupValueError,
-        )
+    EntityApplyValueError,
+    EntitySetupValueError,
+)
 from .functions import (
-        create_builtin_function_factory, 
-        BuiltinFunctionFactory,
-        CustomFunctionFactory,
-        FunctionArgumentsType,
-        )
+    create_builtin_function_factory,
+    BuiltinFunctionFactory,
+    CustomFunctionFactory,
+    FunctionArgumentsType,
+)
 from .meta import (
-        ItemType,
-        NumberType,
-        NumberAttrNameType,
-        is_enum,
-        get_enum_members,
-        ComponentTreeWValuesType,
-        )
+    ItemType,
+    NumberType,
+    FuncArgAttrNameNumberType,
+    is_enum,
+    get_enum_members,
+    ComponentTreeWValuesType,
+    FuncArgDotExprBoolType,
+)
+from .namespaces import DynamicAttrsBase
 from .utils import (
-        UNDEFINED,
-        )
-# from .base import ()
+    UNDEFINED,
+)
 
 
 def get_builtin_function_factories_dict() -> Dict[str, BuiltinFunctionFactory]:
@@ -147,8 +147,8 @@ Startswith = create_builtin_function_factory(startswith, name="Startswith") # no
 #       functionality).  Could be generated and eval("...").
 # ------------------------------------------------------------
 
-# TODO: NumberAttrNameType[NumberType]
-def sum_(value_list: Sequence[ItemType], field_name: NumberAttrNameType) -> NumberType:
+# TODO: FuncArgAttrNameNumberType[NumberType]
+def sum_(value_list: Sequence[ItemType], field_name: FuncArgAttrNameNumberType) -> NumberType:
     """
     NOTE: underlying type must be matched dynamically
     """
@@ -182,15 +182,31 @@ Map = create_builtin_function_factory(
 
 # ------------------------------------------------------------
 
-def filter_(value_list: Sequence[ItemType], callable_or_fieldname : Optional[Union[Callable[[Any], Any], str]]) -> Sequence[ItemType]:
-    " returns iterator "
-    if not callable_or_fieldname:
-        return (item for item in value_list if item)
-    elif isinstance(callable_or_fieldname, str):
-        return (item for item in value_list if getattr(item, callable_or_fieldname, None))
-    elif callable(callable_or_fieldname):
-        return (item for item in value_list if callable_or_fieldname(item))
-    raise TypeError(f"Argument expected to be callable or string (fieldname), got: {callable_or_fieldname} -> {type(callable_or_fieldname)}")
+
+def filter_(value_list: Sequence[ItemType], bool_dot_expr: FuncArgDotExprBoolType) -> Sequence[ItemType]:
+    """ is generatror """
+    if not isinstance(bool_dot_expr, DynamicAttrsBase):
+        raise TypeError(f"Argument expected to be FuncArgDotExprBoolType - DotExpression, got: {bool_dot_expr} -> {type(bool_dot_expr)}")
+    raise NotImplementedError("iterate and evaluate bool_dot_expr for every: {bool_dot_expr}")
+
+    for item in value_list:
+        # TODO: with apply_stack.item:
+        yield bool_dot_expr._evaluator.evaluate(apply_result).value
+    # ALT: return iterator:
+    #   result = (item for item in value_list if bool_dot_expr....(item))
+    return
+
+
+# OLD:
+# def filter_(value_list: Sequence[ItemType], callable_or_fieldname : Optional[Union[Callable[[Any], Any], str]]) -> Sequence[ItemType]:
+#     " returns iterator "
+#     if not callable_or_fieldname:
+#         return (item for item in value_list if item)
+#     elif isinstance(callable_or_fieldname, str):
+#         return (item for item in value_list if getattr(item, callable_or_fieldname, None))
+#     elif callable(callable_or_fieldname):
+#         return (item for item in value_list if callable_or_fieldname(item))
+#     raise TypeError(f"Argument expected to be callable or string (fieldname), got: {callable_or_fieldname} -> {type(callable_or_fieldname)}")
 
 
 Filter = create_builtin_function_factory(
