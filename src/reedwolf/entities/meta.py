@@ -4,6 +4,7 @@ extract_* - the most interesting functions
 
 """
 import inspect
+from abc import abstractmethod
 from copy import copy
 from collections.abc import Sequence
 from functools import partial
@@ -129,8 +130,18 @@ LiteralType             = TypeVar("LiteralType", bound=Any)
 
 ERR_MSG_SUPPORTED = "Supporting custom and standard python types, and typing: Optional, Union[..., NoneType] and Sequence/List[ py-types | Union[py-types, NoneType]]."
 
+@dataclass
+class FuncArgTypeHint:
+    # if type is DotExpression -> inner_type which evaluation of DotExpression should return
+    type: Type
+    inner_type: Optional[Type] = field(repr=False, default=Any)
+
+    @abstractmethod
+    def __hash__(self):
+        ...
+
 # e.g. list, int, dict, Person, List, Dict[str, Optional[Union[str, float]]
-PyTypeHint                 = TypeVar("PyTypeHint", bound=Type)
+PyTypeHint                 = TypeVar("PyTypeHint", bound=Union[Type, FuncArgTypeHint])
 
 RuleDatatype               = TypeVar("RuleDatatype", bound=Union[StandardType, List[StandardType,], Dict[str, StandardType]])
 
@@ -151,7 +162,10 @@ InstanceId = NewType("InstanceId", int)
 KeyString = NewType("KeyString", str)
 
 # used for matching rows types, e.g. std_types map, filter etc.
-ItemType = NewType("ItemType", dict)
+ItemType = TypeVar("ItemType", bound=Any)
+
+# TODO: consider using this for detection of .Items / .Children
+#   ItemSetType = TypeVar("ItemSetType", bound=SequenceType[ItemType])
 
 ComponentNameType = NewType("ComponentNameType", str)
 
@@ -189,37 +203,6 @@ MetaTree = NewType("MetaTree", Dict[ComponentNameType, TreeNode])
 # -- Following are used just to have type declaration for names
 AttrName = NewType("AttrName", str)
 AttrValue = NewType("AttrValue", Any)
-
-# ------------------------------------------------------------
-# Following are used for functions to control type of function arguments
-# Naming convention instead of class inheritance
-# ------------------------------------------------------------
-
-# -- Type hints for attribute name declarations e.g.
-#   def Sum(fieldname: FuncArgAttrNameNumberType)
-
-FUNC_ARG_ATTR_NAME_TYPE_PREFIX: str = "FuncArgAttrName"
-
-FuncArgAttrNameType = TypeVar(f"{FUNC_ARG_ATTR_NAME_TYPE_PREFIX}Type", bound=Any)
-FuncArgAttrNameNumberType = TypeVar(f"{FUNC_ARG_ATTR_NAME_TYPE_PREFIX}NumberType", bound=Union[NumberType])
-# NOTE: *NUMBER_TYPES # self.type_.__constraints__
-#       (<class 'int'>, <class 'float'>, <class 'decimal.Decimal'>)
-FuncArgAttrNameStringType = TypeVar(f"{FUNC_ARG_ATTR_NAME_TYPE_PREFIX}StringType", bound=str)
-
-# -- Type hints for delayed DotExpression-s - dot-expression will have delayed evaluation,
-#    will be evaluated in a function for every function call e.g.
-#        def Filter(term: FuncArgDotExpression)
-#        This.Items.Filter(This.value > 10)
-
-FUNC_ARG_DOT_EXPR_TYPE_PREFIX: str = "FuncArgDotExpr"
-
-FuncArgDotExprType = TypeVar(f"{FUNC_ARG_DOT_EXPR_TYPE_PREFIX}Type", bound=DynamicAttrsBase)
-FuncArgDotExprBoolType = TypeVar(f"{FUNC_ARG_DOT_EXPR_TYPE_PREFIX}BoolType", bound=DynamicAttrsBase)
-
-FUNC_ARG_DOT_EXPR_TYPE_MAP : Dict[Type, Type] = {
-    FuncArgDotExprType: Any,
-    FuncArgDotExprBoolType: bool,
-}
 
 # ------------------------------------------------------------
 
@@ -502,6 +485,23 @@ def type_as_str(type_: type):
          if hasattr(type_, "__name__") and str(getattr(type_, "__module__", "")) not in ("", "builtins",) 
          else f"{getattr(type_, '__name__', str(type_))}")
 
+
+# # not used any more and not currently
+# def extract_bound_inner_type(inner_type_name_prefix: str, inner_type: Type) -> Tuple[bool, Type]:
+#     if inner_type and getattr(inner_type, "__name__", "").startswith(inner_type_name_prefix):
+#         is_matched = True
+#         if hasattr(inner_type, "__bound__"):
+#             # TypeVar("Name", bound=some_type)
+#             inner_type = inner_type.__bound__ if inner_type.__bound__ else Any
+#         elif hasattr(inner_type, "__supertype__"):
+#             # NewType("Name", some_type)
+#             inner_type = inner_type.__supertype__
+#         else:
+#             raise EntityInternalError(msg=f"inner_type '{inner_type.__name__}' is not bound TypeVar, got: {inner_type}")
+#     else:
+#         is_matched = False
+#     return is_matched, inner_type
+
 # ------------------------------------------------------------
 # TypeInfo
 # ------------------------------------------------------------
@@ -517,8 +517,7 @@ class TypeInfo:
     is_optional:    bool = field(init=False, repr=False, default=UNDEFINED)
     is_enum:        bool = field(init=False, repr=False, default=UNDEFINED)
     is_union:       bool = field(init=False, repr=False, default=UNDEFINED)
-    is_attrname:    bool = field(init=False, repr=False, default=UNDEFINED)
-    is_dot_expr:    bool = field(init=False, repr=False, default=UNDEFINED)
+    is_func_arg_th: bool = field(init=False, repr=False, default=UNDEFINED)
 
     # list of python type underneath - e.g. int, str, list, dict, Person, or list of accepted types
     types:          List[Type] = field(init=False, default=UNDEFINED)
@@ -527,9 +526,8 @@ class TypeInfo:
     type_:          Type = field(init=False, repr=False, default=UNDEFINED)
 
     # ------------------------------------------------------------
-
-    TYPE_INFO_REGISTRY: ClassVar[Dict[type, Self]] = {}
-
+    # cache - registry by class type
+    TYPE_INFO_REGISTRY: ClassVar[Dict[Union[type, FuncArgTypeHint], Self]] = {}
 
     def __post_init__(self):
         # if self.th_field and self.th_field.name=='company_type': ...
@@ -555,23 +553,16 @@ class TypeInfo:
     def is_none_type(self):
         return self.types == [NoneType]
 
-    def _extract_bound_inner_type(self, inner_type_name_prefix: str, inner_type: Type) -> Tuple[bool, Type]:
-        if inner_type and getattr(inner_type, "__name__", "").startswith(inner_type_name_prefix):
-            is_matched = True
-            if hasattr(inner_type, "__bound__"):
-                # TypeVar("Name", bound=some_type)
-                inner_type = inner_type.__bound__ if inner_type.__bound__ else Any
-            # elif hasattr(inner_type, "__supertype__"):
-            #     # NewType("Name", some_type)
-            #     inner_type = inner_type.__supertype__
-            else:
-                raise EntityInternalError(owner=self, msg=f"inner_type '{inner_type.__name__}' is not bound TypeVar, got: {inner_type}")
-        else:
-            is_matched = False
-        return is_matched, inner_type
 
     def _extract_type_hint_details(self):
-        py_type_hint = self.py_type_hint
+        if isinstance(self.py_type_hint, FuncArgTypeHint):
+            func_arg_type_hint: FuncArgTypeHint = self.py_type_hint
+            py_type_hint = func_arg_type_hint.type
+        else:
+            func_arg_type_hint = None
+            py_type_hint = self.py_type_hint
+
+        self.is_func_arg_th = bool(func_arg_type_hint)
 
         origin_type = getattr(py_type_hint, "__origin__", None)
 
@@ -610,9 +601,10 @@ class TypeInfo:
         else:
             inner_type = py_type_hint
 
-        self.is_attrname, inner_type = self._extract_bound_inner_type(FUNC_ARG_ATTR_NAME_TYPE_PREFIX, inner_type)
-        if not self.is_attrname:
-            self.is_dot_expr, inner_type = self._extract_bound_inner_type(FUNC_ARG_DOT_EXPR_TYPE_PREFIX, inner_type)
+        if func_arg_type_hint:
+            assert inner_type == py_type_hint
+            if func_arg_type_hint.inner_type:
+                inner_type = func_arg_type_hint.inner_type
 
         # Another Union layer allowed, e.g.:  List[Union[str, int, NoneType]]
         if getattr(inner_type, "__origin__", inner_type) == Union: 
@@ -715,10 +707,10 @@ class TypeInfo:
         if self.is_union:
             out.insert(0, "Union[")
             out.append("]")
-        if self.is_attrname:
-            out.insert(0, "AttrName[")
+        if self.is_func_arg_th:
+            out.insert(0, "FuncArgAttrname[")
             out.append("]")
-        if self.is_dot_expr:
+        if self.is_func_arg_dot_expr:
             out.insert(0, "DotExpr[")
             out.append("]")
 
@@ -759,10 +751,9 @@ class TypeInfo:
                         "\n  2) 'get_model_fields() + .type' used instead 'extract_py_type_hints()' -> get_or_create_by_type() (internal issue, use 'extract_model_field_meta' maybe?)"
                         "Explanation: When 'from future import annotations + __annotations__' is used then python hints are strings. Use 'typing.get_type_hints()' to resolve hints properly." 
                         )
-
         if py_type_hint not in cls.TYPE_INFO_REGISTRY:
+            # py_type_hint can be FuncArgTypeHint
             cls.TYPE_INFO_REGISTRY[py_type_hint] = TypeInfo(py_type_hint=py_type_hint)
-
         return cls.TYPE_INFO_REGISTRY[py_type_hint]
 
     # ------------------------------------------------------------
@@ -878,4 +869,37 @@ def make_dataclass_with_optional_fields(dc_model: DataclassType) -> DataclassTyp
 #     if not hint_type: # check if type
 #         raise EntityTypeError(item=inspect_object, msg=f"{caller_name}: Object type hint for '{attr_name}' is not valid '{hint_type}'. Expected some type.")
 #     return hint_type
+
+# ------------------------------------------------------------
+# Following are used for functions to control type of function arguments
+# Naming convention instead of class inheritance
+# ------------------------------------------------------------
+
+# -- Type hints for attribute name declarations e.g.
+#   def Sum(fieldname: FuncArgAttrNameNumberType)
+
+# FuncArgAttrNameType = TypeVar(f"FuncArgAttrNameType", bound=DynamicAttrsBase)
+# FuncArgDotExprType = TypeVar("FuncArgDotExprType", bound=DynamicAttrsBase)
+
+# FUNC_ARG_ATTR_NAME_TYPE_PREFIX: str = "FuncArgAttrName"
+# FuncArgAttrNameType = TypeVar(f"{FUNC_ARG_ATTR_NAME_TYPE_PREFIX}Type", bound=Any)
+# FuncArgAttrNameNumberType = TypeVar(f"{FUNC_ARG_ATTR_NAME_TYPE_PREFIX}NumberType", bound=Union[NumberType])
+# # NOTE: *NUMBER_TYPES # self.type_.__constraints__
+# #       (<class 'int'>, <class 'float'>, <class 'decimal.Decimal'>)
+# FuncArgAttrNameStringType = TypeVar(f"{FUNC_ARG_ATTR_NAME_TYPE_PREFIX}StringType", bound=str)
+#
+# # -- Type hints for delayed DotExpression-s - dot-expression will have delayed evaluation,
+# #    will be evaluated in a function for every function call e.g.
+# #        def Filter(term: FuncArgDotExpression)
+# #        This.Items.Filter(This.value > 10)
+#
+# FUNC_ARG_DOT_EXPR_TYPE_PREFIX: str = "FuncArgDotExpr"
+#
+# FuncArgDotExprType = TypeVar(f"{FUNC_ARG_DOT_EXPR_TYPE_PREFIX}Type", bound=DynamicAttrsBase)
+# FuncArgDotExprBoolType = TypeVar(f"{FUNC_ARG_DOT_EXPR_TYPE_PREFIX}BoolType", bound=DynamicAttrsBase)
+#
+# FUNC_ARG_DOT_EXPR_TYPE_MAP : Dict[Type, Type] = {
+#     FuncArgDotExprType: Any,
+#     FuncArgDotExprBoolType: bool,
+# }
 

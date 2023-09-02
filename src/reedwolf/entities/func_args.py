@@ -34,13 +34,15 @@ from .meta import (
     is_model_class,
     STANDARD_TYPE_LIST,
     is_function,
-    ComponentTreeWValuesType, 
-    FUNC_ARG_DOT_EXPR_TYPE_MAP,
+    ComponentTreeWValuesType,
+    NoneType,
 )
 from .expressions import (
     DotExpression,
     IDotExpressionNode,
     ISetupSession,
+    FuncArgAttrnameTypeHint,
+    FuncArgDotexprTypeHint,
 )
 from .attr_nodes import (
     AttrDexpNode,
@@ -60,8 +62,10 @@ class PrepArg:
 
     parent_name: str = field(repr=False)
 
-    # can be None on creation, but filled later after complete finish is done
-    # Example: F. namespace (FieldsNS.)
+    # - can be TypeInfo instance or a function (object.get_type_info) that will be called
+    #   on-tye-fly and return TypeInfo instance.
+    # - can be None on creation, but filled later after complete finish is done
+    #     Example: F. namespace (FieldsNS.)
     type_info_or_callable: Union[TypeInfo, TypeInfoCallable]
 
     # TODO: Union[NoneType, StdPyTypes (Literal[]), IDotExpressionNode
@@ -73,25 +77,28 @@ class PrepArg:
     # autocomputed
     # TODO: maybe drop: compare=False and rerp=False + adjust tests
     is_dot_expr: bool = field(init=False, compare=False, repr=False)
+    _type_info: TypeInfo = field(init=False, compare=False, repr=False, default=None)
 
     def __post_init__(self):
         if self.type_info_or_callable is None:
             raise EntityInternalError(owner=self, msg="type_info / 'callable() -> type_info' not supplied")
         self.is_dot_expr = isinstance(self.value_or_dexp, DotExpression)
 
-        # TODO:
-        # if self.is_none_type():
-        #     raise EntityInternalError(owner=self, msg="type_info / 'callable() -> type_info' is NoneType")
+        # TODO: consider:
+        #   if self.type_info is None or self.is_none_type():
+        #       raise EntityInternalError(owner=self, msg="type_info / 'callable() -> type_info' is NoneType")
 
     def is_none_type(self):
-        return self.type_info.is_none_type()
+        return self.type_info.type_ is NoneType
 
     @property
     def type_info(self) -> Optional[TypeInfo]:
         " in some cases type_info is not available, then callable is provided which will start returning non-None value after finish() is completed "
-        return self.type_info_or_callable() \
-                if callable(self.type_info_or_callable) \
-                else self.type_info_or_callable
+        if not self._type_info:
+            self._type_info = self.type_info_or_callable() \
+                    if callable(self.type_info_or_callable) \
+                    else self.type_info_or_callable
+        return self._type_info
 
 
 @dataclass
@@ -509,7 +516,6 @@ class FunctionArguments:
 
         kwargs = dict(func_arg_dict=self.func_arg_dict, prepared_args=prepared_args)
 
-
         if not prepared_args.any_prep_arg_lack_type_info():
             check_prepared_arguments(**kwargs)
         else:
@@ -536,14 +542,20 @@ def check_prepared_arguments(
         if prep_arg.type_info is None:
             raise EntityInternalError(f"{prepared_args.parent_name} -> Argument '{prep_arg}' type_info is not set")
 
-        if prep_arg.is_dot_expr and exp_arg.type_info.is_dot_expr:
-            # can not use type_ since it is: DynamicAttrsBase
-            # TODO: ovo bolje riješi - da se snimi ovaj podatak u TypeInfo i da onda ga koristi u usporedbi za .dexpr_return_type
-            exp_type_orig = exp_arg.type_info.py_type_hint
-            exp_type = FUNC_ARG_DOT_EXPR_TYPE_MAP.get(exp_type_orig)
-            if not exp_type:
-                raise EntityInternalError(owner=exp_arg, msg=f"Invalid type for FUNC_ARG_DOT_EXPR_TYPE_MAP, got: {exp_type_orig}")
-            exp_type_info = TypeInfo.get_or_create_by_type(exp_type, caller=exp_arg)
+        if exp_arg.type_info.is_func_arg_th:
+            if not prep_arg.is_dot_expr:
+                err_messages.append(f"Expected DotExpression, got: {prep_arg.value_or_dexp}")
+
+            if isinstance(exp_arg.type_info.py_type_hint, FuncArgAttrnameTypeHint):
+                ... # TODO: any special handling here needed?
+            elif isinstance(exp_arg.type_info.py_type_hint, FuncArgDotexprTypeHint):
+                ... # TODO: any special handling here needed?
+            else:
+                raise EntityInternalError(owner=exp_arg, msg=f"Unsupported function argumment type hint, got:  {exp_arg.type_info.py_type_hint}")
+
+            # .type_ holds inner type - result type of DotExpression
+            exp_type_info = exp_arg.type_info
+            # DELTHIS: exp_type_info = TypeInfo.get_or_create_by_type(exp_arg.type_info.inner_type, caller=exp_arg)
         else:
             exp_type_info = exp_arg.type_info
 

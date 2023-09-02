@@ -13,13 +13,13 @@ from enum import (
         Enum
         )
 from typing import (
-        List,
-        Optional,
-        Union,
-        Any,
-        Callable,
-        Tuple,
-        )
+    List,
+    Optional,
+    Union,
+    Any,
+    Callable,
+    Tuple, Type,
+)
 
 from .utils import (
         UNDEFINED,
@@ -39,16 +39,16 @@ from .namespaces import (
         Namespace,
         )
 from .meta import (
-        TypeInfo,
-        FunctionArgumentsType,
-        FunctionArgumentsTupleType,
-        STANDARD_TYPE_W_NONE_LIST,
-        HookOnFinishedAllCallable,
-        LiteralType,
-        AttrName,
-        Self,
-        ModelType,
-        )
+    TypeInfo,
+    FunctionArgumentsType,
+    FunctionArgumentsTupleType,
+    STANDARD_TYPE_W_NONE_LIST,
+    HookOnFinishedAllCallable,
+    LiteralType,
+    AttrName,
+    Self,
+    ModelType, FuncArgTypeHint,
+)
 # ------------------------------------------------------------
 # interfaces / base classes / internal structs
 # ------------------------------------------------------------
@@ -970,4 +970,20 @@ def execute_dexp_or_node(
 
     return dexp_result
 
+
+@dataclass
+class FuncArgAttrnameTypeHint(FuncArgTypeHint):
+    inner_type: Optional[Type] = field(repr=True, default=Any)
+    type: Type = field(init=False, default=DotExpression)
+
+    def __hash__(self):
+        return hash((self.__class__.__name__, self.type, self.inner_type))
+
+@dataclass
+class FuncArgDotexprTypeHint(FuncArgTypeHint):
+    inner_type: Optional[Type] = field(repr=True, default=Any)
+    type: Type = field(init=False, default=DotExpression)
+
+    def __hash__(self):
+        return hash((self.__class__.__name__, self.type, self.inner_type))
 
