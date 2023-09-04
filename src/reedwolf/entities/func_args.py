@@ -243,11 +243,14 @@ class FunctionArguments:
                 assert setup_session
                 # NOTE: ThisRegistryForInstance not available so low, using path:
                 #       session -> container -> ... 
-                local_setup_session = setup_session.create_local_setup_session_for_this_instance(
-                                                            model_class=model_class,
-                                                            )
+                this_registry = setup_session.container.create_this_registry_for_instance(
+                    model_class=model_class,
+                )
+                # local_setup_session = setup_session.create_local_setup_session_for_this_instance(
+                #                                             model_class=model_class,
+                #                                             )
             elif model_class in STANDARD_TYPE_LIST:
-                local_setup_session = None 
+                this_registry = None
             else:
                 raise EntitySetupValueError(owner=self, msg=f"{parent_name}: Unsupported type: {caller} / {model_class}")
 
@@ -258,7 +261,7 @@ class FunctionArguments:
                     SetupStackFrame(
                         container = setup_session.current_frame.container, 
                         component = setup_session.current_frame.component, 
-                        local_setup_session = local_setup_session,
+                        this_registry = this_registry,
                     )):
                 dexp_node = dexp.Setup(setup_session=setup_session, owner=setup_session.current_frame.component)
 

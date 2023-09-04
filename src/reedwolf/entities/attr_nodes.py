@@ -5,31 +5,34 @@ from typing import (
         )
 from dataclasses import dataclass, field
 
-from .utils import (
-        UNDEFINED,
-        NA_DEFAULTS_MODE,
-        to_repr,
-        )
-from .exceptions import (
-        EntitySetupValueError,
-        EntityInternalError,
-        EntityApplyNameError,
-        EntityApplyValueError,
-        )
 from .namespaces import (
-        Namespace,
-        )
+    ThisNS,
+)
+from .utils import (
+    UNDEFINED,
+    NA_DEFAULTS_MODE,
+    to_repr,
+)
+from .exceptions import (
+    EntitySetupValueError,
+    EntityInternalError,
+    EntityApplyNameError,
+    EntityApplyValueError,
+)
+from .namespaces import (
+    Namespace,
+)
 from .expressions import (
-        DotExpression,
-        IDotExpressionNode,
-        IAttributeAccessorBase,
-        )
+    DotExpression,
+    IDotExpressionNode,
+    IAttributeAccessorBase,
+)
 from .meta import (
-        TypeInfo,
-        is_model_class,
-        is_function,
-        ModelField,
-        )
+    TypeInfo,
+    is_model_class,
+    is_function,
+    ModelField,
+)
 # TODO: remove this dependency
 from .base import (
     UndefinedType,
@@ -210,15 +213,22 @@ class AttrDexpNode(IDotExpressionNode):
                 if not len(names)==1:
                     raise EntityInternalError(owner=self, msg=f"Initial evaluation step for non-subentity_items failed, expected single name member (e.g. M), got: {self.name}\n  == Compoonent: {frame.container}")
 
-            registry = None
-
-            if apply_result.current_frame.local_setup_session:
-                # take from apply_result's current local_setup_session
-                registry = apply_result.current_frame.local_setup_session.get_registry(self.namespace, strict=False)
-
-            if not registry:
+            if self.namespace == ThisNS:
+                # TODO: DRY this - identical logic in expressions.py :: Setup()
+                if not apply_result.current_frame.this_registry:
+                    raise EntityApplyNameError(owner=self, msg=f"Namespace 'This.' is not available in this context, got: {self.name}\n  == Compoonent: {frame.container}")
+                registry = apply_result.current_frame.this_registry
+            else:
                 # take from setup_session
                 registry = apply_result.setup_session.get_registry(self.namespace)
+
+            # registry = None
+            # if apply_result.current_frame.local_setup_session:
+            #     # take from apply_result's current local_setup_session
+            #     registry = apply_result.current_frame.local_setup_session.get_registry(self.namespace, strict=False)
+            # if not registry:
+            #     # take from setup_session
+            #     registry = apply_result.setup_session.get_registry(self.namespace)
 
             # get starting instance
             root_value = registry.get_root_value(apply_result=apply_result, attr_name=attr_name)

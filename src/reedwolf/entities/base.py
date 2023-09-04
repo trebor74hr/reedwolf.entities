@@ -939,7 +939,7 @@ class ComponentBase(SetParentMixin, ABC):
                                         else child, 
                             component = child, 
                             # should not be used 
-                            local_setup_session = None,
+                            this_registry = None,
                         )):
                     # RECURSION x 2
                     if child.is_subentity():
@@ -991,8 +991,7 @@ class ComponentBase(SetParentMixin, ABC):
                 #       created in ContainerBase.setup()
                 this_registry = container.try_create_this_registry(component=self, setup_session=setup_session)
                 if this_registry:
-                    local_setup_session = setup_session.create_local_setup_session(this_registry)
-                    setup_session.current_frame.set_local_setup_session(local_setup_session, force=True)
+                    setup_session.current_frame.set_this_registry(this_registry, force=True)
 
             ret = self._setup(setup_session=setup_session)
 
@@ -1479,8 +1478,9 @@ class SetupStackFrame(IStackFrame):
     # current component - can be BoundModel too
     component: ComponentBase
 
-    # used for ThisNS in some cases
-    local_setup_session: Optional[ISetupSession] = field(repr=False, default=None)
+    # # used for ThisNS in some cases
+    # local_setup_session: Optional[ISetupSession] = field(repr=False, default=None)
+    this_registry: Optional[IThisRegistry] = field(repr=False, default=None)
 
     # Computed from container/component
     # used for BoundModelWithHandlers cases (read_handlers()), 
@@ -1497,8 +1497,8 @@ class SetupStackFrame(IStackFrame):
         if not isinstance(self.component, ComponentBase):
             raise EntityInternalError(owner=self, msg=f"Expected ComponentBase, got: {self.component}") 
 
-        if self.local_setup_session:
-            assert isinstance(self.local_setup_session, ISetupSession)
+        if self.this_registry:
+            assert isinstance(self.this_registry, IThisRegistry)
 
         if isinstance(self.component, BoundModelBase):
             self.bound_model = self.component
@@ -1507,11 +1507,16 @@ class SetupStackFrame(IStackFrame):
 
     # ------------------------------------------------------------
 
-    def set_local_setup_session(self, local_setup_session: ISetupSession, force: bool = False):
-        if not force and self.local_setup_session:
-            raise EntityInternalError(owner=self, msg=f"local_setup_session already set to '{self.local_setup_session}', got: '{local_setup_session}'") 
-        self.local_setup_session = local_setup_session
+    # def set_local_setup_session(self, local_setup_session: ISetupSession, force: bool = False):
+    #     if not force and self.local_setup_session:
+    #         raise EntityInternalError(owner=self, msg=f"local_setup_session already set to '{self.local_setup_session}', got: '{local_setup_session}'")
+    #     self.local_setup_session = local_setup_session
 
+    def set_this_registry(self, this_registry: Optional[IThisRegistry], force: bool = False):
+        # NOTE: in some cases existing and new this_registry can be None. Did not cover such combinations
+        if not force and self.this_registry:
+            raise EntityInternalError(owner=self, msg=f"this_registry already set to '{self.this_registry}', got: '{this_registry}'")
+        self.this_registry = this_registry
 
 
 # ------------------------------------------------------------
@@ -1664,7 +1669,8 @@ class ApplyStackFrame(IStackFrame):
     parent_instance_new: Optional[ModelType] = field(repr=False, default=None)
 
     # Usually used for ThisNS / This. namespace 
-    local_setup_session: Optional[ISetupSession] = field(repr=False, default=None)
+    # local_setup_session: Optional[ISetupSession] = field(repr=False, default=None)
+    this_registry: Optional[IThisRegistry] = field(repr=False, default=None)
 
     # currently used only for cleaners
     instance_is_list: bool = field(repr=False, default=False)
@@ -1713,8 +1719,8 @@ class ApplyStackFrame(IStackFrame):
         elif not is_model_class(instance_to_test.__class__):
             raise EntityInternalError(owner=self, msg=f"Expected model instance: {instance_to_test.__class__} or list[instances], got: {self.instance}")
 
-        if self.local_setup_session:
-            assert isinstance(self.local_setup_session, ISetupSession)
+        if self.this_registry:
+            assert isinstance(self.this_registry, IThisRegistry)
 
         assert self.bound_model_root
 
@@ -1728,11 +1734,15 @@ class ApplyStackFrame(IStackFrame):
         return parent_values_subtree_orig
 
 
-    def set_local_setup_session(self, local_setup_session: ISetupSession):
-        if self.local_setup_session:
-            raise EntityInternalError(owner=self, msg=f"local_setup_session already set to '{self.local_setup_session}', got: '{local_setup_session}'") 
-        self.local_setup_session = local_setup_session
+    # def set_local_setup_session(self, local_setup_session: ISetupSession):
+    #     if self.local_setup_session:
+    #         raise EntityInternalError(owner=self, msg=f"local_setup_session already set to '{self.local_setup_session}', got: '{local_setup_session}'")
+    #     self.local_setup_session = local_setup_session
 
+    def set_this_registry(self, this_registry: IThisRegistry):
+        if self.this_registry:
+            raise EntityInternalError(owner=self, msg=f"this_registry already set to '{self.this_registry}', got: '{this_registry}'")
+        self.this_registry = this_registry
 
     def clean(self):
         assert isinstance(self.component, ComponentBase)

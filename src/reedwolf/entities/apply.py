@@ -126,7 +126,7 @@ class UseApplyStackFrameCtxManager(UseStackFrameCtxManagerBase):
                 self._copy_attr_from_previous_frame(previous_frame, "key_string", may_be_copied=False)
 
                 # NOTE: not this for now:
-                self._copy_attr_from_previous_frame(previous_frame, "local_setup_session",
+                self._copy_attr_from_previous_frame(previous_frame, "this_registry",
                                                     # for Apply -> ChildrenValidation setup can be different
                                                     if_set_must_be_same=False)
 
@@ -677,15 +677,10 @@ class ApplyResult(IApplyResult):
                             )) as current_frame:
 
                     # setup this registry
-                    this_registry = comp_container.create_this_registry(
-                                            component=component, 
-                                            setup_session=self.setup_session)
-
-                    local_setup_session = self.setup_session.create_local_setup_session(this_registry) \
-                                          if this_registry else None
-
-                    # newt_frame.set_local_setup_session(local_setup_session, force=True)
-                    current_frame.set_local_setup_session(local_setup_session)
+                    current_frame.set_this_registry(
+                        comp_container.create_this_registry(
+                            component=component,
+                            setup_session=self.setup_session))
 
                     # finally apply validations on list of items
                     all_ok = self._execute_cleaners(component,
@@ -751,28 +746,10 @@ class ApplyResult(IApplyResult):
             assert getattr(component, "bind", None)
             assert not component.is_container()
 
-            # ---------------------------------------------------------------
-            # TODO: in setup phase attach local_setup_session to component -
-            #       and get this cached value
-            # ---------------------------------------------------------------
-            this_registry = comp_container.create_this_registry(
-                                    component=component, 
-                                    setup_session=self.setup_session)
-
-            local_setup_session = self.setup_session.create_local_setup_session(this_registry) \
-                                  if this_registry else None
-
-            # newt_frame.set_local_setup_session(local_setup_session, force=True)
-            new_frame.set_local_setup_session(local_setup_session)
-
-            # OLD:
-            #   attr_node = component.bind._dexp_node
-            #   if not attr_node:
-            #       raise EntityInternalError(owner=component, msg=f"{attr_node.name}.bind='{component.bind}' is not setup")
-            #   local_setup_session = self.setup_session.create_local_setup_session(
-            #                               ThisRegistryForValue(attr_node)
-            #                               )
-            #   new_frame.set_local_setup_session(local_setup_session)
+            new_frame.set_this_registry(
+                comp_container.create_this_registry(
+                    component=component,
+                    setup_session=self.setup_session))
 
 
         # ------------------------------------------------------------
@@ -871,17 +848,13 @@ class ApplyResult(IApplyResult):
                     this_registry = self.current_frame.container.create_this_registry(
                                             component=component,
                                             setup_session=self.setup_session)
-                    local_setup_session = self.setup_session.create_local_setup_session(
-                                            this_registry)
-
                     with self.use_stack_frame(
                             ApplyStackFrame(
                                 component=self.current_frame.component,
                                 # instance is a single item
                                 instance=self.current_frame.instance,
                                 container=self.current_frame.container,
-                                local_setup_session=local_setup_session,
-                                # parent_instance=self.current_frame.parent_instance,
+                                this_registry=this_registry,
                                 # in_component_only_tree=in_component_only_tree,
                             )) as current_frame:
                         all_ok = self._execute_cleaners(component,

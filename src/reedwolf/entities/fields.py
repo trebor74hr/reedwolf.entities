@@ -558,17 +558,20 @@ class ChoiceField(FieldBase):
                 assert not is_list
                 if is_list:
                     # TODO: explain, give example
-                    raise EntityInternalError(owner=self, msg="Choices is a a list of model instances, expecting single instance.") 
+                    raise EntityInternalError(owner=self, msg="Choices is a a list of model instances, expecting single instance.")
 
-            local_setup_session = setup_session.create_local_setup_session_for_this_instance(
-                                        model_class=model_class,
-                                        )
+            this_registry = setup_session.container.create_this_registry_for_instance(
+                model_class=model_class,
+            )
+            # local_setup_session = setup_session.create_local_setup_session_for_this_instance(
+            #                             model_class=model_class,
+            #                             )
 
             with setup_session.use_stack_frame(
                     SetupStackFrame(
                         container = self.get_first_parent_container(consider_self=True), 
                         component = self, 
-                        local_setup_session = local_setup_session,
+                        this_registry = this_registry,
               )):
                 self.choice_value_attr_node = self._create_attr_node(setup_session, "choice_value", dexp=self.choice_value)
                 self.choice_title_attr_node = self._create_attr_node(setup_session, "choice_title", dexp=self.choice_title)

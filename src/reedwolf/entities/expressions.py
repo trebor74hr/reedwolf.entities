@@ -33,11 +33,11 @@ from .exceptions import (
         EntityApplyError,
         )
 from .namespaces import (
-        DynamicAttrsBase,
-        FunctionsNS,
-        OperationsNS,
-        Namespace,
-        )
+    DynamicAttrsBase,
+    FunctionsNS,
+    OperationsNS,
+    Namespace, ThisNS,
+)
 from .meta import (
     TypeInfo,
     FunctionArgumentsType,
@@ -147,17 +147,24 @@ class IThisRegistry(IRegistry):
 
 class ISetupSession(ABC):
 
-    @abstractmethod
-    def create_local_setup_session(self, this_registry: IThisRegistry) -> Self:
-        ...
+    # @abstractmethod
+    # def create_local_setup_session(self, this_registry: IThisRegistry) -> Self:
+    #     ...
 
-    @abstractmethod
-    def create_local_setup_session_for_this_instance(self, 
-                                                     model_class: ModelType, 
-                                                     ) -> Self:
-        " creates Session with ThisRegistryForInstance "
-        # TODO: ugly name :(
-        ...
+    # @abstractmethod
+    # def create_local_setup_session_for_this_instance(self,
+    #                                                  model_class: ModelType,
+    #                                                  ) -> Self:
+    #     " creates Session with ThisRegistryForInstance "
+    #     # TODO: ugly name :(
+    #     ...
+
+    # @abstractmethod
+    # def create_this_registry_for_instance(self, model_class: ModelType) -> Self:
+    #     """
+    #     creates ThisRegistryForInstance "
+    #     """
+    #     ...
 
     @abstractmethod
     def get_registry(self, namespace: Namespace, strict: bool = True, is_internal_use: bool = False) -> IRegistry:
@@ -309,17 +316,24 @@ class DotExpression(DynamicAttrsBase):
 
         self._EnsureFinished()
 
-        registry = None
-
-        local_setup_session = setup_session.current_frame.local_setup_session if setup_session.current_frame else None
-
-        if local_setup_session:
-            # try to find in local repo
-            registry = local_setup_session.get_registry(self._namespace, strict=False, is_internal_use=self._is_internal_use)
-
-        if not registry:
+        # this_registry = setup_session.current_frame.this_registry if setup_session.current_frame else None
+        if self._namespace == ThisNS:
+            # TODO: DRY this - identical logic in expressions.py :: Setup()
+            if not setup_session.current_frame.this_registry:
+                raise EntitySetupNameError(owner=self, msg=f"Namespace 'This.' is not available in this context, got: {self._name}")
+            registry = setup_session.current_frame.this_registry
+        else:
             # if local repo not available or ns not found in it, find in container repo
             registry = setup_session.get_registry(self._namespace, is_internal_use=self._is_internal_use)
+
+        # registry = None
+        # local_setup_session = setup_session.current_frame.local_setup_session if setup_session.current_frame else None
+        # if local_setup_session:
+        #     # try to find in local repo
+        #     registry = local_setup_session.get_registry(self._namespace, strict=False, is_internal_use=self._is_internal_use)
+        # if not registry:
+        #     # if local repo not available or ns not found in it, find in container repo
+        #     registry = setup_session.get_registry(self._namespace, is_internal_use=self._is_internal_use)
 
         if not registry:
             raise EntityInternalError(owner=self, msg=f"Registry not created for: {self._namespace}")

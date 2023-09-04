@@ -357,7 +357,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
                 SetupStackFrame(
                     container = self, 
                     component = self, 
-                    local_setup_session = None,
+                    this_registry = None,
                 )):
 
             # ----------------------------------------
@@ -373,8 +373,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             # setup this_registry objects must be inside of stack_frame due
             # premature component.bind setup in some ThisRegistryFor* classes.
             this_registry = self.create_this_registry(component=self, setup_session=self.setup_session)
-            local_setup_session = self.setup_session.create_local_setup_session(this_registry)
-            self.setup_session.current_frame.set_local_setup_session(local_setup_session)
+            self.setup_session.current_frame.set_this_registry(this_registry)
 
             # ------------------------------------------------------------
             # setup me and all my children and children's children and ...

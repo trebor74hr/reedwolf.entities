@@ -556,7 +556,7 @@ class UseSetupStackFrameCtxManager(UseStackFrameCtxManagerBase):
 
         previous_frame = self.owner_session.stack_frames[0]
 
-        self._copy_attr_from_previous_frame(previous_frame, "local_setup_session", 
+        self._copy_attr_from_previous_frame(previous_frame, "this_registry",
                                             if_set_must_be_same=False)
 
 
@@ -771,15 +771,14 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
 
     # ------------------------------------------------------------
 
-    def create_local_setup_session_for_this_instance(self, 
-                                                     model_class: ModelType, 
-                                                     ) -> IThisRegistry:
-        # NOTE: must be placed here since:
-        #   expressions 
-        this_registry = self.container.create_this_registry_for_instance(
-                                model_class=model_class)
-        local_setup_session = self.create_local_setup_session(this_registry)
-        return local_setup_session
+    # def create_local_setup_session_for_this_instance(self,
+    #                                                  model_class: ModelType,
+    #                                                  ) -> IThisRegistry:
+    #     # NOTE: must be placed here since:
+    #     #   expressions
+    #     this_registry = self.container.create_this_registry_for_instance(model_class=model_class)
+    #     local_setup_session = self.create_local_setup_session(this_registry)
+    #     return local_setup_session
 
 
 

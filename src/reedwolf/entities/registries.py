@@ -612,32 +612,25 @@ class ThisRegistryForItemsAndChildren(IThisRegistry, RegistryBase):
 
 
 class SetupSession(SetupSessionBase):
+    ...
 
-    def create_local_setup_session(self, this_registry: IThisRegistry) -> Self:
-        """ Currently creates only local ThisNS registry, which is used for
-        some local context, e.g. Component This. dexps 
-        Args:
+    # def create_local_setup_session(self, this_registry: IThisRegistry) -> Self:
+    #     """ Currently creates only local ThisNS registry, which is used for
+    #     some local context, e.g. Component This. dexps
+    #     Args:
+    #         a) this_ns_instance_model_class -> This.Instance + This.<all-attribute-names> logic
+    #         b) this_ns_value_attr_node -> .Value logic, no other attributes for now
+    #     """
+    #     if not (this_registry and isinstance(this_registry, IThisRegistry)):
+    #         raise EntityInternalError(owner=self, msg=f"Expected IThisRegistry instance, got: {this_registry}")
 
-            a) this_ns_instance_model_class -> This.Instance + This.<all-attribute-names> logic
+    #     local_setup_session = SetupSession(
+    #                             container=self.container,
+    #                             parent_setup_session=None,
+    #                             functions_factory_registry=self.functions_factory_registry,
+    #                             )
+    #     local_setup_session.add_registry(this_registry)
 
-            b) this_ns_value_attr_node -> .Value logic, no other attributes for now
-
-        TODO:??
-            this_ns_value_attr_name:
-                when None -> .Instance + all-attributes logic
-                when not None -> .Value logic, no other attributes for now
-
-        """
-        if not (this_registry and isinstance(this_registry, IThisRegistry)):
-            raise EntityInternalError(owner=self, msg=f"Expected IThisRegistry instance, got: {this_registry}") 
-
-        local_setup_session = SetupSession(
-                                container=self.container,
-                                parent_setup_session=None,
-                                functions_factory_registry=self.functions_factory_registry,
-                                )
-        local_setup_session.add_registry(this_registry)
-
-        return local_setup_session
+    #     return local_setup_session
 
 
