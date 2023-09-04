@@ -678,9 +678,11 @@ class ApplyResult(IApplyResult):
 
                     # setup this registry
                     current_frame.set_this_registry(
-                        comp_container.create_this_registry(
-                            component=component,
-                            setup_session=self.setup_session))
+                        component.get_this_registry()
+                        # comp_container.create_this_registry(
+                        #     component=component,
+                        #     setup_session=self.setup_session),
+                    )
 
                     # finally apply validations on list of items
                     all_ok = self._execute_cleaners(component,
@@ -747,9 +749,11 @@ class ApplyResult(IApplyResult):
             assert not component.is_container()
 
             new_frame.set_this_registry(
-                comp_container.create_this_registry(
-                    component=component,
-                    setup_session=self.setup_session))
+                component.get_this_registry()
+                # comp_container.create_this_registry(
+                #     component=component,
+                #     setup_session=self.setup_session),
+            )
 
 
         # ------------------------------------------------------------
@@ -845,9 +849,10 @@ class ApplyResult(IApplyResult):
                     #       child_field = ChildField(Name=child_component.name, _type_info=child_component.)
                     #       child_component._
                     #       child_component.
-                    this_registry = self.current_frame.container.create_this_registry(
-                                            component=component,
-                                            setup_session=self.setup_session)
+                    # this_registry = self.current_frame.container.create_this_registry(
+                    #                         component=component,
+                    #                         setup_session=self.setup_session)
+                    this_registry = component.get_this_registry()
                     with self.use_stack_frame(
                             ApplyStackFrame(
                                 component=self.current_frame.component,

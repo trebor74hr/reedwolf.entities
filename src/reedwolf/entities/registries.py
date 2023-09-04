@@ -1,83 +1,83 @@
 import inspect
 from dataclasses import (
-        dataclass, 
-        field,
-        InitVar,
-        )
+    dataclass,
+    field,
+    InitVar,
+)
 from typing import (
-        List,
-        Union,
-        Optional,
-        ClassVar,
-        Dict,
-        )
+    List,
+    Union,
+    Optional,
+    ClassVar,
+    Dict,
+)
+
 from .utils import (
-        UNDEFINED,
-        UndefinedType,
-        to_repr,
-        )
+    UNDEFINED,
+    UndefinedType,
+    to_repr,
+)
 from .exceptions import (
-        EntitySetupError,
-        EntitySetupNameError,
-        EntitySetupValueError,
-        EntityInternalError,
-        EntityApplyTypeError,
-        EntityApplyNameError,
-        )
+    EntitySetupError,
+    EntitySetupNameError,
+    EntitySetupValueError,
+    EntityInternalError,
+    EntityApplyTypeError,
+    EntityApplyNameError,
+)
 from .namespaces import (
-        Namespace,
-        ModelsNS,
-        FieldsNS,
-        ThisNS,
-        FunctionsNS,
-        ContextNS,
-        ConfigNS,
-        OperationsNS,
-        )
+    Namespace,
+    ModelsNS,
+    FieldsNS,
+    ThisNS,
+    FunctionsNS,
+    ContextNS,
+    ConfigNS,
+    OperationsNS,
+)
 from .expressions import (
-        DotExpression,
-        IDotExpressionNode,
-        IThisRegistry,
-        )
+    DotExpression,
+    IDotExpressionNode,
+    IThisRegistry,
+)
 from .meta import (
-        Self,
-        ModelType,
-        get_model_fields,
-        TypeInfo,
-        AttrName,
-        AttrValue,
-        )
+    ModelType,
+    get_model_fields,
+    TypeInfo,
+    AttrName,
+    AttrValue,
+)
 from .base import (
-        ReservedAttributeNames,
-        ComponentBase,
-        IFieldBase,
-        IContainerBase,
-        IApplyResult,
-        BoundModelBase,
-        IFieldGroup,
-        ISetupSession,
-        )
+    ReservedAttributeNames,
+    ComponentBase,
+    IFieldBase,
+    IContainerBase,
+    IApplyResult,
+    BoundModelBase,
+    IFieldGroup,
+    ISetupSession,
+)
 from .attr_nodes import (
-        AttrDexpNode,
-        )
+    AttrDexpNode,
+)
 from .valid_base import (
-        ValidationBase,
-        )
+    ValidationBase,
+)
 from .eval_base import (
-        EvaluationBase,
-        )
+    EvaluationBase,
+)
 from .contexts import (
-        IContext,
-        )
+    IContext,
+)
 from .config import (
-        Config,
-        )
+    Config,
+)
 from .setup import (
-        RegistryBase,
-        RegistryUseDenied,
-        ComponentAttributeAccessor,
-        SetupSessionBase,
-        )
+    RegistryBase,
+    RegistryUseDenied,
+    ComponentAttributeAccessor,
+    SetupSessionBase,
+)
 
 # ------------------------------------------------------------
 

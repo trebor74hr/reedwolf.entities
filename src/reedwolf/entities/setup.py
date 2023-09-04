@@ -1,55 +1,53 @@
 from abc import abstractmethod
 from dataclasses import dataclass, field
 from typing import (
-        Any,
-        List,
-        Union,
-        Optional,
-        ClassVar,
-        Tuple,
-        Dict,
-        Type,
-        )
+    Any,
+    List,
+    Union,
+    Optional,
+    ClassVar,
+    Tuple,
+    Dict,
+)
 
 from .utils import (
-        get_available_names_example,
-        UNDEFINED,
-        UndefinedType,
-        check_identificator_name,
-        to_repr,
-        snake_case_to_camel,
-        )
+    get_available_names_example,
+    UNDEFINED,
+    UndefinedType,
+    check_identificator_name,
+    to_repr,
+)
 from .exceptions import (
-        EntityError,
-        EntitySetupError,
-        EntitySetupNameError,
-        EntitySetupNameNotFoundError,
-        EntityInternalError,
-        EntityApplyNameError,
-        EntitySetupValueError,
-        )
+    EntityError,
+    EntitySetupError,
+    EntitySetupNameError,
+    EntitySetupNameNotFoundError,
+    EntityInternalError,
+    EntityApplyNameError,
+    EntitySetupValueError,
+)
 from .namespaces import (
-        Namespace,
-        )
+    Namespace,
+)
 from .expressions import (
-        DotExpression,
-        IDotExpressionNode,
-        IFunctionDexpNode,
-        IRegistry,
-        IThisRegistry,
-        ISetupSession,
-        IAttributeAccessorBase,
-        )
+    DotExpression,
+    IDotExpressionNode,
+    IFunctionDexpNode,
+    IRegistry,
+    IThisRegistry,
+    ISetupSession,
+    IAttributeAccessorBase,
+    )
 from .meta import (
-        Self,
-        is_model_class,
-        FunctionArgumentsType,
-        FunctionArgumentsTupleType,
-        ModelType,
-        TypeInfo,
-        HookOnFinishedAllCallable,
-        get_model_fields,
-        )
+    Self,
+    is_model_class,
+    FunctionArgumentsType,
+    FunctionArgumentsTupleType,
+    ModelType,
+    TypeInfo,
+    HookOnFinishedAllCallable,
+    get_model_fields,
+)
 from .base import (
     IComponentFields,
     ChildField,
@@ -63,15 +61,15 @@ from .base import (
     ReservedAttributeNames,
     SetupStackFrame,
     UseStackFrameCtxManagerBase,
-        )
+)
 from .functions import (
-        FunctionsFactoryRegistry,
-        CustomFunctionFactory,
-        try_create_function,
-        )
+    FunctionsFactoryRegistry,
+    CustomFunctionFactory,
+    try_create_function,
+)
 from .attr_nodes import (
-        AttrDexpNode,
-        )
+    AttrDexpNode,
+)
 
 # ------------------------------------------------------------
 

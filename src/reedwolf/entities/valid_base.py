@@ -3,9 +3,9 @@ from abc import (
         abstractmethod,
         )
 from typing import (
-        Any,
-        Union, 
-        )
+    Any,
+    Union, ClassVar,
+)
 from dataclasses import dataclass
 
 from .utils import (
@@ -40,6 +40,7 @@ from .expressions import (
 class ValidationBase(ComponentBase, ABC): # TODO: make it abstract
     """ Executes validate() method which checks all ok
     """
+    HAS_THIS_NAMESPACE: ClassVar[bool] = False
 
     def __post_init__(self):
         if hasattr(self, "ensure"):

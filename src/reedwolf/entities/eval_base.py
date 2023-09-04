@@ -28,6 +28,7 @@ class EvaluationBase(ComponentBase, ABC):  # TODO: make it abstract
         current instance/object. The execution should not fail.
     """
     REQUIRES_AUTOCOMPUTE: ClassVar[bool] = field(default=True)
+    HAS_THIS_NAMESPACE: ClassVar[bool] = False
 
     @abstractmethod
     def execute(self, apply_result: IApplyResult) -> Optional[ExecResult]:

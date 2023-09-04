@@ -370,9 +370,11 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             #   M. namespace finished.
             self.bound_model.setup(setup_session=self.setup_session)
 
-            # setup this_registry objects must be inside of stack_frame due
-            # premature component.bind setup in some ThisRegistryFor* classes.
-            this_registry = self.create_this_registry(component=self, setup_session=self.setup_session)
+            # NOTE: setup this_registry objects must be inside of stack_frame due
+            #       premature component.bind setup in some ThisRegistryFor* classes.
+            # this_registry = self.create_this_registry(component=self, setup_session=self.setup_session)
+            this_registry = self.get_or_create_this_registry(setup_session=self.setup_session, owner_container=self)
+
             self.setup_session.current_frame.set_this_registry(this_registry)
 
             # ------------------------------------------------------------
@@ -447,69 +449,85 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         key_pairs = self.keys.get_key_pairs(instance, apply_result=apply_result)
         return key_pairs
 
-    # ------------------------------------------------------------
-    def create_this_registry(self, component: ComponentBase, setup_session: ISetupSession) -> IThisRegistry:
-        maybe_this_registry = self.try_create_this_registry(component=component, setup_session=setup_session)
-        if maybe_this_registry is None:
-            raise EntityInternalError(owner=self, msg=f"create_this_registry() failed for component {component}")
-        return maybe_this_registry
+    # # ------------------------------------------------------------
+    # def create_this_registry(self, component: ComponentBase, setup_session: ISetupSession) -> IThisRegistry:
+    #     maybe_this_registry = self.try_create_this_registry(component=component, setup_session=setup_session)
+    #     if maybe_this_registry is None:
+    #         raise EntityInternalError(owner=self, msg=f"create_this_registry() failed for component {component}")
+    #     return maybe_this_registry
 
-    def try_create_this_registry(self, component: ComponentBase, setup_session: ISetupSession) -> Optional[IThisRegistry]:
+    # def try_create_this_registry(self, component: ComponentBase, setup_session: ISetupSession) -> Optional[IThisRegistry]:
 
-        # Besides direct children, collect all FieldGroup and
-        # BooleanField+enables fields too (recursively)
+    #     # Besides direct children, collect all FieldGroup and
+    #     # BooleanField+enables fields too (recursively)
 
-        has_children = bool(component.get_children())
+    #     has_children = bool(component.get_children())
 
-        if isinstance(component, IFieldBase):
-            # ==== similar logic in apply.py :: _apply() ====
-            # TODO: this is 2nd place to call '.Setup()'. Explain!
-            assert not component.is_container()
-            assert getattr(component, "bind", None)
+    #     if not component.HAS_THIS_NAMESPACE:
+    #         if component.is_container():
+    #             raise EntityInternalError(owner=component, msg="Container should have local_session created")
+    #         this_registry = None
+    #     elif isinstance(component, IFieldBase):
+    #         # ==== similar logic in apply.py :: _apply() ====
+    #         # TODO: this is 2nd place to call '.Setup()'. Explain!
+    #         assert not component.is_container()
+    #         assert getattr(component, "bind", None)
 
-            # Field -> This.Value == This.<all-attributes>
-            if not component.bind.IsFinished():
-                attr_node = component.bind.Setup(setup_session=setup_session, owner=self)
-            else:
-                attr_node = component.bind._dexp_node
+    #         # Field -> This.Value == This.<all-attributes>
+    #         if not component.bind.IsFinished():
+    #             # only place where container is used ...
+    #             attr_node = component.bind.Setup(setup_session=setup_session, owner=self)
+    #         else:
+    #             attr_node = component.bind._dexp_node
 
-            if not attr_node:
-                raise EntitySetupNameError(owner=component, msg=f"{attr_node.name}.bind='{component.bind}' could not be evaluated")
+    #         if not attr_node:
+    #             raise EntitySetupNameError(owner=component, msg=f"{attr_node.name}.bind='{component.bind}' could not be evaluated")
 
-            if has_children:
-                # Field with children (e.g. BooleanField.enables)
-                # Children -> This..Children + This.<all-attributes>
-                # model_class = component.get_type_info().type_
-                this_registry = ThisRegistryForValueAndChildren(attr_node=attr_node, owner=component, setup_session=setup_session)
-            else:
-                this_registry = ThisRegistryForValue(attr_node)
+    #         if has_children:
+    #             # Field with children (e.g. BooleanField.enables)
+    #             # Children -> This..Children + This.<all-attributes>
+    #             # model_class = component.get_type_info().type_
+    #             this_registry = ThisRegistryForValueAndChildren(attr_node=attr_node, owner=component, setup_session=setup_session)
+    #         else:
+    #             this_registry = ThisRegistryForValue(attr_node)
 
+    #     else:
+    #         if not has_children:
+    #             raise EntityInternalError(owner=component, msg="Non-fields should have children or HAS_THIS_NAMESPACE = False")
 
-        elif has_children:
-            if component.is_subentity_items():
-                # Items -> This.Items 
-                this_registry = ThisRegistryForItemsAndChildren(owner=component, setup_session=setup_session)
+    #         # and not component.is_bound_model()
+    #         if component.is_subentity_items():
+    #             # Items -> This.Items
+    #             this_registry = ThisRegistryForItemsAndChildren(owner=component, setup_session=setup_session)
 
-            # TODO: add .Instance ==> BoundModel instance
-            # elif component.is_subentity_single():
-            #     # Children -> This.Children + This.<all-attributes> + This.Instance
-            #     this_registry = ThisRegistryForInstanceAndChildren(owner=component, setup_session=setup_session)
-            else:
-                # Children -> This.Children + This.<all-attributes>
-                this_registry = ThisRegistryForChildren(owner=component, setup_session=setup_session)
-        else:
-            if component.is_container():
-                raise EntityInternalError(owner=self, msg="Container should have local_session created") 
-            # no This for you!
-            this_registry = None
+    #         # TODO: add .Instance ==> BoundModel instance
+    #         # elif component.is_subentity_single():
+    #         #     # Children -> This.Children + This.<all-attributes> + This.Instance
+    #         #     this_registry = ThisRegistryForInstanceAndChildren(owner=component, setup_session=setup_session)
+    #         else:
+    #             # Children -> This.Children + This.<all-attributes>
+    #             this_registry = ThisRegistryForChildren(owner=component, setup_session=setup_session)
+    #     # else:
+    #     #     raise EntityInternalError(owner=component, msg="Component create this_registry failed - case unsupported")
+    #     #     if component.is_container():
+    #     #         raise EntityInternalError(owner=component, msg="Container should have local_session created")
+    #     #     # no This for you!
+    #     #     if component.HAS_THIS_NAMESPACE:
+    #     #         # if not isinstance(component, (BoundModelBase, ValidationBase, EvaluationBase)):
+    #     #         raise EntityInternalError(owner=component, msg="ThisNS is None and component requires This namespaces")
+    #     #     this_registry = None
 
-        return this_registry
+    #     if hasattr(component, "_this_registry"):
+    #         assert component._this_registry == this_registry
+    #         component._this_registry = this_registry
+
+    #     return this_registry
 
     # ------------------------------------------------------------
 
     @staticmethod
-    def create_this_registry_for_instance(
-            model_class: Optional[ModelType], 
+    def create_this_registry_for_model_class(
+            model_class: ModelType,
             ) -> IThisRegistry:
         # NOTE: must be here since:
         #   - expressions.py don't see ThisRegistryForInstance
@@ -853,9 +871,10 @@ class Entity(ContainerBase):
 
 @dataclass
 class SubEntityBase(ContainerBase, ABC):
-    """ can not be used individually - must be directly embedded into Other
-        SubEntityItems or top Entity """
-
+    """
+    can not be used individually - must be directly embedded into Other
+    SubEntityItems or top Entity
+    """
     # DotExpression based model -> can be dumped
     bound_model     : Union[BoundModel, BoundModelWithHandlers] = field(repr=False)
     # metadata={"bind_to_parent_setup_session" : True})
@@ -901,6 +920,7 @@ class SubEntityBase(ContainerBase, ABC):
 
     # Class attributes
     # namespace_only  : ClassVar[Namespace] = ThisNS
+    # HAS_THIS_NAMESPACE: ClassVar[bool] = False
 
     def __post_init__(self):
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)

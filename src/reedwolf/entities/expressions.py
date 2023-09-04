@@ -159,13 +159,6 @@ class ISetupSession(ABC):
     #     # TODO: ugly name :(
     #     ...
 
-    # @abstractmethod
-    # def create_this_registry_for_instance(self, model_class: ModelType) -> Self:
-    #     """
-    #     creates ThisRegistryForInstance "
-    #     """
-    #     ...
-
     @abstractmethod
     def get_registry(self, namespace: Namespace, strict: bool = True, is_internal_use: bool = False) -> IRegistry:
         ...
