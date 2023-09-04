@@ -123,10 +123,6 @@ class RegistryBase(IRegistry):
     NAMESPACE : ClassVar[Namespace] = None
     ROOT_VALUE_NEEDS_FETCH_BY_NAME: ClassVar[bool] = True
 
-    def __post_init__(self):
-        ...
-
-
     @abstractmethod
     def get_root_value(self, apply_result: IApplyResult, attr_name: str) -> Any:
         # TODO: same method declared in IRegistry
@@ -140,8 +136,7 @@ class RegistryBase(IRegistry):
         """
         ...
 
-
-    def set_setup_session(self, setup_session: ISetupSession):
+    def setup(self, setup_session: ISetupSession):
         if self.setup_session:
             raise EntityInternalError(owner=self, msg=f"setup_session already set: {self.setup_session}") 
         self.setup_session = setup_session
@@ -150,7 +145,7 @@ class RegistryBase(IRegistry):
         if self.finished:
             raise EntityInternalError(owner=self, msg="already finished") 
         if not self.setup_session:
-            raise EntityInternalError(owner=self, msg="setup_session not set, function set_setup_session() not called") 
+            raise EntityInternalError(owner=self, msg="setup_session not set, function .setup() not called")
         self.finished = True
 
     def count(self) -> int:
@@ -643,7 +638,7 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
         if ns_name in self._registry_dict:
             raise EntityInternalError(owner=self, msg=f"Registry {registry} already in registry")
         self._registry_dict[ns_name] = registry
-        registry.set_setup_session(self)
+        registry.setup(setup_session=self)
 
     # ------------------------------------------------------------
 

@@ -373,8 +373,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             # NOTE: setup this_registry objects must be inside of stack_frame due
             #       premature component.bind setup in some ThisRegistryFor* classes.
             # this_registry = self.create_this_registry(component=self, setup_session=self.setup_session)
-            this_registry = self.get_or_create_this_registry(setup_session=self.setup_session, owner_container=self)
-
+            this_registry = self.get_or_create_this_registry(setup_session=self.setup_session)
             self.setup_session.current_frame.set_this_registry(this_registry)
 
             # ------------------------------------------------------------
@@ -527,6 +526,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
     @staticmethod
     def create_this_registry_for_model_class(
+            setup_session: ISetupSession,
             model_class: ModelType,
             ) -> IThisRegistry:
         # NOTE: must be here since:
@@ -539,7 +539,10 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         - .Instance + <attr-names> is used only in manual setup cases, 
           e.g. ChoiceField()
         """
-        return ThisRegistryForInstance(model_class=model_class)
+        this_registry = ThisRegistryForInstance(model_class=model_class)
+        this_registry.setup(setup_session=setup_session)
+        this_registry.finish()
+        return this_registry
 
 # ------------------------------------------------------------
 

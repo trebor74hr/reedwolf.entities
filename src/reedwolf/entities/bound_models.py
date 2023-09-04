@@ -172,8 +172,13 @@ class NestedBoundModelMixin:
                 for child_bound_model in children_bound_models
                 }
 
+        # TODO: this is strange, setup this_registry in BoundModel.setup()
+        #       and then just use self.this_registry
         this_registry = apply_result.setup_session.container \
-                            .create_this_registry_for_model_class(model_class=self.model)
+                            .create_this_registry_for_model_class(
+                                setup_session=apply_result.setup_session,
+                                model_class=self.model)
+
         # local_setup_session = apply_result.setup_session \
         #                         .create_local_setup_session_for_this_instance(
         #                                 model_class=self.model,

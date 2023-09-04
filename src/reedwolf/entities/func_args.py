@@ -244,6 +244,7 @@ class FunctionArguments:
                 # NOTE: ThisRegistryForInstance not available so low, using path:
                 #       session -> container -> ... 
                 this_registry = setup_session.container.create_this_registry_for_model_class(
+                    setup_session=setup_session,
                     model_class=model_class,
                 )
                 # local_setup_session = setup_session.create_local_setup_session_for_this_instance(

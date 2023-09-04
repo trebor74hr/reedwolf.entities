@@ -304,7 +304,7 @@ class ContextRegistry(RegistryBase):
     NAMESPACE: ClassVar[Namespace] = ContextNS
 
     def __post_init__(self):
-        super().__post_init__() 
+        # super().__post_init__()
         if self.context_class:
             self.register_all_nodes()
 
@@ -374,8 +374,7 @@ class ConfigRegistry(RegistryBase):
     NAMESPACE: ClassVar[Namespace] = ConfigNS
 
     def __post_init__(self):
-        super().__post_init__()
-
+        # super().__post_init__()
         if not self.config:
             raise EntityInternalError(owner=self, msg="Config is required")
 
@@ -418,14 +417,18 @@ class ThisRegistryForValue(IThisRegistry, RegistryBase):
         if not isinstance(self.attr_node, AttrDexpNode):
             raise EntitySetupValueError(owner=self, msg=f"Expected AttrDexpNode, got: {type(self.attr_node)} / {self.attr_node}")
         self.attr_name = self.attr_node.name
+
+    def setup(self, setup_session: ISetupSession):
+        super().setup(setup_session)
         # This.Value == ReservedAttributeNames.VALUE_ATTR_NAME
         self.register_value_attr_node(attr_node=self.attr_node)
 
     def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
+        if not self.finished:
+            raise EntityInternalError(owner=self, msg="Setup not called")
         if attr_name != ReservedAttributeNames.VALUE_ATTR_NAME.value:
             raise EntityInternalError(owner=self, msg=f"Expected attribute name: {ReservedAttributeNames.VALUE_ATTR_NAME.value}, got: {attr_name}") 
-
-        # with 2nd param -> instead of fetching .Value, instruct caller to
+        # with 2nd return value -> instead of fetching .Value, instruct caller to
         #                   fetch component's bound attribute
         return RootValue(apply_result.current_frame.instance, self.attr_name)
 
@@ -438,18 +441,25 @@ class ThisRegistryForChildren(IThisRegistry, RegistryBase):
     """
     owner: ComponentBase
     # extendd list of arguments to constructor, but not stored
-    setup_session: InitVar[Optional[ISetupSession]] = field(repr=False)
+    # setup_session: InitVar[Optional[ISetupSession]] = field(repr=False)
 
     NAMESPACE: ClassVar[Namespace] = ThisNS
 
-    def __post_init__(self, setup_session: Optional[ISetupSession]):
+    # def __post_init__(self):
+    #     # , setup_session: Optional[ISetupSession]
+    #     ...
+
+    def setup(self, setup_session: ISetupSession):
+        super().setup(setup_session)
         self._register_children(
-                setup_session=setup_session,
-                attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME,
-                owner=self.owner, 
-                )
+            setup_session=setup_session,
+            attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME,
+            owner=self.owner,
+        )
 
     def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
+        if not self.finished:
+            raise EntityInternalError(owner=self, msg="Setup not called")
         if not isinstance(apply_result.current_frame.instance, self.model_class):
             raise EntityInternalError(owner=self, msg=f"Type of apply session's instance expected to be '{self.model_class}, got: {apply_result.current_frame.instance}") 
 
@@ -475,23 +485,28 @@ class ThisRegistryForValueAndChildren(ThisRegistryForChildren):
     """
     attr_node: AttrDexpNode
     owner: ComponentBase = field(repr=False)
-    setup_session: InitVar[Optional[ISetupSession]] = field(repr=False)
+    # setup_session: InitVar[Optional[ISetupSession]] = field(repr=False)
 
     # autocomputed
     attr_name: Optional[str] = field(init=False, repr=False, default=None)
 
     # TODO: not good!!!
-    def __post_init__(self, setup_session: Optional[ISetupSession]):
-        super().__post_init__(setup_session=setup_session)
-        # TODO: DRY this
+    def __post_init__(self): # , setup_session: Optional[ISetupSession]):
+        # super().__post_init__() # setup_session=setup_session)
         if not isinstance(self.attr_node, AttrDexpNode):
             raise EntitySetupValueError(owner=self, msg=f"Expected AttrDexpNode, got: {type(self.attr_node)} / {self.attr_node}")
         self.attr_name = self.attr_node.name
+
+    def setup(self, setup_session: ISetupSession):
+        super().setup(setup_session)
         # This.Value == ReservedAttributeNames.VALUE_ATTR_NAME
         self.register_value_attr_node(attr_node=self.attr_node)
         # TODO: .Children?
 
     def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
+        if not self.finished:
+            raise EntityInternalError(owner=self, msg="Setup not called")
+
         instance, atrr_name_to_fetch = super().get_root_value(apply_result=apply_result, attr_name=attr_name)
 
         if atrr_name_to_fetch and attr_name == ReservedAttributeNames.VALUE_ATTR_NAME:
@@ -537,6 +552,9 @@ class ThisRegistryForInstance(IThisRegistry, RegistryBase):
 
     def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
         " TODO: explain: when 2nd param is not None, then ... "
+        if not self.finished:
+            raise EntityInternalError(owner=self, msg="Setup not called")
+
         if not isinstance(apply_result.current_frame.instance, self.model_class):
             raise EntityInternalError(owner=self, msg=f"Type of apply session's instance expected to be '{self.model_class}, got: {apply_result.current_frame.instance}") 
 
@@ -568,23 +586,29 @@ class ThisRegistryForItemsAndChildren(IThisRegistry, RegistryBase):
     #       -> validation will be runned againts all items
 
     owner: ComponentBase
-    setup_session: InitVar[ISetupSession] = field(repr=False)
+    # setup_session: InitVar[ISetupSession] = field(repr=False)
 
     NAMESPACE: ClassVar[Namespace] = ThisNS
 
-    def __post_init__(self, setup_session: ISetupSession):
+    # def __post_init__(self): # , setup_session: ISetupSession):
+
+    def setup(self, setup_session: ISetupSession):
+        super().setup(setup_session)
         # This.Items == ReservedAttributeNames.ITEMS_ATTR_NAME.value
         self.register_items_attr_node(owner=self.owner)
-
-        # TODO: Children + <attributes> - explain case when this will be used
+        # NOTE: Children + <attributes> - e.g.
         #       This.Children.age >= 18 ==> every item should be at least 18 years old
         self._register_children(
-                setup_session=setup_session,
-                attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME,
-                owner=self.owner, 
-                )
+            setup_session=setup_session,
+            attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME,
+            owner=self.owner,
+        )
+        # TODO: .Children?
 
     def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
+        if not self.finished:
+            raise EntityInternalError(owner=self, msg="Setup not called")
+
         if attr_name == ReservedAttributeNames.ITEMS_ATTR_NAME.value:
             assert isinstance(apply_result.current_frame.instance, (list, tuple))
             root_value = RootValue(

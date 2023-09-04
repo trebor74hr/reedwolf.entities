@@ -127,6 +127,14 @@ class IDotExpressionNode(ABC):
 class IRegistry:
 
     @abstractmethod
+    def setup(self, setup_session: "ISetupSession") -> None:
+        ...
+
+    @abstractmethod
+    def finish(self) -> None:
+        ...
+
+    @abstractmethod
     def get_root_value(self, apply_result: "IApplyResult", attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]: # noqa: F821
         """ 
         Used in apply phase. returns instance or instance attribute value + a
@@ -137,10 +145,6 @@ class IRegistry:
 
 # ------------------------------------------------------------
 
-
-class IThisRegistry(IRegistry):
-    # to mark class
-    ...
 
 
 # ------------------------------------------------------------
@@ -177,6 +181,11 @@ class ISetupSession(ABC):
         " TODO: can be done here "
         ...
 
+# ------------------------------------------------------------
+
+@dataclass
+class IThisRegistry(IRegistry):
+    ...
 
 # ------------------------------------------------------------
 
