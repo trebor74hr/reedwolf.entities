@@ -63,7 +63,7 @@ class ModelWithHandlers:
     type_info: TypeInfo = field(repr=False)
 
 
-class NestedBoundModelMixin:
+class NestedBoundModelBase(BoundModelBase):
 
     def _register_nested_models(self, setup_session:ISetupSession):
         # ALT: self.get_children()
@@ -174,10 +174,13 @@ class NestedBoundModelMixin:
 
         # TODO: this is strange, setup this_registry in BoundModel.setup()
         #       and then just use self.this_registry
-        this_registry = apply_result.setup_session.container \
-                            .create_this_registry_for_model_class(
-                                setup_session=apply_result.setup_session,
-                                model_class=self.model)
+        this_registry = self.get_this_registry()
+        if not this_registry:
+            raise EntityInternalError(owner=self, msg=f"this_registry is not set")
+        # this_registry = apply_result.setup_session.container \
+        #                     .create_this_registry_for_model_class(
+        #                         setup_session=apply_result.setup_session,
+        #                         model_class=self.model)
 
         # local_setup_session = apply_result.setup_session \
         #                         .create_local_setup_session_for_this_instance(
@@ -241,7 +244,7 @@ class NestedBoundModelMixin:
 # ------------------------------------------------------------
 
 @dataclass
-class BoundModelWithHandlers(NestedBoundModelMixin, BoundModelBase):
+class BoundModelWithHandlers(NestedBoundModelBase):
     # return type of this function is used as model
     read_handler : CustomFunctionFactory
 
@@ -317,7 +320,7 @@ class BoundModelWithHandlers(NestedBoundModelMixin, BoundModelBase):
 # ------------------------------------------------------------
 
 @dataclass
-class BoundModel(NestedBoundModelMixin, BoundModelBase):
+class BoundModel(NestedBoundModelBase):
 
     # setup must be called first for this component, and later for others
     # bigger comes first, 0 is DotExpression default, 1 is for other copmonents default

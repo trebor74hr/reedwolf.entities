@@ -47,7 +47,7 @@ from .meta import (
     LiteralType,
     AttrName,
     Self,
-    ModelType, FuncArgTypeHint,
+    ModelType, FuncArgTypeHint, AttrValue,
 )
 # ------------------------------------------------------------
 # interfaces / base classes / internal structs
@@ -123,6 +123,14 @@ class IDotExpressionNode(ABC):
 
 # ------------------------------------------------------------
 
+@dataclass
+class RootValue:
+    value_root: AttrValue
+    attr_name_new : Optional[AttrName]
+    do_fetch_by_name: Union[bool, UndefinedType] = UNDEFINED
+
+# ------------------------------------------------------------
+
 
 class IRegistry:
 
@@ -135,8 +143,8 @@ class IRegistry:
         ...
 
     @abstractmethod
-    def get_root_value(self, apply_result: "IApplyResult", attr_name: AttrName) -> Tuple[Any, Optional[AttrName]]: # noqa: F821
-        """ 
+    def apply_to_get_root_value(self, apply_result: "IApplyResult", attr_name: AttrName) -> RootValue: # noqa: F821
+        """
         Used in apply phase. returns instance or instance attribute value + a
         different attribute name when different attribute needs to be retrieved
         from instance.

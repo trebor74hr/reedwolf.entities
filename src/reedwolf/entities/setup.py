@@ -124,7 +124,7 @@ class RegistryBase(IRegistry):
     ROOT_VALUE_NEEDS_FETCH_BY_NAME: ClassVar[bool] = True
 
     @abstractmethod
-    def get_root_value(self, apply_result: IApplyResult, attr_name: str) -> Any:
+    def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: str) -> Any:
         # TODO: same method declared in IRegistry
         """ 
         Apply phase - Namespace.<attr_name> - 
@@ -502,7 +502,7 @@ class RegistryBase(IRegistry):
 
 class RegistryUseDenied(RegistryBase):
 
-    def get_root_value(self, apply_result: IApplyResult, attr_name: str) -> Any:
+    def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: str) -> Any:
         raise EntityInternalError(owner=self, msg="Registry should not be used to get root value.")
 
 

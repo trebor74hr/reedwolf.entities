@@ -38,7 +38,7 @@ from .namespaces import (
 from .expressions import (
     DotExpression,
     IDotExpressionNode,
-    IThisRegistry,
+    IThisRegistry, RootValue,
 )
 from .meta import (
     ModelType,
@@ -88,15 +88,6 @@ class FunctionsRegistry(RegistryUseDenied):
 @dataclass
 class OperationsRegistry(RegistryUseDenied):
     NAMESPACE: ClassVar[Namespace] = OperationsNS
-
-
-@dataclass
-class RootValue:
-    value_root: AttrValue
-    attr_name_new : Optional[AttrName]
-    do_fetch_by_name: Union[bool, UndefinedType] = UNDEFINED
-
-# ------------------------------------------------------------
 
 
 @dataclass
@@ -195,7 +186,7 @@ class ModelsRegistry(RegistryBase):
 
     # ------------------------------------------------------------
 
-    def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
+    def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
         # ROOT_VALUE_NEEDS_FETCH_BY_NAME = False
         # component = apply_result.current_frame.component
         instance = apply_result.current_frame.instance
@@ -285,7 +276,7 @@ class FieldsRegistry(RegistryBase):
         return attr_node
 
 
-    def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
+    def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
         # container = apply_result.current_frame.component.get_first_parent_container(consider_self=True)
         component = apply_result.current_frame.component
         instance  = apply_result.current_frame.instance
@@ -354,7 +345,7 @@ class ContextRegistry(RegistryBase):
             self.register_attr_node(attr_node, attr_name)
 
 
-    def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
+    def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
         context = apply_result.context
         if context in (UNDEFINED, None):
             component = apply_result.current_frame.component
@@ -389,7 +380,7 @@ class ConfigRegistry(RegistryBase):
             attr_node = self._create_attr_node_for_model_attr(config_class, attr_name)
             self.register_attr_node(attr_node)
 
-    def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
+    def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
         # ALT: config = apply_result.entity.config
         config = self.config
         if config in (UNDEFINED, None):
@@ -423,7 +414,7 @@ class ThisRegistryForValue(IThisRegistry, RegistryBase):
         # This.Value == ReservedAttributeNames.VALUE_ATTR_NAME
         self.register_value_attr_node(attr_node=self.attr_node)
 
-    def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
+    def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
         if not self.finished:
             raise EntityInternalError(owner=self, msg="Setup not called")
         if attr_name != ReservedAttributeNames.VALUE_ATTR_NAME.value:
@@ -457,7 +448,7 @@ class ThisRegistryForChildren(IThisRegistry, RegistryBase):
             owner=self.owner,
         )
 
-    def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
+    def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
         if not self.finished:
             raise EntityInternalError(owner=self, msg="Setup not called")
         if not isinstance(apply_result.current_frame.instance, self.model_class):
@@ -503,11 +494,11 @@ class ThisRegistryForValueAndChildren(ThisRegistryForChildren):
         self.register_value_attr_node(attr_node=self.attr_node)
         # TODO: .Children?
 
-    def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
+    def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
         if not self.finished:
             raise EntityInternalError(owner=self, msg="Setup not called")
 
-        instance, atrr_name_to_fetch = super().get_root_value(apply_result=apply_result, attr_name=attr_name)
+        instance, atrr_name_to_fetch = super().apply_to_get_root_value(apply_result=apply_result, attr_name=attr_name)
 
         if atrr_name_to_fetch and attr_name == ReservedAttributeNames.VALUE_ATTR_NAME:
             # instance = apply_result.current_frame.instance
@@ -550,7 +541,7 @@ class ThisRegistryForInstance(IThisRegistry, RegistryBase):
                         attr_name_prefix=None)
 
 
-    def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
+    def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
         " TODO: explain: when 2nd param is not None, then ... "
         if not self.finished:
             raise EntityInternalError(owner=self, msg="Setup not called")
@@ -605,7 +596,7 @@ class ThisRegistryForItemsAndChildren(IThisRegistry, RegistryBase):
         )
         # TODO: .Children?
 
-    def get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
+    def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
         if not self.finished:
             raise EntityInternalError(owner=self, msg="Setup not called")
 

@@ -1,9 +1,12 @@
 from typing import (
-        Any,
-        Union,
-        Optional,
-        )
-from dataclasses import dataclass, field
+    Any,
+    Union,
+    Optional,
+)
+from dataclasses import (
+    dataclass,
+    field,
+)
 
 from .namespaces import (
     ThisNS,
@@ -43,7 +46,7 @@ from .base import (
     ExecResult,
     ReservedAttributeNames,
     AttrDexpNodeTypeEnum,
-        )
+)
 
 # ------------------------------------------------------------
 
@@ -231,7 +234,7 @@ class AttrDexpNode(IDotExpressionNode):
             #     registry = apply_result.setup_session.get_registry(self.namespace)
 
             # get starting instance
-            root_value = registry.get_root_value(apply_result=apply_result, attr_name=attr_name)
+            root_value = registry.apply_to_get_root_value(apply_result=apply_result, attr_name=attr_name)
             value_previous = root_value.value_root
             attr_name_new = root_value.attr_name_new
 

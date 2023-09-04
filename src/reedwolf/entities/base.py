@@ -208,7 +208,7 @@ class ReservedArgumentNames(str, Enum):
 # ------------------------------------------------------------
 
 def _(message: str) -> TransMessageType:
-    return message
+    return TransMessageType(message)
 
 # TODO: add type hint: TransMessageType -> TranslatedMessageType
 # TODO: accept "{dot_node}" - can be a security issue, attr_nodes() should not make any logic
@@ -1288,6 +1288,7 @@ class ComponentBase(SetParentMixin, ABC):
             ThisRegistryForValue,
             ThisRegistryForItemsAndChildren,
             ThisRegistryForChildren,
+            ThisRegistryForInstance,
         )
 
         # Besides direct children, collect all FieldGroup and
@@ -1299,9 +1300,23 @@ class ComponentBase(SetParentMixin, ABC):
         has_children = bool(self.get_children())
 
         if not self.HAS_THIS_NAMESPACE:
+            # if not isinstance(self, (ValidationBase, EvaluationBase)):
             if self.is_container():
                 raise EntityInternalError(owner=self, msg="Container should have local_session created")
             this_registry = None
+        elif isinstance(self, BoundModelBase):
+            model = self.model
+            if isinstance(self.model, DotExpression):
+                if not self.model.IsFinished():
+                    # container = self.get_first_parent_container(consider_self=True)
+                    # model_dexp_node: IDotExpressionNode = model.Setup(setup_session=setup_session, owner=container)
+                    raise EntityInternalError(owner=self, msg=f"{self.model} dot-expression is not finished")
+
+                model_dexp_node = self.model._dexp_node
+                model = model_dexp_node.get_type_info().type_
+
+            this_registry = ThisRegistryForInstance(model_class=model)
+
         elif isinstance(self, IFieldBase):
             # ==== similar logic in apply.py :: _apply() ====
             # TODO: this is 2nd place to call '.Setup()'. Explain!
@@ -1432,7 +1447,7 @@ class IContainerBase(ABC):
 @dataclass
 class BoundModelBase(ComponentBase, ABC):
 
-    HAS_THIS_NAMESPACE: ClassVar[bool] = False
+    # HAS_THIS_NAMESPACE: ClassVar[bool] = False
 
     @staticmethod
     def is_bound_model() -> bool:
@@ -1811,7 +1826,7 @@ class ApplyStackFrame(IStackFrame):
             self.bound_model_root = self.container.bound_model
             if self.instance_is_list:
                 if not isinstance(self.instance, (list, tuple)):
-                    raise EntityInternalError(owner=self, msg=f"Expected list of model instances: {instance_to_test.__class__}, got: {self.instance}")
+                    raise EntityInternalError(owner=self, msg=f"Expected list of model instances, got: {self.instance}")
                 instance_to_test = self.instance[0] if self.instance else None
             else:
                 instance_to_test = self.instance
