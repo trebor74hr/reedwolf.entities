@@ -393,7 +393,7 @@ class ComponentBase(SetParentMixin, ABC):
 
     # lazy init - done in Setup phase
     _component_fields_dataclass: Optional[TypingType[IComponentFields]] = field(init=False, repr=False, default=None)
-    _child_field_list: Optional[List[ChildField]] = field(init=False, repr=False, default=None)
+    child_field_list: Optional[List[ChildField]] = field(init=False, repr=False, default=None)
 
     def __post_init__(self):
         self.init_clean_base()
@@ -878,8 +878,8 @@ class ComponentBase(SetParentMixin, ABC):
         available).
         """
         if self._component_fields_dataclass is not None:
-            assert self._child_field_list is not None
-            return self._component_fields_dataclass, self._child_field_list
+            assert self.child_field_list is not None
+            return self._component_fields_dataclass, self.child_field_list
 
         # TODO: to have deep_collect or not??
         children = self.get_children(deep_collect=True)
@@ -968,9 +968,9 @@ class ComponentBase(SetParentMixin, ABC):
                                 child_field_list=child_field_list,
                                 )
         self._component_fields_dataclass = component_fields_dataclass
-        self._child_field_list = child_field_list
+        self.child_field_list = child_field_list
 
-        return self._component_fields_dataclass, self._child_field_list
+        return self._component_fields_dataclass, self.child_field_list
 
     # ------------------------------------------------------------
 

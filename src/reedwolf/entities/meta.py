@@ -602,7 +602,7 @@ class TypeInfo:
             inner_type = py_type_hint
 
         if func_arg_type_hint:
-            assert inner_type == py_type_hint
+            assert inner_type == py_type_hint, "inner_type shouldn't be changed from original py_type_hint"
             if func_arg_type_hint.inner_type:
                 inner_type = func_arg_type_hint.inner_type
 

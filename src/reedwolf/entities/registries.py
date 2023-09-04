@@ -5,14 +5,11 @@ from dataclasses import (
         InitVar,
         )
 from typing import (
-        Any,
         List,
         Union,
         Optional,
         ClassVar,
         Dict,
-        Type,
-        Tuple,
         )
 from .utils import (
         UNDEFINED,
@@ -44,7 +41,6 @@ from .expressions import (
         )
 from .meta import (
         Self,
-        is_model_class,
         ModelType,
         get_model_fields,
         TypeInfo,
@@ -409,7 +405,9 @@ class ConfigRegistry(RegistryBase):
 
 @dataclass
 class ThisRegistryForValue(IThisRegistry, RegistryBase):
-
+    """
+    This.Value - returns current Component's value
+    """
     attr_node: AttrDexpNode
     # autocomputed
     attr_name: Optional[str] = field(init=False, repr=False, default=None)
@@ -435,14 +433,16 @@ class ThisRegistryForValue(IThisRegistry, RegistryBase):
 
 @dataclass
 class ThisRegistryForChildren(IThisRegistry, RegistryBase):
-
+    """
+    This.Children + This.<component's-fields>
+    """
     owner: ComponentBase
+    # extendd list of arguments to constructor, but not stored
     setup_session: InitVar[Optional[ISetupSession]] = field(repr=False)
 
     NAMESPACE: ClassVar[Namespace] = ThisNS
 
     def __post_init__(self, setup_session: Optional[ISetupSession]):
-        # This.Children + This.<all-attributes>
         self._register_children(
                 setup_session=setup_session,
                 attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME,
@@ -456,6 +456,7 @@ class ThisRegistryForChildren(IThisRegistry, RegistryBase):
         if attr_name == ReservedAttributeNames.CHILDREN_ATTR_NAME:
             # with 2nd param == None -> do not fetch further
             atrr_name_to_fetch = None
+            raise NotImplementedError()
         else:
             # with 2nd param like this -> fetch further by attr_name
             atrr_name_to_fetch = attr_name
@@ -466,8 +467,12 @@ class ThisRegistryForChildren(IThisRegistry, RegistryBase):
 
 @dataclass
 class ThisRegistryForValueAndChildren(ThisRegistryForChildren):
-    " inherits ThisRegistryForChildren + adds .Value"
-
+    """
+    Inherits ThisRegistryForChildren + adds .Value", resulting:
+        This.Children + This.<component's-fields> + This.Value
+    Example: BooleanField with enables.
+             .Children -> see ThisRegistryForItemsAndChildren
+    """
     attr_node: AttrDexpNode
     owner: ComponentBase = field(repr=False)
     setup_session: InitVar[Optional[ISetupSession]] = field(repr=False)
@@ -490,7 +495,7 @@ class ThisRegistryForValueAndChildren(ThisRegistryForChildren):
         instance, atrr_name_to_fetch = super().get_root_value(apply_result=apply_result, attr_name=attr_name)
 
         if atrr_name_to_fetch and attr_name == ReservedAttributeNames.VALUE_ATTR_NAME:
-            instance = apply_result.current_frame.instance
+            # instance = apply_result.current_frame.instance
             atrr_name_to_fetch = self.attr_name
 
         return RootValue(apply_result.current_frame.instance, atrr_name_to_fetch)
@@ -508,15 +513,13 @@ class ThisRegistryForValueAndChildren(ThisRegistryForChildren):
 
 @dataclass
 class ThisRegistryForInstance(IThisRegistry, RegistryBase):
-    """ 
-    Applies to model instances, e.g. 
-        company <= Company(name="Cisco", city="London")
-
-        This.Instance <= company
-        This.name <= "Cisco"
-        This.city <= "London"
-
-    Uses ReservedAttributeNames.INSTANCE_ATTR_NAME == "Instance" 
+    """
+    This.Instance + This.<component's-fields>
+    Example: model instances:
+        company := Company(name="Cisco", city="London")
+        This.Instance := company
+        This.name := "Cisco"
+        This.city := "London"
     """
 
     model_class: ModelType
@@ -545,16 +548,21 @@ class ThisRegistryForInstance(IThisRegistry, RegistryBase):
             atrr_name_to_fetch = attr_name
         return RootValue(apply_result.current_frame.instance, atrr_name_to_fetch)
 
-
-
-
 # --------------------
 
 @dataclass
 class ThisRegistryForItemsAndChildren(IThisRegistry, RegistryBase):
     """
-    Items -> input is list of items, which can be filtered, mapped, counter, selected single ...
-    # TODO: .Children?
+    .Items -> input is list of items, which can be filtered, mapped, counter, selected single ...
+    .Children -> list of ChildField instances.
+    Applies to SubentityItemss.
+    Company(name== "Cisco", address_set = [Address(street="First", city="London"), Address(street="Second", city="Paris")])
+    This. on address_set:
+        This.Items := [Address(street="First", city="London"),
+                       Address(street="Second", city="Paris")]
+        This.Children := for each item (Address) list of fields with values (ChildField). Example - for first:
+                := [ChildField(name="street", Value="First"),
+                    ChildField(name="city", value="London")]
     """
     # TODO: consider to include Children + attributes too :
     #       -> validation will be runned againts all items
@@ -585,12 +593,12 @@ class ThisRegistryForItemsAndChildren(IThisRegistry, RegistryBase):
                             do_fetch_by_name=False)
         elif attr_name == ReservedAttributeNames.CHILDREN_ATTR_NAME.value:
             assert not isinstance(apply_result.current_frame.instance, (list, tuple))
-            if not isinstance(apply_result.current_frame.component._child_field_list, (list, tuple)):
-                raise EntityInternalError(owner=apply_result.current_frame.component, msg=f"_child_field_list not a list, got: {apply_result.current_frame.component._child_field_list}")
+            if not isinstance(apply_result.current_frame.component.child_field_list, (list, tuple)):
+                raise EntityInternalError(owner=apply_result.current_frame.component, msg=f"_child_field_list not a list, got: {apply_result.current_frame.component.child_field_list}")
 
             # TODO: .Children?
             root_value = RootValue(
-                            value_root=apply_result.current_frame.component._child_field_list,
+                            value_root=apply_result.current_frame.component.child_field_list,
                             attr_name_new=None,
                             do_fetch_by_name=False,
                             )
