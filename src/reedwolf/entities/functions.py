@@ -18,60 +18,60 @@ from dataclasses import dataclass, field
 from enum import Enum
 from abc import ABC
 from typing import (
-        Dict,
-        Optional,
-        ClassVar,
-        Any,
-        List,
-        Callable,
-        Union,
-        Type,
-        Tuple,
-        )
+    Dict,
+    Optional,
+    ClassVar,
+    Any,
+    List,
+    Callable,
+    Union,
+    Type,
+    Tuple,
+)
 
 from .utils import (
-        UNDEFINED,
-        get_available_names_example,
-        )
+    UNDEFINED,
+    get_available_names_example, UndefinedType,
+)
 from .exceptions import (
-        EntitySetupValueError,
-        EntitySetupNameError,
-        EntitySetupNameNotFoundError,
-        EntityInternalError,
-        EntitySetupTypeError,
-        EntitySetupError,
-        EntityApplyError,
-        )
+    EntitySetupValueError,
+    EntitySetupNameError,
+    EntitySetupNameNotFoundError,
+    EntityInternalError,
+    EntitySetupTypeError,
+    EntitySetupError,
+    EntityApplyError,
+)
 from .namespaces import (
-        FieldsNS,
-        )
+    FieldsNS,
+)
 from .meta import (
-        FunctionArgumentsType,
-        TypeInfo,
-        is_function,
-        EmptyFunctionArguments,
-        NoneType,
-        )
+    FunctionArgumentsType,
+    TypeInfo,
+    is_function,
+    EmptyFunctionArguments,
+    NoneType, STANDARD_TYPE_LIST, is_model_class, ItemType, ModelType,
+)
 from .expressions import (
-        DotExpression,
-        IDotExpressionNode,
-        IFunctionDexpNode,
-        ExecResult,
-        execute_dexp_or_node,
-        ISetupSession,
-        )
+    DotExpression,
+    IDotExpressionNode,
+    IFunctionDexpNode,
+    ExecResult,
+    execute_dexp_or_node,
+    ISetupSession, IThisRegistry,
+)
 from .func_args import (
-        FunctionArguments,
-        create_function_arguments,
-        PreparedArguments,
-        )
+    FunctionArguments,
+    create_function_arguments,
+    PreparedArguments,
+)
 from .base import (
     AttrDexpNodeTypeEnum,
     ReservedArgumentNames,
     IFieldBase,
     IApplyResult,
-    ComponentBase,
-        )
+    ComponentBase, SetupStackFrame,
+)
 
 
 ValueArgValidatorPyFuncType = Callable[..., NoneType]
@@ -173,13 +173,13 @@ class IFunction(IFunctionDexpNode):
 
     is_finished: bool = field(init=False, repr=False, default=False)
 
+    # all DotExpressions prepared arguments of this function will have access to this_registry within stack_frame
+    this_registry: Union[IThisRegistry, NoneType, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
+
 
     def __post_init__(self):
-        if not self.py_function:
-            raise EntityInternalError(owner=self, msg="py_function input parameter is obligatory")
-        if not is_function(self.py_function):
-            raise EntitySetupValueError(owenr=self, msg=f"py_function is not a function, got: {self.py_function}")
-
+        if not (self.py_function and is_function(self.py_function)):
+            raise EntityInternalError(owner=self, msg="py_function input parameter is obligatory and must be a function, got: {self.py_function}")
         self.func_name = self.py_function.__name__
 
         if not self.name:
@@ -198,17 +198,31 @@ class IFunction(IFunctionDexpNode):
         if not self.function_arguments:
             self.function_arguments = create_function_arguments(self.py_function)
 
-        # else: Can be cloned object (.clone()) - reuse same object or not?
+        # This. namespace make available to all prepared arguments DotExpression
+        #       and all nested/inner expressions too.
+        this_registry = self.create_this_registry()
 
-        # put this in self.parsed_arguments
-        self.prepared_args = self.function_arguments.parse_func_args(
-                setup_session=self.setup_session,
-                caller=self.caller,
-                parent_name=f"{self.as_str()}",
-                func_args=self.func_args,
-                fixed_args=self.fixed_args,
-                value_arg_type_info=self.value_arg_type_info,
-                value_arg_name=self.value_arg_name)
+        prep_args_kwargs = dict(
+            setup_session = self.setup_session,
+            caller = self.caller,
+            parent_name = f"{self.as_str()}",
+            func_args = self.func_args,
+            fixed_args = self.fixed_args,
+            value_arg_type_info = self.value_arg_type_info,
+            value_arg_name = self.value_arg_name)
+
+        if self.setup_session.current_frame:
+            with self.setup_session.use_stack_frame(
+                    SetupStackFrame(
+                        container = self.setup_session.current_frame.container,
+                        component = self.setup_session.current_frame.component,
+                        this_registry=this_registry,
+              )):
+                self.prepared_args = self.function_arguments.parse_func_args( **prep_args_kwargs)
+        else:
+            # container is None only in direct functino creation - then This NS is not available.
+            # Currently only in unit tests this case occurs.
+            self.prepared_args = self.function_arguments.parse_func_args( **prep_args_kwargs)
 
         # first validate value type matches
         # if self.prepared_args.value_arg_implicit==True:
@@ -217,6 +231,84 @@ class IFunction(IFunctionDexpNode):
             self._call_arg_validators()
 
         # self.setup_session.register_dexp_node(self)
+
+    def create_this_registry(self) -> IThisRegistry:
+        # TODO: maybe DRY is needed - similar logic found in base:: get_or_create_this_registry
+        if self.this_registry is not UNDEFINED:
+            raise EntityInternalError(owner=self, msg=f"this_registry already set: {self.this_registry}")
+        assert self.setup_session
+
+        model_class: ModelType = None
+        type_info: Optional[TypeInfo] = None  # not used
+
+        if not self.caller:
+            # NOTE: Namespace top level like: Fn.Length(This.name)
+            #       BoundModelWithHandlers with read_handlers case
+            if self.setup_session.current_frame is None:
+                # direct function creation - currently only unit test uses it
+                pass
+            else:
+                model = self.setup_session.current_frame.bound_model.model
+                if isinstance(model, DotExpression):
+                    if not model.IsFinished():
+                        # container = self.get_first_parent_container(consider_self=True)
+                        # model_dexp_node: IDotExpressionNode = model.Setup(setup_session=setup_session, owner=container)
+                        raise EntityInternalError(owner=self, msg=f"{model} dot-expression is not finished")
+                    model_dexp_node: IDotExpressionNode = model._dexp_node
+                    type_info = model_dexp_node.get_type_info()
+                elif is_model_class(model):
+                    model_class = model
+                else:
+                    raise EntityInternalError(owner=self, msg=f"expecting model class or dot expression, got: {model}")
+        else:
+            if isinstance(self.caller, IFunction):
+                function: IFunction = self.caller
+                func_output_type_info = function.get_type_info()
+                if func_output_type_info.type_ == ItemType:
+                    # TODO: I don't like this solution, make it more clean and robust
+                    type_info_or_callable = function.value_arg_type_info
+                    type_info = type_info_or_callable() if callable(type_info_or_callable) else type_info_or_callable
+                    if type_info is None:
+                        # Fallback?: type_info = func_output_type_info
+                        raise EntityInternalError(owner=self, msg=f"Type info can not be extracted in this moment, check function output type again ...")
+                    elif not (func_output_type_info.is_list==type_info.is_list):
+                        raise EntityInternalError(owner=self, msg=f"function type info <> value arg type info: {func_output_type_info.is_list} != {type_info.is_list if type_info else '<None>'}")
+                else:
+                    type_info = func_output_type_info
+            elif isinstance(self.caller, IDotExpressionNode):
+                # TODO: drop this case - change to 'setup_session.current_frame' case
+                dexp_node: IDotExpressionNode = self.caller
+                type_info = dexp_node.get_type_info()
+            else:
+                raise EntityInternalError(owner=self, msg=f"Unsupported caller type, expected Function/DotExpressionNode, got: {self.caller}")
+
+        if not model_class and type_info:
+            model_class = type_info.type_
+
+        if model_class is None:
+            # direct function creation - currently only unit test uses it
+            this_registry = None
+        elif is_model_class(model_class):
+            # pydantic / dataclasses
+            this_registry = self.setup_session.container.create_this_registry_for_model_class(
+                setup_session=self.setup_session,
+                model_class=model_class,
+            )
+        elif model_class in STANDARD_TYPE_LIST:
+            this_registry = None
+        elif type_info and type_info.is_list:
+            # TODO: create This.Items and similar ...
+            model_class = type_info.type_
+            this_registry = self.setup_session.container.create_this_registry_for_model_class(
+                setup_session=self.setup_session,
+                model_class=model_class,
+            )
+        else:
+            raise EntitySetupValueError(owner=self, msg=f"Unsupported type: {self.caller} / {model_class}")
+
+        self.this_registry = this_registry
+
+        return self.this_registry
 
 
     def get_type_info(self) -> TypeInfo:

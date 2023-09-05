@@ -221,50 +221,49 @@ class FunctionArguments:
         if isinstance(value_object, TypeInfo):
             type_info_or_callable = value_object
             # TODO: should be DotExpression or IDotExpressionNode
-            value_or_dexp = UNDEFINED 
+            value_or_dexp = UNDEFINED
+
         elif isinstance(value_object, DotExpression):
             dexp: DotExpression = value_object
-
             if dexp.IsFinished():
                 raise EntityInternalError(owner=self, msg=f"{parent_name}: DotExpression is already setup {dexp}")
-
-            if not caller: 
-                # NOTE: Namespace top level like: Fn.Length(This.name) 
-                #       BoundModelWithHandlers with read_handlers case
-                model_class = setup_session.current_frame.bound_model.model
-            else:
-                # TODO: drop this case - change to 'setup_session.current_frame' case
-                model_class = caller.type_info.type_
-
-            assert model_class
-
-            if is_model_class(model_class):
-                # pydantic / dataclasses
-                assert setup_session
-                # NOTE: ThisRegistryForInstance not available so low, using path:
-                #       session -> container -> ... 
-                this_registry = setup_session.container.create_this_registry_for_model_class(
-                    setup_session=setup_session,
-                    model_class=model_class,
-                )
-                # local_setup_session = setup_session.create_local_setup_session_for_this_instance(
-                #                                             model_class=model_class,
-                #                                             )
-            elif model_class in STANDARD_TYPE_LIST:
-                this_registry = None
-            else:
-                raise EntitySetupValueError(owner=self, msg=f"{parent_name}: Unsupported type: {caller} / {model_class}")
-
             if not setup_session:
-                raise EntityInternalError(owner=self, msg=f"{parent_name}: SetupSession is required for DotExpression() function argument case") 
+                raise EntityInternalError(owner=self, msg=f"{parent_name}: SetupSession is required for DotExpression() function argument case")
 
-            with setup_session.use_stack_frame(
-                    SetupStackFrame(
-                        container = setup_session.current_frame.container, 
-                        component = setup_session.current_frame.component, 
-                        this_registry = this_registry,
-                    )):
-                dexp_node = dexp.Setup(setup_session=setup_session, owner=setup_session.current_frame.component)
+            # if not caller:
+            #     # NOTE: Namespace top level like: Fn.Length(This.name)
+            #     #       BoundModelWithHandlers with read_handlers case
+            #     model_class = setup_session.current_frame.bound_model.model
+            # else:
+            #     # TODO: drop this case - change to 'setup_session.current_frame' case
+            #     model_class = caller.type_info.type_
+
+            # assert model_class
+
+            # if is_model_class(model_class):
+            #     # pydantic / dataclasses
+            #     assert setup_session
+            #     # NOTE: ThisRegistryForInstance not available so low, using path:
+            #     #       session -> container -> ...
+            #     this_registry = setup_session.container.create_this_registry_for_model_class(
+            #         setup_session=setup_session,
+            #         model_class=model_class,
+            #     )
+            #     # local_setup_session = setup_session.create_local_setup_session_for_this_instance(
+            #     #                                             model_class=model_class,
+            #     #                                             )
+            # elif model_class in STANDARD_TYPE_LIST:
+            #     this_registry = None
+            # else:
+            #     raise EntitySetupValueError(owner=self, msg=f"{parent_name}: Unsupported type: {caller} / {model_class}")
+
+            # with setup_session.use_stack_frame(
+            #         SetupStackFrame(
+            #             container = setup_session.current_frame.container,
+            #             component = setup_session.current_frame.component,
+            #             this_registry = this_registry,
+            #         )):
+            dexp_node = dexp.Setup(setup_session=setup_session, owner=setup_session.current_frame.component)
 
             # NOTE: pass callable since type_info for some Dexp-s are not avaialble (e.g. FieldsNS, F.name)
             type_info_or_callable = dexp_node.get_type_info()

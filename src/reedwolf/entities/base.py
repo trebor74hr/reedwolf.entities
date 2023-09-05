@@ -1280,8 +1280,7 @@ class ComponentBase(SetParentMixin, ABC):
         return self._this_registry
 
     def get_or_create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:
-        # , owner_container: "IContainerBase"
-
+        # TODO: maybe DRY is needed - similar logic found in functions:: create_this_registry
         # TODO: resolve circular dependency issue here
         from .registries import (
             ThisRegistryForValueAndChildren,
@@ -1304,6 +1303,7 @@ class ComponentBase(SetParentMixin, ABC):
             if self.is_container():
                 raise EntityInternalError(owner=self, msg="Container should have local_session created")
             this_registry = None
+
         elif isinstance(self, BoundModelBase):
             model = self.model
             if isinstance(self.model, DotExpression):

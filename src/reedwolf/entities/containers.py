@@ -923,7 +923,6 @@ class SubEntityBase(ContainerBase, ABC):
 
     # Class attributes
     # namespace_only  : ClassVar[Namespace] = ThisNS
-    # HAS_THIS_NAMESPACE: ClassVar[bool] = False
 
     def __post_init__(self):
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)

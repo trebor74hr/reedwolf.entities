@@ -560,14 +560,11 @@ class ChoiceField(FieldBase):
                     # TODO: explain, give example
                     raise EntityInternalError(owner=self, msg="Choices is a a list of model instances, expecting single instance.")
 
+            #  exception to the rule - ChoiceFileld value and title from This.
             this_registry = setup_session.container.create_this_registry_for_model_class(
                 setup_session=setup_session,
                 model_class=model_class,
             )
-            # local_setup_session = setup_session.create_local_setup_session_for_this_instance(
-            #                             model_class=model_class,
-            #                             )
-
             with setup_session.use_stack_frame(
                     SetupStackFrame(
                         container = self.get_first_parent_container(consider_self=True), 
