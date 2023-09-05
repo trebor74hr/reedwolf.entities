@@ -429,20 +429,21 @@ class ComponentBase(SetParentMixin, ABC):
         has_children = bool(self.get_children())
 
         if not has_children:
-            raise EntityInternalError(owner=self, msg="Non-fields should have children or HAS_THIS_NAMESPACE = False")
+            raise EntityInternalError(owner=self, msg="Non-fields should have children")
 
-        # and not self.is_bound_model()
-        if self.is_subentity_items():
-            # Items -> This.Items
-            this_registry = ThisRegistry(component=self)
+        this_registry = ThisRegistry(component=self)
+        # # and not self.is_bound_model()
+        # if self.is_subentity_items():
+        #     # Items -> This.Items
+        #     this_registry = ThisRegistry(component=self)
 
-        # TODO: add .Instance ==> BoundModel instance
-        # elif self.is_subentity_single():
-        #     # Children -> This.Children + This.<all-attributes> + This.Instance
-        #     this_registry = ThisRegistryForInstanceAndChildren(owner=self) # , setup_session=setup_session)
-        else:
-            # Children -> This.Children + This.<all-attributes>
-            this_registry = ThisRegistry(component=self) # , setup_session=setup_session
+        # # TODO: add .Instance ==> BoundModel instance
+        # # elif self.is_subentity_single():
+        # #     # Children -> This.Children + This.<all-attributes> + This.Instance
+        # #     this_registry = ThisRegistryForInstanceAndChildren(owner=self) # , setup_session=setup_session)
+        # else:
+        #     # Children -> This.Children + This.<all-attributes>
+        #     this_registry = ThisRegistry(component=self) # , setup_session=setup_session
 
         return this_registry
 
@@ -1308,6 +1309,7 @@ class ComponentBase(SetParentMixin, ABC):
             if this_registry:
                 this_registry.setup(setup_session=setup_session)
                 this_registry.finish()
+                # test repr: print(f"this_registry={this_registry}")
             self._this_registry = this_registry
 
         return self._this_registry

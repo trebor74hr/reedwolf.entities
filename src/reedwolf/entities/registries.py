@@ -417,6 +417,18 @@ class ThisRegistry(IThisRegistry, RegistryBase):
             if self.attr_name or self.component:
                 raise EntityInternalError(owner=self, msg="model_class - Invalid case")
 
+    def __repr__(self):
+        out: List[str] = []
+        if self.attr_name:
+            out.append(f"attr={self.attr_name}")
+        if self.component:
+            out.append(f"{'items' if self.is_items else 'component'}={self.component.__class__.__name__}({self.component.name})")
+        if self.model_class:
+            out.append(f"model={self.model_class.__name__}")
+        assert out, "must be at least one set"
+        return f'{self.__class__.__name__}({",".join(out)})'
+
+    __str__ =  __repr__
 
     def setup(self, setup_session: ISetupSession) -> None:
         super().setup(setup_session)
