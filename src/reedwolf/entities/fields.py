@@ -16,51 +16,58 @@ Notes:
 """
 from abc import ABC
 from typing import (
-        Union, 
-        List, 
-        Sequence,
-        Optional, 
-        Any, 
-        ClassVar, 
-        Dict,
-        )
-from dataclasses import dataclass, field
+    Union,
+    List,
+    Sequence,
+    Optional,
+    Any,
+    ClassVar,
+    Dict,
+)
+from dataclasses import (
+    dataclass,
+    field,
+)
 import inspect
-
 from decimal import Decimal
-from datetime import date, time, datetime, timedelta
-# from pathlib import Path
+from datetime import (
+    date,
+    time,
+    datetime,
+    timedelta,
+)
 from enum import Enum, IntEnum
 
 from .utils import (
-        to_repr,
-        UNDEFINED,
-        NA_DEFAULTS_MODE,
-        UndefinedType,
-        message_truncate,
-        )
+    to_repr,
+    UNDEFINED,
+    NA_DEFAULTS_MODE,
+    UndefinedType,
+    message_truncate,
+)
 from .exceptions import (
     EntitySetupValueError,
     EntityInternalError,
     EntitySetupError,
-    EntitySetupTypeError, EntitySetupNameError,
+    EntitySetupTypeError,
+    EntitySetupNameError,
 )
 from .namespaces import (
-        ModelsNS,
-        FieldsNS,
-        ThisNS,
-        )
+    ModelsNS,
+    FieldsNS,
+    ThisNS,
+)
 from .meta import (
-        TransMessageType,
-        TypeInfo,
-        is_enum,
-        is_model_class,
-        is_function,
-        get_enum_member_py_type,
-        EmptyFunctionArguments,
-        STANDARD_TYPE_LIST,
-        Self,
-        )
+    TransMessageType,
+    TypeInfo,
+    is_enum,
+    is_model_class,
+    is_function,
+    get_enum_member_py_type,
+    EmptyFunctionArguments,
+    STANDARD_TYPE_LIST,
+    Self,
+)
 from .base import (
     get_name_from_bind,
     warn,
@@ -78,37 +85,38 @@ from .expressions import (
     ISetupSession, IThisRegistry,
 )
 from .attr_nodes import (
-        AttrDexpNode
-        )
+    AttrDexpNode
+)
 from .functions import (
-        CustomFunctionFactory,
-        )
+    CustomFunctionFactory,
+)
+from .registries import (
+    ThisRegistryForValueAndChildren,
+    ThisRegistryForValue,
+)
 from .valid_field import (
-        MinValue,
-        )
-from .valid_field import (
-        MaxLength,
-        ExactLength,
-        FieldValidationBase
-        )
+    MinValue,
+    MaxLength,
+    ExactLength,
+    FieldValidationBase
+)
 from .eval_field import (
-        FieldEvaluationBase,
-        )
+    FieldEvaluationBase,
+)
 from .valid_children import (
-        ChildrenValidationBase,
-        )
+    ChildrenValidationBase,
+)
 from .eval_children import (
-        ChildrenEvaluationBase,
-        )
+    ChildrenEvaluationBase,
+)
 from .valid_base import (
-        ValidationBase,
-        )
+    ValidationBase,
+)
 from .eval_base import (
-        EvaluationBase,
-        )
+    EvaluationBase,
+)
 
-
-# Items are: 
+# Items are:
 #   - when single - that must be added
 #   - when tuple(validtions) then one of listed must be added
 RequiredValidationsType = List[Union[ValidationBase, List[ValidationBase]]]
@@ -301,10 +309,6 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
 
 
     def create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:
-        from .registries import (
-            ThisRegistryForValueAndChildren,
-            ThisRegistryForValue,
-        )
         # ==== similar logic in apply.py :: _apply() ====
         # TODO: this is 2nd place to call '.Setup()'. Explain!
         assert not self.is_container()

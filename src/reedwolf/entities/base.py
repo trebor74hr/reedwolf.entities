@@ -420,6 +420,8 @@ class ComponentBase(SetParentMixin, ABC):
         """
         default implementation
         """
+        # TODO: resolve circular dependency by moving this function logic to
+        #       .registries.py/.setup.py or somewhere else
         from .registries import (
             ThisRegistryForItemsAndChildren,
             ThisRegistryForChildren,
