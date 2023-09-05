@@ -53,7 +53,7 @@ from .base import (
     ApplyStackFrame,
 )
 from .registries import (
-    ThisRegistryForInstance,
+    ThisRegistry,
 )
 
 
@@ -80,7 +80,7 @@ class NestedBoundModelBase(BoundModelBase):
             model_dexp_node = self.model._dexp_node
             model = model_dexp_node.get_type_info().type_
 
-        this_registry = ThisRegistryForInstance(model_class=model)
+        this_registry = ThisRegistry(model_class=model)
         return this_registry
 
     def _register_nested_models(self, setup_session:ISetupSession):

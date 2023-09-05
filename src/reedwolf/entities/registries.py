@@ -38,7 +38,8 @@ from .namespaces import (
 from .expressions import (
     DotExpression,
     IDotExpressionNode,
-    IThisRegistry, RootValue,
+    IThisRegistry,
+    RootValue,
 )
 from .meta import (
     ModelType,
@@ -391,240 +392,134 @@ class ConfigRegistry(RegistryBase):
 
 
 # ------------------------------------------------------------
-
-
 @dataclass
-class ThisRegistryForValue(IThisRegistry, RegistryBase):
-    """
-    This.Value - returns current Component's value
-    """
-    attr_node: AttrDexpNode
-    # autocomputed
-    attr_name: Optional[str] = field(init=False, repr=False, default=None)
-
+class ThisRegistry(IThisRegistry, RegistryBase):
     NAMESPACE: ClassVar[Namespace] = ThisNS
 
-    def __post_init__(self):
-        if not isinstance(self.attr_node, AttrDexpNode):
-            raise EntitySetupValueError(owner=self, msg=f"Expected AttrDexpNode, got: {type(self.attr_node)} / {self.attr_node}")
-        self.attr_name = self.attr_node.name
-
-    def setup(self, setup_session: ISetupSession):
-        super().setup(setup_session)
-        # This.Value == ReservedAttributeNames.VALUE_ATTR_NAME
-        self.register_value_attr_node(attr_node=self.attr_node)
-
-    def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
-        if not self.finished:
-            raise EntityInternalError(owner=self, msg="Setup not called")
-        if attr_name != ReservedAttributeNames.VALUE_ATTR_NAME.value:
-            raise EntityInternalError(owner=self, msg=f"Expected attribute name: {ReservedAttributeNames.VALUE_ATTR_NAME.value}, got: {attr_name}") 
-        # with 2nd return value -> instead of fetching .Value, instruct caller to
-        #                   fetch component's bound attribute
-        return RootValue(apply_result.current_frame.instance, self.attr_name)
-
-# --------------------
-
-@dataclass
-class ThisRegistryForChildren(IThisRegistry, RegistryBase):
-    """
-    This.Children + This.<component's-fields>
-    """
-    owner: ComponentBase
-    # extendd list of arguments to constructor, but not stored
-    # setup_session: InitVar[Optional[ISetupSession]] = field(repr=False)
-
-    NAMESPACE: ClassVar[Namespace] = ThisNS
-
-    # def __post_init__(self):
-    #     # , setup_session: Optional[ISetupSession]
-    #     ...
-
-    def setup(self, setup_session: ISetupSession):
-        super().setup(setup_session)
-        self._register_children(
-            setup_session=setup_session,
-            attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME,
-            owner=self.owner,
-        )
-
-    def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
-        if not self.finished:
-            raise EntityInternalError(owner=self, msg="Setup not called")
-        if not isinstance(apply_result.current_frame.instance, self.model_class):
-            raise EntityInternalError(owner=self, msg=f"Type of apply session's instance expected to be '{self.model_class}, got: {apply_result.current_frame.instance}") 
-
-        if attr_name == ReservedAttributeNames.CHILDREN_ATTR_NAME:
-            # with 2nd param == None -> do not fetch further
-            atrr_name_to_fetch = None
-            raise NotImplementedError()
-        else:
-            # with 2nd param like this -> fetch further by attr_name
-            atrr_name_to_fetch = attr_name
-
-        return RootValue(apply_result.current_frame.instance, atrr_name_to_fetch)
-
-# ------------------------------------------------------------
-
-@dataclass
-class ThisRegistryForValueAndChildren(ThisRegistryForChildren):
-    """
-    Inherits ThisRegistryForChildren + adds .Value", resulting:
-        This.Children + This.<component's-fields> + This.Value
-    Example: BooleanField with enables.
-             .Children -> see ThisRegistryForItemsAndChildren
-    """
-    attr_node: AttrDexpNode
-    owner: ComponentBase = field(repr=False)
-    # setup_session: InitVar[Optional[ISetupSession]] = field(repr=False)
+    attr_node: Optional[AttrDexpNode] = field(default=None)
+    component: Optional[ComponentBase] = field(default=None)
+    model_class: Optional[ModelType] = field(default=None)
 
     # autocomputed
+    is_items: bool = field(init=False, default=False)
     attr_name: Optional[str] = field(init=False, repr=False, default=None)
 
-    # TODO: not good!!!
-    def __post_init__(self): # , setup_session: Optional[ISetupSession]):
-        # super().__post_init__() # setup_session=setup_session)
-        if not isinstance(self.attr_node, AttrDexpNode):
-            raise EntitySetupValueError(owner=self, msg=f"Expected AttrDexpNode, got: {type(self.attr_node)} / {self.attr_node}")
-        self.attr_name = self.attr_node.name
-
-    def setup(self, setup_session: ISetupSession):
-        super().setup(setup_session)
-        # This.Value == ReservedAttributeNames.VALUE_ATTR_NAME
-        self.register_value_attr_node(attr_node=self.attr_node)
-        # TODO: .Children?
-
-    def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
-        if not self.finished:
-            raise EntityInternalError(owner=self, msg="Setup not called")
-
-        instance, atrr_name_to_fetch = super().apply_to_get_root_value(apply_result=apply_result, attr_name=attr_name)
-
-        if atrr_name_to_fetch and attr_name == ReservedAttributeNames.VALUE_ATTR_NAME:
-            # instance = apply_result.current_frame.instance
-            atrr_name_to_fetch = self.attr_name
-
-        return RootValue(apply_result.current_frame.instance, atrr_name_to_fetch)
-
-# ------------------------------------------------------------
-
-# TODO: for SubEntitySingle
-# @dataclass
-# class ThisRegistryForInstanceAndChildren(ThisRegistryForChildren):
-#     " inherits ThisRegistryForChildren + adds .Instance"
-
-
-# --------------------
-
-
-@dataclass
-class ThisRegistryForInstance(IThisRegistry, RegistryBase):
-    """
-    This.Instance + This.<component's-fields>
-    Example: model instances:
-        company := Company(name="Cisco", city="London")
-        This.Instance := company
-        This.name := "Cisco"
-        This.city := "London"
-    """
-
-    model_class: ModelType
-
-    NAMESPACE: ClassVar[Namespace] = ThisNS
 
     def __post_init__(self):
-        # M.Instance / Models.Instance + # M.<all-attributes>
-        self._register_model_nodes(model_class=self.model_class)
-        self._register_children_attr_node(
-                        model_class=self.model_class,
-                        attr_name=ReservedAttributeNames.INSTANCE_ATTR_NAME,
-                        attr_name_prefix=None)
+        if self.attr_node:
+            if not isinstance(self.attr_node, AttrDexpNode):
+                raise EntitySetupValueError(owner=self, msg=f"Expected AttrDexpNode, got: {type(self.attr_node)} / {self.attr_node}")
+            self.attr_name = self.attr_node.name
+
+        self.is_items = (self.component and self.component.is_subentity_items())
+
+        if self.model_class:
+            if self.attr_name or self.component:
+                raise EntityInternalError(owner=self, msg="model_class - Invalid case")
 
 
-    def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
-        " TODO: explain: when 2nd param is not None, then ... "
-        if not self.finished:
-            raise EntityInternalError(owner=self, msg="Setup not called")
-
-        if not isinstance(apply_result.current_frame.instance, self.model_class):
-            raise EntityInternalError(owner=self, msg=f"Type of apply session's instance expected to be '{self.model_class}, got: {apply_result.current_frame.instance}") 
-
-        if attr_name == ReservedAttributeNames.INSTANCE_ATTR_NAME:
-            # with 2nd param == None -> do not fetch further
-            atrr_name_to_fetch = None
-        else:
-            # with 2nd param like this -> fetch further by attr_name
-            atrr_name_to_fetch = attr_name
-        return RootValue(apply_result.current_frame.instance, atrr_name_to_fetch)
-
-# --------------------
-
-@dataclass
-class ThisRegistryForItemsAndChildren(IThisRegistry, RegistryBase):
-    """
-    .Items -> input is list of items, which can be filtered, mapped, counter, selected single ...
-    .Children -> list of ChildField instances.
-    Applies to SubentityItemss.
-    Company(name== "Cisco", address_set = [Address(street="First", city="London"), Address(street="Second", city="Paris")])
-    This. on address_set:
-        This.Items := [Address(street="First", city="London"),
-                       Address(street="Second", city="Paris")]
-        This.Children := for each item (Address) list of fields with values (ChildField). Example - for first:
-                := [ChildField(name="street", Value="First"),
-                    ChildField(name="city", value="London")]
-    """
-    # TODO: consider to include Children + attributes too :
-    #       -> validation will be runned againts all items
-
-    owner: ComponentBase
-    # setup_session: InitVar[ISetupSession] = field(repr=False)
-
-    NAMESPACE: ClassVar[Namespace] = ThisNS
-
-    # def __post_init__(self): # , setup_session: ISetupSession):
-
-    def setup(self, setup_session: ISetupSession):
+    def setup(self, setup_session: ISetupSession) -> None:
         super().setup(setup_session)
-        # This.Items == ReservedAttributeNames.ITEMS_ATTR_NAME.value
-        self.register_items_attr_node(owner=self.owner)
-        # NOTE: Children + <attributes> - e.g.
-        #       This.Children.age >= 18 ==> every item should be at least 18 years old
-        self._register_children(
-            setup_session=setup_session,
-            attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME,
-            owner=self.owner,
-        )
-        # TODO: .Children?
+        if self.model_class:
+            # M.Instance / Models.Instance + # M.<all-attributes>
+            self._register_model_nodes(model_class=self.model_class)
+            self._register_children_attr_node(
+                model_class=self.model_class,
+                attr_name=ReservedAttributeNames.INSTANCE_ATTR_NAME,
+                attr_name_prefix=None)
+
+        else:
+            if self.attr_node:
+                # This.Value == ReservedAttributeNames.VALUE_ATTR_NAME
+                self.register_value_attr_node(attr_node=self.attr_node)
+
+            if self.component:
+                if self.is_items:
+                    self.register_items_attr_node(owner=self.component)
+
+                self._register_children(
+                    setup_session=setup_session,
+                    attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME,
+                    owner=self.component,
+                )
+
 
     def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
         if not self.finished:
             raise EntityInternalError(owner=self, msg="Setup not called")
 
-        if attr_name == ReservedAttributeNames.ITEMS_ATTR_NAME.value:
-            assert isinstance(apply_result.current_frame.instance, (list, tuple))
-            root_value = RootValue(
+        root_value: Optional[RootValue] = None
+
+        if self.model_class:
+            if not isinstance(apply_result.current_frame.instance, self.model_class):
+                raise EntityInternalError(owner=self,
+                                          msg=f"Type of apply session's instance expected to be '{self.model_class}, got: {apply_result.current_frame.instance}")
+
+            if attr_name == ReservedAttributeNames.INSTANCE_ATTR_NAME:
+                # with 2nd param == None -> do not fetch further
+                atrr_name_to_fetch = None
+            else:
+                # with 2nd param like this -> fetch further by attr_name
+                atrr_name_to_fetch = attr_name
+
+            root_value = RootValue(apply_result.current_frame.instance, atrr_name_to_fetch)
+        else:
+            if self.attr_node:
+                if attr_name != ReservedAttributeNames.VALUE_ATTR_NAME.value:
+                    raise EntityInternalError(owner=self, msg=f"Expected attribute name: {ReservedAttributeNames.VALUE_ATTR_NAME.value}, got: {attr_name}")
+                # with 2nd return value -> instead of fetching .Value, instruct caller to
+                #                   fetch component's bound attribute
+                root_value = RootValue(value_root=apply_result.current_frame.instance,
+                                        attr_name_new=self.attr_name)
+
+            if self.component:
+                if self.is_items:
+                    # multiple items case
+                    if attr_name == ReservedAttributeNames.ITEMS_ATTR_NAME.value:
+                        if not isinstance(apply_result.current_frame.instance, (list, tuple)):
+                            raise EntityInternalError(f"Items expected, got: {apply_result.current_frame.instance}")
+
+                        root_value = RootValue(
                             value_root=apply_result.current_frame.instance,
-                            attr_name_new=None, 
+                            attr_name_new=None,
                             do_fetch_by_name=False)
-        elif attr_name == ReservedAttributeNames.CHILDREN_ATTR_NAME.value:
-            assert not isinstance(apply_result.current_frame.instance, (list, tuple))
-            if not isinstance(apply_result.current_frame.component.child_field_list, (list, tuple)):
-                raise EntityInternalError(owner=apply_result.current_frame.component, msg=f"_child_field_list not a list, got: {apply_result.current_frame.component.child_field_list}")
+                    elif attr_name == ReservedAttributeNames.CHILDREN_ATTR_NAME.value:
+                        if  isinstance(apply_result.current_frame.instance, (list, tuple)):
+                            raise EntityInternalError(f"Single item expected, got: {apply_result.current_frame.instance}")
 
-            # TODO: .Children?
-            root_value = RootValue(
+                        if not isinstance(apply_result.current_frame.component.child_field_list, (list, tuple)):
+                            raise EntityInternalError(owner=apply_result.current_frame.component,
+                                                      msg=f"_child_field_list not a list, got: {apply_result.current_frame.component.child_field_list}")
+                        # TODO: .Children?
+                        # raise NotImplementedError()
+                        root_value = RootValue(
                             value_root=apply_result.current_frame.component.child_field_list,
                             attr_name_new=None,
                             do_fetch_by_name=False,
-                            )
-        else:
-            raise EntityInternalError(owner=self, msg=f"Expected attribute name: {ReservedAttributeNames.ITEMS_ATTR_NAME.value} or {ReservedAttributeNames.CHILDREN_ATTR_NAME.value} , got: {attr_name}") 
+                        )
+                    else:
+                        raise EntityInternalError(owner=self, msg=f"Expected attribute name: {ReservedAttributeNames.ITEMS_ATTR_NAME.value} or {ReservedAttributeNames.CHILDREN_ATTR_NAME.value} , got: {attr_name}")
+                else:
+                    # single item component
+                    if not isinstance(apply_result.current_frame.instance, self.model_class):
+                        raise EntityInternalError(owner=self,
+                                                  msg=f"Type of apply session's instance expected to be '{self.model_class}, got: {apply_result.current_frame.instance}")
+
+                    if attr_name == ReservedAttributeNames.CHILDREN_ATTR_NAME:
+                        # with 2nd param == None -> do not fetch further
+                        atrr_name_to_fetch = None
+                        raise NotImplementedError()
+                    else:
+                        # with 2nd param like this -> fetch further by attr_name
+                        atrr_name_to_fetch = attr_name
+                    root_value = RootValue(apply_result.current_frame.instance, atrr_name_to_fetch)
+
+        if not root_value:
+            raise EntityInternalError(owner=self, msg="Invalid case")
+
         return root_value
 
-
-
 # ------------------------------------------------------------
-
 
 class SetupSession(SetupSessionBase):
     ...

@@ -83,11 +83,7 @@ from .registries import (
         OperationsRegistry,
         ContextRegistry,
         ConfigRegistry,
-        ThisRegistryForValue,
-        ThisRegistryForChildren,
-        ThisRegistryForValueAndChildren,
-        ThisRegistryForItemsAndChildren,
-        ThisRegistryForInstance,
+        ThisRegistry,
         )
 from .valid_children import (
         ChildrenValidationBase,
@@ -455,18 +451,19 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             model_class: ModelType,
             ) -> IThisRegistry:
         # NOTE: must be here since:
-        #   - expressions.py don't see ThisRegistryForInstance
+        #   - expressions.py don't see ThisRegistry
         #   - setup.py does not see registries
         #   - registries - needed by setup.py which can not see registries
         """ 
-        - ThisRegistryForInstance it is unavailable to low-level modules -
+        - ThisRegistry is unavailable to low-level modules -
           e.g. func_args -> setup.
         - .Instance + <attr-names> is used only in manual setup cases, 
           e.g. ChoiceField()
         """
-        this_registry = ThisRegistryForInstance(model_class=model_class)
+        this_registry = ThisRegistry(model_class=model_class)
         this_registry.setup(setup_session=setup_session)
         this_registry.finish()
+
         return this_registry
 
 # ------------------------------------------------------------

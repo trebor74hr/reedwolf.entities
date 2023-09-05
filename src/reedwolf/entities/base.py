@@ -423,8 +423,7 @@ class ComponentBase(SetParentMixin, ABC):
         # TODO: resolve circular dependency by moving this function logic to
         #       .registries.py/.setup.py or somewhere else
         from .registries import (
-            ThisRegistryForItemsAndChildren,
-            ThisRegistryForChildren,
+            ThisRegistry,
         )
 
         has_children = bool(self.get_children())
@@ -435,7 +434,7 @@ class ComponentBase(SetParentMixin, ABC):
         # and not self.is_bound_model()
         if self.is_subentity_items():
             # Items -> This.Items
-            this_registry = ThisRegistryForItemsAndChildren(owner=self) # , setup_session=setup_session)
+            this_registry = ThisRegistry(component=self)
 
         # TODO: add .Instance ==> BoundModel instance
         # elif self.is_subentity_single():
@@ -443,7 +442,7 @@ class ComponentBase(SetParentMixin, ABC):
         #     this_registry = ThisRegistryForInstanceAndChildren(owner=self) # , setup_session=setup_session)
         else:
             # Children -> This.Children + This.<all-attributes>
-            this_registry = ThisRegistryForChildren(owner=self) # , setup_session=setup_session
+            this_registry = ThisRegistry(component=self) # , setup_session=setup_session
 
         return this_registry
 

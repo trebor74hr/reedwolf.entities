@@ -191,7 +191,6 @@ class ISetupSession(ABC):
 
 # ------------------------------------------------------------
 
-@dataclass
 class IThisRegistry(IRegistry):
     ...
 

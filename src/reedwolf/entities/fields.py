@@ -91,8 +91,7 @@ from .functions import (
     CustomFunctionFactory,
 )
 from .registries import (
-    ThisRegistryForValueAndChildren,
-    ThisRegistryForValue,
+    ThisRegistry,
 )
 from .valid_field import (
     MinValue,
@@ -336,9 +335,9 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
             # Field with children (e.g. BooleanField.enables)
             # Children -> This..Children + This.<all-attributes>
             # model_class = self.get_type_info().type_
-            this_registry = ThisRegistryForValueAndChildren(attr_node=attr_node, owner=self) # , setup_session=setup_session)
+            this_registry = ThisRegistry(attr_node=attr_node, component=self)
         else:
-            this_registry = ThisRegistryForValue(attr_node)
+            this_registry = ThisRegistry(attr_node=attr_node)
 
         return this_registry
 
