@@ -40,11 +40,11 @@ from .utils import (
         message_truncate,
         )
 from .exceptions import (
-        EntitySetupValueError,
-        EntityInternalError,
-        EntitySetupError,
-        EntitySetupTypeError,
-        )
+    EntitySetupValueError,
+    EntityInternalError,
+    EntitySetupError,
+    EntitySetupTypeError, EntitySetupNameError,
+)
 from .namespaces import (
         ModelsNS,
         FieldsNS,
@@ -71,12 +71,12 @@ from .base import (
     SetupStackFrame,
     ComponentBase,
         )
-from .expressions   import (
-        DotExpression,
-        DExpStatusEnum,
-        IFunctionDexpNode,
-        ISetupSession,
-        )
+from .expressions import (
+    DotExpression,
+    DExpStatusEnum,
+    IFunctionDexpNode,
+    ISetupSession, IThisRegistry,
+)
 from .attr_nodes import (
         AttrDexpNode
         )
@@ -298,6 +298,45 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
             else:
                 raise EntityInternalError(owner=self, msg="python_type must be set in custom setup() method or define PYTHON_TYPE class constant")
         self._set_type_info()
+
+
+    def create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:
+        from .registries import (
+            ThisRegistryForValueAndChildren,
+            ThisRegistryForValue,
+        )
+        # ==== similar logic in apply.py :: _apply() ====
+        # TODO: this is 2nd place to call '.Setup()'. Explain!
+        assert not self.is_container()
+        assert getattr(self, "bind", None)
+
+        # # if not isinstance(self, (ValidationBase, EvaluationBase)):
+        # if self.is_container():
+        #     raise EntityInternalError(owner=self, msg="Container should have local_session created")
+        # this_registry = None
+
+        has_children = bool(self.get_children())
+
+        # Field -> This.Value == This.<all-attributes>
+        if not self.bind.IsFinished():
+            # only place where container is used ...
+            container = self.get_first_parent_container(consider_self=True)
+            attr_node = self.bind.Setup(setup_session=setup_session, owner=container)
+        else:
+            attr_node = self.bind._dexp_node
+
+        if not attr_node:
+            raise EntitySetupNameError(owner=self, msg=f"{attr_node.name}.bind='{self.bind}' could not be evaluated")
+
+        if has_children:
+            # Field with children (e.g. BooleanField.enables)
+            # Children -> This..Children + This.<all-attributes>
+            # model_class = self.get_type_info().type_
+            this_registry = ThisRegistryForValueAndChildren(attr_node=attr_node, owner=self) # , setup_session=setup_session)
+        else:
+            this_registry = ThisRegistryForValue(attr_node)
+
+        return this_registry
 
     # ------------------------------------------------------------
 

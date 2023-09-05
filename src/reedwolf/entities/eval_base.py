@@ -13,8 +13,8 @@ from .base import (
     IApplyResult,
         )
 from .expressions import (
-        ExecResult,
-        )
+    ExecResult, ISetupSession, IThisRegistry,
+)
 
 
 # ------------------------------------------------------------
@@ -28,7 +28,12 @@ class EvaluationBase(ComponentBase, ABC):  # TODO: make it abstract
         current instance/object. The execution should not fail.
     """
     REQUIRES_AUTOCOMPUTE: ClassVar[bool] = field(default=True)
-    HAS_THIS_NAMESPACE: ClassVar[bool] = False
+
+    def create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:
+        """
+        return None -> inherit this_registry of the calling component.
+        """
+        return None
 
     @abstractmethod
     def execute(self, apply_result: IApplyResult) -> Optional[ExecResult]:

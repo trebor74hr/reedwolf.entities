@@ -232,7 +232,7 @@ class IFunction(IFunctionDexpNode):
 
         # self.setup_session.register_dexp_node(self)
 
-    def create_this_registry(self) -> IThisRegistry:
+    def create_this_registry(self) -> Optional[IThisRegistry]:
         # TODO: maybe DRY is needed - similar logic found in base:: get_or_create_this_registry
         if self.this_registry is not UNDEFINED:
             raise EntityInternalError(owner=self, msg=f"this_registry already set: {self.this_registry}")

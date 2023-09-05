@@ -4,7 +4,7 @@ from abc import (
         )
 from typing import (
     Any,
-    Union, ClassVar,
+    Union, ClassVar, Optional,
 )
 from dataclasses import dataclass
 
@@ -23,11 +23,11 @@ from .base import (
     ValidationFailure,
         )
 from .expressions import (
-        DotExpression,
-        ExecResult,
-        NotAvailableExecResult,
-        execute_available_dexp,
-        )
+    DotExpression,
+    ExecResult,
+    NotAvailableExecResult,
+    execute_available_dexp, ISetupSession, IThisRegistry,
+)
 
 
 
@@ -40,7 +40,6 @@ from .expressions import (
 class ValidationBase(ComponentBase, ABC): # TODO: make it abstract
     """ Executes validate() method which checks all ok
     """
-    HAS_THIS_NAMESPACE: ClassVar[bool] = False
 
     def __post_init__(self):
         if hasattr(self, "ensure"):
@@ -66,6 +65,11 @@ class ValidationBase(ComponentBase, ABC): # TODO: make it abstract
     #     # due multiple inheritance - to force calling ComponentBase implementation
     #     return super().__repr__()
 
+    def create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:
+        """
+        return None -> inherit this_registry of the calling component.
+        """
+        return None
 
     def _check_dot_expression_or_positive_int(self, attr_name:str, attr_value: Any):
         if not isinstance(attr_value, DotExpression) and not to_int(attr_value, 0) >= 0:

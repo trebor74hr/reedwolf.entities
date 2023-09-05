@@ -1,57 +1,61 @@
 from typing       import (
-        Optional, 
-        List, 
-        Union,
-        Dict,
-        ClassVar,
-        )
+    Optional,
+    List,
+    Union,
+    Dict,
+    ClassVar,
+)
 from dataclasses  import (
-        dataclass, 
-        field,
-        )
+    dataclass,
+    field,
+)
 
 from .utils import (
-        camel_case_to_snake,
-        UNDEFINED,
-        UndefinedType,
-        to_repr,
-        get_available_names_example,
-        )
+    camel_case_to_snake,
+    UNDEFINED,
+    UndefinedType,
+    to_repr,
+    get_available_names_example,
+)
 from .exceptions import (
-        EntitySetupValueError,
-        EntityInternalError,
-        )
+    EntitySetupValueError,
+    EntityInternalError,
+)
 from .namespaces import (
-        ModelsNS,
-        )
+    ModelsNS,
+)
 from .meta import (
-        Self,
-        TypeInfo,
-        is_model_class,
-        ModelType,
-        # get_model_fields,
-        extract_py_type_hints,
-        EmptyFunctionArguments,
-        )
+    Self,
+    TypeInfo,
+    is_model_class,
+    ModelType,
+    # get_model_fields,
+    extract_py_type_hints,
+    EmptyFunctionArguments,
+)
 from .expressions import (
-        DotExpression,
-        ISetupSession,
-        ExecResult,
-        )
+    DotExpression,
+    ISetupSession,
+    ExecResult, IThisRegistry,
+)
 from .attr_nodes import (
-        AttrDexpNode,
-        )
+    AttrDexpNode,
+)
 from .functions import (
-        CustomFunctionFactory,
-        IFunction,
-        )
+    CustomFunctionFactory,
+    IFunction,
+)
 from .base import (
     get_name_from_bind,
     BoundModelBase,
     SetupStackFrame,
     IApplyResult,
     ApplyStackFrame,
-        )
+)
+from .registries import (
+    ThisRegistryForInstance,
+)
+
 
 # ------------------------------------------------------------
 
@@ -64,6 +68,20 @@ class ModelWithHandlers:
 
 
 class NestedBoundModelBase(BoundModelBase):
+
+    def create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:
+        model = self.model
+        if isinstance(self.model, DotExpression):
+            if not self.model.IsFinished():
+                # container = self.get_first_parent_container(consider_self=True)
+                # model_dexp_node: IDotExpressionNode = model.Setup(setup_session=setup_session, owner=container)
+                raise EntityInternalError(owner=self, msg=f"{self.model} dot-expression is not finished")
+
+            model_dexp_node = self.model._dexp_node
+            model = model_dexp_node.get_type_info().type_
+
+        this_registry = ThisRegistryForInstance(model_class=model)
+        return this_registry
 
     def _register_nested_models(self, setup_session:ISetupSession):
         # ALT: self.get_children()
