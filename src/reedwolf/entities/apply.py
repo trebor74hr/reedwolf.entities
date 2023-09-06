@@ -36,17 +36,17 @@ from .utils import (
         to_repr,
         )
 from .meta import (
-        Self,
-        NoneType,
-        ModelType,
-        is_model_class,
-        is_model_instance,
-        ValuesTree,
-        ComponentTreeWValuesType,
-        LiteralType,
-        make_dataclass_with_optional_fields,
-        get_dataclass_field_type_info,
-        )
+    Self,
+    NoneType,
+    ModelType,
+    is_model_class,
+    is_model_instance,
+    ValuesTree,
+    ComponentTreeWValuesType,
+    LiteralType,
+    make_dataclass_with_optional_fields,
+    get_dataclass_field_type_info, dataclass_from_dict,
+)
 from .base import (
     IFieldBase,
     UndefinedType,
@@ -908,12 +908,13 @@ class ApplyResult(IApplyResult):
 
         # TODO: logger: apply_result.config.logger.debug(f"depth={depth}, comp={component.name}, bind={bind} => {dexp_result}")
 
-        if self.instance_none_mode \
-          and component.is_top_parent():
+        if self.instance_none_mode and component.is_top_parent():
             # create new instance of bound_model.model class
             # based on temporary created dataclass
             kwargs = asdict(self.instance)
-            self.instance = self.bound_model.model(**kwargs)
+            self.instance = dataclass_from_dict(
+                               dataclass_klass=self.bound_model.model,
+                               values_dict=kwargs)
 
         return
 
