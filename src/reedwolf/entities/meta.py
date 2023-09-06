@@ -634,7 +634,7 @@ class TypeInfo:
                     raise EntityTypeError(item=self, msg=f"Unsupported type hint, got: {self.py_type_hint}. {ERR_MSG_SUPPORTED}")
 
 
-    def check_compatible(self, other: Self) -> Optional[str]:
+    def check_compatible(self, other: Self, ignore_list_check: bool=False) -> Optional[str]:
         """
         returns error message when input type is not compatible with given type
         """
@@ -644,10 +644,10 @@ class TypeInfo:
         if self==other:
             return None
 
-        if self.py_type_hint == Any:
+        if self.py_type_hint is Any or other.py_type_hint is Any:
             return None
 
-        if self.is_list!=other.is_list:
+        if not ignore_list_check and self.is_list!=other.is_list:
             if self.is_list:
                 err_msg = "expecting a list compatible type"
             else:
@@ -722,6 +722,22 @@ class TypeInfo:
     # ------------------------------------------------------------
     # Classmethods
     # ------------------------------------------------------------
+
+    @classmethod
+    def get_or_create_by_value(cls, value: AttrValue, caller: Optional[Any] = None) -> Self:
+        """
+        simple and stupid for now
+        """
+        if isinstance(value, (list, tuple)) and value:
+            inner_type = type(value[0])
+            py_type_hint = List[inner_type]
+        elif isinstance(value, dict) and value:
+            inner_type = type(value.values[0])
+            py_type_hint = List[inner_type]
+        else:
+            py_type_hint = type(value)
+        type_info = cls.get_or_create_by_type(py_type_hint=py_type_hint, caller=caller)
+        return type_info
 
     @classmethod
     def get_or_create_by_type(cls, py_type_hint: PyTypeHint, caller: Optional[Any] = None) -> Self:

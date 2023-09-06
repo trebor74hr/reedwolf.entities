@@ -204,8 +204,6 @@ class AttrDexpNode(IDotExpressionNode):
 
         assert dexp_result not in (None,)
 
-        root_value : Optional[RegistryRootValue] = None
-
         if dexp_result in (UNDEFINED, None):
             # ==== Initial / first value - get from registry / namespace, e.g. M
             dexp_result = ExecResult()
@@ -307,16 +305,7 @@ class AttrDexpNode(IDotExpressionNode):
         else:
             value_new = value_previous
 
-        # if root_valuee and root_value.attr_dexp_node:
-        # expected_type_info = root_value.attr_dexp_node.type_info
-        # if expected_type_info:
-        #     value_type_info = TypeInfo.get_or_create_by_type(type(value_new))
-        #     err_msg = expected_type_info.check_compatible(value_type_info)
-        #     if err_msg:
-        #         raise EntityApplyValueError(owner=self, msg=f"For attribute '{attr_name}' type is not compatible:\n  {err_msg}\n  expecting value of type:"
-        #                                                     f"\n  {expected_type_info}"
-        #                                                     f"\n  got:\n  {value_type_info}"
-        #                                                     f"\n  value: {value_new}")
+        # self.check_root_value_type_info(...)
 
         # TODO: check type_info match too - and put in all types of nodes - functions/operators
         if apply_result.component_name_only and apply_result.instance_new == value_new:
@@ -340,6 +329,28 @@ class AttrDexpNode(IDotExpressionNode):
 
         return dexp_result
 
+    # NOTE: this logic is dropped - expected_type_info is sometimes missmatched and sometimes adaptations needs to be done ...
+    #       all in all - currently too complex, anyway type of final value will be checked later.
+    # def check_root_value_type_info(self, ...):
+    #     if root_value and value_new not in ([], {}, None, UNDEFINED):
+    #         adapted_value = apply_result.current_frame.component.try_adapt_value(value_new) \
+    #             if isinstance(apply_result.current_frame.component, IFieldBase) \
+    #             else value_new
+    #         # will be reported later
+    #         ignore_list_check = True # apply_result.current_frame.on_component_only is not None
+
+    #         # None is set in dataclasss initialization - and then this test fails. Ignore this for noew
+    #         assert root_value.attr_dexp_node
+    #         expected_type_info = root_value.attr_dexp_node.type_info
+    #         assert  expected_type_info
+    #         value_type_info = TypeInfo.get_or_create_by_value(adapted_value)
+    #         err_msg = expected_type_info.check_compatible(value_type_info, ignore_list_check=ignore_list_check)
+    #         if err_msg:
+    #             expected_type_info.check_compatible(value_type_info, ignore_list_check=ignore_list_check)
+    #             raise EntityApplyValueError(owner=self, msg=f"For attribute '{attr_name}' type is not compatible:\n  {err_msg}\n  expecting value of type:"
+    #                                                         f"\n  {expected_type_info}"
+    #                                                         f"\n  got:\n  {value_type_info}"
+    #                                                         f"\n  value: {adapted_value}")
 
     def isoptional(self):
         return self.type_info.is_optional if self.type_info else False
