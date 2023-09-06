@@ -1,4 +1,5 @@
 import inspect
+from collections import OrderedDict
 from dataclasses import (
     dataclass,
     field,
@@ -15,7 +16,7 @@ from typing import (
 from .utils import (
     UNDEFINED,
     UndefinedType,
-    to_repr,
+    to_repr, get_available_names_example,
 )
 from .exceptions import (
     EntitySetupError,
@@ -23,7 +24,7 @@ from .exceptions import (
     EntitySetupValueError,
     EntityInternalError,
     EntityApplyTypeError,
-    EntityApplyNameError,
+    EntityApplyNameError, EntityApplyValueError,
 )
 from .namespaces import (
     Namespace,
@@ -39,7 +40,7 @@ from .expressions import (
     DotExpression,
     IDotExpressionNode,
     IThisRegistry,
-    RootValue,
+    RegistryRootValue,
 )
 from .meta import (
     ModelType,
@@ -106,6 +107,9 @@ class ModelsRegistry(RegistryBase):
 
     root_attr_nodes : Optional[Dict[str, AttrDexpNode]] = field(repr=False, init=False, default_factory=dict)
 
+    # Just to check not duplicate. Can have several, first is main model, other are submodels
+    models_dict : Dict[str, ModelType] = field(repr=True, init=False, default_factory=OrderedDict)
+
     NAMESPACE: ClassVar[Namespace] = ModelsNS
 
     # def __post_init__(self):
@@ -135,6 +139,10 @@ class ModelsRegistry(RegistryBase):
         if not root_attr_node:
             root_attr_node = self._create_root_attr_node(bound_model=bound_model)
 
+        if bound_model.name in self.models_dict:
+            raise EntityInternalError(owner=self, msg=f"Model {bound_model.name} already set {self.models_dict[bound_model.name]}, got: {model}")
+        self.models_dict[bound_model.name] = model
+
         name = bound_model.get_full_name()
         is_root = "." not in name # TODO: hack
         if name in self.root_attr_nodes:
@@ -156,8 +164,6 @@ class ModelsRegistry(RegistryBase):
                         attr_name = ReservedAttributeNames.INSTANCE_ATTR_NAME.value,
                         attr_name_prefix = None if is_root else f"{name_for_reg}__",
                         )
-
-
 
     # ------------------------------------------------------------
 
@@ -187,7 +193,7 @@ class ModelsRegistry(RegistryBase):
 
     # ------------------------------------------------------------
 
-    def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
+    def _apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RegistryRootValue:
         # ROOT_VALUE_NEEDS_FETCH_BY_NAME = False
         # component = apply_result.current_frame.component
         instance = apply_result.current_frame.instance
@@ -211,11 +217,12 @@ class ModelsRegistry(RegistryBase):
                 instance_to_test = instance
 
             # == M.name case
+            # TODO: caller should check expected type ...
             if not apply_result.instance_none_mode and instance_to_test \
               and not isinstance(instance_to_test, expected_type):
                 raise EntityApplyTypeError(owner=self, msg=f"Wrong type, expected '{expected_type}', got '{instance}'")
 
-        return RootValue(instance, None)
+        return RegistryRootValue(instance, None)\
 
 
 # ------------------------------------------------------------
@@ -277,12 +284,12 @@ class FieldsRegistry(RegistryBase):
         return attr_node
 
 
-    def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
+    def _apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RegistryRootValue:
         # container = apply_result.current_frame.component.get_first_parent_container(consider_self=True)
         component = apply_result.current_frame.component
         instance  = apply_result.current_frame.instance
         top_attr_accessor = ComponentAttributeAccessor(component, instance)
-        return RootValue(top_attr_accessor, None)
+        return RegistryRootValue(top_attr_accessor, None)
 
 
 # ------------------------------------------------------------
@@ -346,13 +353,13 @@ class ContextRegistry(RegistryBase):
             self.register_attr_node(attr_node, attr_name)
 
 
-    def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
+    def _apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RegistryRootValue:
         context = apply_result.context
         if context in (UNDEFINED, None):
             component = apply_result.current_frame.component
             raise EntityApplyNameError(owner=self, msg=f"ContextNS attribute '{component.name}' can not be fetched since context is not set ({type(context)}).")
         # if attr_name in self.context_class.get_dexp_attrname_dict():
-        return RootValue(context, None)
+        return RegistryRootValue(context, None)
 
 
 # ------------------------------------------------------------
@@ -381,19 +388,36 @@ class ConfigRegistry(RegistryBase):
             attr_node = self._create_attr_node_for_model_attr(config_class, attr_name)
             self.register_attr_node(attr_node)
 
-    def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
+    def _apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RegistryRootValue:
         # ALT: config = apply_result.entity.config
         config = self.config
         if config in (UNDEFINED, None):
             component = apply_result.current_frame.component
             raise EntityInternalError(owner=self, 
                 msg=f"ConfigNS attribute '{component.name}' can not be fetched since config is not set ({type(config)}).")
-        return RootValue(config, None)
+        return RegistryRootValue(config, None)
 
 
 # ------------------------------------------------------------
 @dataclass
 class ThisRegistry(IThisRegistry, RegistryBase):
+    """
+    General idea/overview:
+                                                Field   bool-ena field-gr subent-sin subent-its FuncArg: Filter(T.) FuncArg: T.attr
+                                                ------- -------- -------- ---------- ---------- ------------------- ---------------
+    a) .<field-name>     - direktno             -       yes      yes      yes        yes (*1)   - (vidi f)          yes- if Item
+    b) This.Value                               yes     yes      -        -          -          -                   yes- if std.
+    c) This.Instance     - jel mi treba???      -       -        -        yes        -- (*2)    yes(Self)           yes- if Item?
+    d) This.Items: List[Item]                   -       -        -        -          yes        - (vidi g)          -
+    e) This.Children: List[ChildField]          -       yes      yes      yes        yes (*1)   -                   -
+
+    f) This.Item.<field-name>                   -       -        -        -          -          yes(*3)             -
+    g) This.Item.Children                       -       -        -        -          -          yes(*3)             -
+
+    (*1) - in which case to put this? - if this is ok, then put in first too
+    (*2) - maybe InstanceList
+    (*3) - the question: how to make This.Item work? maybe simple as done in a) i e)
+    """
     NAMESPACE: ClassVar[Namespace] = ThisNS
 
     attr_node: Optional[AttrDexpNode] = field(default=None)
@@ -456,11 +480,11 @@ class ThisRegistry(IThisRegistry, RegistryBase):
                 )
 
 
-    def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RootValue:
+    def _apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RegistryRootValue:
         if not self.finished:
             raise EntityInternalError(owner=self, msg="Setup not called")
 
-        root_value: Optional[RootValue] = None
+        root_value: Optional[RegistryRootValue] = None
 
         if self.model_class:
             if not isinstance(apply_result.current_frame.instance, self.model_class):
@@ -474,15 +498,15 @@ class ThisRegistry(IThisRegistry, RegistryBase):
                 # with 2nd param like this -> fetch further by attr_name
                 atrr_name_to_fetch = attr_name
 
-            root_value = RootValue(apply_result.current_frame.instance, atrr_name_to_fetch)
+            root_value = RegistryRootValue(apply_result.current_frame.instance, atrr_name_to_fetch)
         else:
             if self.attr_node:
                 if attr_name != ReservedAttributeNames.VALUE_ATTR_NAME.value:
                     raise EntityInternalError(owner=self, msg=f"Expected attribute name: {ReservedAttributeNames.VALUE_ATTR_NAME.value}, got: {attr_name}")
                 # with 2nd return value -> instead of fetching .Value, instruct caller to
                 #                   fetch component's bound attribute
-                root_value = RootValue(value_root=apply_result.current_frame.instance,
-                                        attr_name_new=self.attr_name)
+                root_value = RegistryRootValue(value_root=apply_result.current_frame.instance,
+                                               attr_name_new=self.attr_name)
 
             if self.component:
                 if self.is_items:
@@ -491,7 +515,7 @@ class ThisRegistry(IThisRegistry, RegistryBase):
                         if not isinstance(apply_result.current_frame.instance, (list, tuple)):
                             raise EntityInternalError(f"Items expected, got: {apply_result.current_frame.instance}")
 
-                        root_value = RootValue(
+                        root_value = RegistryRootValue(
                             value_root=apply_result.current_frame.instance,
                             attr_name_new=None,
                             do_fetch_by_name=False)
@@ -504,7 +528,7 @@ class ThisRegistry(IThisRegistry, RegistryBase):
                                                       msg=f"_child_field_list not a list, got: {apply_result.current_frame.component.child_field_list}")
                         # TODO: .Children?
                         # raise NotImplementedError()
-                        root_value = RootValue(
+                        root_value = RegistryRootValue(
                             value_root=apply_result.current_frame.component.child_field_list,
                             attr_name_new=None,
                             do_fetch_by_name=False,
@@ -524,7 +548,7 @@ class ThisRegistry(IThisRegistry, RegistryBase):
                     else:
                         # with 2nd param like this -> fetch further by attr_name
                         atrr_name_to_fetch = attr_name
-                    root_value = RootValue(apply_result.current_frame.instance, atrr_name_to_fetch)
+                    root_value = RegistryRootValue(apply_result.current_frame.instance, atrr_name_to_fetch)
 
         if not root_value:
             raise EntityInternalError(owner=self, msg="Invalid case")

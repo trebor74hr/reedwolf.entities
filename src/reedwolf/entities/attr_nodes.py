@@ -28,7 +28,7 @@ from .namespaces import (
 from .expressions import (
     DotExpression,
     IDotExpressionNode,
-    IAttributeAccessorBase,
+    IAttributeAccessorBase, RegistryRootValue,
 )
 from .meta import (
     TypeInfo,
@@ -204,6 +204,8 @@ class AttrDexpNode(IDotExpressionNode):
 
         assert dexp_result not in (None,)
 
+        root_value : Optional[RegistryRootValue] = None
+
         if dexp_result in (UNDEFINED, None):
             # ==== Initial / first value - get from registry / namespace, e.g. M
             dexp_result = ExecResult()
@@ -225,15 +227,7 @@ class AttrDexpNode(IDotExpressionNode):
                 registry = apply_result.current_frame.this_registry
             else:
                 # take from setup_session
-                registry = apply_result.setup_session.get_registry(self.namespace)
-
-            # registry = None
-            # if apply_result.current_frame.local_setup_session:
-            #     # take from apply_result's current local_setup_session
-            #     registry = apply_result.current_frame.local_setup_session.get_registry(self.namespace, strict=False)
-            # if not registry:
-            #     # take from setup_session
-            #     registry = apply_result.setup_session.get_registry(self.namespace)
+                registry = apply_result.get_setup_session().get_registry(self.namespace)
 
             # get starting instance
             root_value = registry.apply_to_get_root_value(apply_result=apply_result, attr_name=attr_name)
@@ -312,6 +306,17 @@ class AttrDexpNode(IDotExpressionNode):
             value_new = value_new_as_list[0] if not result_is_list else value_new_as_list
         else:
             value_new = value_previous
+
+        # if root_valuee and root_value.attr_dexp_node:
+        # expected_type_info = root_value.attr_dexp_node.type_info
+        # if expected_type_info:
+        #     value_type_info = TypeInfo.get_or_create_by_type(type(value_new))
+        #     err_msg = expected_type_info.check_compatible(value_type_info)
+        #     if err_msg:
+        #         raise EntityApplyValueError(owner=self, msg=f"For attribute '{attr_name}' type is not compatible:\n  {err_msg}\n  expecting value of type:"
+        #                                                     f"\n  {expected_type_info}"
+        #                                                     f"\n  got:\n  {value_type_info}"
+        #                                                     f"\n  value: {value_new}")
 
         # TODO: check type_info match too - and put in all types of nodes - functions/operators
         if apply_result.component_name_only and apply_result.instance_new == value_new:

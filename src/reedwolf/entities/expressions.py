@@ -124,10 +124,20 @@ class IDotExpressionNode(ABC):
 # ------------------------------------------------------------
 
 @dataclass
-class RootValue:
+class RegistryRootValue:
     value_root: AttrValue
     attr_name_new : Optional[AttrName]
     do_fetch_by_name: Union[bool, UndefinedType] = UNDEFINED
+    # later set
+    attr_dexp_node: Optional["AttrDexpNode"] =  field(init=False, repr=False, default=None)
+
+    def set_attr_dexp_node(self, attr_dexp_node: "AttrDexpNode") -> Self:
+        if self.attr_dexp_node is not None:
+            raise EntityInternalError(owner=self, msg=f"attr_dexp_node already set to: {self.attr_dexp_node}, got: {attr_dexp_node}")
+        self.attr_dexp_node = attr_dexp_node
+        return self
+
+
 
 # ------------------------------------------------------------
 
@@ -143,11 +153,19 @@ class IRegistry:
         ...
 
     @abstractmethod
-    def apply_to_get_root_value(self, apply_result: "IApplyResult", attr_name: AttrName) -> RootValue: # noqa: F821
+    def apply_to_get_root_value(self, apply_result: "IApplyResult", attr_name: AttrName) -> RegistryRootValue: # noqa: F821
         """
         Used in apply phase. returns instance or instance attribute value + a
         different attribute name when different attribute needs to be retrieved
         from instance.
+        """
+        ...
+
+    @abstractmethod
+    def _apply_to_get_root_value(self, apply_result: "IApplyResult", attr_name: AttrName) -> RegistryRootValue: # noqa: F821
+        """
+        specific implementation for every registry.
+        Common logic and caller to this is in apply_to_get_root_value()
         """
         ...
 

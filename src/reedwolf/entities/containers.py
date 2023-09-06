@@ -182,6 +182,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
         assert isinstance(self.models, dict), self.models
 
+        # can have several, first is main model, other are submodels e.g. BoundModelWithHandlers
         for bound_model_name, bound_model in self.models.items():
             assert bound_model_name.split(".")[-1] == bound_model.name
             self._register_bound_model(bound_model=bound_model)
@@ -737,8 +738,8 @@ class Entity(ContainerBase):
         container = self.get_first_parent_container(consider_self=True)
 
         apply_result = \
-                ApplyResult(setup_session=container.setup_session, 
-                      entity=self, 
+                ApplyResult(
+                      entity=self,
                       component_name_only=component_name_only,
                       context=context, 
                       instance=instance,
@@ -770,8 +771,7 @@ class Entity(ContainerBase):
         apply_result = \
                 ApplyResult(
                     defaults_mode=True,
-                    setup_session=container.setup_session, 
-                    entity=self, 
+                    entity=self,
                     component_name_only=None,
                     context=context, 
                     instance=NA_DEFAULTS_MODE,

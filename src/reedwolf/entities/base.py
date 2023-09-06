@@ -1838,9 +1838,7 @@ class StructEnum(str, Enum):
 
 @dataclass
 class IApplyResult(IStackOwnerSession):
-    # TODO: možda bi ovo trebalo izbaciti ... - link na IRegistry u dexp node-ovima 
-    setup_session: ISetupSession = field(repr=False)
-    entity: IContainerBase = field(repr=False) 
+    entity: IContainerBase = field(repr=False)
     instance: Any = field(repr=False)
     # TODO: consider: instance_new: Union[ModelType, UndefinedType] = UNDEFINED,
     instance_new: Optional[ModelType] = field(repr=False)
@@ -1933,6 +1931,11 @@ class IApplyResult(IStackOwnerSession):
     def _get_new_id(self) -> str:
         self.new_id_counter+=1
         return self.new_id_counter
+
+    def get_setup_session(self) -> ISetupSession:
+        if self.current_frame is None:
+            raise EntityInternalError(owner=self, msg="Setup session can't be get, no current frame set")
+        return self.current_frame.container.setup_session
 
     def init_update_history_for_key(self, key_str: str) -> None:
         if key_str in self.update_history:

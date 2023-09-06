@@ -751,9 +751,11 @@ class TypeInfo:
                         "\n  2) 'get_model_fields() + .type' used instead 'extract_py_type_hints()' -> get_or_create_by_type() (internal issue, use 'extract_model_field_meta' maybe?)"
                         "Explanation: When 'from future import annotations + __annotations__' is used then python hints are strings. Use 'typing.get_type_hints()' to resolve hints properly." 
                         )
+
         if py_type_hint not in cls.TYPE_INFO_REGISTRY:
             # py_type_hint can be FuncArgTypeHint
             cls.TYPE_INFO_REGISTRY[py_type_hint] = TypeInfo(py_type_hint=py_type_hint)
+
         return cls.TYPE_INFO_REGISTRY[py_type_hint]
 
     # ------------------------------------------------------------

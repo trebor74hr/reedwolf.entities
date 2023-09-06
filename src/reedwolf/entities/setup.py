@@ -36,8 +36,8 @@ from .expressions import (
     IRegistry,
     IThisRegistry,
     ISetupSession,
-    IAttributeAccessorBase,
-    )
+    IAttributeAccessorBase, RegistryRootValue,
+)
 from .meta import (
     Self,
     is_model_class,
@@ -123,8 +123,7 @@ class RegistryBase(IRegistry):
     NAMESPACE : ClassVar[Namespace] = None
     ROOT_VALUE_NEEDS_FETCH_BY_NAME: ClassVar[bool] = True
 
-    @abstractmethod
-    def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: str) -> Any:
+    def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: str) -> RegistryRootValue:
         # TODO: same method declared in IRegistry
         """ 
         Apply phase - Namespace.<attr_name> - 
@@ -134,7 +133,17 @@ class RegistryBase(IRegistry):
         different source / instance is used based on different attr_name. See
         ThisNS.Instance.
         """
-        ...
+
+        if attr_name not in self.store:
+            # NOTE: Should not hhappen if DotExpression.setup() has done its job properly
+            names_avail = get_available_names_example(attr_name, list(self.store.keys()))
+            raise EntityApplyNameError(owner=self, msg=f"Unknown attribute: {attr_name} available={names_avail}")
+
+        attr_dexp_node: AttrDexpNode = self.store[attr_name]
+        root_value: RegistryRootValue = self._apply_to_get_root_value(apply_result=apply_result,
+                                                                      attr_name=attr_name)
+        root_value.set_attr_dexp_node(attr_dexp_node)
+        return root_value
 
     def setup(self, setup_session: ISetupSession):
         if self.setup_session:
