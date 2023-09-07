@@ -874,7 +874,10 @@ def make_dataclass_with_optional_fields(dc_model: DataclassType) -> DataclassTyp
     return temp_dataclass_model
 
 def dataclass_from_dict(dataclass_klass: Type, values_dict: Dict[str, Any]) -> DataclassType:
-    """ inspired by: https://stackoverflow.com/a/54769644/565525 """
+    """
+    Inspired by: https://stackoverflow.com/a/54769644/565525
+    Check load.py too - it has some similar logic, but for different purpose.
+    """
     if not is_dataclass(dataclass_klass):
         raise TypeError(f"Expecting dataclass as inner klass, got: {dataclass_klass}")
     if not isinstance(values_dict, dict):

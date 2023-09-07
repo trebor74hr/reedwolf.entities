@@ -172,11 +172,11 @@ class FunctionArguments:
 
     def names(self):
         assert self.finished
-        return self.func_arg_dict.keys()
+        return list(self.func_arg_dict.keys())
 
     def arguments(self):
         assert self.finished
-        return self.func_arg_dict.values()
+        return list(self.func_arg_dict.values())
 
     def get(self, name, default=None):
         assert self.finished

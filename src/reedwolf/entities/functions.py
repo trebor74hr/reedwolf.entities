@@ -63,7 +63,7 @@ from .expressions import (
 from .func_args import (
     FunctionArguments,
     create_function_arguments,
-    PreparedArguments,
+    PreparedArguments, FuncArg,
 )
 from .base import (
     AttrDexpNodeTypeEnum,
@@ -109,6 +109,8 @@ class IFunction(IFunctionDexpNode):
     single left parameter (value from parent - previous dot chain, parent ) ,
     i.e. function wrapped should not have 2+ required params left
     """
+    IS_ITEMS_FOR_EACH: ClassVar[bool] = False
+
     INPUT_CARDINALITY: ClassVar[DatatypeCardinalityEnum] = DatatypeCardinalityEnum.SINGLE
 
     # 1. python pure function that will be called
@@ -176,6 +178,8 @@ class IFunction(IFunctionDexpNode):
     # all DotExpressions prepared arguments of this function will have access to this_registry within stack_frame
     this_registry: Union[IThisRegistry, NoneType, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
 
+    # set only when IS_ITEMS_FOR_EACH
+    items_func_arg: Optional[FuncArg] = field(init=False, repr=True, default=None)
 
     def __post_init__(self):
         if not (self.py_function and is_function(self.py_function)):
@@ -193,10 +197,21 @@ class IFunction(IFunctionDexpNode):
         # chain_arg_type_info
         # self.value_arg_type_info = self.get_value_arg_type_info()
 
+        # TODO: dry this - same cade in IFunctionFactory
         self._output_type_info = TypeInfo.extract_function_return_type_info(self.py_function)
 
         if not self.function_arguments:
             self.function_arguments = create_function_arguments(self.py_function)
+
+        if self.IS_ITEMS_FOR_EACH:
+            if not self.value_arg_name:
+                raise EntityInternalError(owner=self, msg="value_arg_name is not set")
+            self.items_func_arg = self.function_arguments.get(self.value_arg_name)
+            if not self.items_func_arg:
+                args_avail = get_available_names_example(self.value_arg_name, self.function_arguments.names())
+                raise EntitySetupNameError(owner=self, msg=f"value_arg_name '{self.value_arg_name}' is unknown, available function's argument names: {args_avail}")
+            if not self.items_func_arg.type_info.is_list:
+                raise EntitySetupNameError(owner=self, msg=f"For 'Items' functions value_arg_name '{self.value_arg_name}' must have List type, got: {self.items_func_arg.type_info.py_type_hint}")
 
         prep_args_kwargs = dict(
             setup_session = self.setup_session,
@@ -251,12 +266,14 @@ class IFunction(IFunctionDexpNode):
             raise EntityInternalError(owner=self, msg=f"this_registry already set: {self.this_registry}")
         assert self.setup_session
 
-        model_class: ModelType = None
+        # model_class: ModelType = None
         type_info: Optional[TypeInfo] = None  # not used
 
         if not self.caller:
             # NOTE: Namespace top level like: Fn.Length(This.name)
             #       BoundModelWithHandlers with read_handlers case
+
+            # TODO: test case self.items_func_arg: - top level function call, e.g. '<Namespace>.{self.name}(...)'
             if self.setup_session.current_frame is None:
                 # direct function creation - currently only unit test uses it
                 pass
@@ -270,7 +287,8 @@ class IFunction(IFunctionDexpNode):
                     model_dexp_node: IDotExpressionNode = model._dexp_node
                     type_info = model_dexp_node.get_type_info()
                 elif is_model_class(model):
-                    model_class = model
+                    # model_class = model
+                    type_info = TypeInfo.get_or_create_by_type(model)
                 else:
                     raise EntityInternalError(owner=self, msg=f"expecting model class or dot expression, got: {model}")
         else:
@@ -289,46 +307,45 @@ class IFunction(IFunctionDexpNode):
                 else:
                     type_info = func_output_type_info
             elif isinstance(self.caller, IDotExpressionNode):
-                # TODO: drop this case - change to 'setup_session.current_frame' case
+                # TODO: to drop this case or not? To change to 'setup_session.current_frame' case?
                 dexp_node: IDotExpressionNode = self.caller
                 type_info = dexp_node.get_type_info()
             else:
                 raise EntityInternalError(owner=self, msg=f"Unsupported caller type, expected Function/DotExpressionNode, got: {self.caller}")
 
-        if not model_class and type_info:
-            model_class = type_info.type_
+        model_class = type_info.type_ if type_info else None
 
         if model_class is None:
             # direct function creation - currently only unit test uses it
             this_registry = None
-        elif is_model_class(model_class):
-            # pydantic / dataclasses
-            this_registry = ThisRegistry.create_for_model_class(
-                setup_session=self.setup_session,
-                model_class=model_class)
 
-            # this_registry = self.setup_session.container.create_this_registry_for_model_class(
-            #     setup_session=self.setup_session,
-            #     model_class=model_class,
-            #     # TODO: typ_info=type_info OR is_items = type_info.is_list,
-            # )
+        elif self.items_func_arg or is_model_class(model_class) or type_info.is_list:
+            # complex structs: pydantic / dataclasses / List[Any] / ...
+            if self.items_func_arg and not type_info.is_list:
+                raise EntitySetupTypeError(owner=self, msg=f"For 'Items' functions only list types are supported, got: {type_info.py_type_hint}")
+
+            this_registry = ThisRegistry.create_for_model_class(
+                is_items_for_each_mode = (self.items_func_arg is not None),
+                setup_session=self.setup_session,
+                model_class=type_info.py_type_hint)
+
+            if self.items_func_arg and not this_registry.is_items_for_each_mode:
+                raise EntityInternalError(owner=self, msg=f"Failed to setup this_registry for Items in 'for-each' mode: {this_registry}")
+
         elif model_class in STANDARD_TYPE_LIST:
             this_registry = None
-        elif type_info and type_info.is_list:
-            # TODO: mislim da ovdje nikad ni ne dolazi
-            raise NotImplementedError()
-            # TODO: create This.Items and similar ...
-            print("HERE-44")
-            model_class = type_info.type_
-            this_registry = ThisRegistry.create_for_model_class(
-                setup_session=self.setup_session,
-                model_class=model_class)
-            # this_registry = self.setup_session.container.create_this_registry_for_model_class(
-            #     setup_session=self.setup_session,
-            #     model_class=model_class,
-            # )
+        # elif type_info and type_info.is_list:
+        #     # NOTE: u ovaj slučaj nikad se ne ulazi
+        #     model_class = type_info.type_
+        #     this_registry = ThisRegistry.create_for_model_class(
+        #         setup_session=self.setup_session,
+        #         model_class=model_class)
+        #     # this_registry = self.setup_session.container.create_this_registry_for_model_class(
+        #     #     setup_session=self.setup_session,
+        #     #     model_class=model_class,
+        #     # )
         else:
-            raise EntitySetupValueError(owner=self, msg=f"Unsupported type: {self.caller} / {model_class}")
+            raise EntitySetupValueError(owner=self, msg=f"Unsupported type: {self.caller} / {model_class} / {type_info}")
 
         self.this_registry = this_registry
 
@@ -450,7 +467,7 @@ class IFunction(IFunctionDexpNode):
                 else:
                     args.insert(0, input_value)
 
-            self._process_inject_pargs(apply_result=apply_result, kwargs=kwargs)
+            self._process_inject_prepared_args(apply_result=apply_result, kwargs=kwargs)
 
 
         if self.func_args:
@@ -483,7 +500,7 @@ class IFunction(IFunctionDexpNode):
 
     # ------------------------------------------------------------
 
-    def _process_inject_pargs(self, apply_result: IApplyResult, kwargs: Dict[str, ValueOrDexp]):
+    def _process_inject_prepared_args(self, apply_result: IApplyResult, kwargs: Dict[str, ValueOrDexp]):
 
         prep_arg = self.prepared_args.get(ReservedArgumentNames.INJECT_COMPONENT_TREE)
         if not prep_arg:
@@ -524,16 +541,22 @@ class IFunction(IFunctionDexpNode):
 class CustomFunction(IFunction):
     pass
 
+@dataclass
+class CustomItemsFunction(IFunction):
+    IS_ITEMS_FOR_EACH: ClassVar[bool] = True
 
 @dataclass
 class BuiltinFunction(IFunction):
     pass
 
+@dataclass
+class BuiltinItemsFunction(IFunction):
+    IS_ITEMS_FOR_EACH: ClassVar[bool] = True
+
 # ------------------------------------------------------------
 
 @dataclass
 class IFunctionFactory(ABC):
-
     """
     Function wrapper for arbitrary regular python function.
     that will reside in Global namespace and can not be 
@@ -542,6 +565,8 @@ class IFunctionFactory(ABC):
     inject_args should be used as functools.partial()
     later reference will fill func_args
     """
+    FUNCTION_CLASS : ClassVar[Union[UndefinedType, Type[IFunction]]] = UNDEFINED
+
     # regular python function - should be pure (do not change input args,
     # rather copy and return modified copy
     py_function : Callable[..., Any]
@@ -567,7 +592,6 @@ class IFunctionFactory(ABC):
     # TODO: 'instantiate' class mode - get result as instance and cache result -
     #       py_function is Class, result is instance
 
-
     def __post_init__(self):
         if not is_function(self.py_function):
             raise EntitySetupValueError(owner=self, msg=f"py_function is not a function, got: {type(self.py_function)} / {self.py_function}")
@@ -576,7 +600,16 @@ class IFunctionFactory(ABC):
             self.name = self.py_function.__name__
         if self.fixed_args is None:
             self.fixed_args = ()
+        # TODO: dry this - same cade in IFunction
         self._output_type_info = TypeInfo.extract_function_return_type_info(self.py_function)
+
+        if self.FUNCTION_CLASS is UNDEFINED:
+            raise EntityInternalError(owner=self, msg="FUNCTION_CLASS is not set on class level")
+
+        # TODO: dry this - same cade in IFunction
+        if self.FUNCTION_CLASS.IS_ITEMS_FOR_EACH:
+            if not self.value_arg_name:
+                raise EntityInternalError(owner=self, msg="value_arg_name is not set")
 
     # def get_type_info(self) -> TypeInfo: return self._output_type_info
 
@@ -611,14 +644,20 @@ class IFunctionFactory(ABC):
 class CustomFunctionFactory(IFunctionFactory):
     FUNCTION_CLASS : ClassVar[Type[IFunction]] = CustomFunction
 
+@dataclass
+class CustomItemsFunctionFactory(CustomFunctionFactory):
+    FUNCTION_CLASS : ClassVar[Type[IFunction]] = CustomItemsFunction
+
 # ------------------------------------------------------------
 
 @dataclass
 class BuiltinFunctionFactory(IFunctionFactory):
     FUNCTION_CLASS : ClassVar[Type[IFunction]] = BuiltinFunction
 
+@dataclass
+class BuiltinItemsFunctionFactory(BuiltinFunctionFactory):
+    FUNCTION_CLASS : ClassVar[Type[IFunction]] = BuiltinItemsFunction
 
-# ------------------------------------------------------------
 
 def Function(py_function : Callable[..., Any], 
              name: Optional[str] = None,
@@ -657,8 +696,25 @@ def Function(py_function : Callable[..., Any],
                     ),
                 arg_validators=arg_validators,
                 )
+def ItemsFunction(py_function : Callable[..., Any],
+             # NOTE: this parameter is required
+             items_value_arg_name: str,
+             name: Optional[str] = None,
+             args   : Optional[List[DotExpression]] = UNDEFINED,
+             kwargs : Optional[Dict[str, DotExpression]] = UNDEFINED,
+             arg_validators : Optional[ValueArgValidatorPyFuncDictType] = None,
+             ) -> CustomItemsFunctionFactory:
+    return CustomItemsFunctionFactory(
+        py_function=py_function,
+        name=name,
+        value_arg_name=items_value_arg_name,
+        fixed_args=FunctionArgumentsType(
+            args if args is not UNDEFINED else (),
+            kwargs if kwargs is not UNDEFINED else {}
+        ),
+        arg_validators=arg_validators,
+    )
 
-# ------------------------------------------------------------
 
 def create_builtin_function_factory(
             py_function : Callable[..., Any], 
@@ -669,7 +725,7 @@ def create_builtin_function_factory(
             arg_validators : Optional[ValueArgValidatorPyFuncDictType] = None,
             ) -> BuiltinFunctionFactory:
     """
-    wrapper around BuiltinFunctionFactory - better api look
+    wrapper around BuiltinFunctionFactory - to have better api look
     TODO: consider creating decorator
     """
     return BuiltinFunctionFactory(
@@ -682,6 +738,28 @@ def create_builtin_function_factory(
                 arg_validators=arg_validators,
                 )
 
+def create_builtin_items_function_factory(
+        py_function : Callable[..., Any],
+        # NOTE: this parameter is required
+        items_value_arg_name:str,
+        name: Optional[str] = None,
+        args   : Optional[List[DotExpression]] = None,
+        kwargs: Optional[Dict[str, DotExpression]] = None,
+        arg_validators : Optional[ValueArgValidatorPyFuncDictType] = None,
+) -> BuiltinItemsFunctionFactory:
+    """
+    wrapper around BuiltinFunctionFactory - better api look
+    TODO: consider creating decorator
+    """
+    return BuiltinItemsFunctionFactory(
+        py_function=py_function,
+        name=name,
+        value_arg_name=items_value_arg_name,
+        fixed_args=FunctionArgumentsType(
+            args if args is not None else (),
+            kwargs if kwargs is not None else {}),
+        arg_validators=arg_validators,
+    )
 
 # =====================================================================
 # FunctionsFactoryRegistry

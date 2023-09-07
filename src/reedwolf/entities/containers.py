@@ -883,7 +883,8 @@ class SubEntityItems(SubEntityBase):
     """ one to many relations - e.g. Person -> PersonAddresses """
 
     def __post_init__(self):
-        self._check_cleaners((ItemsValidationBase, ChildrenValidationBase, ItemsEvaluationBase, ChildrenEvaluationBase))
+        # TODO: ChildrenValidationBase, ChildrenEvaluationBase
+        self._check_cleaners([ItemsValidationBase, ItemsEvaluationBase])
         # for cleaner in self.cleaners:
         #     if not isinstance(cleaner, (ItemsValidationBase, ChildrenValidationBase, ItemsEvaluationBase, ChildrenEvaluationBase)):
         #         raise EntitySetupTypeError(owner=self, msg=f"Cleaners should be instances of ItemsValidationBase, ChildrenValidationBase, ItemsEvaluationBase or ChildrenEvaluationBase, got: {type(cleaner)} / {cleaner}") 
@@ -902,7 +903,7 @@ class SubEntitySingle(SubEntityBase):
     cleaners        : Optional[List[Union[SingleValidation, ChildrenValidationBase, ChildrenEvaluationBase]]] = field(repr=False, default_factory=list)
 
     def __post_init__(self):
-        self._check_cleaners((SingleValidation, ChildrenValidationBase, ChildrenEvaluationBase))
+        self._check_cleaners([SingleValidation, ChildrenValidationBase, ChildrenEvaluationBase])
         # for cleaner in self.cleaners:
         #     if not isinstance(cleaner, (SingleValidation, ChildrenValidationBase, ChildrenEvaluationBase)):
         #         raise EntitySetupTypeError(owner=self, msg=f"Cleaners should be instances of SingleValidation, ChildrenValidationBase or ChildrenEvaluationBase, got: {type(cleaner)} / {cleaner}") 

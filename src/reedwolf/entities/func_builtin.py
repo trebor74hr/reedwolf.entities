@@ -17,9 +17,10 @@ from .exceptions import (
 )
 from .functions import (
     create_builtin_function_factory,
+    create_builtin_items_function_factory,
     BuiltinFunctionFactory,
     CustomFunctionFactory,
-    FunctionArgumentsType,
+    FunctionArgumentsType, CustomItemsFunctionFactory,
 )
 from .meta import (
     ItemType,
@@ -61,6 +62,7 @@ def EnumMembers(
         enum: Enum, 
         name: Optional[str] = None,
         ) -> CustomFunctionFactory:
+    # TODO: consider to create/return CustomItemsFunctionFactory
     """
     used for EnumField(choices=...) - instead of obsolete data=[StaticData] and DataNs.
     it is not BuiltinFunctionFactory since it is added to functions= argument.
@@ -109,15 +111,6 @@ SingleBoolSelected = create_builtin_function_factory(  # noqa: E305
             )
 
 
-def count(value_list: List[ItemType]) -> int:
-    """ for objects from datastores - e.g. rows, iterables """
-    return len(value_list)
-
-Count = create_builtin_function_factory(  # noqa: E305
-            count, name="Count", 
-            # arg_validators={"value_list": ensure_is_list},
-            )
-
 
 def length(value_sized: Sized) -> int:
     """ TODO: for string and other similar """
@@ -125,7 +118,7 @@ def length(value_sized: Sized) -> int:
 
 Length = create_builtin_function_factory( # noqa: E305
             length, name="Length", 
-            # arg_validators={"value_list": ensure_has_len},
+            # arg_validators={"item_list": ensure_has_len},
             )
 
 def upper(str_value: str) -> str:
@@ -152,109 +145,125 @@ Startswith = create_builtin_function_factory(startswith, name="Startswith") # no
 #       functionality).  Could be generated and eval("...").
 # ------------------------------------------------------------
 
-def sum_(value_list: Sequence[ItemType], field_name: FuncArgAttrnameTypeHint(NumberType)) -> NumberType:
+def count(item_list: List[ItemType]) -> int:
+    """ for objects from datastores - e.g. rows, iterables """
+    return len(item_list)
+
+Count = create_builtin_items_function_factory(  # noqa: E305
+            items_value_arg_name="item_list",
+            py_function=count, name="Count",
+            # arg_validators={"item_list": ensure_is_list},
+        )
+
+
+def sum_(item_list: Sequence[ItemType], field_name: FuncArgAttrnameTypeHint(NumberType)) -> NumberType:
     """
     NOTE: underlying type must be matched dynamically
     """
     # if not field_name:
-    #     return sum(value_list)
+    #     return sum(item_list)
     # else:
-    return sum([getattr(item, field_name, 0) for item in value_list])
+    return sum([getattr(item, field_name, 0) for item in item_list])
 
-Sum = create_builtin_function_factory(
-            sum_, name="Sum",
-            value_arg_name="value_list",
-            # arg_validators={"value_list": [ ensure_is_list, ensure_is_number ]},
-            )
+Sum = create_builtin_items_function_factory(
+            items_value_arg_name="item_list",
+            py_function=sum_, name="Sum",
+            # arg_validators={"item_list": [ ensure_is_list, ensure_is_number ]},
+        )
 
 
-# def map_(value_list: Sequence[ItemType], callable_or_fieldname : Union[Callable[[Any], Any], str]) -> Sequence[ItemType]:
+# def map_(item_list: Sequence[ItemType], callable_or_fieldname : Union[Callable[[Any], Any], str]) -> Sequence[ItemType]:
 def map_(item_list: Sequence[ItemType], dot_expr: FuncArgDotexprTypeHint(inner_type=Any)) -> Sequence[ItemType]:
     for item in item_list:
         yield dot_expr._evaluator.evaluate(item.value)
     raise NotImplementedError()
     # " returns iterator "
     # if isinstance(callable_or_fieldname, str):
-    #     return (getattr(item, callable_or_fieldname, None) for item in value_list)
+    #     return (getattr(item, callable_or_fieldname, None) for item in item_list)
     # elif callable(callable_or_fieldname):
-    #     return (callable_or_fieldname(item) for item in value_list)
+    #     return (callable_or_fieldname(item) for item in item_list)
     # raise TypeError(f"Argument expected to be callable or string (fieldname), got: {callable_or_fieldname} -> {type(callable_or_fieldname)}")
 
-Map = create_builtin_function_factory(
-            map_, name="Map",
-            # arg_validators={"value_list": ensure_is_list},
-            )
+Map = create_builtin_items_function_factory(
+            items_value_arg_name="item_list",
+            py_function=map_, name="Map",
+            # arg_validators={"item_list": ensure_is_list},
+        )
 
 
-# def filter_(value_list: Sequence[ItemType], bool_dot_expr: FuncArgDotExprBoolType) -> Sequence[ItemType]:
-def filter_(value_list: Sequence[ItemType], bool_dot_expr: FuncArgDotexprTypeHint(inner_type=bool)) -> Sequence[ItemType]:
+# def filter_(item_list: Sequence[ItemType], bool_dot_expr: FuncArgDotExprBoolType) -> Sequence[ItemType]:
+def filter_(item_list: Sequence[ItemType], bool_dot_expr: FuncArgDotexprTypeHint(inner_type=bool)) -> Sequence[ItemType]:
     """ is generatror """
     if not isinstance(bool_dot_expr, DynamicAttrsBase):
         raise TypeError(f"Argument expected to be FuncArgDotExprBoolType - DotExpression, got: {bool_dot_expr} -> {type(bool_dot_expr)}")
     raise NotImplementedError("iterate and evaluate bool_dot_expr for every: {bool_dot_expr}")
 
-    # for item in value_list:
+    # for item in item_list:
     #     # TODO: with apply_stack.item:
     #     yield bool_dot_expr._evaluator.evaluate(apply_result).value
     # # ALT: return iterator:
-    # #   result = (item for item in value_list if bool_dot_expr....(item))
+    # #   result = (item for item in item_list if bool_dot_expr....(item))
     # return
 
 
 # OLD:
-# def filter_(value_list: Sequence[ItemType], callable_or_fieldname : Optional[Union[Callable[[Any], Any], str]]) -> Sequence[ItemType]:
+# def filter_(item_list: Sequence[ItemType], callable_or_fieldname : Optional[Union[Callable[[Any], Any], str]]) -> Sequence[ItemType]:
 #     " returns iterator "
 #     if not callable_or_fieldname:
-#         return (item for item in value_list if item)
+#         return (item for item in item_list if item)
 #     elif isinstance(callable_or_fieldname, str):
-#         return (item for item in value_list if getattr(item, callable_or_fieldname, None))
+#         return (item for item in item_list if getattr(item, callable_or_fieldname, None))
 #     elif callable(callable_or_fieldname):
-#         return (item for item in value_list if callable_or_fieldname(item))
+#         return (item for item in item_list if callable_or_fieldname(item))
 #     raise TypeError(f"Argument expected to be callable or string (fieldname), got: {callable_or_fieldname} -> {type(callable_or_fieldname)}")
 
-Filter = create_builtin_function_factory(
-            filter_, name="Filter",
-            # arg_validators={"value_list": ensure_is_list},
-            )
+Filter = create_builtin_items_function_factory(
+            items_value_arg_name="item_list",
+            py_function=filter_,
+            name="Filter",
+            # arg_validators={"item_list": ensure_is_list},
+        )
 
 # ------------------------------------------------------------
 
-# def max_(value_list: Sequence[ItemType], callable_or_fieldname : Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
+# def max_(item_list: Sequence[ItemType], callable_or_fieldname : Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
 def max_(item_list: Sequence[ItemType], dot_expr: FuncArgDotexprTypeHint(inner_type=Any)) -> Optional[Any]:
     for item in item_list:
         yield dot_expr._evaluator.evaluate(item.value)
     raise NotImplementedError
     # if not callable_or_fieldname:
-    #     return max([item for item in value_list])
+    #     return max([item for item in item_list])
     # elif isinstance(callable_or_fieldname, str):
-    #     return max([getattr(item, callable_or_fieldname, None) for item in value_list])
+    #     return max([getattr(item, callable_or_fieldname, None) for item in item_list])
     # elif callable(callable_or_fieldname):
-    #     return max([callable_or_fieldname(item) for item in value_list])
+    #     return max([callable_or_fieldname(item) for item in item_list])
     # raise TypeError(f"Argument expected to be callable or string (fieldname), got: {callable_or_fieldname} -> {type(callable_or_fieldname)}")
 
 
-Max = create_builtin_function_factory(
-            max_, name="Max",
+Max = create_builtin_items_function_factory(
+            items_value_arg_name="item_list",
+            py_function=max_, name="Max",
             # arg_validators=[ensure_is_list],
-            )
+        )
 
 # ------------------------------------------------------------
 
-# def min_(value_list: Sequence[ItemType], callable_or_fieldname : Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
+# def min_(item_list: Sequence[ItemType], callable_or_fieldname : Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
 def min_(item_list: Sequence[ItemType], dot_expr: FuncArgDotexprTypeHint(inner_type=Any)) -> Optional[Any]:
     raise NotImplementedError()
     # if not callable_or_fieldname:
-    #     return min([item for item in value_list])
+    #     return min([item for item in item_list])
     # elif isinstance(callable_or_fieldname, str):
-    #     return min([getattr(item, callable_or_fieldname, None) for item in value_list])
+    #     return min([getattr(item, callable_or_fieldname, None) for item in item_list])
     # elif callable(callable_or_fieldname):
-    #     return min([callable_or_fieldname(item) for item in value_list])
+    #     return min([callable_or_fieldname(item) for item in item_list])
     # raise TypeError(f"Argument expected to be callable or string (fieldname), got: {callable_or_fieldname} -> {type(callable_or_fieldname)}")
 
-Min = create_builtin_function_factory(
-            min_, name="Min",
+Min = create_builtin_items_function_factory(
+            items_value_arg_name="item_list",
+            py_function=min_, name="Min",
             # arg_validators=[ensure_is_list],
-            )
+        )
 
 # def _process_item(item: ItemType, callable_or_fieldname : Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
 #     if not callable_or_fieldname:
@@ -265,29 +274,31 @@ Min = create_builtin_function_factory(
 #         return callable_or_fieldname(item)
 #     raise TypeError(f"Argument expected to be callable or string (fieldname), got: {callable_or_fieldname} -> {type(callable_or_fieldname)}")
 
-# def first(value_list: Sequence[ItemType], callable_or_fieldname : Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
+# def first(item_list: Sequence[ItemType], callable_or_fieldname : Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
 def first(item_list: Sequence[ItemType], dot_expr: FuncArgDotexprTypeHint(inner_type=Any)) -> Optional[Any]:
     raise NotImplementedError()
-    # if not value_list:
+    # if not item_list:
     #     return UNDEFINED
-    # return _process_item(value_list[0])
+    # return _process_item(item_list[0])
 
-First = create_builtin_function_factory(
-            first, name="First",
+First = create_builtin_items_function_factory(
+            items_value_arg_name="item_list",
+            py_function=first, name="First",
             # arg_validators=[ensure_is_list],
-            )
+        )
 
-# def last(value_list: Sequence[ItemType], callable_or_fieldname : Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
+# def last(item_list: Sequence[ItemType], callable_or_fieldname : Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
 def last(item_list: Sequence[ItemType], dot_expr: FuncArgDotexprTypeHint(inner_type=Any)) -> Optional[Any]:
     raise NotImplementedError()
-    # if not value_list:
+    # if not item_list:
     #     return UNDEFINED
-    # return _process_item(value_list[-1])
+    # return _process_item(item_list[-1])
 
-Last = create_builtin_function_factory(
-            last, name="Last",
+Last = create_builtin_items_function_factory(
+            items_value_arg_name="item_list",
+            py_function=last, name="Last",
             # arg_validators=[ensure_is_list],
-            )
+        )
 
 
 

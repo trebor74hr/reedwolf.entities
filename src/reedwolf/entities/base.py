@@ -358,6 +358,10 @@ class ChildField:
 
 
 class IComponentFields:
+    """
+    Used only for dynamically created dataclass classes that holds only fields from owner component's.
+    See make_component_fields_dataclass()
+    """
     ...
 
 
@@ -2134,7 +2138,8 @@ def extract_type_info(
         raise EntitySetupNameNotFoundError(msg=f"Type object {parent_object} has no attribute '{attr_node_name}'. {valid_names}")
 
     if not isinstance(type_info, TypeInfo):
-        raise EntityInternalError(msg=f"{type_info} is not TypeInfo") 
+        raise EntityInternalError(msg=f"{type_info} is not TypeInfo")
+
     return type_info, th_field # , func_node
 
 
