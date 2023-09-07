@@ -160,10 +160,16 @@ class ModelsRegistry(RegistryBase):
             self.register_attr_node(attr_node, alt_attr_node_name=alt_attr_node_name)
 
         # register
+        type_info = bound_model.get_type_info()
+        type_info_from_model = TypeInfo.get_or_create_by_type(model)
+        if not type_info_from_model.type_ == type_info.type_:
+            raise EntityInternalError(owner=self, msg=f"Model type info inner type <> bound_model's : {type_info} <> {type_info_from_model}")
+
         self._register_special_attr_node(
-                        model_class=model,
+                        type_info = type_info,
                         attr_name = ReservedAttributeNames.INSTANCE_ATTR_NAME.value,
                         attr_name_prefix = None if is_root else f"{name_for_reg}__",
+                        # model_class=model,
                         )
 
     # ------------------------------------------------------------
@@ -484,15 +490,16 @@ class ThisRegistry(IThisRegistry, RegistryBase):
             # This.Value == ReservedAttributeNames.VALUE_ATTR_NAME
             type_info = self.attr_node.get_type_info()
             self._register_special_attr_node(
-                model_class=type_info.type_,
+                type_info=type_info,
                 attr_name=ReservedAttributeNames.VALUE_ATTR_NAME.value,
+                # model_class=type_info.type_,
                 )
 
         if self.model_class:
             if not self.is_items_for_each_mode and self.is_items_mode:
                 # This.Items
                 self._register_special_attr_node(
-                    model_class=self.model_class_type_info.type_,
+                    type_info=self.model_class_type_info,  # already a List
                     attr_name=ReservedAttributeNames.ITEMS_ATTR_NAME.value,
                 )
             else:
@@ -501,18 +508,24 @@ class ThisRegistry(IThisRegistry, RegistryBase):
                 self._register_model_nodes(model_class=self.model_class_type_info.type_)
                 # This.Instance
                 self._register_special_attr_node(
-                    model_class=self.model_class_type_info.type_,
+                    type_info=self.model_class_type_info,
                     attr_name=ReservedAttributeNames.INSTANCE_ATTR_NAME,
-                    attr_name_prefix=None)
+                    attr_name_prefix=None,
+                    # model_class=self.model_class_type_info.type_,
+                )
 
         if self.component:
             if not self.is_items_for_each_mode and self.is_items_mode:
                 # This.Items : List[component_fields_dataclass]
                 component_fields_dataclass, _ = self.component.get_component_fields_dataclass(
                                                     setup_session=setup_session)
+                py_type_hint = List[component_fields_dataclass]
+                type_info = TypeInfo.get_or_create_by_type(py_type_hint)
                 self._register_special_attr_node(
-                    model_class=component_fields_dataclass,
-                    attr_name=ReservedAttributeNames.ITEMS_ATTR_NAME.value)
+                    type_info=type_info,
+                    attr_name=ReservedAttributeNames.ITEMS_ATTR_NAME.value,
+                    # model_class=component_fields_dataclass,
+                )
             else:
                 # NOTE: Includes self.is_items_for_each_mode too
                 # This.<all-attribute> + This.Children: List[ChildField]

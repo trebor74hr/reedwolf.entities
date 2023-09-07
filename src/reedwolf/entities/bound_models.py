@@ -329,7 +329,7 @@ class BoundModelWithHandlers(NestedBoundModelBase):
         self._finished = True
 
 
-    def get_type_info(self):
+    def get_type_info(self) -> TypeInfo:
         assert self.type_info
         return self.type_info
 
@@ -379,7 +379,7 @@ class BoundModel(NestedBoundModelBase):
                     msg=f"For 'model' argument expected model class or DotExpression, got: {self.model}")
 
 
-    def get_type_info(self):
+    def get_type_info(self) -> TypeInfo:
         if not self.type_info:
             self._set_type_info()
         return self.type_info

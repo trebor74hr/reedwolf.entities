@@ -228,7 +228,6 @@ class IFunction(IFunctionDexpNode):
             component = self.setup_session.current_frame.component
             # if self.is_for_items():
             #   assert is first and component.is_subentity_items():
-            #     print("here-3")
             #   ...
             # else:
             #   ...

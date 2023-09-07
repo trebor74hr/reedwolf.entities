@@ -175,7 +175,15 @@ class IRegistry:
 
 # ------------------------------------------------------------
 
+@dataclass
 class ISetupSession(ABC):
+
+    # TODO: typing.Protocol
+    current_frame: Optional["ApplyStackFrame"] = field(repr=False, init=False, default=None)
+
+    @abstractmethod
+    def use_stack_frame(self, frame: "IStackFrame") -> "UseStackFrameCtxManagerBase":
+        ...
 
     # @abstractmethod
     # def create_local_setup_session(self, this_registry: IThisRegistry) -> Self:

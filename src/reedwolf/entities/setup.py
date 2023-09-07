@@ -213,9 +213,12 @@ class RegistryBase(IRegistry):
             self.register_attr_node(attr_node)
 
         owner_model_class = List[ChildField]
+        type_info = TypeInfo.get_or_create_by_type(owner_model_class)
+
         # owner_model_class = List[component_fields_dataclass]
         children_atr_node = self._register_special_attr_node(
-                        model_class = owner_model_class,
+                        # model_class = owner_model_class,
+                        type_info=type_info,
                         attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME.value,
                         attr_name_prefix = attr_name_prefix,
                         # TODO: missusing
@@ -226,7 +229,8 @@ class RegistryBase(IRegistry):
     # --------------------
 
     def _register_special_attr_node(self,
-                                    model_class: ModelType,
+                                    # model_class: ModelType,
+                                    type_info: TypeInfo,
                                     attr_name = ReservedAttributeNames,
                                     attr_name_prefix: Optional[str]=None,
                                     th_field: Optional[Any] = None,
@@ -234,10 +238,13 @@ class RegistryBase(IRegistry):
         # NOTE: removed restriction - was too strict
         # if not (is_model_class(model_class) or model_class in STANDARD_TYPE_LIST or is_enum(model_class)):
         #     raise EntitySetupValueError(owner=self, msg=f"Expected model class (DC/PYD), got: {type(model_class)} / {model_class} ")
+
         if th_field and not (isclass(th_field) and issubclass(th_field, IComponentFields)):
             raise EntitySetupValueError(owner=self, msg=f"Expected th_field is IComponentFields, got: {type(th_field)} / {th_field} ")
 
-        type_info = TypeInfo.get_or_create_by_type(py_type_hint=model_class)
+        # type_info = TypeInfo.get_or_create_by_type(py_type_hint=model_class)
+        # model_class: ModelType = type_info.type_
+
         if attr_name_prefix:
             attr_name = f"{attr_name_prefix}{attr_name}"
 

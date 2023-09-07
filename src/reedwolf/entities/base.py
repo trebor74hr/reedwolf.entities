@@ -1000,7 +1000,7 @@ class ComponentBase(SetParentMixin, ABC):
 
         # TODO: this really needs some explanation - looks like hack
         component_fields_dataclass = make_component_fields_dataclass(
-                                class_name=f"{class_name_camel}Fields",
+                                class_name=f"{class_name_camel}__Fields",
                                 child_field_list=child_field_list,
                                 )
         self._component_fields_dataclass = component_fields_dataclass
@@ -1387,6 +1387,10 @@ class IContainerBase(ABC):
 
 @dataclass
 class BoundModelBase(ComponentBase, ABC):
+
+    @abstractmethod
+    def get_type_info(self) -> TypeInfo:
+        ...
 
     @staticmethod
     def is_bound_model() -> bool:
