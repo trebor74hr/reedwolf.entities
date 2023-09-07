@@ -198,10 +198,6 @@ class IFunction(IFunctionDexpNode):
         if not self.function_arguments:
             self.function_arguments = create_function_arguments(self.py_function)
 
-        # This. namespace make available to all prepared arguments DotExpression
-        #       and all nested/inner expressions too.
-        this_registry = self.create_this_registry()
-
         prep_args_kwargs = dict(
             setup_session = self.setup_session,
             caller = self.caller,
@@ -212,12 +208,26 @@ class IFunction(IFunctionDexpNode):
             value_arg_name = self.value_arg_name)
 
         if self.setup_session.current_frame:
+            # NOTE: to create_this_registry should not be required if  there is no DotExpression in argument
+            #       directly or indirectly. too much effort for no big benefit.
+            component = self.setup_session.current_frame.component
+            # if self.is_for_items():
+            #   assert is first and component.is_subentity_items():
+            #     print("here-3")
+            #   ...
+            # else:
+            #   ...
+            #
+            # This. namespace make available to all prepared arguments DotExpression
+            #       and all nested/inner expressions too.
+            this_registry = self.create_this_registry()
+
             with self.setup_session.use_stack_frame(
                     SetupStackFrame(
                         container = self.setup_session.current_frame.container,
-                        component = self.setup_session.current_frame.component,
+                        component = component,
                         this_registry=this_registry,
-              )):
+              )) as frame:
                 self.prepared_args = self.function_arguments.parse_func_args( **prep_args_kwargs)
         else:
             # container is None only in direct functino creation - then This NS is not available.
@@ -233,6 +243,9 @@ class IFunction(IFunctionDexpNode):
         # self.setup_session.register_dexp_node(self)
 
     def create_this_registry(self) -> Optional[IThisRegistry]:
+        # TODO: resolve this circular dependency
+        from .registries import ThisRegistry
+
         # TODO: maybe DRY is needed - similar logic found in base:: get_or_create_this_registry
         if self.this_registry is not UNDEFINED:
             raise EntityInternalError(owner=self, msg=f"this_registry already set: {self.this_registry}")
@@ -290,19 +303,30 @@ class IFunction(IFunctionDexpNode):
             this_registry = None
         elif is_model_class(model_class):
             # pydantic / dataclasses
-            this_registry = self.setup_session.container.create_this_registry_for_model_class(
+            this_registry = ThisRegistry.create_for_model_class(
                 setup_session=self.setup_session,
-                model_class=model_class,
-            )
+                model_class=model_class)
+
+            # this_registry = self.setup_session.container.create_this_registry_for_model_class(
+            #     setup_session=self.setup_session,
+            #     model_class=model_class,
+            #     # TODO: typ_info=type_info OR is_items = type_info.is_list,
+            # )
         elif model_class in STANDARD_TYPE_LIST:
             this_registry = None
         elif type_info and type_info.is_list:
+            # TODO: mislim da ovdje nikad ni ne dolazi
+            raise NotImplementedError()
             # TODO: create This.Items and similar ...
+            print("HERE-44")
             model_class = type_info.type_
-            this_registry = self.setup_session.container.create_this_registry_for_model_class(
+            this_registry = ThisRegistry.create_for_model_class(
                 setup_session=self.setup_session,
-                model_class=model_class,
-            )
+                model_class=model_class)
+            # this_registry = self.setup_session.container.create_this_registry_for_model_class(
+            #     setup_session=self.setup_session,
+            #     model_class=model_class,
+            # )
         else:
             raise EntitySetupValueError(owner=self, msg=f"Unsupported type: {self.caller} / {model_class}")
 

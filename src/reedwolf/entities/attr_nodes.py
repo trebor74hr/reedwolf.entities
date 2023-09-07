@@ -305,7 +305,9 @@ class AttrDexpNode(IDotExpressionNode):
         else:
             value_new = value_previous
 
-        # self.check_root_value_type_info(...)
+        # TODO: currently this is not done, too many issues, needs further investigation
+        # if root_value:
+        #   self.check_root_value_type_info(root_value, value_new OR root_value.value_new)
 
         # TODO: check type_info match too - and put in all types of nodes - functions/operators
         if apply_result.component_name_only and apply_result.instance_new == value_new:

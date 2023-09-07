@@ -876,16 +876,26 @@ def make_dataclass_with_optional_fields(dc_model: DataclassType) -> DataclassTyp
 def dataclass_from_dict(dataclass_klass: Type, values_dict: Dict[str, Any]) -> DataclassType:
     """ inspired by: https://stackoverflow.com/a/54769644/565525 """
     if not is_dataclass(dataclass_klass):
-        raise TypeError(f"Expecting dataclass klass, got: {dataclass_klass}")
+        raise TypeError(f"Expecting dataclass as inner klass, got: {dataclass_klass}")
     if not isinstance(values_dict, dict):
         raise TypeError(f"Expecting dict of values, got: {values_dict}")
 
-    fieldtypes: Dict[str, Type] = {fld.name: fld.type for fld in dc_fields(dataclass_klass)}
+    dc_field_dict: Dict[str, DcField] = {fld.name: fld for fld in dc_fields(dataclass_klass)}
     kwargs = {}
     for fld_name, value in values_dict.items():
-        fld_type = fieldtypes[fld_name]
-        if is_dataclass(fld_type) and value is not None:
-            value = dataclass_from_dict(dataclass_klass=fld_type, values_dict=value)
+        dc_field = dc_field_dict.get(fld_name, None)
+        if not (dc_field and dc_field.init == True):
+            continue
+        type_info = TypeInfo.get_or_create_by_type(dc_field.type)
+        if is_dataclass(type_info.type_) and value is not None:
+            # ALT: type_info.is_list
+            if isinstance(value, (list, tuple)):
+                value = [
+                    dataclass_from_dict(dataclass_klass=type_info.type_, values_dict=item)
+                    for item in value
+                ]
+            else:
+                value = dataclass_from_dict(dataclass_klass=type_info.type_, values_dict=value)
         kwargs[fld_name] = value
     return dataclass_klass(**kwargs)
 

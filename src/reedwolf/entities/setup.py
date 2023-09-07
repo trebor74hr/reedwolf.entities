@@ -34,7 +34,6 @@ from .expressions import (
     IDotExpressionNode,
     IFunctionDexpNode,
     IRegistry,
-    IThisRegistry,
     ISetupSession,
     IAttributeAccessorBase, RegistryRootValue,
 )

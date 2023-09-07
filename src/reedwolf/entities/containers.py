@@ -83,7 +83,6 @@ from .registries import (
         OperationsRegistry,
         ContextRegistry,
         ConfigRegistry,
-        ThisRegistry,
         )
 from .valid_children import (
         ChildrenValidationBase,
@@ -446,26 +445,27 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         return key_pairs
 
 
-    @staticmethod
-    def create_this_registry_for_model_class(
-            setup_session: ISetupSession,
-            model_class: ModelType,
-            ) -> IThisRegistry:
-        # NOTE: must be here since:
-        #   - expressions.py don't see ThisRegistry
-        #   - setup.py does not see registries
-        #   - registries - needed by setup.py which can not see registries
-        """ 
-        - ThisRegistry is unavailable to low-level modules -
-          e.g. func_args -> setup.
-        - .Instance + <attr-names> is used only in manual setup cases, 
-          e.g. ChoiceField()
-        """
-        this_registry = ThisRegistry(model_class=model_class)
-        this_registry.setup(setup_session=setup_session)
-        this_registry.finish()
+    # @staticmethod
+    # def create_this_registry_for_model_class(
+    #         setup_session: ISetupSession,
+    #         model_class: ModelType,
+    #         ) -> IThisRegistry:
+    #     # NOTE: must be here since:
+    #     #   - expressions.py don't see ThisRegistry
+    #     #   - setup.py does not see registries
+    #     #   - registries - needed by setup.py which can not see registries
+    #     # TODO: try to resolve this and put
+    #     """
+    #     - ThisRegistry is unavailable to low-level modules -
+    #       e.g. func_args -> setup.
+    #     - .Instance + <attr-names> is used only in manual setup cases,
+    #       e.g. ChoiceField()
+    #     """
+    #     this_registry = ThisRegistry(model_class=model_class)
+    #     this_registry.setup(setup_session=setup_session)
+    #     this_registry.finish()
 
-        return this_registry
+    #     return this_registry
 
 # ------------------------------------------------------------
 

@@ -1366,16 +1366,16 @@ class IContainerBase(ABC):
         """ pretty print - prints to stdout all components """
         ...
 
-    @staticmethod
-    @abstractmethod
-    def create_this_registry_for_model_class(
-            setup_session: ISetupSession,
-            model_class: ModelType,
-    ) -> IThisRegistry:
-        """
-        This is @staticmethod
-        """
-        ...
+    # @staticmethod
+    # @abstractmethod
+    # def create_this_registry_for_model_class(
+    #         setup_session: ISetupSession,
+    #         model_class: ModelType,
+    # ) -> IThisRegistry:
+    #     """
+    #     This is @staticmethod
+    #     """
+    #     ...
 
 # ------------------------------------------------------------
 # BoundModelBase
