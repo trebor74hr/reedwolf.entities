@@ -1,6 +1,9 @@
 Packaging and deploy info in
 https://github.com/trebor74hr/sqlalchemy-capture-sql/blob/main/deploy.txt
 
+TOOD: consider: 
+    https://robamu.github.io/posts/packaging-python-in-2023/
+
 like this::
 
     # 1. build
