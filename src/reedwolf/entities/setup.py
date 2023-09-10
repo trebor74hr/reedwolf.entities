@@ -36,7 +36,8 @@ from .expressions import (
     IFunctionDexpNode,
     IRegistry,
     ISetupSession,
-    IAttributeAccessorBase, RegistryRootValue,
+    IAttributeAccessorBase,
+    RegistryRootValue,
 )
 from .meta import (
     Self,
@@ -47,6 +48,7 @@ from .meta import (
     TypeInfo,
     HookOnFinishedAllCallable,
     get_model_fields, STANDARD_TYPE_LIST,
+    AttrName,
 )
 from .base import (
     IComponentFields,
@@ -123,7 +125,7 @@ class RegistryBase(IRegistry):
     NAMESPACE : ClassVar[Namespace] = None
     ROOT_VALUE_NEEDS_FETCH_BY_NAME: ClassVar[bool] = True
 
-    def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: str) -> RegistryRootValue:
+    def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName, caller: Optional[str] = None) -> RegistryRootValue: # noqa: F821
         # TODO: same method declared in IRegistry
         """ 
         Apply phase - Namespace.<attr_name> - 
@@ -137,7 +139,8 @@ class RegistryBase(IRegistry):
         if attr_name not in self.store:
             # NOTE: Should not hhappen if DotExpression.setup() has done its job properly
             names_avail = get_available_names_example(attr_name, list(self.store.keys()))
-            raise EntityApplyNameError(owner=self, msg=f"Unknown attribute: {attr_name} available={names_avail}")
+            raise EntityApplyNameError(owner=self, msg=f"Unknown attribute '{attr_name}, available attribute(s): {names_avail}."
+                                                       + (f" Caller: {caller}" if caller else ""))
 
         attr_dexp_node: AttrDexpNode = self.store[attr_name]
         root_value: RegistryRootValue = self._apply_to_get_root_value(apply_result=apply_result,
@@ -502,7 +505,7 @@ class RegistryBase(IRegistry):
 
 class RegistryUseDenied(RegistryBase):
 
-    def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: str) -> Any:
+    def apply_to_get_root_value(self, apply_result: "IApplyResult", attr_name: AttrName, caller: Optional[str] = None) -> RegistryRootValue: # noqa: F821
         raise EntityInternalError(owner=self, msg="Registry should not be used to get root value.")
 
 
@@ -542,15 +545,8 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
 
 class UseSetupStackFrameCtxManager(UseStackFrameCtxManagerBase):
     " with() ... custom context manager. "
-
-    def copy_from_previous_frame(self):
-        if not self.owner_session.stack_frames:
-            return
-
-        previous_frame = self.owner_session.stack_frames[0]
-
-        self._copy_attr_from_previous_frame(previous_frame, "this_registry",
-                                            if_set_must_be_same=False)
+    owner_session: "SetupSessionBase"
+    frame: SetupStackFrame
 
 
 # ------------------------------------------------------------

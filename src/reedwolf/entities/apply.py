@@ -91,48 +91,8 @@ from .containers import (
 
 class UseApplyStackFrameCtxManager(UseStackFrameCtxManagerBase):
     " with() ... custom context manager. "
-
-    def copy_from_previous_frame(self):
-        """
-        if the instance is the same - consider from last frame 
-        container (copy/check), index0 (copy/check), component ...
-        """
-        if not self.owner_session.stack_frames:
-            return
-
-        previous_frame = self.owner_session.stack_frames[0]
-
-        self._copy_attr_from_previous_frame(previous_frame, "in_component_only_tree", 
-                                            if_set_must_be_same=False)
-        self._copy_attr_from_previous_frame(previous_frame, "depth", 
-                                            if_set_must_be_same=False)
-        self._copy_attr_from_previous_frame(previous_frame, "parent_values_subtree", 
-                                            if_set_must_be_same=False)
-
-        # do not use ==, compare by instance (ALT: use id(instance) ) 
-        if self.frame.instance is previous_frame.instance:
-            self._copy_attr_from_previous_frame(previous_frame, "container", may_be_copied=False)
-            self._copy_attr_from_previous_frame(previous_frame, "bound_model_root", may_be_copied=False)
-            self._copy_attr_from_previous_frame(previous_frame, "instance_new")
-            self._copy_attr_from_previous_frame(previous_frame, "index0")
-
-            # only these can be copied
-            self._copy_attr_from_previous_frame(previous_frame, "parent_instance")
-            self._copy_attr_from_previous_frame(previous_frame, "parent_instance_new")
-
-            # do not use ==, compare by instance (ALT: use id(instance) ) 
-            if self.frame.component is previous_frame.component:
-                self._copy_attr_from_previous_frame(previous_frame, "on_component_only", may_be_copied=False)
-                self._copy_attr_from_previous_frame(previous_frame, "key_string", may_be_copied=False)
-
-                # NOTE: not this for now:
-                self._copy_attr_from_previous_frame(previous_frame, "this_registry",
-                                                    # for Apply -> ChildrenValidation setup can be different
-                                                    if_set_must_be_same=False)
-
-            # check / init again 
-            self.frame.clean()
-
+    owner_session: "ApplyResult"
+    frame: ApplyStackFrame
 
 
 # ============================================================

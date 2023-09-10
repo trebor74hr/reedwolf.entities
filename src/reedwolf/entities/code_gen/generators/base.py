@@ -392,6 +392,12 @@ class CodegenStackFrame(IStackFrame):
         if self.owner_comp_dump:
             self.owner_class_name_path.append(self.owner_comp_dump.class_declaration.name)
 
+    def clean(self):
+        pass
+
+    def post_clean(self):
+        pass
+
     def set_new_file_dump(self, file_dump: FileDumpBase): 
         if self.file_dump.filename == file_dump.filename:
             raise EntityInternalError(owner=self, msg=f"Expected diff self.file_dump.filename == file_dump.filename, got: {file_dump}") 
@@ -400,9 +406,17 @@ class CodegenStackFrame(IStackFrame):
 
 # ------------------------------------------------------------
 
+class UseCodegenStackFrameCtxManager(UseStackFrameCtxManagerBase):
+    # TODO: put proper class
+    # owner_session: "IStackOwnerSession"
+    # frame: IStackFrame
+    ...
 
 @dataclass
 class DumpToBase(IStackOwnerSession):
+
+    STACK_FRAME_CLASS: ClassVar[type] = CodegenStackFrame
+    STACK_FRAME_CTX_MANAGER_CLASS: ClassVar[type] = UseCodegenStackFrameCtxManager
 
     # file_split_to_depth:
     #     1 - (default) no split at all, single file is produced
@@ -434,8 +448,6 @@ class DumpToBase(IStackOwnerSession):
     current_frame: Optional[CodegenStackFrame] = field(repr=False, init=False, default=None)
     finished: bool = field(repr=False, init=False, default = False)
 
-    STACK_FRAME_CLASS: ClassVar[type] = CodegenStackFrame
-    STACK_FRAME_CTX_MANAGER_CLASS: ClassVar[type] = UseStackFrameCtxManagerBase
 
     # needs to be set in inherited class
     KlassClassDeclaration    : ClassVar[type] = None

@@ -70,7 +70,7 @@ from .base import (
     ReservedArgumentNames,
     IFieldBase,
     IApplyResult,
-    ComponentBase, SetupStackFrame,
+    ComponentBase, SetupStackFrame, ApplyStackFrame,
 )
 
 
@@ -222,26 +222,18 @@ class IFunction(IFunctionDexpNode):
             value_arg_type_info = self.value_arg_type_info,
             value_arg_name = self.value_arg_name)
 
+        # NOTE: Stack and creation of this_registry should not be required
+        #       if there is no DotExpression in argument directly or indirectly.
+        #       Won't do this now, too much effort for no big benefit.
         if self.setup_session.current_frame:
-            # NOTE: to create_this_registry should not be required if  there is no DotExpression in argument
-            #       directly or indirectly. too much effort for no big benefit.
-            component = self.setup_session.current_frame.component
-            # if self.is_for_items():
-            #   assert is first and component.is_subentity_items():
-            #   ...
-            # else:
-            #   ...
-            #
-            # This. namespace make available to all prepared arguments DotExpression
+            # Make available This. namespace to all prepared arguments DotExpression
             #       and all nested/inner expressions too.
-            this_registry = self.create_this_registry()
-
             with self.setup_session.use_stack_frame(
                     SetupStackFrame(
                         container = self.setup_session.current_frame.container,
-                        component = component,
-                        this_registry=this_registry,
-              )) as frame:
+                        component = self.setup_session.current_frame.component,
+                        this_registry = self.setup_this_registry(),
+              )):
                 self.prepared_args = self.function_arguments.parse_func_args( **prep_args_kwargs)
         else:
             # container is None only in direct functino creation - then This NS is not available.
@@ -256,7 +248,7 @@ class IFunction(IFunctionDexpNode):
 
         # self.setup_session.register_dexp_node(self)
 
-    def create_this_registry(self) -> Optional[IThisRegistry]:
+    def setup_this_registry(self) -> Optional[IThisRegistry]:
         # TODO: resolve this circular dependency
         from .registries import ThisRegistry
 
@@ -347,7 +339,6 @@ class IFunction(IFunctionDexpNode):
             raise EntitySetupValueError(owner=self, msg=f"Unsupported type: {self.caller} / {model_class} / {type_info}")
 
         self.this_registry = this_registry
-
         return self.this_registry
 
 
@@ -428,9 +419,32 @@ class IFunction(IFunctionDexpNode):
 
         return arg_value
 
-
-    # TODO: IApplyResult is in dropthis which imports .functions just for one case ...
     def execute_node(self,
+                     apply_result: "IApplyResult",  # noqa: F821
+                     dexp_result: ExecResult,
+                     is_last:bool,
+                     prev_node_type_info: Optional[TypeInfo],
+                     ) -> Any:
+        instance = apply_result.current_frame.instance
+
+        # apply_result.current_frame.instance_is_list
+        # if self.this_registry.is_items_for_each_mode:
+
+        with apply_result.use_stack_frame(
+                ApplyStackFrame(
+                    container=apply_result.current_frame.container,
+                    component=apply_result.current_frame.component,
+                    instance = instance,
+                    this_registry=self.this_registry,
+                )):
+            result = self._execute_node(
+                      apply_result=apply_result,
+                      dexp_result=dexp_result,
+                      is_last=is_last,
+                      prev_node_type_info=prev_node_type_info)
+        return result
+
+    def _execute_node(self,
                      apply_result: "IApplyResult",  # noqa: F821
                      dexp_result: ExecResult,
                      is_last:bool,
@@ -440,6 +454,7 @@ class IFunction(IFunctionDexpNode):
         will be called when actual function logic needs to be executed. Input
         is/are function argument(s).
 
+        # TODO: IApplyResult is in dropthis which imports .functions just for one case ... Explain or remove !!!
         # TODO: check all input arguments and output type match:
         #       check first / dexp_result argument that matches self.value_arg_type_info
         #       check output type that matches output_type_info

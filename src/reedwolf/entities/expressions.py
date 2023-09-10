@@ -47,7 +47,7 @@ from .meta import (
     LiteralType,
     AttrName,
     Self,
-    ModelType, FuncArgTypeHint, AttrValue,
+    ModelType, IFuncArgHint, AttrValue,
 )
 # ------------------------------------------------------------
 # interfaces / base classes / internal structs
@@ -153,7 +153,7 @@ class IRegistry:
         ...
 
     @abstractmethod
-    def apply_to_get_root_value(self, apply_result: "IApplyResult", attr_name: AttrName) -> RegistryRootValue: # noqa: F821
+    def apply_to_get_root_value(self, apply_result: "IApplyResult", attr_name: AttrName, caller: Optional[str] = None) -> RegistryRootValue: # noqa: F821
         """
         Used in apply phase. returns instance or instance attribute value + a
         different attribute name when different attribute needs to be retrieved
@@ -1021,17 +1021,30 @@ def execute_dexp_or_node(
 
 
 @dataclass
-class FuncArgAttrnameTypeHint(FuncArgTypeHint):
+class AttrnameFuncArgHint(IFuncArgHint):
     inner_type: Optional[Type] = field(repr=True, default=Any)
     type: Type = field(init=False, default=DotExpression)
+
+    def get_type(self) -> Type:
+        return self.type
+
+    def get_inner_type(self) -> Optional[Type]:
+        return self.inner_type
 
     def __hash__(self):
         return hash((self.__class__.__name__, self.type, self.inner_type))
 
+
 @dataclass
-class FuncArgDotexprTypeHint(FuncArgTypeHint):
+class DotexprFuncArgHint(IFuncArgHint):
     inner_type: Optional[Type] = field(repr=True, default=Any)
     type: Type = field(init=False, default=DotExpression)
+
+    def get_type(self) -> Type:
+        return self.type
+
+    def get_inner_type(self) -> Optional[Type]:
+        return self.inner_type
 
     def __hash__(self):
         return hash((self.__class__.__name__, self.type, self.inner_type))

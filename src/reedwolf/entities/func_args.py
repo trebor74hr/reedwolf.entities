@@ -41,8 +41,8 @@ from .expressions import (
     DotExpression,
     IDotExpressionNode,
     ISetupSession,
-    FuncArgAttrnameTypeHint,
-    FuncArgDotexprTypeHint,
+    AttrnameFuncArgHint,
+    DotexprFuncArgHint,
 )
 from .attr_nodes import (
     AttrDexpNode,
@@ -545,20 +545,19 @@ def check_prepared_arguments(
         if prep_arg.type_info is None:
             raise EntityInternalError(f"{prepared_args.parent_name} -> Argument '{prep_arg}' type_info is not set")
 
-        if exp_arg.type_info.is_func_arg_th:
+        if exp_arg.type_info.is_func_arg_hint:
             if not prep_arg.is_dot_expr:
                 err_messages.append(f"Expected DotExpression, got: {prep_arg.value_or_dexp}")
 
-            if isinstance(exp_arg.type_info.py_type_hint, FuncArgAttrnameTypeHint):
-                ... # TODO: any special handling here needed?
-            elif isinstance(exp_arg.type_info.py_type_hint, FuncArgDotexprTypeHint):
-                ... # TODO: any special handling here needed?
-            else:
-                raise EntityInternalError(owner=exp_arg, msg=f"Unsupported function argumment type hint, got:  {exp_arg.type_info.py_type_hint}")
+            # if isinstance(exp_arg.type_info.py_type_hint, AttrnameFuncArgHint):
+            #     ... # TODO: any special handling here needed?
+            # elif isinstance(exp_arg.type_info.py_type_hint, DotexprFuncArgHint):
+            #     ... # TODO: any special handling here needed?
+            # else:
+            #     raise EntityInternalError(owner=exp_arg, msg=f"Unsupported function argumment type hint, got:  {exp_arg.type_info.py_type_hint}")
 
             # .type_ holds inner type - result type of DotExpression
             exp_type_info = exp_arg.type_info
-            # DELTHIS: exp_type_info = TypeInfo.get_or_create_by_type(exp_arg.type_info.inner_type, caller=exp_arg)
         else:
             exp_type_info = exp_arg.type_info
 

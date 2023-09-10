@@ -34,8 +34,8 @@ from .utils import (
     UNDEFINED,
 )
 from .expressions import (
-    FuncArgDotexprTypeHint,
-    FuncArgAttrnameTypeHint,
+    DotexprFuncArgHint,
+    AttrnameFuncArgHint,
 )
 
 
@@ -145,7 +145,7 @@ Startswith = create_builtin_function_factory(startswith, name="Startswith") # no
 #       functionality).  Could be generated and eval("...").
 # ------------------------------------------------------------
 
-def count(item_list: List[ItemType]) -> int:
+def count(item_list: Sequence[ItemType]) -> int:
     """ for objects from datastores - e.g. rows, iterables """
     return len(item_list)
 
@@ -156,7 +156,7 @@ Count = create_builtin_items_function_factory(  # noqa: E305
         )
 
 
-def sum_(item_list: Sequence[ItemType], field_name: FuncArgAttrnameTypeHint(NumberType)) -> NumberType:
+def sum_(item_list: Sequence[ItemType], field_name: AttrnameFuncArgHint(NumberType)) -> NumberType:
     """
     NOTE: underlying type must be matched dynamically
     """
@@ -173,7 +173,7 @@ Sum = create_builtin_items_function_factory(
 
 
 # def map_(item_list: Sequence[ItemType], callable_or_fieldname : Union[Callable[[Any], Any], str]) -> Sequence[ItemType]:
-def map_(item_list: Sequence[ItemType], dot_expr: FuncArgDotexprTypeHint(inner_type=Any)) -> Sequence[ItemType]:
+def map_(item_list: Sequence[ItemType], dot_expr: DotexprFuncArgHint(inner_type=Any)) -> Sequence[ItemType]:
     for item in item_list:
         yield dot_expr._evaluator.evaluate(item.value)
     raise NotImplementedError()
@@ -192,8 +192,9 @@ Map = create_builtin_items_function_factory(
 
 
 # def filter_(item_list: Sequence[ItemType], bool_dot_expr: FuncArgDotExprBoolType) -> Sequence[ItemType]:
-def filter_(item_list: Sequence[ItemType], bool_dot_expr: FuncArgDotexprTypeHint(inner_type=bool)) -> Sequence[ItemType]:
+def filter_(item_list: Sequence[ItemType], bool_dot_expr: DotexprFuncArgHint(inner_type=bool)) -> Sequence[ItemType]:
     """ is generatror """
+    print(item_list)
     if not isinstance(bool_dot_expr, DynamicAttrsBase):
         raise TypeError(f"Argument expected to be FuncArgDotExprBoolType - DotExpression, got: {bool_dot_expr} -> {type(bool_dot_expr)}")
     raise NotImplementedError("iterate and evaluate bool_dot_expr for every: {bool_dot_expr}")
@@ -227,7 +228,7 @@ Filter = create_builtin_items_function_factory(
 # ------------------------------------------------------------
 
 # def max_(item_list: Sequence[ItemType], callable_or_fieldname : Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
-def max_(item_list: Sequence[ItemType], dot_expr: FuncArgDotexprTypeHint(inner_type=Any)) -> Optional[Any]:
+def max_(item_list: Sequence[ItemType], dot_expr: DotexprFuncArgHint(inner_type=Any)) -> Optional[Any]:
     for item in item_list:
         yield dot_expr._evaluator.evaluate(item.value)
     raise NotImplementedError
@@ -249,7 +250,7 @@ Max = create_builtin_items_function_factory(
 # ------------------------------------------------------------
 
 # def min_(item_list: Sequence[ItemType], callable_or_fieldname : Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
-def min_(item_list: Sequence[ItemType], dot_expr: FuncArgDotexprTypeHint(inner_type=Any)) -> Optional[Any]:
+def min_(item_list: Sequence[ItemType], dot_expr: DotexprFuncArgHint(inner_type=Any)) -> Optional[Any]:
     raise NotImplementedError()
     # if not callable_or_fieldname:
     #     return min([item for item in item_list])
@@ -275,7 +276,7 @@ Min = create_builtin_items_function_factory(
 #     raise TypeError(f"Argument expected to be callable or string (fieldname), got: {callable_or_fieldname} -> {type(callable_or_fieldname)}")
 
 # def first(item_list: Sequence[ItemType], callable_or_fieldname : Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
-def first(item_list: Sequence[ItemType], dot_expr: FuncArgDotexprTypeHint(inner_type=Any)) -> Optional[Any]:
+def first(item_list: Sequence[ItemType], dot_expr: DotexprFuncArgHint(inner_type=Any)) -> Optional[Any]:
     raise NotImplementedError()
     # if not item_list:
     #     return UNDEFINED
@@ -288,7 +289,7 @@ First = create_builtin_items_function_factory(
         )
 
 # def last(item_list: Sequence[ItemType], callable_or_fieldname : Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
-def last(item_list: Sequence[ItemType], dot_expr: FuncArgDotexprTypeHint(inner_type=Any)) -> Optional[Any]:
+def last(item_list: Sequence[ItemType], dot_expr: DotexprFuncArgHint(inner_type=Any)) -> Optional[Any]:
     raise NotImplementedError()
     # if not item_list:
     #     return UNDEFINED

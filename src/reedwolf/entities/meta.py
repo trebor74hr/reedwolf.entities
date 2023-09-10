@@ -130,18 +130,29 @@ LiteralType             = TypeVar("LiteralType", bound=Any)
 
 ERR_MSG_SUPPORTED = "Supporting custom and standard python types, and typing: Optional, Union[..., NoneType] and Sequence/List[ py-types | Union[py-types, NoneType]]."
 
-@dataclass
-class FuncArgTypeHint:
+# @dataclass
+class IFuncArgHint:
     # if type is DotExpression -> inner_type which evaluation of DotExpression should return
-    type: Type
-    inner_type: Optional[Type] = field(repr=False, default=Any)
+    # type: Type
+    # inner_type: Optional[Type] = field(repr=False, default=Any)
+
+    @abstractmethod
+    def get_type(self) -> Type:
+        ...
+
+    @abstractmethod
+    def get_inner_type(self) -> Optional[Type]:
+        ...
 
     @abstractmethod
     def __hash__(self):
+        """
+        must implement hash since it will be stored in TypeInfo.TYPE_INFO_REGISTRY
+        """
         ...
 
 # e.g. list, int, dict, Person, List, Dict[str, Optional[Union[str, float]]
-PyTypeHint                 = TypeVar("PyTypeHint", bound=Union[Type, FuncArgTypeHint])
+PyTypeHint                 = TypeVar("PyTypeHint", bound=Union[Type, IFuncArgHint])
 
 RuleDatatype               = TypeVar("RuleDatatype", bound=Union[StandardType, List[StandardType,], Dict[str, StandardType]])
 
@@ -517,7 +528,7 @@ class TypeInfo:
     is_optional:    bool = field(init=False, repr=False, default=UNDEFINED)
     is_enum:        bool = field(init=False, repr=False, default=UNDEFINED)
     is_union:       bool = field(init=False, repr=False, default=UNDEFINED)
-    is_func_arg_th: bool = field(init=False, repr=False, default=UNDEFINED)
+    is_func_arg_hint: bool = field(init=False, repr=False, default=UNDEFINED)
 
     # list of python type underneath - e.g. int, str, list, dict, Person, or list of accepted types
     types:          List[Type] = field(init=False, default=UNDEFINED)
@@ -527,7 +538,7 @@ class TypeInfo:
 
     # ------------------------------------------------------------
     # cache - registry by class type
-    TYPE_INFO_REGISTRY: ClassVar[Dict[Union[type, FuncArgTypeHint], Self]] = {}
+    TYPE_INFO_REGISTRY: ClassVar[Dict[Union[type, IFuncArgHint], Self]] = {}
 
     def __post_init__(self):
         # if self.th_field and self.th_field.name=='company_type': ...
@@ -555,14 +566,14 @@ class TypeInfo:
 
 
     def _extract_type_hint_details(self):
-        if isinstance(self.py_type_hint, FuncArgTypeHint):
-            func_arg_type_hint: FuncArgTypeHint = self.py_type_hint
-            py_type_hint = func_arg_type_hint.type
+        if isinstance(self.py_type_hint, IFuncArgHint):
+            func_arg_hint: IFuncArgHint = self.py_type_hint
+            py_type_hint = func_arg_hint.get_type()
         else:
-            func_arg_type_hint = None
+            func_arg_hint = None
             py_type_hint = self.py_type_hint
 
-        self.is_func_arg_th = bool(func_arg_type_hint)
+        self.is_func_arg_hint = bool(func_arg_hint)
 
         origin_type = getattr(py_type_hint, "__origin__", None)
 
@@ -601,10 +612,11 @@ class TypeInfo:
         else:
             inner_type = py_type_hint
 
-        if func_arg_type_hint:
+        if func_arg_hint:
             assert inner_type == py_type_hint, "inner_type shouldn't be changed from original py_type_hint"
-            if func_arg_type_hint.inner_type:
-                inner_type = func_arg_type_hint.inner_type
+            fah_inner_type = func_arg_hint.get_inner_type()
+            if fah_inner_type:
+                inner_type = fah_inner_type
 
         # Another Union layer allowed, e.g.:  List[Union[str, int, NoneType]]
         if getattr(inner_type, "__origin__", inner_type) == Union: 
@@ -707,7 +719,7 @@ class TypeInfo:
         if self.is_union:
             out.insert(0, "Union[")
             out.append("]")
-        if self.is_func_arg_th:
+        if self.is_func_arg_hint:
             out.insert(0, "FuncArgAttrname[")
             out.append("]")
         if self.is_func_arg_dot_expr:
@@ -769,7 +781,7 @@ class TypeInfo:
                         )
 
         if py_type_hint not in cls.TYPE_INFO_REGISTRY:
-            # py_type_hint can be FuncArgTypeHint
+            # py_type_hint can be IFuncArgHint
             cls.TYPE_INFO_REGISTRY[py_type_hint] = TypeInfo(py_type_hint=py_type_hint)
 
         return cls.TYPE_INFO_REGISTRY[py_type_hint]

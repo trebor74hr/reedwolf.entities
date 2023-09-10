@@ -1438,31 +1438,74 @@ class BoundModelBase(ComponentBase, ABC):
 
 # ============================================================
 
-class IStackFrame(ABC):
-    ...
+@dataclass
+class IStackFrame:
+
+    @abstractmethod
+    def clean(self):
+        ...
+
+
+    @abstractmethod
+    def post_clean(self):
+        ...
+
+    @abstractmethod
+    def copy_from_previous_frame(self, previous_frame: Self):
+        ...
+
+    def _copy_attr_from_previous_frame(self,
+                                       previous_frame: Self,
+                                       attr_name: str,
+                                       may_be_copied: bool = True,
+                                       if_set_must_be_same: bool = True):
+
+        if not hasattr(self, attr_name):
+            raise EntityInternalError(owner=self, msg=f"This frame {self}.{attr_name} not found")
+        if not hasattr(previous_frame, attr_name):
+            raise EntityInternalError(owner=self, msg=f"Previous frame {previous_frame}.{attr_name} not found")
+
+        this_frame_attr_value = getattr(self, attr_name)
+        prev_frame_attr_value = getattr(previous_frame, attr_name)
+
+        if this_frame_attr_value is None or this_frame_attr_value is UNDEFINED:
+            # if prev_frame_attr_value not in (None, UNDEFINED):
+            if not (prev_frame_attr_value is None or prev_frame_attr_value is UNDEFINED):
+                if not may_be_copied:
+                    raise EntityInternalError(owner=self,
+                                              msg=f"Attribute '{attr_name}' value in previous frame is non-empty and current frame has empty value:\n  {previous_frame}\n    = {prev_frame_attr_value}\n<>\n  {self}\n    = {this_frame_attr_value} ")
+                    # Copy from previous frame
+                # apply_result.config.loggeer.debugf"setattr '{attr_name}' current_frame <= previous_frame := {prev_frame_attr_value} (frame={self})")
+                setattr(self, attr_name, prev_frame_attr_value)
+        else:
+            # in some cases id() / is should be used?
+            if if_set_must_be_same and prev_frame_attr_value != this_frame_attr_value:
+                raise EntityInternalError(owner=self,
+                                          msg=f"Attribute '{attr_name}' value in previous frame is different from current:\n  {previous_frame}\n    = {prev_frame_attr_value}\n<>\n  {self}\n    = {this_frame_attr_value} ")
 
 
 @dataclass
 class UseStackFrameCtxManagerBase(AbstractContextManager):
     """
     'onwer_session' must implement following:
-
-
     # ALT: from contextlib import contextmanager
 
     """
     owner_session: "IStackOwnerSession"
     frame: IStackFrame
 
-    def __post_init__(self):
-        self.copy_from_previous_frame()
 
-    def copy_from_previous_frame(self):
-        return
+    def __post_init__(self):
+        if self.owner_session.stack_frames:
+            previous_frame = self.owner_session.stack_frames[0]
+            self.frame.copy_from_previous_frame(previous_frame)
+        self.frame.post_clean()
+
 
     def __enter__(self):
         self.owner_session.push_frame_to_stack(self.frame)
         return self.frame
+
 
     def __exit__(self, exc_type, exc_value, exc_tb):
         if not self.owner_session.current_frame == self.frame:
@@ -1472,34 +1515,34 @@ class UseStackFrameCtxManagerBase(AbstractContextManager):
             raise EntityInternalError(owner=self, msg=f"Something wrong with frame stack, got {frame_popped}, expected {self.frame}")
 
 
-    def _copy_attr_from_previous_frame(self, 
-            previous_frame: Self, 
-            attr_name: str, 
-            may_be_copied: bool = True,
-            if_set_must_be_same: bool = True):
+    # def _copy_attr_from_previous_frame(self,
+    #         previous_frame: Self,
+    #         attr_name: str,
+    #         may_be_copied: bool = True,
+    #         if_set_must_be_same: bool = True):
 
-        if not hasattr(self.frame, attr_name):
-            raise EntityInternalError(owner=self, msg=f"This frame {self.frame}.{attr_name} not found") 
-        if not hasattr(previous_frame, attr_name):
-            raise EntityInternalError(owner=self, msg=f"Previous frame {previous_frame}.{attr_name} not found") 
+    #     if not hasattr(self.frame, attr_name):
+    #         raise EntityInternalError(owner=self, msg=f"This frame {self.frame}.{attr_name} not found")
+    #     if not hasattr(previous_frame, attr_name):
+    #         raise EntityInternalError(owner=self, msg=f"Previous frame {previous_frame}.{attr_name} not found")
 
-        this_frame_attr_value = getattr(self.frame, attr_name)
-        prev_frame_attr_value = getattr(previous_frame, attr_name)
+    #     this_frame_attr_value = getattr(self.frame, attr_name)
+    #     prev_frame_attr_value = getattr(previous_frame, attr_name)
 
-        if this_frame_attr_value is None or this_frame_attr_value is UNDEFINED:
-            # if prev_frame_attr_value not in (None, UNDEFINED):
-            if not (prev_frame_attr_value is None or prev_frame_attr_value is UNDEFINED):
-                if not may_be_copied:
-                    raise EntityInternalError(owner=self, 
-                        msg=f"Attribute '{attr_name}' value in previous frame is non-empty and current frame has empty value:\n  {previous_frame}\n    = {prev_frame_attr_value}\n<>\n  {self.frame}\n    = {this_frame_attr_value} ") 
-                # Copy from previous frame
-                # apply_result.config.loggeer.debugf"setattr '{attr_name}' current_frame <= previous_frame := {prev_frame_attr_value} (frame={self.frame})")
-                setattr(self.frame, attr_name, prev_frame_attr_value)
-        else:
-            # in some cases id() / is should be used?
-            if if_set_must_be_same and prev_frame_attr_value != this_frame_attr_value:
-                raise EntityInternalError(owner=self, 
-                    msg=f"Attribute '{attr_name}' value in previous frame is different from current:\n  {previous_frame}\n    = {prev_frame_attr_value}\n<>\n  {self.frame}\n    = {this_frame_attr_value} ") 
+    #     if this_frame_attr_value is None or this_frame_attr_value is UNDEFINED:
+    #         # if prev_frame_attr_value not in (None, UNDEFINED):
+    #         if not (prev_frame_attr_value is None or prev_frame_attr_value is UNDEFINED):
+    #             if not may_be_copied:
+    #                 raise EntityInternalError(owner=self,
+    #                     msg=f"Attribute '{attr_name}' value in previous frame is non-empty and current frame has empty value:\n  {previous_frame}\n    = {prev_frame_attr_value}\n<>\n  {self.frame}\n    = {this_frame_attr_value} ")
+    #             # Copy from previous frame
+    #             # apply_result.config.loggeer.debugf"setattr '{attr_name}' current_frame <= previous_frame := {prev_frame_attr_value} (frame={self.frame})")
+    #             setattr(self.frame, attr_name, prev_frame_attr_value)
+    #     else:
+    #         # in some cases id() / is should be used?
+    #         if if_set_must_be_same and prev_frame_attr_value != this_frame_attr_value:
+    #             raise EntityInternalError(owner=self,
+    #                 msg=f"Attribute '{attr_name}' value in previous frame is different from current:\n  {previous_frame}\n    = {prev_frame_attr_value}\n<>\n  {self.frame}\n    = {this_frame_attr_value} ")
 
 
 class IStackOwnerSession(ABC):
@@ -1554,19 +1597,33 @@ class SetupStackFrame(IStackFrame):
     # current container data instance which will be procesed: changed/validated/evaluated
     # type_info: TypeInfo
 
-    def __post_init__(self):
-        if not isinstance(self.container, IContainerBase):
-            raise EntityInternalError(owner=self, msg=f"Expected IContainerBase, got: {self.container}") 
-        if not isinstance(self.component, ComponentBase):
-            raise EntityInternalError(owner=self, msg=f"Expected ComponentBase, got: {self.component}") 
 
-        if self.this_registry:
-            assert isinstance(self.this_registry, IThisRegistry)
+    def __post_init__(self):
+        self.clean()
+
+
+    def clean(self):
+        if not isinstance(self.container, IContainerBase):
+            raise EntityInternalError(owner=self, msg=f"Expected IContainerBase, got: {self.container}")
+        if not isinstance(self.component, ComponentBase):
+            raise EntityInternalError(owner=self, msg=f"Expected ComponentBase, got: {self.component}")
 
         if isinstance(self.component, BoundModelBase):
             self.bound_model = self.component
         else:
             self.bound_model = self.container.bound_model
+
+    def copy_from_previous_frame(self, previous_frame: Self):
+        assert previous_frame
+        self._copy_attr_from_previous_frame(previous_frame, "this_registry",
+                                            if_set_must_be_same=False)
+        # check / init again
+        self.clean()
+
+
+    def post_clean(self):
+        if self.this_registry:
+            assert isinstance(self.this_registry, IThisRegistry)
 
     # ------------------------------------------------------------
 
@@ -1735,8 +1792,9 @@ class ApplyStackFrame(IStackFrame):
     # local_setup_session: Optional[ISetupSession] = field(repr=False, default=None)
     this_registry: Optional[IThisRegistry] = field(repr=False, default=None)
 
-    # currently used only for cleaners
-    instance_is_list: bool = field(repr=False, default=False)
+    # currently used only in cleaners - by default None to enable "automatic-copy",
+    # if not set - then set to False in post_clean()
+    instance_is_list: Optional[bool] = field(repr=False, default=None)
 
     # --------------------
     # -- autocomputed
@@ -1748,11 +1806,64 @@ class ApplyStackFrame(IStackFrame):
     bound_model_root : Optional[BoundModelBase] = field(repr=False, init=False, default=None)
 
 
-
     def __post_init__(self):
-
         self.clean()
 
+
+    def clean(self):
+        if not isinstance(self.container, IContainerBase):
+            raise EntityInternalError(owner=self, msg=f"Expected IContainerBase, got: {self.container}")
+        if not isinstance(self.component, ComponentBase):
+            raise EntityInternalError(owner=self, msg=f"Expected ComponentBase, got: {self.component}")
+
+        if self.index0 is not None and self.index0 < 0:
+            raise EntityInternalError(owner=self, msg=f"index0 invalid value: {self.index0}")
+
+    def copy_from_previous_frame(self, previous_frame: Self):
+        """
+        if the instance is the same - consider from last frame
+        container (copy/check), index0 (copy/check), component ...
+        """
+        assert previous_frame
+
+        self._copy_attr_from_previous_frame(previous_frame, "in_component_only_tree",
+                                            if_set_must_be_same=False)
+        self._copy_attr_from_previous_frame(previous_frame, "depth",
+                                            if_set_must_be_same=False)
+        self._copy_attr_from_previous_frame(previous_frame, "parent_values_subtree",
+                                            if_set_must_be_same=False)
+
+        # do not use ==, compare by instance (ALT: use id(instance) )
+        if self.instance is previous_frame.instance:
+            self._copy_attr_from_previous_frame(previous_frame, "container", may_be_copied=False)
+            # will be autocomputed
+            # self._copy_attr_from_previous_frame(previous_frame, "bound_model_root", may_be_copied=False)
+            self._copy_attr_from_previous_frame(previous_frame, "instance_new")
+            self._copy_attr_from_previous_frame(previous_frame, "instance_is_list")
+            self._copy_attr_from_previous_frame(previous_frame, "index0")
+
+            # only these can be copied
+            self._copy_attr_from_previous_frame(previous_frame, "parent_instance")
+            self._copy_attr_from_previous_frame(previous_frame, "parent_instance_new")
+
+            # do not use ==, compare by instance (ALT: use id(instance) )
+            if self.component is previous_frame.component:
+                self._copy_attr_from_previous_frame(previous_frame, "on_component_only", may_be_copied=False)
+                self._copy_attr_from_previous_frame(previous_frame, "key_string", may_be_copied=False)
+
+                # NOTE: not this for now:
+                self._copy_attr_from_previous_frame(previous_frame, "this_registry",
+                                                    # for Apply -> ChildrenValidation setup can be different
+                                                    if_set_must_be_same=False)
+        # check / init again
+        self.clean()
+
+
+    def post_clean(self):
+        if self.instance_is_list is None:
+            self.instance_is_list = False
+
+        # TODO: DRY - similar logic in ApplyResult._detect_instance_new_struct_type()
         if self.on_component_only:
             self.bound_model_root = (self.on_component_only 
                                      if self.on_component_only.is_subentity_items()
@@ -1777,7 +1888,7 @@ class ApplyStackFrame(IStackFrame):
             # defaults_mode
             pass
         elif instance_to_test is None:
-            # TODO: explain when this happens ...
+            # if instance is a list and it is empty, then nothing to check
             pass
         elif not is_model_class(instance_to_test.__class__):
             raise EntityInternalError(owner=self, msg=f"Expected model instance: {instance_to_test.__class__} or list[instances], got: {self.instance}")
@@ -1807,12 +1918,6 @@ class ApplyStackFrame(IStackFrame):
             raise EntityInternalError(owner=self, msg=f"this_registry already set to '{self.this_registry}', got: '{this_registry}'")
         self.this_registry = this_registry
 
-    def clean(self):
-        assert isinstance(self.component, ComponentBase)
-        assert isinstance(self.container, IContainerBase)
-
-        if self.index0 is not None:
-            assert self.index0 >= 0
 
 
 @dataclass
