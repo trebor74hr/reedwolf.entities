@@ -401,8 +401,9 @@ class FunctionArguments:
             # TODO: more clean way would be to iterate all self.func_arg_list and if inject they must be empty ...
             for expected_arg in expected_args:
                 func_arg = self.get(expected_arg, UNDEFINED)
-                if func_arg and inspect.isclass(func_arg.type_info.type_) \
-                  and issubclass(func_arg.type_info.type_, IInjectFuncArgHint):
+                if func_arg and func_arg.type_info.is_inject_func_arg:
+                # if func_arg and inspect.isclass(func_arg.type_info.type_) \
+                #   and issubclass(func_arg.type_info.type_, IInjectFuncArgHint):
                     if not (isinstance(caller, AttrDexpNode)
                             and caller.namespace == FieldsNS):
                         raise EntityInternalError(owner=self, msg=f"Expected F.<fieldname>, got: {caller}")
@@ -555,8 +556,9 @@ def check_prepared_arguments(
             raise EntityInternalError(f"{prepared_args.parent_name} -> Argument '{prep_arg}' type_info is not set")
 
         if exp_arg.type_info.is_func_arg_hint:
-            if not prep_arg.is_dot_expr:
-                err_messages.append(f"Expected DotExpression, got: {prep_arg.value_or_dexp}")
+            # TODO: extract somehow this info from some func_arg_hint objects
+            # if not prep_arg.is_dot_expr:
+            #     err_messages.append(f"Expected DotExpression, got: {prep_arg.value_or_dexp}")
 
             # if isinstance(exp_arg.type_info.py_type_hint, AttrnameFuncArgHint):
             #     ... # TODO: any special handling here needed?

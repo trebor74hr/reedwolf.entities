@@ -482,8 +482,12 @@ class IFunction(IFunctionDexpNode):
                 else:
                     args.insert(0, input_value)
 
-            for prep_arg in self.prepared_args.prep_arg_list:
-                if isclass(prep_arg.type_info.type_) and issubclass(prep_arg.type_info.type_, IInjectFuncArgHint):
+            for exp_arg in self.function_arguments.func_arg_list:
+                # if isclass(prep_arg.type_info.type_) and issubclass(prep_arg.type_info.type_, IInjectFuncArgHint):
+                if exp_arg.type_info.is_inject_func_arg:
+                    prep_arg = self.prepared_args.get(exp_arg.name)
+                    assert prep_arg
+                    # TODO: check that prep_arg is not filled
                     self._process_inject_prepared_args(inject_prep_arg=prep_arg, apply_result=apply_result,
                                                        kwargs=kwargs)
 
@@ -565,10 +569,10 @@ class IFunction(IFunctionDexpNode):
 class InjectComponentTreeValuesFuncArgHint(IInjectFuncArgHint):
 
     def get_type(self) -> Type:
-        return ComponentTreeWValuesType
+        return self.__class__
 
     def get_inner_type(self) -> Optional[Type]:
-        return None
+        return ComponentTreeWValuesType
 
     def __hash__(self):
         return hash((self.__class__.__name__))

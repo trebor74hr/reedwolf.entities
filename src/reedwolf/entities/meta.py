@@ -22,7 +22,7 @@ from typing import (
     Union,
     get_type_hints,
     TypeVar,
-    Sequence as SequenceType,
+    Sequence as SequenceType, Iterable,
 )
 from enum import Enum
 from decimal import Decimal
@@ -536,10 +536,12 @@ class TypeInfo:
 
     # evaluated
     is_list:        bool = field(init=False, repr=False, default=UNDEFINED)
+    is_dict:        bool = field(init=False, repr=False, default=UNDEFINED)
     is_optional:    bool = field(init=False, repr=False, default=UNDEFINED)
     is_enum:        bool = field(init=False, repr=False, default=UNDEFINED)
     is_union:       bool = field(init=False, repr=False, default=UNDEFINED)
     is_func_arg_hint: bool = field(init=False, repr=False, default=UNDEFINED)
+    is_inject_func_arg: bool = field(init=False, repr=False, default=UNDEFINED)
 
     # list of python type underneath - e.g. int, str, list, dict, Person, or list of accepted types
     types:          List[Type] = field(init=False, default=UNDEFINED)
@@ -580,13 +582,19 @@ class TypeInfo:
         if isinstance(self.py_type_hint, IFuncArgHint):
             func_arg_hint: IFuncArgHint = self.py_type_hint
             py_type_hint = func_arg_hint.get_type()
+            origin_type = func_arg_hint.get_inner_type()
+            origin_type = get_underlying_type(origin_type)
+        elif inspect.isclass(self.py_type_hint) and issubclass(self.py_type_hint, IFuncArgHint):
+            raise EntityTypeError(owner=self, msg=f"Type hint should be instances of IFuncArgHint class, not class itself (type). Got: {self.py_type_hint}")
         else:
             func_arg_hint = None
             py_type_hint = self.py_type_hint
+            origin_type = getattr(py_type_hint, "__origin__", None)
+
+        py_type_hint = get_underlying_type(py_type_hint)
 
         self.is_func_arg_hint = bool(func_arg_hint)
-
-        origin_type = getattr(py_type_hint, "__origin__", None)
+        self.is_inject_func_arg = self.is_func_arg_hint and isinstance(func_arg_hint, IInjectFuncArgHint)
 
         is_optional = False
         if origin_type == Union:
@@ -612,19 +620,30 @@ class TypeInfo:
 
 
         is_list = False
-        if origin_type in (list, Sequence):
+        is_dict = False
+        inner_type = UNDEFINED
+
+        if origin_type in (list, Sequence, Iterable):
             # List[some_type]
             is_list = True
             if len(py_type_hint.__args__) != 1:
                 raise EntityTypeError(item=py_type_hint, msg=f"AttrDexpNode's annotation should have single List argument, got: {py_type_hint.__args__}.")
             inner_type = py_type_hint.__args__[0]
+        elif origin_type in (dict, Dict):
+            is_dict = True
+            inner_type = py_type_hint.__args__[1]
+        elif getattr(origin_type, "__origin__", None) in (dict,):
+            is_dict = True
+            # type of key is ignored
+            inner_type = origin_type.__args__[1]
+            origin_type = origin_type.__origin__
         elif origin_type is not None:
             inner_type = origin_type
         else:
             inner_type = py_type_hint
 
         if func_arg_hint:
-            assert inner_type == py_type_hint, "inner_type shouldn't be changed from original py_type_hint"
+            # assert inner_type == py_type_hint, "inner_type shouldn't be changed from original py_type_hint"
             fah_inner_type = func_arg_hint.get_inner_type()
             if fah_inner_type:
                 inner_type = fah_inner_type
@@ -633,10 +652,13 @@ class TypeInfo:
         if getattr(inner_type, "__origin__", inner_type) == Union: 
             # list of accepted types, e.g.
             #   Union[int, str, NoneType] -> int, str, NoneType
-            inner_type = inner_type.__args__ 
+            inner_type = inner_type.__args__
+
+        inner_type = get_underlying_type(inner_type)
 
         # normalize
         self.is_list = is_list
+        self.is_dict = is_dict
         self.is_optional = is_optional
 
         # TODO: probably it will need extra attribute to hold Enum internal type (int, str, etc.)
@@ -669,6 +691,9 @@ class TypeInfo:
 
         if self.py_type_hint is Any or other.py_type_hint is Any:
             return None
+
+        if self.is_dict!=other.is_dict:
+            return "expecting a dict compatible type"
 
         if not ignore_list_check and self.is_list!=other.is_list:
             if self.is_list:
@@ -924,6 +949,17 @@ def dataclass_from_dict(dataclass_klass: Type, values_dict: Dict[str, Any]) -> D
                 value = dataclass_from_dict(dataclass_klass=type_info.type_, values_dict=value)
         kwargs[fld_name] = value
     return dataclass_klass(**kwargs)
+
+def get_underlying_type(py_type_hint: Type) -> Type:
+    if py_type_hint == ItemType:
+        pass
+    elif getattr(py_type_hint, "__supertype__", None):
+        # NewType
+        py_type_hint = py_type_hint.__supertype__
+    elif getattr(py_type_hint, "__bound__", None):
+        # TypeVar
+        py_type_hint = py_type_hint.__bound__
+    return py_type_hint
 
 # ------------------------------------------------------------
 # OBSOLETE
