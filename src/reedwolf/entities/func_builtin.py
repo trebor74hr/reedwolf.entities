@@ -20,7 +20,7 @@ from .functions import (
     create_builtin_items_function_factory,
     BuiltinFunctionFactory,
     CustomFunctionFactory,
-    FunctionArgumentsType, CustomItemsFunctionFactory,
+    FunctionArgumentsType, CustomItemsFunctionFactory, InjectComponentTreeValuesFuncArgHint,
 )
 from .meta import (
     ItemType,
@@ -86,13 +86,15 @@ def EnumMembers(
 
 T = TypeVar("T", bound=Any)
 
+# def children(value: Any, inject_component_tree: ComponentTreeWValuesType) -> List[ChildField]:
+#     return inject_component_tree["contains"]
 
-def children(value: Any, inject_component_tree: ComponentTreeWValuesType) -> List[ChildField]:
+def children(value: Any, component_tree: InjectComponentTreeValuesFuncArgHint) -> List[ChildField]:
     """
     Component's list of children
     TODO: ex. was List[ItemType] - should convert "contains" to child_list
     """
-    return inject_component_tree["contains"]
+    return component_tree["contains"]
 
 Children = create_builtin_function_factory(  # noqa: E305
             children, name="Children", 

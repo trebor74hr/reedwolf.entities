@@ -200,8 +200,9 @@ class ReservedAttributeNames(str, Enum):
 
 # ------------------------------------------------------------
 
-class ReservedArgumentNames(str, Enum):
-    INJECT_COMPONENT_TREE = "inject_component_tree" 
+# class ReservedArgumentNames(str, Enum):
+#     # INJECT_COMPONENT_TREE = "inject_component_tree"
+#     ...
 
 # ------------------------------------------------------------
 # Message functions

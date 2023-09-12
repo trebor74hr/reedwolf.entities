@@ -17,6 +17,7 @@ extra args could be passed and must be called as function.
 from dataclasses import dataclass, field
 from enum import Enum
 from abc import ABC
+from inspect import isclass
 from typing import (
     Dict,
     Optional,
@@ -50,7 +51,8 @@ from .meta import (
     TypeInfo,
     is_function,
     EmptyFunctionArguments,
-    NoneType, STANDARD_TYPE_LIST, is_model_class, ItemType, ModelType,
+    NoneType, STANDARD_TYPE_LIST, is_model_class, ItemType, ModelType, IFuncArgHint, ComponentTreeWValuesType,
+    IInjectFuncArgHint,
 )
 from .expressions import (
     DotExpression,
@@ -63,11 +65,10 @@ from .expressions import (
 from .func_args import (
     FunctionArguments,
     create_function_arguments,
-    PreparedArguments, FuncArg,
+    PreparedArguments, FuncArg, PrepArg,
 )
 from .base import (
     AttrDexpNodeTypeEnum,
-    ReservedArgumentNames,
     IFieldBase,
     IApplyResult,
     ComponentBase, SetupStackFrame, ApplyStackFrame,
@@ -481,7 +482,14 @@ class IFunction(IFunctionDexpNode):
                 else:
                     args.insert(0, input_value)
 
-            self._process_inject_prepared_args(apply_result=apply_result, kwargs=kwargs)
+            for prep_arg in self.prepared_args.prep_arg_list:
+                if isclass(prep_arg.type_info.type_) and issubclass(prep_arg.type_info.type_, IInjectFuncArgHint):
+                    self._process_inject_prepared_args(inject_prep_arg=prep_arg, apply_result=apply_result,
+                                                       kwargs=kwargs)
+
+            # inject_prep_arg = self.prepared_args.get(ReservedArgumentNames.INJECT_COMPONENT_TREE)
+            # if inject_prep_arg:
+            #     self._process_inject_prepared_args(inject_prep_arg=inject_prep_arg, apply_result=apply_result, kwargs=kwargs)
 
 
         if self.func_args:
@@ -514,21 +522,24 @@ class IFunction(IFunctionDexpNode):
 
     # ------------------------------------------------------------
 
-    def _process_inject_prepared_args(self, apply_result: IApplyResult, kwargs: Dict[str, ValueOrDexp]):
+    def _process_inject_prepared_args(self, inject_prep_arg: PrepArg, apply_result: IApplyResult, kwargs: Dict[str, ValueOrDexp]):
 
-        prep_arg = self.prepared_args.get(ReservedArgumentNames.INJECT_COMPONENT_TREE)
-        if not prep_arg:
-            return 
+        # for prep_arg in self.prepared_args.prep_arg_list:
+        #     if isclass(prep_arg.type_info) and issubclass(prep_arg.type_info, IInjectFuncArgHint):
 
-        if not isinstance(prep_arg.caller, IDotExpressionNode):
-            raise EntityInternalError(owner=self, msg=f"Expected IDotExpressionNode, got: {type(prep_arg.caller)} / {prep_arg.caller}") 
+        # inject_prep_arg = self.prepared_args.get(ReservedArgumentNames.INJECT_COMPONENT_TREE)
+        # if not inject_prep_arg:
+        #     return
 
-        dexp_node: IDotExpressionNode = prep_arg.caller
+        if not isinstance(inject_prep_arg.caller, IDotExpressionNode):
+            raise EntityInternalError(owner=self, msg=f"Expected IDotExpressionNode, got: {type(inject_prep_arg.caller)} / {inject_prep_arg.caller}")
+
+        dexp_node: IDotExpressionNode = inject_prep_arg.caller
 
         if not (dexp_node.attr_node_type == AttrDexpNodeTypeEnum.FIELD
           and dexp_node.namespace == FieldsNS
           and isinstance(dexp_node.data, IFieldBase)):
-            raise EntityInternalError(owner=self, msg=f"INJECT_COMPONENT_TREE :: PrepArg '{prep_arg.name}' expected DExp(F.<field>) -> Field(),  got: '{dexp_node}' -> '{dexp_node.data}' ") 
+            raise EntityInternalError(owner=self, msg=f"Inject function argument value :: PrepArg '{inject_prep_arg.name}' expected DExp(F.<field>) -> Field(),  got: '{dexp_node}' -> '{dexp_node.data}' ")
 
         component: ComponentBase = dexp_node.data
         assert component == apply_result.current_frame.component
@@ -538,13 +549,29 @@ class IFunction(IFunctionDexpNode):
         # get complete tree with values
         output = apply_result.get_values_tree(key_string=key_string)
 
-        assert ReservedArgumentNames.INJECT_COMPONENT_TREE not in kwargs
-        kwargs[ReservedArgumentNames.INJECT_COMPONENT_TREE] = output
+
+        assert inject_prep_arg.name not in kwargs
+        kwargs[inject_prep_arg.name] = output
+
+        # assert ReservedArgumentNames.INJECT_COMPONENT_TREE not in kwargs
+        # kwargs[ReservedArgumentNames.INJECT_COMPONENT_TREE] = output
 
         # prep_arg.caller.namespace / field_name = prep_arg.caller.name / prep_arg.caller.get_type_info()
         #   TypeInfo(py_type_hint=<class 'bool'>, types=[<class 'bool'>])
         # prep_arg.caller.data
         #   BooleanField(parent_name='company_entity', bind=DExpr(Models.can_be_accessed), name='can_be_accessed')
+
+@dataclass
+class InjectComponentTreeValuesFuncArgHint(IInjectFuncArgHint):
+
+    def get_type(self) -> Type:
+        return ComponentTreeWValuesType
+
+    def get_inner_type(self) -> Optional[Type]:
+        return None
+
+    def __hash__(self):
+        return hash((self.__class__.__name__))
 
 # ------------------------------------------------------------
 # CustomFunctions - need 2 steps and 3 layers:

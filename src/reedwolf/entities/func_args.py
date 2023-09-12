@@ -35,7 +35,7 @@ from .meta import (
     STANDARD_TYPE_LIST,
     is_function,
     ComponentTreeWValuesType,
-    NoneType,
+    NoneType, IInjectFuncArgHint,
 )
 from .expressions import (
     DotExpression,
@@ -46,10 +46,6 @@ from .expressions import (
 )
 from .attr_nodes import (
     AttrDexpNode,
-)
-from .base import (
-    SetupStackFrame,
-    ReservedArgumentNames,
 )
 
 TypeInfoCallable = Callable[[], TypeInfo]
@@ -401,14 +397,27 @@ class FunctionArguments:
             value_args = []
             value_kwargs = {}
 
-            # TODO: inject component - it is not perfect :( 
-            if ReservedArgumentNames.INJECT_COMPONENT_TREE in expected_args:
-                if not (isinstance(caller, AttrDexpNode)
-                        and caller.namespace == FieldsNS):
-                    raise EntityInternalError(owner=self, msg=f"Expected F.<fieldname>, got: {caller}") 
-                component_tree_type_info = TypeInfo.get_or_create_by_type(py_type_hint=ComponentTreeWValuesType, caller=caller)
-                # NOTE: caller is here lost, hopefully won't be needed
-                value_kwargs[ReservedArgumentNames.INJECT_COMPONENT_TREE] = component_tree_type_info
+            # TODO: inject component - it is not perfect :(
+            # TODO: more clean way would be to iterate all self.func_arg_list and if inject they must be empty ...
+            for expected_arg in expected_args:
+                func_arg = self.get(expected_arg, UNDEFINED)
+                if func_arg and inspect.isclass(func_arg.type_info.type_) \
+                  and issubclass(func_arg.type_info.type_, IInjectFuncArgHint):
+                    if not (isinstance(caller, AttrDexpNode)
+                            and caller.namespace == FieldsNS):
+                        raise EntityInternalError(owner=self, msg=f"Expected F.<fieldname>, got: {caller}")
+                    inject_type_info = TypeInfo.get_or_create_by_type(py_type_hint=func_arg.type_info.type_,
+                                                                              caller=caller)
+                    # NOTE: caller is here lost, hopefully won't be needed
+                    value_kwargs[func_arg.name] = inject_type_info
+
+            # if ReservedArgumentNames.INJECT_COMPONENT_TREE in expected_args:
+            #     if not (isinstance(caller, AttrDexpNode)
+            #             and caller.namespace == FieldsNS):
+            #         raise EntityInternalError(owner=self, msg=f"Expected F.<fieldname>, got: {caller}")
+            #     component_tree_type_info = TypeInfo.get_or_create_by_type(py_type_hint=ComponentTreeWValuesType, caller=caller)
+            #     # NOTE: caller is here lost, hopefully won't be needed
+            #     value_kwargs[ReservedArgumentNames.INJECT_COMPONENT_TREE] = component_tree_type_info
 
             if value_arg_name:
                 value_kwargs[value_arg_name] = value_arg_type_info

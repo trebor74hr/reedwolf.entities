@@ -1,37 +1,38 @@
 from abc import (
-        ABC, 
-        abstractmethod,
-        )
+    ABC,
+    abstractmethod,
+    )
 import operator
 import ast
 from dataclasses import (
-        dataclass, 
-        field,
-        replace as dataclasses_replace,
-        )
+    dataclass,
+    field,
+    replace as dataclasses_replace,
+    fields as dc_fields,
+    )
 from enum import (
-        Enum
-        )
+    Enum
+    )
 from typing import (
     List,
     Optional,
     Union,
     Any,
     Callable,
-    Tuple, Type,
+    Tuple, Type, Generic,
 )
 
 from .utils import (
-        UNDEFINED,
-        UndefinedType,
-        )
+    UNDEFINED,
+    UndefinedType,
+    )
 from .exceptions import (
-        EntitySetupValueError,
-        EntitySetupError,
-        EntitySetupNameError,
-        EntityInternalError,
-        EntityApplyError,
-        )
+    EntitySetupValueError,
+    EntitySetupError,
+    EntitySetupNameError,
+    EntityInternalError,
+    EntityApplyError,
+    )
 from .namespaces import (
     DynamicAttrsBase,
     FunctionsNS,
@@ -47,7 +48,8 @@ from .meta import (
     LiteralType,
     AttrName,
     Self,
-    ModelType, IFuncArgHint, AttrValue,
+    IFuncArgHint,
+    AttrValue,
 )
 # ------------------------------------------------------------
 # interfaces / base classes / internal structs
@@ -1035,6 +1037,7 @@ class AttrnameFuncArgHint(IFuncArgHint):
         return hash((self.__class__.__name__, self.type, self.inner_type))
 
 
+
 @dataclass
 class DotexprFuncArgHint(IFuncArgHint):
     inner_type: Optional[Type] = field(repr=True, default=Any)
@@ -1048,4 +1051,5 @@ class DotexprFuncArgHint(IFuncArgHint):
 
     def __hash__(self):
         return hash((self.__class__.__name__, self.type, self.inner_type))
+
 

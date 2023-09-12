@@ -132,6 +132,13 @@ ERR_MSG_SUPPORTED = "Supporting custom and standard python types, and typing: Op
 
 # @dataclass
 class IFuncArgHint:
+    """
+    TODO: make CustomGenericAlias, check readme.txt - search
+        custom type hints - IFuncArgHint - can be done:
+      ref:
+        https://peps.python.org/pep-0560/#specification
+        https://docs.python.org/3/reference/datamodel.html#emulating-generic-types
+    """
     # if type is DotExpression -> inner_type which evaluation of DotExpression should return
     # type: Type
     # inner_type: Optional[Type] = field(repr=False, default=Any)
@@ -150,6 +157,10 @@ class IFuncArgHint:
         must implement hash since it will be stored in TypeInfo.TYPE_INFO_REGISTRY
         """
         ...
+
+class IInjectFuncArgHint(IFuncArgHint):
+    pass
+
 
 # e.g. list, int, dict, Person, List, Dict[str, Optional[Union[str, float]]
 PyTypeHint                 = TypeVar("PyTypeHint", bound=Union[Type, IFuncArgHint])
