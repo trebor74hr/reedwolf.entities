@@ -60,7 +60,7 @@ from .expressions import (
     IFunctionDexpNode,
     ExecResult,
     execute_dexp_or_node,
-    ISetupSession, IThisRegistry,
+    ISetupSession, IThisRegistry, JustDotexprFuncArgHint,
 )
 from .func_args import (
     FunctionArguments,
@@ -405,10 +405,14 @@ class IFunction(IFunctionDexpNode):
     @staticmethod
     def execute_arg(
             apply_result: "IApplyResult", # noqa: F821
+            exp_arg: FuncArg,
             arg_value: ValueOrDexp,
-            prev_node_type_info:TypeInfo, 
+            prev_node_type_info:TypeInfo,
             ) -> Any:
-        if isinstance(arg_value, (DotExpression, IDotExpressionNode)):
+
+        if isinstance(exp_arg.type_info.py_type_hint, JustDotexprFuncArgHint):
+            pass
+        elif isinstance(arg_value, (DotExpression, IDotExpressionNode)):
             # arg_value._evaluator.execute(apply_result=apply_result)
             dexp_result = execute_dexp_or_node(
                             arg_value,
@@ -507,13 +511,31 @@ class IFunction(IFunctionDexpNode):
             if self.fixed_args.kwargs:
                 kwargs.update(self.fixed_args.kwargs)
 
-        args   = [self.execute_arg(apply_result, arg_value, prev_node_type_info=prev_node_type_info) 
-                  for arg_value in args]
-        kwargs = {arg_name: self.execute_arg(apply_result, arg_value,prev_node_type_info=prev_node_type_info) 
+        args_unfilled_by_kwargs = [exp_arg for exp_arg in self.function_arguments.func_arg_list if exp_arg.name not in kwargs]
+        # will need name to each arg and
+        kwargs_from_args = {}
+        for arg_value, exp_arg in zip(args, args_unfilled_by_kwargs):
+            kwargs_from_args[exp_arg.name] = self.execute_arg(apply_result=apply_result,
+                                                arg_value = arg_value,
+                                                exp_arg = exp_arg,
+                                                prev_node_type_info = prev_node_type_info)
+
+        kwargs_from_kwargs = {arg_name: self.execute_arg(apply_result=apply_result,
+                                             arg_value=arg_value,
+                                             exp_arg=self.function_arguments.func_arg_dict[arg_name],
+                                             prev_node_type_info=prev_node_type_info)
                   for arg_name, arg_value in kwargs.items()}
 
+        overlaps = list(set(kwargs_from_kwargs.keys()).intersection(set(kwargs_from_args.keys())))
+        if overlaps:
+            # TODO: this should have been checked before - in setup / check type phase. reuse that code - DRY.
+            raise EntityApplyError(owner=self, msg=f"Overlapping positional and keyword arguments: {overlaps}")
+
+        kwargs_all =  kwargs_from_kwargs.copy()
+        kwargs_all.update(kwargs_from_args)
+
         try:
-            ouptut_value = self.py_function(*args, **kwargs)
+            ouptut_value = self.py_function(**kwargs_all)
         except Exception as ex:
             raise EntityApplyError(owner=self, msg=f"failed in calling '{self.name}({args}, {kwargs})' => {ex}")
 

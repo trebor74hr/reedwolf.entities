@@ -35,7 +35,7 @@ from .utils import (
 )
 from .expressions import (
     DotexprFuncArgHint,
-    AttrnameFuncArgHint,
+    AttrnameFuncArgHint, JustDotexprFuncArgHint,
 )
 
 
@@ -194,12 +194,13 @@ Map = create_builtin_items_function_factory(
 
 
 # def filter_(item_list: Sequence[ItemType], bool_dot_expr: FuncArgDotExprBoolType) -> Sequence[ItemType]:
-def filter_(item_list: Sequence[ItemType], bool_dot_expr: DotexprFuncArgHint(inner_type=bool)) -> Sequence[ItemType]:
+def filter_(item_list: Sequence[ItemType],  term_dot_expr: JustDotexprFuncArgHint(inner_type=bool)) -> Sequence[ItemType]:
     """ is generatror """
     print(item_list)
-    if not isinstance(bool_dot_expr, DynamicAttrsBase):
+    if not isinstance(term_dot_expr, DynamicAttrsBase):
         raise TypeError(f"Argument expected to be FuncArgDotExprBoolType - DotExpression, got: {bool_dot_expr} -> {type(bool_dot_expr)}")
-    raise NotImplementedError("iterate and evaluate bool_dot_expr for every: {bool_dot_expr}")
+    # TODO: raise NotImplementedError("iterate and evaluate bool_dot_expr for every: {bool_dot_expr}")
+    return [1]
 
     # for item in item_list:
     #     # TODO: with apply_stack.item:

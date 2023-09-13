@@ -1052,4 +1052,10 @@ class DotexprFuncArgHint(IFuncArgHint):
     def __hash__(self):
         return hash((self.__class__.__name__, self.type, self.inner_type))
 
+class JustDotexprFuncArgHint(DotexprFuncArgHint):
+    """
+    will not execute dot expression - will leave the job to function
+    """
+    ...
+
 
