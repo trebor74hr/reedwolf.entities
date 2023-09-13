@@ -130,6 +130,10 @@ LiteralType             = TypeVar("LiteralType", bound=Any)
 
 ERR_MSG_SUPPORTED = "Supporting custom and standard python types, and typing: Optional, Union[..., NoneType] and Sequence/List[ py-types | Union[py-types, NoneType]]."
 
+# -- Following are used just to have type declaration for names
+AttrName = NewType("AttrName", str)
+AttrValue = NewType("AttrValue", Any)
+
 # @dataclass
 class IFuncArgHint:
     """
@@ -159,7 +163,10 @@ class IFuncArgHint:
         ...
 
 class IInjectFuncArgHint(IFuncArgHint):
-    pass
+
+    @abstractmethod
+    def get_apply_value(self, apply_result: "IApplyResult", prep_arg: "PrepArg") -> AttrValue:
+        ...
 
 
 # e.g. list, int, dict, Person, List, Dict[str, Optional[Union[str, float]]
@@ -222,9 +229,6 @@ ValuesTree = NewType("ValuesTree", Dict[ComponentNameType, TreeNode])
 #   Optional[contains: List[TreeNode]]
 MetaTree = NewType("MetaTree", Dict[ComponentNameType, TreeNode])
 
-# -- Following are used just to have type declaration for names
-AttrName = NewType("AttrName", str)
-AttrValue = NewType("AttrValue", Any)
 
 # ------------------------------------------------------------
 

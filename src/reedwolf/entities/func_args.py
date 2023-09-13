@@ -31,18 +31,13 @@ from .meta import (
     FunctionArgumentsType,
     TypeInfo,
     extract_function_arguments_default_dict,
-    is_model_class,
-    STANDARD_TYPE_LIST,
     is_function,
-    ComponentTreeWValuesType,
-    NoneType, IInjectFuncArgHint,
+    NoneType,
 )
 from .expressions import (
     DotExpression,
     IDotExpressionNode,
     ISetupSession,
-    AttrnameFuncArgHint,
-    DotexprFuncArgHint,
 )
 from .attr_nodes import (
     AttrDexpNode,
@@ -402,13 +397,11 @@ class FunctionArguments:
             for expected_arg in expected_args:
                 func_arg = self.get(expected_arg, UNDEFINED)
                 if func_arg and func_arg.type_info.is_inject_func_arg:
-                # if func_arg and inspect.isclass(func_arg.type_info.type_) \
-                #   and issubclass(func_arg.type_info.type_, IInjectFuncArgHint):
                     if not (isinstance(caller, AttrDexpNode)
                             and caller.namespace == FieldsNS):
                         raise EntityInternalError(owner=self, msg=f"Expected F.<fieldname>, got: {caller}")
                     inject_type_info = TypeInfo.get_or_create_by_type(py_type_hint=func_arg.type_info.type_,
-                                                                              caller=caller)
+                                                                      caller=caller)
                     # NOTE: caller is here lost, hopefully won't be needed
                     value_kwargs[func_arg.name] = inject_type_info
 
