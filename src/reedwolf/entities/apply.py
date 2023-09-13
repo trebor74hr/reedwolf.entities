@@ -639,9 +639,6 @@ class ApplyResult(IApplyResult):
                     # setup this registry
                     current_frame.set_this_registry(
                         component.get_this_registry()
-                        # comp_container.create_this_registry(
-                        #     component=component,
-                        #     setup_session=self.setup_session),
                     )
 
                     # finally apply validations on list of items
@@ -710,9 +707,6 @@ class ApplyResult(IApplyResult):
 
             new_frame.set_this_registry(
                 component.get_this_registry()
-                # comp_container.create_this_registry(
-                #     component=component,
-                #     setup_session=self.setup_session),
             )
 
 
@@ -799,19 +793,6 @@ class ApplyResult(IApplyResult):
                     #       on every instance in the list - what is this moment
 
                     # == Create This. registry and put in local setup session
-                    #
-                    # TODO: fill child_field_list or reuse from setup_session. 
-                    #       and pass it:
-                    #
-                    #   child_field_list: List[ChildField] = []
-                    #   for child_component in children:
-                    #       value = self.get_current_value(child_component, strict=False)
-                    #       child_field = ChildField(Name=child_component.name, _type_info=child_component.)
-                    #       child_component._
-                    #       child_component.
-                    # this_registry = self.current_frame.container.create_this_registry(
-                    #                         component=component,
-                    #                         setup_session=self.setup_session)
                     this_registry = component.get_this_registry()
                     with self.use_stack_frame(
                             ApplyStackFrame(

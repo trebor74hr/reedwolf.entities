@@ -134,7 +134,6 @@ ERR_MSG_SUPPORTED = "Supporting custom and standard python types, and typing: Op
 AttrName = NewType("AttrName", str)
 AttrValue = NewType("AttrValue", Any)
 
-# @dataclass
 class IFuncArgHint:
     """
     TODO: make CustomGenericAlias, check readme.txt - search
@@ -142,10 +141,17 @@ class IFuncArgHint:
       ref:
         https://peps.python.org/pep-0560/#specification
         https://docs.python.org/3/reference/datamodel.html#emulating-generic-types
-    """
     # if type is DotExpression -> inner_type which evaluation of DotExpression should return
-    # type: Type
-    # inner_type: Optional[Type] = field(repr=False, default=Any)
+    """
+
+    def setup_check(self, setup_session: "ISetupSession", caller: Optional["IDotExpressionNode"], func_arg: "FuncArg"):
+        # TODO: need to do this - currently Attrname makes problem only ...
+        #       if so - then remove redundant logic (Dotexpr ...) and call super() in implementations
+        #           exp_type_info = TypeInfo.get_or_create_by_type(self.type)
+        #           err_msg = func_arg.type_info.check_compatible(exp_type_info)
+        #           if err_msg:
+        #               raise EntityTypeError(owner=self, msg=f"Function argument {func_arg} type not compatible: {err_msg}")
+        ...
 
     @abstractmethod
     def get_type(self) -> Type:
@@ -154,7 +160,6 @@ class IFuncArgHint:
     @abstractmethod
     def get_inner_type(self) -> Optional[Type]:
         ...
-
 
     @abstractmethod
     def __hash__(self):
@@ -179,6 +184,10 @@ class IInjectFuncArgHint(IFuncArgHint):
     """
     will evaluate value and return to the caller
     """
+    @abstractmethod
+    def setup_check(self, setup_session: "ISetupSession", caller: Optional["IDotExpressionNode"], func_arg: "FuncArg"):
+        ...
+
     @abstractmethod
     def get_apply_inject_value(self, apply_result: "IApplyResult", prep_arg: "PrepArg") -> AttrValue:
         ...

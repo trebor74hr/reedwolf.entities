@@ -15,7 +15,7 @@ from typing import (
 from .utils import (
     UNDEFINED,
     UndefinedType,
-    to_repr, get_available_names_example,
+    to_repr,
 )
 from .exceptions import (
     EntitySetupError,
@@ -24,7 +24,6 @@ from .exceptions import (
     EntityInternalError,
     EntityApplyTypeError,
     EntityApplyNameError,
-    EntityApplyValueError,
     EntitySetupTypeError,
 )
 from .namespaces import (

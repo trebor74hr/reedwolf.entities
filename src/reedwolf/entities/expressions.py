@@ -49,7 +49,7 @@ from .meta import (
     AttrName,
     Self,
     IFuncArgHint,
-    AttrValue, IExecuteFuncArgHint,
+    AttrValue, IExecuteFuncArgHint, ModelType, IInjectFuncArgHint,
 )
 # ------------------------------------------------------------
 # interfaces / base classes / internal structs
@@ -1041,6 +1041,8 @@ class AttrnameFuncArgHint(IExecuteFuncArgHint):
                         arg_value: AttrValue,
                         prev_node_type_info: TypeInfo,
                         ) -> AttrValue:
+        # TODO: check that dot expression (arg_value) is in Models/Fields namespace
+        #       do not evaluate, just use ._name or GetName()
         raise NotImplementedError()
 
 
@@ -1089,4 +1091,5 @@ class JustDotexprFuncArgHint(IFuncArgHint):
 
     def __hash__(self):
         return hash((self.__class__.__name__, self.type, self.inner_type))
+
 

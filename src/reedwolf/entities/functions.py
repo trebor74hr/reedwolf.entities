@@ -30,6 +30,7 @@ from typing import (
     Tuple,
 )
 
+from .attr_nodes import AttrDexpNode
 from .utils import (
     UNDEFINED,
     get_available_names_example, UndefinedType,
@@ -41,7 +42,7 @@ from .exceptions import (
     EntityInternalError,
     EntitySetupTypeError,
     EntitySetupError,
-    EntityApplyError, EntityApplyTypeError,
+    EntityApplyError, EntityApplyTypeError, EntityTypeError,
 )
 from .namespaces import (
     FieldsNS,
@@ -51,16 +52,25 @@ from .meta import (
     TypeInfo,
     is_function,
     EmptyFunctionArguments,
-    NoneType, STANDARD_TYPE_LIST, is_model_class, ItemType, ModelType, IFuncArgHint, ComponentTreeWValuesType,
-    IInjectFuncArgHint, AttrValue, IExecuteFuncArgHint,
+    NoneType,
+    STANDARD_TYPE_LIST,
+    is_model_class,
+    ItemType,
+    ModelType,
+    ComponentTreeWValuesType,
+    IInjectFuncArgHint,
+    AttrValue,
+    IExecuteFuncArgHint,
 )
 from .expressions import (
     DotExpression,
     IDotExpressionNode,
     IFunctionDexpNode,
     ExecResult,
-    execute_dexp_or_node,
-    ISetupSession, IThisRegistry, JustDotexprFuncArgHint, DotexprFuncArgHint,
+    ISetupSession,
+    IThisRegistry,
+    JustDotexprFuncArgHint,
+    DotexprFuncArgHint,
 )
 from .func_args import (
     FunctionArguments,
@@ -570,6 +580,11 @@ class IFunction(IFunctionDexpNode):
 @dataclass
 class InjectComponentTreeValuesFuncArgHint(IInjectFuncArgHint):
 
+    def setup_check(self, setup_session: ISetupSession, caller: Optional[IDotExpressionNode], func_arg: FuncArg):
+        if not (isinstance(caller, AttrDexpNode)
+                and caller.namespace == FieldsNS):
+            raise EntityInternalError(owner=self, msg=f"Expected F.<fieldname>, got: {caller}")
+
     def get_type(self) -> Type:
         return self.__class__
 
@@ -990,3 +1005,58 @@ def try_create_function(
         raise EntitySetupNameNotFoundError(f"Function name '{attr_node_name}' not found. Valid are: {names_avail_all}")
 
     return func_node
+
+
+@dataclass
+class DotexprExecuteOnItemFactoryFuncArgHint(IInjectFuncArgHint):
+    inner_type: Optional[Type] = field(repr=True, default=Any)
+    type: Type = field(init=False, default=DotExpression)
+
+    def setup_check(self, setup_session: "ISetupSession", caller: Optional["IDotExpressionNode"], func_arg: "FuncArg"):
+        exp_type_info = TypeInfo.get_or_create_by_type(self.type)
+        err_msg = exp_type_info.check_compatible(func_arg.type_info)
+        if err_msg:
+            raise EntityTypeError(owner=self, msg=f"Function argument {func_arg} type not compatible: {err_msg}")
+
+
+    def get_type(self) -> Type:
+        return self.type
+
+    def get_inner_type(self) -> Optional[Type]:
+        return self.inner_type
+
+    def __hash__(self):
+        return hash((self.__class__.__name__, self.type, self.inner_type))
+
+    def get_apply_inject_value(self, apply_result: "IApplyResult", prep_arg: "PrepArg"
+                               ) -> Callable[[DotExpression, ModelType], AttrValue]:
+        """
+        create this registry function that retriieves context processor
+        which will crearte this factory for providded item
+        """
+        # TODO: 2nd) resolve again ThisRegistry dependency
+        from .registries import ThisRegistry
+
+        def execute_dot_expr_w_this_registry_of_item(
+                dot_expr:  DotExpression,
+                item: ModelType,
+        ) -> AttrValue:
+            # TODO: setup_session could be attached to current_frame directly
+            setup_session = apply_result.current_frame.component.setup_session
+            this_registry = ThisRegistry.create_for_model_class(
+                setup_session=setup_session,
+                model_class=type(item),
+            )
+            with apply_result.use_stack_frame(
+                    ApplyStackFrame(
+                        container = apply_result.current_frame.container,
+                        component = apply_result.current_frame.component,
+                        instance=item,
+                        this_registry = this_registry,
+                    )):
+                dexp_result = dot_expr._evaluator.execute_dexp(
+                    apply_result=apply_result,
+                )
+            return dexp_result.value
+
+        return execute_dot_expr_w_this_registry_of_item

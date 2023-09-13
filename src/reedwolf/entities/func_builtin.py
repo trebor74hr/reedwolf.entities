@@ -15,27 +15,24 @@ from .exceptions import (
     EntityApplyValueError,
     EntitySetupValueError,
 )
-from .functions import (
-    create_builtin_function_factory,
-    create_builtin_items_function_factory,
-    BuiltinFunctionFactory,
-    CustomFunctionFactory,
-    FunctionArgumentsType, CustomItemsFunctionFactory, InjectComponentTreeValuesFuncArgHint,
-)
+from .namespaces import DynamicAttrsBase
 from .meta import (
     ItemType,
     NumberType,
     is_enum,
     get_enum_members,
-    ComponentTreeWValuesType,
-)
-from .namespaces import DynamicAttrsBase
-from .utils import (
-    UNDEFINED,
 )
 from .expressions import (
     DotexprFuncArgHint,
     AttrnameFuncArgHint, JustDotexprFuncArgHint,
+)
+from .functions import (
+    create_builtin_function_factory,
+    create_builtin_items_function_factory,
+    BuiltinFunctionFactory,
+    CustomFunctionFactory,
+    FunctionArgumentsType,
+    InjectComponentTreeValuesFuncArgHint, DotexprExecuteOnItemFactoryFuncArgHint,
 )
 
 
@@ -194,32 +191,23 @@ Map = create_builtin_items_function_factory(
 
 
 # def filter_(item_list: Sequence[ItemType], bool_dot_expr: FuncArgDotExprBoolType) -> Sequence[ItemType]:
-def filter_(item_list: Sequence[ItemType],  term_dot_expr: JustDotexprFuncArgHint(inner_type=bool)) -> Sequence[ItemType]:
-    """ is generatror """
-    print(item_list)
-    if not isinstance(term_dot_expr, DynamicAttrsBase):
-        raise TypeError(f"Argument expected to be FuncArgDotExprBoolType - DotExpression, got: {bool_dot_expr} -> {type(bool_dot_expr)}")
-    # TODO: raise NotImplementedError("iterate and evaluate bool_dot_expr for every: {bool_dot_expr}")
-    return [1]
+def filter_(item_list: Sequence[ItemType],
+            dot_expr_execute_on_item_function: DotexprExecuteOnItemFactoryFuncArgHint(),
+            term_dot_expr: JustDotexprFuncArgHint(inner_type=bool)) -> Sequence[ItemType]:
+    """
+    TODO: can become iterator/generator
+    """
+    # if not isinstance(term_dot_expr, DynamicAttrsBase):
+    #     raise TypeError(f"Argument expected to be FuncArgDotExprBoolType - DotExpression, got: {term_dot_expr} -> {type(term_dot_expr)}")
+    # if not callable(dot_expr_execute_on_item_function):
+    #     raise TypeError(f"Argument expected to be callable, got: {term_dot_expr} -> {type(dot_expr_execute_on_item_function)}")
+    output = []
+    for item in item_list:
+        term_value = dot_expr_execute_on_item_function(term_dot_expr, item)
+        if term_value:
+            output.append(item)
+    return output
 
-    # for item in item_list:
-    #     # TODO: with apply_stack.item:
-    #     yield bool_dot_expr._evaluator.evaluate(apply_result).value
-    # # ALT: return iterator:
-    # #   result = (item for item in item_list if bool_dot_expr....(item))
-    # return
-
-
-# OLD:
-# def filter_(item_list: Sequence[ItemType], callable_or_fieldname : Optional[Union[Callable[[Any], Any], str]]) -> Sequence[ItemType]:
-#     " returns iterator "
-#     if not callable_or_fieldname:
-#         return (item for item in item_list if item)
-#     elif isinstance(callable_or_fieldname, str):
-#         return (item for item in item_list if getattr(item, callable_or_fieldname, None))
-#     elif callable(callable_or_fieldname):
-#         return (item for item in item_list if callable_or_fieldname(item))
-#     raise TypeError(f"Argument expected to be callable or string (fieldname), got: {callable_or_fieldname} -> {type(callable_or_fieldname)}")
 
 Filter = create_builtin_items_function_factory(
             items_value_arg_name="item_list",

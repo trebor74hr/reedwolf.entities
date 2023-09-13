@@ -32,7 +32,7 @@ from .meta import (
     TypeInfo,
     extract_function_arguments_default_dict,
     is_function,
-    NoneType,
+    NoneType, IInjectFuncArgHint, IFuncArgHint,
 )
 from .expressions import (
     DotExpression,
@@ -396,14 +396,16 @@ class FunctionArguments:
             # TODO: more clean way would be to iterate all self.func_arg_list and if inject they must be empty ...
             for expected_arg in expected_args:
                 func_arg = self.get(expected_arg, UNDEFINED)
-                if func_arg and func_arg.type_info.is_inject_func_arg:
-                    if not (isinstance(caller, AttrDexpNode)
-                            and caller.namespace == FieldsNS):
-                        raise EntityInternalError(owner=self, msg=f"Expected F.<fieldname>, got: {caller}")
-                    inject_type_info = TypeInfo.get_or_create_by_type(py_type_hint=func_arg.type_info.type_,
-                                                                      caller=caller)
-                    # NOTE: caller is here lost, hopefully won't be needed
-                    value_kwargs[func_arg.name] = inject_type_info
+                assert func_arg
+                if func_arg and func_arg.type_info.is_func_arg_hint:
+                    func_arg_hint: IFuncArgHint = func_arg.type_info.py_type_hint
+                    func_arg_hint.setup_check(setup_session=setup_session, caller=caller, func_arg=func_arg)
+
+                    if func_arg.type_info.is_inject_func_arg:
+                        inject_type_info = TypeInfo.get_or_create_by_type(py_type_hint=func_arg.type_info.type_,
+                                                                          caller=caller)
+                        # NOTE: caller is here lost, hopefully won't be needed
+                        value_kwargs[func_arg.name] = inject_type_info
 
             # if ReservedArgumentNames.INJECT_COMPONENT_TREE in expected_args:
             #     if not (isinstance(caller, AttrDexpNode)
