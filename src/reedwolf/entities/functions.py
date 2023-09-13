@@ -52,7 +52,7 @@ from .meta import (
     is_function,
     EmptyFunctionArguments,
     NoneType, STANDARD_TYPE_LIST, is_model_class, ItemType, ModelType, IFuncArgHint, ComponentTreeWValuesType,
-    IInjectFuncArgHint, AttrValue,
+    IInjectFuncArgHint, AttrValue, IExecuteFuncArgHint,
 )
 from .expressions import (
     DotExpression,
@@ -60,7 +60,7 @@ from .expressions import (
     IFunctionDexpNode,
     ExecResult,
     execute_dexp_or_node,
-    ISetupSession, IThisRegistry, JustDotexprFuncArgHint,
+    ISetupSession, IThisRegistry, JustDotexprFuncArgHint, DotexprFuncArgHint,
 )
 from .func_args import (
     FunctionArguments,
@@ -410,17 +410,22 @@ class IFunction(IFunctionDexpNode):
             prev_node_type_info:TypeInfo,
             ) -> Any:
 
+        execute_func_arg_hint: Optional[IExecuteFuncArgHint] = None
         if isinstance(exp_arg.type_info.py_type_hint, JustDotexprFuncArgHint):
-            pass
+            execute_func_arg_hint = None
+        elif isinstance(exp_arg.type_info.py_type_hint, IExecuteFuncArgHint):
+            execute_func_arg_hint: DotexprFuncArgHint = exp_arg.type_info.py_type_hint
         elif isinstance(arg_value, (DotExpression, IDotExpressionNode)):
-            # arg_value._evaluator.execute(apply_result=apply_result)
-            dexp_result = execute_dexp_or_node(
-                            arg_value,
-                            arg_value,
-                            dexp_result = UNDEFINED,
-                            prev_node_type_info=prev_node_type_info,
-                            apply_result=apply_result)
-            arg_value = dexp_result.value
+            # TODO: Explain when this happens!!
+            # NOTE: currently no inner type is passed
+            execute_func_arg_hint = DotexprFuncArgHint()
+
+        if execute_func_arg_hint:
+            arg_value = execute_func_arg_hint.get_apply_value(
+                exp_arg=exp_arg,
+                arg_value=arg_value,
+                prev_node_type_info=prev_node_type_info,
+                apply_result=apply_result)
 
         return arg_value
 
@@ -556,7 +561,7 @@ class IFunction(IFunctionDexpNode):
 
         func_arg_hint : IInjectFuncArgHint = exp_arg.type_info.py_type_hint
 
-        output = func_arg_hint.get_apply_value(apply_result=apply_result, prep_arg=prep_arg)
+        output = func_arg_hint.get_apply_inject_value(apply_result=apply_result, prep_arg=prep_arg)
 
         assert prep_arg.name not in kwargs
         kwargs[prep_arg.name] = output
@@ -571,7 +576,7 @@ class InjectComponentTreeValuesFuncArgHint(IInjectFuncArgHint):
     def get_inner_type(self) -> Optional[Type]:
         return ComponentTreeWValuesType
 
-    def get_apply_value(self, apply_result: IApplyResult, prep_arg: PrepArg) -> AttrValue:
+    def get_apply_inject_value(self, apply_result: IApplyResult, prep_arg: PrepArg) -> AttrValue:
         # maybe belongs to implementation
         if not isinstance(prep_arg.caller, IDotExpressionNode):
             raise EntityInternalError(owner=self, msg=f"Expected IDotExpressionNode, got: {type(inject_prep_arg.caller)} / {inject_prep_arg.caller}")

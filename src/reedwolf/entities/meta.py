@@ -155,6 +155,7 @@ class IFuncArgHint:
     def get_inner_type(self) -> Optional[Type]:
         ...
 
+
     @abstractmethod
     def __hash__(self):
         """
@@ -162,10 +163,24 @@ class IFuncArgHint:
         """
         ...
 
-class IInjectFuncArgHint(IFuncArgHint):
+
+class IExecuteFuncArgHint(IFuncArgHint):
 
     @abstractmethod
-    def get_apply_value(self, apply_result: "IApplyResult", prep_arg: "PrepArg") -> AttrValue:
+    def get_apply_value(self, apply_result: "IApplyResult",
+                        exp_arg: "PrepArg",
+                        arg_value: AttrValue,
+                        prev_node_type_info: "TypeInfo",
+                        ) -> AttrValue:
+        ...
+
+
+class IInjectFuncArgHint(IFuncArgHint):
+    """
+    will evaluate value and return to the caller
+    """
+    @abstractmethod
+    def get_apply_inject_value(self, apply_result: "IApplyResult", prep_arg: "PrepArg") -> AttrValue:
         ...
 
 
