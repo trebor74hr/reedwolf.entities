@@ -1,53 +1,54 @@
 import inspect
 from abc import (
-        ABC, 
-        abstractmethod,
-        )
+    ABC,
+    abstractmethod,
+)
 from typing import (
-        Tuple,
-        Any,
-        Dict,
-        List,
-        Optional,
-        Union,
-        Type,
-        )
-from inspect import isclass, isabstract
-
-from dataclasses import dataclass, field
+    Tuple,
+    Any,
+    Dict,
+    List,
+    Optional,
+    Union,
+    Type,
+)
+from dataclasses import (
+    dataclass,
+    field,
+)
 
 from .utils import (
-        get_available_names_example,
-        UNDEFINED,
-        NA_DEFAULTS_MODE,
-        UndefinedType,
-        camel_case_to_snake,
-        )
+    get_available_names_example,
+    UNDEFINED,
+    NA_DEFAULTS_MODE,
+    UndefinedType,
+    camel_case_to_snake,
+    )
 from .exceptions import (
-        EntitySetupError,
-        EntitySetupValueError,
-        EntitySetupNameError,
-        EntitySetupTypeError,
-        EntityInternalError,
-        EntityNameNotFoundError,
-        EntitySetupNameNotFoundError,
-        EntityApplyNameNotFoundError,
-        EntityValidationError,
-        )
+    EntitySetupError,
+    EntitySetupValueError,
+    EntitySetupNameError,
+    EntitySetupTypeError,
+    EntityInternalError,
+    EntityNameNotFoundError,
+    EntitySetupNameNotFoundError,
+    EntityApplyNameNotFoundError,
+    EntityValidationError, EntityTypeError,
+)
 from .namespaces import (
-        ModelsNS,
-        FieldsNS,
-        )
+    ModelsNS,
+    FieldsNS,
+    )
 from .meta import (
-        STANDARD_TYPE_LIST,
-        TransMessageType,
-        TypeInfo,
-        is_model_class,
-        get_model_fields,
-        ModelType,
-        DataclassType,
-        Self,
-        )
+    STANDARD_TYPE_LIST,
+    TransMessageType,
+    TypeInfo,
+    is_model_class,
+    get_model_fields,
+    ModelType,
+    DataclassType,
+    Self,
+)
 from .base import (
     get_name_from_bind,
     ComponentBase,
@@ -57,71 +58,71 @@ from .base import (
     KeyPairs,
     IApplyResult,
     SetupStackFrame,
-    ISetupSession,
-    IFieldBase,
-        )
+)
 from .expressions import (
-        DotExpression,
-        IThisRegistry,
-        )
+    DotExpression,
+    )
 from .bound_models import (
-        BoundModel,
-        BoundModelWithHandlers,
-        )
+    BoundModel,
+    BoundModelWithHandlers,
+    )
 from .attr_nodes import (
-        AttrDexpNode,
-        )
+    AttrDexpNode,
+    )
 from .functions import (
-        CustomFunctionFactory,
-        IFunction,
-        )
+    CustomFunctionFactory,
+    IFunction,
+    )
 from .registries import (
-        SetupSession,
-        ModelsRegistry,
-        FieldsRegistry,
-        FunctionsRegistry,
-        OperationsRegistry,
-        ContextRegistry,
-        ConfigRegistry,
-        )
+    SetupSession,
+    ModelsRegistry,
+    FieldsRegistry,
+    FunctionsRegistry,
+    OperationsRegistry,
+    ContextRegistry,
+    ConfigRegistry,
+    )
 from .valid_children import (
-        ChildrenValidationBase,
-        )
+    ChildrenValidationBase,
+    )
 from .eval_children import (
-        ChildrenEvaluationBase,
-        )
+    ChildrenEvaluationBase,
+    )
 from .valid_items import (
-        ItemsValidationBase,
-        SingleValidation,
-        )
+    ItemsValidationBase,
+    SingleValidation,
+    )
 from .eval_items import (
-        ItemsEvaluationBase,
-        )
+    ItemsEvaluationBase,
+    )
 from .valid_base import (
-        ValidationBase,
-        )
+    ValidationBase,
+    )
 from .eval_base import (
-        EvaluationBase,
-        )
+    EvaluationBase,
+    )
 from .fields import (
-        FieldGroup,
-        )
+    FieldGroup,
+)
 from .contexts import (
-        IContext,
-        )
+    IContext,
+)
 from .config import (
-        Config,
-        )
-
+    Config,
+)
+from .struct_converters import (
+    StructConverterRunner,
+)
+# import modules that hold any kind of component - will used for COMPONENTS_REGISTRY
 from . import (
-        fields, 
-        valid_field, 
-        valid_items, 
-        valid_children, 
-        eval_field,
-        eval_items,
-        eval_children,
-        )
+    fields,
+    valid_field,
+    valid_items,
+    valid_children,
+    eval_field,
+    eval_items,
+    eval_children,
+)
 
 # ------------------------------------------------------------
 # Entity
@@ -131,6 +132,10 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
     @staticmethod
     def is_container() -> bool:
+        return True
+
+    @staticmethod
+    def can_have_children() -> bool:
         return True
 
     # def is_subentity(self):
@@ -773,7 +778,7 @@ class Entity(ContainerBase):
                     defaults_mode=True,
                     entity=self,
                     component_name_only=None,
-                    context=context, 
+                    context=context,
                     instance=NA_DEFAULTS_MODE,
                     instance_new=None,
                     )\
@@ -789,6 +794,18 @@ class Entity(ContainerBase):
         output = apply_result._dump_defaults()
 
         return output
+
+    def create_dto_instance_from_model_instance(self, instance: ModelType, dto_class: Type[ModelType]) -> ModelType:
+        if not isinstance(instance, self.bound_model.model):
+            raise EntityTypeError(owner=self, msg=f"Expected  {self.bound_model.model} instance, got: {instance} : {type(instance)}")
+
+        struct_converter_runner = StructConverterRunner()
+        dto_instance = struct_converter_runner.create_dto_instance_from_model_instance(
+                            component=self,
+                            instance=instance,
+                            dto_class=dto_class)
+
+        return dto_instance
 
 
 # ------------------------------------------------------------
@@ -933,9 +950,9 @@ def collect_classes(componnents_registry: Dict, module: Any, klass_match: type) 
                  if not n.startswith("_")]
 
     for name, comp_klass in names:
-        if isclass(comp_klass) \
+        if inspect.isclass(comp_klass) \
           and issubclass(comp_klass, klass_match)\
-          and not isabstract(comp_klass) \
+          and not inspect.isabstract(comp_klass) \
           and not name.endswith("Base") \
           and name not in ("Component",) \
           :

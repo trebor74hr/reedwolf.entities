@@ -14,10 +14,12 @@ function is registereed and can be used in
 
 extra args could be passed and must be called as function.
 """
-from dataclasses import dataclass, field
+from dataclasses import (
+    dataclass,
+    field,
+)
 from enum import Enum
 from abc import ABC
-from inspect import isclass
 from typing import (
     Dict,
     Optional,
@@ -502,7 +504,7 @@ class IFunction(IFunctionDexpNode):
                     args.insert(0, input_value)
 
             for exp_arg in self.function_arguments.func_arg_list:
-                # if isclass(prep_arg.type_info.type_) and issubclass(prep_arg.type_info.type_, IInjectFuncArgHint):
+                # if inspect.isclass(prep_arg.type_info.type_) and issubclass(prep_arg.type_info.type_, IInjectFuncArgHint):
                 if exp_arg.type_info.is_inject_func_arg:
                     prep_arg = self.prepared_args.get(exp_arg.name)
                     assert prep_arg
@@ -1041,7 +1043,8 @@ class DotexprExecuteOnItemFactoryFuncArgHint(IInjectFuncArgHint):
                 dot_expr:  DotExpression,
                 item: ModelType,
         ) -> AttrValue:
-            # TODO: setup_session could be attached to current_frame directly
+            # TODO: if this becommes heavy - instead of new frame, reuse existing and change instance only
+            #       this_registry should be the same for same session (same type items)
             setup_session = apply_result.current_frame.component.setup_session
             this_registry = ThisRegistry.create_for_model_class(
                 setup_session=setup_session,

@@ -36,12 +36,13 @@ from ...meta import (
         NoneType,
         )
 from ...base import (
-        IStackOwnerSession,
-        IStackFrame,
-        UseStackFrameCtxManagerBase,
-        ComponentBase,
-        MAX_RECURSIONS,
-        )
+    IStackOwnerSession,
+    IStackFrame,
+    UseStackFrameCtxManagerBase,
+    ComponentBase,
+    MAX_RECURSIONS,
+    DTO_STRUCT_CHILDREN_SUFFIX,
+)
 from ...fields import (
         FieldBase, 
         FieldGroup, 
@@ -602,7 +603,7 @@ class DumpToBase(IStackOwnerSession):
                                     title=f"Children of '{component.name}'",
                                     file_dump = self.current_frame.file_dump,
                                     )
-            var_py_name = f"{component.name}_children"
+            var_py_name = f"{component.name}{DTO_STRUCT_CHILDREN_SUFFIX}"
             var_declaration = self.KlassVariableDeclaration(
                                     name = var_py_name, 
                                     flatten=self.flatten,

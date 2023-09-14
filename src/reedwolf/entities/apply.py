@@ -605,8 +605,14 @@ class ApplyResult(IApplyResult):
                                             component=component,
                                             in_component_only_tree=in_component_only_tree)
 
+            if component.is_subentity_items():
 
-            if isinstance(instance, (list, tuple)):
+                if instance is None:
+                    # TODO: checkk type_info is optional - similar to single case
+                    ...
+                elif not isinstance(instance, (list, tuple)):
+                    raise EntityApplyValueError(owner=component, msg=f"Expecting list of instances, got: {to_repr(instance)}")
+
                 # ---- SubEntityItems case
                 if not component.is_subentity_items():
                     raise EntityApplyValueError(owner=component, msg=f"Did not expect list of instances: {to_repr(instance)}") 
@@ -664,8 +670,11 @@ class ApplyResult(IApplyResult):
             if instance is None:
                 # TODO: check that type_info.is_optional ...
                 ...
+            elif isinstance(instance, (list, tuple)):
+                raise EntityApplyValueError(owner=component, msg=f"Did not expected list/tuple , got: {instance} : {type(instance)}")
+
             elif not is_model_instance(instance):
-                raise EntityApplyValueError(owner=self, msg=f"Expected list/tuple or model instance, got: {instance} : {type(instance)}")
+                raise EntityApplyValueError(owner=component, msg=f"Expected single model instance, got: {instance} : {type(instance)}")
 
             new_frame = ApplyStackFrame(
                             container = component, 
@@ -874,7 +883,10 @@ class ApplyResult(IApplyResult):
         Recursion -> _apply(mode_subentity_items=True) -> ...
         """
 
-        if not isinstance(instance_list, (list, tuple)):
+        if instance_list is None:
+            # NOTE: found no better way to do it
+            instance_list = []
+        elif not isinstance(instance_list, (list, tuple)):
             raise EntityApplyValueError(owner=self, msg=f"{component}: Expected list/tuple in the new instance, got: {current_instance_list_new}")
 
         # instance_list = instance
@@ -1595,7 +1607,7 @@ class ApplyResult(IApplyResult):
                 attr_current_value_instance = None
 
         if attr_current_value_instance is not None:
-            values_dict["attr_current_value_instance"] = attr_current_value_instance
+            values_dict["value_instance"] = attr_current_value_instance
             # values_dict["key_string"] = attr_current_value_instance.key_string
 
         # -- add to parent object or call recursion and fill the tree completely
@@ -1683,8 +1695,8 @@ class ApplyResult(IApplyResult):
         # component's name
         output["name"] = tree["name"]
 
-        if "attr_current_value_instance" in tree:
-            output["value"] = tree["attr_current_value_instance"].get_value(strict=True)
+        if "value_instance" in tree:
+            output["value"] = tree["value_instance"].get_value(strict=True)
 
         self._dump_values_children(tree=tree, output=output, key_name="contains", depth=depth)
         self._dump_values_children(tree=tree, output=output, key_name="subentity_items", depth=depth)

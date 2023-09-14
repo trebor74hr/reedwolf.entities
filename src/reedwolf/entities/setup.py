@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from dataclasses import dataclass, field
-from inspect import isclass
+import inspect
 from typing import (
     Any,
     List,
@@ -242,7 +242,7 @@ class RegistryBase(IRegistry):
         # if not (is_model_class(model_class) or model_class in STANDARD_TYPE_LIST or is_enum(model_class)):
         #     raise EntitySetupValueError(owner=self, msg=f"Expected model class (DC/PYD), got: {type(model_class)} / {model_class} ")
 
-        if th_field and not (isclass(th_field) and issubclass(th_field, IComponentFields)):
+        if th_field and not (inspect.isclass(th_field) and issubclass(th_field, IComponentFields)):
             raise EntitySetupValueError(owner=self, msg=f"Expected th_field is IComponentFields, got: {type(th_field)} / {th_field} ")
 
         # type_info = TypeInfo.get_or_create_by_type(py_type_hint=model_class)

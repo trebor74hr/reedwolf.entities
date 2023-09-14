@@ -96,7 +96,9 @@ from .contexts import (
 # ------------------------------------------------------------
 
 MAX_RECURSIONS: int = 30
-DEXP_PREFIX = "DEXP::"
+DEXP_PREFIX: str = "DEXP::"
+
+DTO_STRUCT_CHILDREN_SUFFIX: str = "_children"
 
 def warn(msg):
     print(f"WARNING: {msg}")  # noqa: T001
@@ -553,13 +555,16 @@ class ComponentBase(SetParentMixin, ABC):
     def is_fieldgroup() -> bool:
         return False
 
+    @staticmethod
+    def can_have_children() -> bool:
+        return False
 
-    def may_collect_my_children(self) -> bool:
+    @staticmethod
+    def may_collect_my_children() -> bool:
         """ 
         when collecting children - if this sub-component has children, 
         may they be collected and be referenced e.g. in This. <all-attributess>
         access (see get_children(deep_collect=True) mode)
-
         """
         return False
 
@@ -1878,7 +1883,7 @@ class ApplyStackFrame(IStackFrame):
                                else self.instance
         else:
             self.bound_model_root = self.container.bound_model
-            if self.instance_is_list:
+            if self.instance_is_list and self.instance is not None:
                 if not isinstance(self.instance, (list, tuple)):
                     raise EntityInternalError(owner=self, msg=f"Expected list of model instances, got: {self.instance}")
                 instance_to_test = self.instance[0] if self.instance else None

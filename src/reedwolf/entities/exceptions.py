@@ -60,6 +60,9 @@ class EntityNameNotFoundError(EntityError):
 class EntityTypeError(EntityError):
     pass
 
+class EntityValueError(EntityError):
+    pass
+
 # ------------------------------------------------------------
 # Entity Setup phase (boot time) validation errors
 # ------------------------------------------------------------

@@ -432,6 +432,7 @@ class ThisRegistry(IThisRegistry, RegistryBase):
     component: Optional[ComponentBase] = field(default=None)
     model_class: Optional[ModelType] = field(default=None)
     # Used for ItemsFunctions when Item attribute will be available, e.g. This.name -> AttrValue
+    # TODO: do I really need this parameter - is it overlapping with is_items_mode?
     is_items_for_each_mode: bool = field(default=False)
 
     # autocomputed

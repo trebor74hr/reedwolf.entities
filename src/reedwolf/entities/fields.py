@@ -468,6 +468,11 @@ class BooleanField(FieldBase):
     def may_collect_my_children() -> bool:
         return True
 
+    @staticmethod
+    def can_have_children() -> bool:
+        return True
+
+
 # ------------------------------------------------------------
 # ChoiceField
 # ------------------------------------------------------------
@@ -838,6 +843,10 @@ class FieldGroup(ComponentBase, IFieldGroup):
 
     @staticmethod
     def may_collect_my_children() -> bool:
+        return True
+
+    @staticmethod
+    def can_have_children() -> bool:
         return True
 
     @staticmethod
