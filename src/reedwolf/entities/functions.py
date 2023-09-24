@@ -449,9 +449,6 @@ class IFunction(IFunctionDexpNode):
                      ) -> Any:
         instance = apply_result.current_frame.instance
 
-        # apply_result.current_frame.instance_is_list
-        # if self.this_registry.is_items_for_each_mode:
-
         with apply_result.use_stack_frame(
                 ApplyStackFrame(
                     container=apply_result.current_frame.container,

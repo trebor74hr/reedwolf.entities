@@ -47,7 +47,7 @@ from .meta import (
     get_model_fields,
     ModelType,
     DataclassType,
-    Self,
+    Self, NoneType,
 )
 from .base import (
     get_name_from_bind,
@@ -123,6 +123,12 @@ from . import (
     eval_items,
     eval_children,
 )
+from .values_accessor import (
+    IValueAccessor,
+    STANDARD_VALUE_ACCESSOR_CLASS_REGISTRY,
+    DEFAULT_VALUE_ACCESSOR_CLASS,
+)
+
 
 # ------------------------------------------------------------
 # Entity
@@ -599,7 +605,7 @@ class Entity(ContainerBase):
     # binding interface - not dumped/exported
     bound_model     : Optional[BoundModel] = field(repr=False, default=None, metadata={"skip_dump": True})
     # will be filled automatically with Config() if not supplied
-    config          : Optional[Type[Config]] = field(repr=False, default=None, metadata={"skip_dump": True})
+    config          : Optional[Config] = field(repr=False, default=None, metadata={"skip_dump": True})
     context_class   : Optional[Type[IContext]] = field(repr=False, default=None, metadata={"skip_dump": True})
     functions       : Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
 
@@ -613,12 +619,17 @@ class Entity(ContainerBase):
     setup_session      : Optional[SetupSession]    = field(init=False, repr=False, default=None)
     components      : Optional[Dict[str, ComponentBase]]  = field(init=False, repr=False, default=None)
     models          : Dict[str, Union[type, DotExpression]] = field(repr=False, init=False, default_factory=dict)
-    # in Entity (top object) this case allway None - since it is top object
-    parent           : Union[None, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    # in Entity (top object) this case allways None - since it is top object
+    # NOTE: not DRY: Entity, SubentityBase and CompoenentBase
+    parent           : Union[NoneType, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     parent_name      : Union[str, UndefinedType]  = field(init=False, default=UNDEFINED)
+    entity           : Union[ContainerBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    value_accessor   : IValueAccessor = field(init=False, repr=False)
 
     # used for automatic component's naming, <parent_name/class_name>__<counter>
     name_counter_by_parent_name: Dict[str, int] = field(init=False, repr=False, default_factory=dict)
+    value_accessor_class_registry: Dict[str, Type[IValueAccessor]] = field(init=False, repr=False)
+    value_accessor_default: IValueAccessor = field(init=False, repr=False)
 
     def __post_init__(self):
 
@@ -645,6 +656,12 @@ class Entity(ContainerBase):
 
         if not isinstance(self.config, Config):
             raise EntitySetupValueError(owner=self, msg=f"config needs Config instance, got: {type(self.config)} / {self.config}")
+
+        # TODO: it is copied to enable user to extend with new ones (should be added in Config/Resource/Repository)
+        self.value_accessor_class_registry = STANDARD_VALUE_ACCESSOR_CLASS_REGISTRY.copy()
+        self.value_accessor_default = self.config.value_accessor if self.config.value_accessor \
+                                      else DEFAULT_VALUE_ACCESSOR_CLASS()
+        assert isinstance(self.value_accessor_default, IValueAccessor)
 
         if self.context_class and not (
                 inspect.isclass(self.context_class)
@@ -840,8 +857,11 @@ class SubEntityBase(ContainerBase, ABC):
     models           : Dict[str, Union[type, DotExpression]] = field(init=False, repr=False, default_factory=dict)
 
     # --- ComponentBase common attrs
+    # NOTE: not DRY: Entity, SubentityBase and CompoenentBase
     parent           : Union[ComponentBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     parent_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+    entity           : Union[ContainerBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    value_accessor   : IValueAccessor = field(init=False, repr=False)
 
     # subentity_items specific - is this top parent or what? what is the difference to self.parent
 

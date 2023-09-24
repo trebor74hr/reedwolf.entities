@@ -1,3 +1,9 @@
+# --------------------------------------------------------------------------------------
+# TOOD: consider to rewrite this to use ._apply() and apply_result to get all values ...
+#       similar to logic NA_DEFAuLTS ... get_defaults() ..., no cleaners call,
+#       just parse and fill values, then dump to wanted struct.
+# --------------------------------------------------------------------------------------
+
 # dump_defaults
 # instance = NA_DEFAULTS_MODE,
 from dataclasses import (

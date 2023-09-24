@@ -34,7 +34,7 @@ from .meta import (
     TypeInfo,
     is_model_class,
     is_function,
-    ModelField,
+    ModelField, AttrName, AttrValue,
 )
 # TODO: remove this dependency
 from .base import (
@@ -198,24 +198,18 @@ class AttrDexpNode(IDotExpressionNode):
         # TODO: not nicest way - string split
         #       for subentity_items: [p._name for p in frame.container.bound_model.model.Path]
         names = self.name.split(".")
-
         attr_name = names[-1]
-        # attr_name_orig = attr_name
-
         assert dexp_result not in (None,)
 
         if dexp_result in (UNDEFINED, None):
-            # ==== Initial / first value - get from registry / namespace, e.g. M
+            # ==== Initial / 1st value - get root value from registry / namespace, e.g. M.<attr_name>
             dexp_result = ExecResult()
             frame = apply_result.current_frame
 
-            if frame.container.is_subentity() or frame.on_component_only:
-                if not len(names)==1:
+            if not len(names)==1:
+                if frame.container.is_subentity() or frame.on_component_only:
                     raise EntityInternalError(owner=self, msg=f"Attribute node - execution initial step for SubEntityItems/SubEntitySingle failed, expected single name members (e.g. M), got: {self.name}\n  == Compoonent: {frame.container}")
-                # if not len(names)>1:
-                #     raise EntityInternalError(owner=self, msg=f"Initial evaluation step for subentity_items failed, expected multiple name members (e.g. M.address_set), got: {self.name}\n  == Compoonent: {frame.container}")
-            else:
-                if not len(names)==1:
+                else:
                     raise EntityInternalError(owner=self, msg=f"Initial evaluation step for non-subentity_items failed, expected single name member (e.g. M), got: {self.name}\n  == Compoonent: {frame.container}")
 
             if self.namespace == ThisNS:
@@ -229,6 +223,7 @@ class AttrDexpNode(IDotExpressionNode):
 
             # get starting instance
             root_value = registry.apply_to_get_root_value(apply_result=apply_result, attr_name=attr_name, caller=self)
+
             value_previous = root_value.value_root
             attr_name_new = root_value.attr_name_new
 
@@ -244,64 +239,47 @@ class AttrDexpNode(IDotExpressionNode):
                 do_fetch_by_name = False
             else:
                 do_fetch_by_name = True
-
-            # == M.company.name mode
-            # do_fetch_by_name = registry.ROOT_VALUE_NEEDS_FETCH_BY_NAME
-
         else:
-            # ==== 2+ value - based on previous result and evolved one step further
-
+            # ==== 2+ value - based on previous result and evolved one step further, e.g. M.access.alive
             if not len(names)>1:
                 raise EntityInternalError(owner=self, msg=f"Names need to be list of at least 2 members: {names}") 
             value_previous = dexp_result.value
             do_fetch_by_name = True
 
-
         if do_fetch_by_name:
-            # convert previous value to list, process all and convert back to
-            # single object when previous_value is not a list
-            result_is_list = isinstance(value_previous, (list, tuple))
+            if isinstance(value_previous, (list, tuple)):
+                raise EntityInternalError(owner=self, msg=f"Expected standard object, got list: {type(value_previous)} : {to_repr(value_previous)}")
 
-            if not result_is_list:
-                # TODO: handle None, UNDEFINED?
-                if prev_node_type_info and prev_node_type_info.is_list:
-                    raise EntityApplyNameError(owner=self, msg=f"Fetching attribute '{attr_name}' expected list and got: '{to_repr(value_previous)}' : '{type(value_previous)}'")
-                value_prev_as_list = [value_previous]
-            else:
-                if prev_node_type_info and not prev_node_type_info.is_list:
-                    raise EntityApplyNameError(owner=self, msg=f"Fetching attribute '{attr_name}' got list what is not expected, got: '{to_repr(value_previous)}' : '{type(value_previous)}'")
-                value_prev_as_list = value_previous
+            if prev_node_type_info and prev_node_type_info.is_list:
+                  raise EntityApplyNameError(owner=self, msg=f"Fetching attribute '{attr_name}' expected list and got: '{to_repr(value_previous)}' : '{type(value_previous)}'")
 
+            value_new = self._get_value_new(apply_result=apply_result,
+                                            value_prev=value_previous,
+                                            attr_name=attr_name)
             # ------------------------------------------------------------
-            value_new_as_list = []
-
-            for idx, value_prev in enumerate(value_prev_as_list, 0):
-                if isinstance(value_prev, IAttributeAccessorBase):
-                    # NOTE: if this is last in chain - fetch final value
-                    value_new = value_prev.get_attribute(
-                                    apply_result=apply_result, 
-                                    attr_name=attr_name, 
-                                    is_last=is_last)
-                else:
-                    if idx==0 and attr_name==ReservedAttributeNames.INSTANCE_ATTR_NAME:
-                        value_new = value_prev
-                    else:
-                        if (value_prev is UNDEFINED 
-                          or value_prev is None
-                          or value_prev is NA_DEFAULTS_MODE
-                          ):
-                            # 'Maybe monad' like
-                            value_new = value_prev
-                        else:
-                            if not hasattr(value_prev, attr_name):
-                                # TODO: list which fields are available
-                                # if all types match - could be internal problem?
-                                raise EntityApplyNameError(owner=self, msg=f"Attribute '{attr_name}' not found in '{to_repr(value_prev)}' : '{type(value_prev)}'")
-                            value_new = getattr(value_prev, attr_name)
-
-                value_new_as_list.append(value_new)
-
-            value_new = value_new_as_list[0] if not result_is_list else value_new_as_list
+            # NOTE: dropped iterating list results - no such test example and hard to imagine which syntax to
+            #       use and when to use it.
+            # # Ponvert previous value to list, process all and convert back to
+            # # single object when previous_value is not a list
+            # result_is_list = isinstance(value_previous, (list, tuple))
+            # if not result_is_list:
+            #   # TODO: handle None, UNDEFINED?
+            #   if prev_node_type_info and prev_node_type_info.is_list:
+            #         raise EntityApplyNameError(owner=self, msg=f"Fetching attribute '{attr_name}' expected list and got: '{to_repr(value_previous)}' : '{type(value_previous)}'")
+            #   value_prev_as_list = [value_previous]
+            # else:
+            #   value_prev_as_list = value_previous
+            #   if prev_node_type_info and not prev_node_type_info.is_list:
+            #     raise EntityApplyNameError(owner=self, msg=f"Fetching attribute '{attr_name}' got list what is not expected, got: '{to_repr(value_previous)}' : '{type(value_previous)}'")
+            # value_new_as_list = []
+            # for idx, value_prev in enumerate(value_prev_as_list, 0):
+            #   value_new = self._get_value_new(apply_result=apply_result,
+            #   value_new_as_list.append(value_new)
+            # if result_is_list:
+            #   value_new = value_new_as_list
+            # else:
+            #   assert len(value_new_as_list) == 1
+            #   value_new = value_new_as_list[0]
         else:
             value_new = value_previous
 
@@ -330,6 +308,46 @@ class AttrDexpNode(IDotExpressionNode):
         dexp_result.set_value(attr_name=attr_name, changer_name=attr_name, value=value_new)
 
         return dexp_result
+
+
+    def _get_value_new(self, apply_result: IApplyResult, value_prev: AttrValue, attr_name: AttrName) -> AttrValue:
+        if isinstance(value_prev, IAttributeAccessorBase):
+            # NOTE: if this is last in chain - fetch final value
+            value_new = value_prev.get_attribute(
+                apply_result=apply_result,
+                attr_name=attr_name)
+        else:
+            # removed. idx == 0 and
+            if attr_name == ReservedAttributeNames.INSTANCE_ATTR_NAME:
+                value_new = value_prev
+            else:
+                if (value_prev is UNDEFINED
+                        or value_prev is None
+                        or value_prev is NA_DEFAULTS_MODE
+                ):
+                    # 'Maybe monad' like
+                    value_new = value_prev
+                else:
+                    # if self.namespace == ThisNS:
+                    #     value_new = apply_result.current_frame.component.value_accessor.get_value(
+                    #                     instance=value_prev, attr_name=attr_name, attr_index=None)
+                    # else:
+                    #     # TODO: this is not easy - how to detect to which component this attribute belongs,
+                    #     #       if it belongs to any. So using default accessor and hope for the best.
+                    #     #       ListByIndex can not be used since, attr_index is not available.
+                    #     value_new = apply_result.current_frame.component.entity.value_accessor.get_value(
+                    #         instance=value_prev, attr_name=attr_name, attr_index=None)
+                    # if value_new is UNDEFINED:
+                    #     raise EntityApplyNameError(owner=self,
+                    #            msg=f"Attribute '{attr_name}' not found in '{to_repr(value_prev)}' : '{type(value_prev)}'")
+
+                    if not hasattr(value_prev, attr_name):
+                        # TODO: list which fields are available
+                        # if all types match - could be internal problem?
+                        raise EntityApplyNameError(owner=self,
+                                                   msg=f"Attribute '{attr_name}' not found in '{to_repr(value_prev)}' : '{type(value_prev)}'")
+                    value_new = getattr(value_prev, attr_name)
+        return value_new
 
     # NOTE: this logic is dropped - expected_type_info is sometimes missmatched and sometimes adaptations needs to be done ...
     #       all in all - currently too complex, anyway type of final value will be checked later.

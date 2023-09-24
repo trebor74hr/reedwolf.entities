@@ -228,7 +228,7 @@ class IAttributeAccessorBase(ABC):
     " used in registry "
 
     @abstractmethod
-    def get_attribute(self, apply_result: 'IApplyResult', attr_name:str, is_last:bool) -> Self: # noqa: F821
+    def get_attribute(self, apply_result: 'IApplyResult', attr_name:str) -> Self: # noqa: F821
         """ 
         is_last -> True - need to get final literal value from object
         (usually primitive type like int/str/date ...) 

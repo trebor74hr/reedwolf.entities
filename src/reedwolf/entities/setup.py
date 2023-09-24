@@ -219,7 +219,7 @@ class RegistryBase(IRegistry):
         type_info = TypeInfo.get_or_create_by_type(owner_model_class)
 
         # owner_model_class = List[component_fields_dataclass]
-        children_atr_node = self._register_special_attr_node(
+        children_attr_node = self._register_special_attr_node(
                         # model_class = owner_model_class,
                         type_info=type_info,
                         attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME.value,
@@ -227,7 +227,7 @@ class RegistryBase(IRegistry):
                         # TODO: missusing
                         th_field = component_fields_dataclass,
                         )
-        return children_atr_node
+        return children_attr_node
 
     # --------------------
 
@@ -518,7 +518,7 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
     component: ComponentBase
     instance: ModelType
 
-    def get_attribute(self, apply_result:IApplyResult, attr_name: str, is_last:bool) -> Self:
+    def get_attribute(self, apply_result:IApplyResult, attr_name: str) -> Self:
         children_dict = apply_result.get_upward_components_dict(self.component)
         if attr_name not in children_dict:
             avail_names = get_available_names_example(attr_name, children_dict.keys())
@@ -527,8 +527,7 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
 
         component = children_dict[attr_name]
 
-        # OLD: 
-        #   if is_last:
+        # OLD: if is_last:
         if not isinstance(component, IFieldBase):
             # ALT: not hasattr(component, "bind")
             raise EntityApplyNameError(owner=self.component,

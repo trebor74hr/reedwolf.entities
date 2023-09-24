@@ -151,20 +151,24 @@ class ApplyResult(IApplyResult):
                     raise EntityApplyError(owner=self, msg=f"Both 'instance' and 'instance_new' is None, at least one should be set.")
 
                 self.instance_none_mode = True
-                # TODO: maybe this could/should be cached by dc_model?
-                #
+
                 # Instead of making new dataclass, filling original dataclass
                 # with all fields having None would be alternative, but thiw
                 # way __post_init__, __init__ and similar methods that could
                 # change instance state are avoided.
+                # TODO: maybe this could/should be cached by dc_model?
                 temp_dataclass_model = make_dataclass_with_optional_fields(self.bound_model.model)
+
+                # self.instance_shadow_dc = temp_dataclass_model()
 
                 # All fields are made optional and will have value == None
                 # (from field's default)
                 self.instance = temp_dataclass_model()
 
-            elif not isinstance(self.instance, self.bound_model.model):
-                raise EntityApplyError(owner=self, msg=f"Object '{self.instance}' is not instance of bound model '{self.bound_model.model}'.")
+            else:
+                self.entity.value_accessor_default.validate_instance_type(owner_name=self.entity.name,
+                                                                          instance=self.instance,
+                                                                          model_type=self.bound_model.model)
 
             if self.instance_new is not None and not self.component_name_only:
                 self._detect_instance_new_struct_type(self.entity)
@@ -384,7 +388,16 @@ class ApplyResult(IApplyResult):
                         for init_raw_attr_value in init_bind_dexp_result.value_history
                         ]
                 if not attr_name_path:
-                    raise EntityInternalError(owner=self, msg=f"{component}: attr_name_path is empty") 
+                    raise EntityInternalError(owner=self, msg=f"{component}: attr_name_path is empty")
+
+                if isinstance(component, IFieldBase):
+                    # TODO: what about Boolean + enables? Better to check .get_children() ?
+                    # value accessor should be used from parent of the component
+                    assert component.parent
+                    value_accessor = component.parent.value_accessor
+                else:
+                    # contaainers + fieldgroup
+                    value_accessor = component.value_accessor
 
                 current_instance_parent = None
                 current_instance = parent_instance
@@ -409,22 +422,37 @@ class ApplyResult(IApplyResult):
                             # all attrs of a new instance will have None value (dc default)
                             temp_dataclass_model = make_dataclass_with_optional_fields(current_instance_model)
                             current_instance = temp_dataclass_model()
-                            setattr(current_instance_parent, attr_name_prev, current_instance)
+                            value_accessor.set_value(instance=current_instance_parent,
+                                                     attr_name=attr_name_prev,
+                                                     attr_index=None,
+                                                     new_value=current_instance)
+                            # ORIG: setattr(current_instance_parent, attr_name_prev, current_instance)
                         else:
                             attr_name_path_prev = ".".join(attr_name_path[:anr])
                             # TODO: fix this ugly validation message
                             raise EntityApplyValueError(owner=self, msg=f"Attribute '{attr_name}' can not be set while '{parent_instance}.{attr_name_path_prev}' is not set. Is '{attr_name_path_prev}' obligatory?")
 
-                    if not hasattr(current_instance, attr_name):
-                        raise EntityInternalError(owner=self, msg=f"Missing attribute:\n  Current: {current_instance}.{attr_name}\n Parent: {parent_instance}.{'.'.join(attr_name_path)}")
-
                     current_instance_parent = current_instance
-                    current_instance = getattr(current_instance_parent, attr_name)
+                    current_instance = value_accessor.get_value(instance=current_instance_parent,
+                                                                attr_name=attr_name,
+                                                                attr_index=None)
+                    if current_instance is UNDEFINED:
+                        raise EntityInternalError(owner=self, msg=f"Missing attribute:\n  Current: {current_instance}.{attr_name}\n Parent: {parent_instance}.{'.'.join(attr_name_path)}")
+                    # ORIG:
+                    # if not hasattr(current_instance, attr_name):
+                    #     raise EntityInternalError(owner=self, msg=f"Missing attribute:\n  Current: {current_instance}.{attr_name}\n Parent: {parent_instance}.{'.'.join(attr_name_path)}")
+                    # current_instance = getattr(current_instance_parent, attr_name)
+
+                    # self.instance_shadow_dc = temp_dataclass_model()
 
                 # ----------------------------------------
                 # Finally change instance value
                 # ----------------------------------------
-                setattr(current_instance_parent, attr_name, new_value)
+                value_accessor.set_value(instance=current_instance_parent,
+                                         attr_name=attr_name,
+                                         attr_index=None,
+                                         new_value=new_value)
+                # setattr(current_instance_parent, attr_name, new_value)
 
             # NOTE: bind_dexp_result last value is not changed
             #       maybe should be changed but ... 
@@ -524,9 +552,12 @@ class ApplyResult(IApplyResult):
                     if self.current_frame.instance is not NA_DEFAULTS_MODE:
                         raise EntityInternalError(owner=self, msg=f"Defaults mode - current frame's instance's model must be NA_DEFAULTS_MODE, got: {type(self.instance)}") 
                 else:
-                    if not self.instance_none_mode \
-                      and not isinstance(self.current_frame.instance, comp_container_model):
-                        raise EntityInternalError(owner=self, msg=f"Current frame's instance's model does not corresponds to component's container's model. Expected: {comp_container_model}, got: {type(self.instance)}") 
+                    pass
+                    # TODO: consider adding validation again with:
+                    #   self.component.value_accessor.validate_instance_type(owner_name=self.component.name,
+                    # if not self.instance_none_mode \
+                    #   and not isinstance(self.current_frame.instance, comp_container_model):
+                    #     raise EntityInternalError(owner=self, msg=f"Current frame's instance's model does not corresponds to component's container's model. Expected: {comp_container_model}, got: {type(self.instance)}")
 
             # TODO: for subentity() any need to check this at all in this phase?
         else:
@@ -537,11 +568,13 @@ class ApplyResult(IApplyResult):
 
             if self.defaults_mode:
                 if self.instance is not NA_DEFAULTS_MODE:
-                    raise EntityInternalError(owner=self, msg=f"Defaults mode - instance must be NA_DEFAULTS_MODE, got: {type(self.instance)}") 
-            else:
-                if not self.instance_none_mode \
-                  and not isinstance(self.instance, comp_container_model):
-                    raise EntityInternalError(owner=self, msg=f"Entity instance's model does not corresponds to component's container's model. Expected: {comp_container_model}, got: {type(self.instance)}") 
+                    raise EntityInternalError(owner=self, msg=f"Defaults mode - instance must be NA_DEFAULTS_MODE, got: {type(self.instance)}")
+            # else:
+            #     # NOTE: Dropped this check - it is done before. if it will be required:
+            #     #     self.entity.value_accessor_default.validate_instance_type(instance=self.instance, bound_model=self.bound_model)
+            #     if not self.instance_none_mode \
+            #       and not isinstance(self.instance, comp_container_model):
+            #         raise EntityInternalError(owner=self, msg=f"Entity instance's model does not corresponds to component's container's model. Expected: {comp_container_model}, got: {type(self.instance)}")
 
         # TODO: in partial mode this raises RecursionError:
         #       component == self.component_only
@@ -1274,10 +1307,9 @@ class ApplyResult(IApplyResult):
                     new_value = instance_new_bind_dexp_result.value
 
             elif self.instance_new_struct_type == StructEnum.ENTITY_LIKE:
-                instance_new_bind_dexp_result = \
-                        self.get_attr_value_by_comp_name(
-                                component=component, 
-                                instance=self.current_frame.instance_new)
+                instance_new_bind_dexp_result = self.get_attr_value_by_comp_name(
+                                                    component=component,
+                                                    instance=self.current_frame.instance_new)
                 new_value = instance_new_bind_dexp_result.value
             else: 
                 raise EntityInternalError(owner=self, msg=f"Invalid instance_new_struct_type = {self.instance_new_struct_type}")
@@ -1500,14 +1532,22 @@ class ApplyResult(IApplyResult):
 
     def get_attr_value_by_comp_name(self, component:ComponentBase, instance: ModelType) -> ExecResult:
         attr_name = component.name
-        if not hasattr(instance, attr_name):
-            # TODO: depending of self.entity strategy or apply(strategy) 
+        value = component.value_accessor.get_value(instance=instance, attr_name=attr_name, attr_index=None)
+        if value is UNDEFINED:
+            # TODO: depending of self.entity strategy or apply(strategy)
             #   - raise error
             #   - return NotAvailableExecResult() / UNDEFINED (default)
             #   - return None (default)
             return NotAvailableExecResult.create(reason="Missing instance attribute")
 
-        value = getattr(instance, attr_name)
+        # ORIG:
+        # if not hasattr(instance, attr_name):
+        #     # TODO: depending of self.entity strategy or apply(strategy)
+        #     #   - raise error
+        #     #   - return NotAvailableExecResult() / UNDEFINED (default)
+        #     #   - return None (default)
+        #     return NotAvailableExecResult.create(reason="Missing instance attribute")
+        # value = getattr(instance, attr_name)
 
         exec_result = ExecResult()
         exec_result.set_value(value, attr_name, changer_name=f"{component.name}.ATTR")

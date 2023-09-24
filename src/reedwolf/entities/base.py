@@ -92,6 +92,7 @@ from .expressions import (
 from .contexts import (
     IContext,
 )
+from .values_accessor import IValueAccessor
 
 # ------------------------------------------------------------
 
@@ -228,11 +229,13 @@ def msg(message: Union[str, TransMessageType]) -> Union[str, TransMessageType]:
 
 class SetParentMixin:
     """ requires (Protocol):
-
         name
         parent_name
         parent
+        value_accessor
+        entity
     """
+
 
     # ------------------------------------------------------------
 
@@ -257,7 +260,19 @@ class SetParentMixin:
             self.title = varname_to_title(self.name)
 
         if not self.name:
-            raise EntityInternalError(owner=self, msg=f"Name is not set: {self}") 
+            raise EntityInternalError(owner=self, msg=f"Name is not set: {self}")
+
+        if self.parent is None:
+            self.entity = self
+            if not self.value_accessor:
+                self.value_accessor = self.entity.value_accessor_default
+        else:
+            # just copy the same object
+            self.entity = self.parent.entity
+            if not self.value_accessor:
+                self.value_accessor = self.parent.value_accessor
+
+        assert self.value_accessor and self.entity
 
 
     def _getset_name(self):
@@ -395,8 +410,11 @@ class ComponentBase(SetParentMixin, ABC):
 
     # NOTE: I wanted to skip saving parent reference/object within component - to
     #       preserve single and one-direction references.
+    # NOTE: Not DRY: Entity, SubentityBase and CompoenentBase
     parent       : Union[Self, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     parent_name  : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+    entity       : Union[Self, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    value_accessor: Union[IValueAccessor, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
 
     # lazy init - done in Setup phase
     child_field_list: Optional[List[ChildField]] = field(init=False, repr=False, default=None)
@@ -412,6 +430,8 @@ class ComponentBase(SetParentMixin, ABC):
         if self.name not in (None, "", UNDEFINED):
             if not self.name.isidentifier():
                 raise EntitySetupValueError(owner=self, msg="Attribute name needs to be valid python identifier name")
+
+
 
     def _check_cleaners(self, allowed_cleaner_base_list: List[TypingType]):
         allowed_cleaner_base_list = tuple(allowed_cleaner_base_list)
@@ -1142,12 +1162,16 @@ class ComponentBase(SetParentMixin, ABC):
                                       "function", "context_class", "config",
                                       "min", "max", "allow_none", "ignore_none",
                                       "keys",
-                                      # "value", 
+                                      "entity",
+                                      "value_accessor",
+                                      "value_accessor_default",
+                                      "value_accessor_class_registry",
+                                      # "value",
                                       # "enum",
                                       )
                or sub_component_name[0] == "_"):
                 # TODO: this should be main way how to check ...
-                if sub_component_name not in ("parent", "parent_container") and \
+                if sub_component_name not in ("parent", "parent_container", "entity") and \
                   (hasattr(sub_component, "setup") or hasattr(sub_component, "setup")):
                     raise EntityInternalError(f"ignored attribute name '{sub_component_name}' has setup()/Setup(). Is attribute list ok or value is not proper class (got component='{sub_component}').")
                 continue
@@ -1255,6 +1279,8 @@ class ComponentBase(SetParentMixin, ABC):
     # ------------------------------------------------------------
 
     def get_first_parent_container(self, consider_self: bool) -> "IContainerBase":  # noqa: F821
+        # TODO: replace this function and maybe calls with:
+        #       return self.parent_container if consider_self else (self.parent.parent_container if self.parent else None)
         parents = self.get_path_to_first_parent_container(consider_self=consider_self)
         return parents[-1] if parents else None
 
@@ -1262,6 +1288,7 @@ class ComponentBase(SetParentMixin, ABC):
         """ 
         traverses up the component tree up (parents) and find first container
         including self ( -> if self is container then it returns self)
+        TODO: maybe it is reasonable to cache this
         """
         if self.parent is UNDEFINED:
             raise EntitySetupError(owner=self, msg="Parent is not set. Call .setup() method first.")
@@ -1896,8 +1923,14 @@ class ApplyStackFrame(IStackFrame):
         elif instance_to_test is None:
             # if instance is a list and it is empty, then nothing to check
             pass
-        elif not is_model_class(instance_to_test.__class__):
-            raise EntityInternalError(owner=self, msg=f"Expected model instance: {instance_to_test.__class__} or list[instances], got: {self.instance}")
+        else:
+            pass
+            # TODO: this should be checked only once per container, and I am not sure what is good way to do it
+            # # if not is_model_class(instance_to_test.__class__):
+            # #     raise EntityInternalError(owner=self, msg=f"Expected model instance: {instance_to_test.__class__} or list[instances], got: {self.instance}")
+            # self.component.value_accessor.validate_instance_type(owner_name=self.component.name,
+            #                                                      instance=instance_to_test,
+            #                                                      model_type=self.container.bound_model.model)
 
         if self.this_registry:
             assert isinstance(self.this_registry, IThisRegistry)
@@ -1992,6 +2025,17 @@ class IApplyResult(IStackOwnerSession):
     # used when when collecting list of instances/attributes which are updated
     instance_by_key_string_cache : Dict[KeyString, ModelType] = \
                             field(repr=False, init=False, default_factory=dict)
+
+    # TODO: consider this:
+        # Instance can be dataclass, dictionary and so on.
+        # Accessing instance attribute values are done in 2 places:
+        #   a) getting/setting in processing children
+        #   b) getting in executing DotExpression's AttributeNode-s
+        # for a) value_accessor is used in all cases,
+        # for b) not-attribute-instance it is too complicated to get values
+        # with value_accessor, so input instance is copied to this shadow
+        # dataclass instance which is used for AttributeNode's DotExpression-s.
+        # instance_shadow_dc: DataclassType = field(init=False, repr=False)
 
     # Central registry of attribute values. Contains initial, intermediate and
     # final values of each instance field/attribute. 

@@ -206,8 +206,7 @@ class ModelsRegistry(RegistryBase):
 
         # bound_model = apply_result.current_frame.container.bound_model
         bound_model_root = apply_result.current_frame.bound_model_root
-        if not bound_model_root:
-            print("here33")
+        # if not bound_model_root: print("here33")
 
         expected_type = bound_model_root.type_info.type_ \
                         if isinstance(bound_model_root.model, DotExpression) \
@@ -226,11 +225,16 @@ class ModelsRegistry(RegistryBase):
 
             # == M.name case
             # TODO: caller should check expected type ...
-            if not apply_result.instance_none_mode and instance_to_test \
-              and not isinstance(instance_to_test, expected_type):
-                raise EntityApplyTypeError(owner=self, msg=f"Wrong type, expected '{expected_type}', got '{instance}'")
+            if not apply_result.instance_none_mode and instance_to_test:
+                apply_result.current_frame.component.value_accessor.validate_instance_type(
+                        owner_name=f"{apply_result.current_frame.component.name} -> {self}.{attr_name}",
+                        instance=instance_to_test,
+                        model_type=expected_type,
+                )
+                # if not isinstance(instance_to_test, expected_type):
+                #     raise EntityApplyTypeError(owner=self, msg=f"Wrong type, expected '{expected_type}', got '{instance}'")
 
-        return RegistryRootValue(instance, None)\
+        return RegistryRootValue(instance, None)
 
 
 # ------------------------------------------------------------

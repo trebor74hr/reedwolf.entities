@@ -1,4 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Optional
+
+from .values_accessor import IValueAccessor
+
 
 # ------------------------------------------------------------
 # IConfig
@@ -17,3 +21,10 @@ class Config:
     This is plain class, no setup()/Setup() process.
     """
     debug: bool = False
+    # if not set will use default ValueExpress
+    value_accessor: Optional[IValueAccessor] = field(default=None, metadata={"dexp_exposed": False})
+
+    # def set_value_accessor(self, value_accessor: IValueAccessor) -> None:
+    #     assert isinstance(value_accessor, IValueAccessor)
+    #     assert self.value_accessor is None
+    #     self.value_accessor = value_accessor
