@@ -22,7 +22,6 @@ from .exceptions import (
     EntitySetupNameError,
     EntitySetupValueError,
     EntityInternalError,
-    EntityApplyTypeError,
     EntityApplyNameError,
     EntitySetupTypeError,
 )
@@ -53,11 +52,11 @@ from .base import (
     ReservedAttributeNames,
     ComponentBase,
     IFieldBase,
-    IContainerBase,
     IApplyResult,
     BoundModelBase,
     IFieldGroup,
     ISetupSession,
+    IContainerBase,
 )
 from .attr_nodes import (
     AttrDexpNode,
@@ -247,7 +246,8 @@ class FieldsRegistry(RegistryBase):
 
     ALLOWED_BASE_TYPES: ClassVar[List[type]] = (IFieldBase, )
 
-    DENIED_BASE_TYPES: ClassVar[List[type]] = (BoundModelBase, ValidationBase, EvaluationBase, IFieldGroup, IContainerBase, )
+    # TODO: zamijeni IContainerBase s; IFieldGroup, IEntityBase, a dodaj u Allowed: ISubentityBase
+    DENIED_BASE_TYPES: ClassVar[List[type]] = (BoundModelBase, ValidationBase, EvaluationBase, IContainerBase, IFieldGroup,)
 
     def create_attr_node(self, component:ComponentBase):
         # TODO: put class in container and remove these local imports
@@ -265,10 +265,17 @@ class FieldsRegistry(RegistryBase):
             denied = False
             deny_reason = ""
             type_info = component.type_info if component.type_info else None
+        # elif isinstance(component, (ISubentityBase, )):
+        #     denied = False
+        #     deny_reason = ""
+        #     d1, d2 = component.get_component_fields_dataclass(setup_session=self.setup_session)
+        #     type_info = None # component.get_type_info()
+
         # TODO: to have standard types in some global list in fields.py
         #           containers, validations, evaluations,
         elif isinstance(component, self.DENIED_BASE_TYPES): # 
             # stored - but should not be used
+            assert not isinstance(component, self.ALLOWED_BASE_TYPES), component
             denied = True
             deny_reason = f"Component of type {component.__class__.__name__} can not be referenced in DotExpressions"
             if hasattr(component, "type_info"):
@@ -276,6 +283,8 @@ class FieldsRegistry(RegistryBase):
             else:
                 type_info=None
         else:
+            if isinstance(component, self.ALLOWED_BASE_TYPES):
+                raise EntityInternalError(owner=self, msg=f"Component is in ALLOWED_BASE_TYPES, and is not processed: {type(component)}. Add new if isinstance() here.")
             # TODO: this should be automatic, a new registry for field types
             valid_types = ', '.join([t.__name__ for t in self.ALLOWED_BASE_TYPES])
             raise EntitySetupError(owner=self, msg=f"Valid type of objects or objects inherited from: {valid_types}. Got: {type(component)} / {to_repr(component)}. ")

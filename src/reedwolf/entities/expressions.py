@@ -8,7 +8,6 @@ from dataclasses import (
     dataclass,
     field,
     replace as dataclasses_replace,
-    fields as dc_fields,
     )
 from enum import (
     Enum
@@ -19,25 +18,25 @@ from typing import (
     Union,
     Any,
     Callable,
-    Tuple, Type, Generic,
+    Tuple, Type, Generic, Dict,
 )
 
 from .utils import (
     UNDEFINED,
-    UndefinedType,
-    )
+    UndefinedType, to_repr,
+)
 from .exceptions import (
     EntitySetupValueError,
     EntitySetupError,
     EntitySetupNameError,
     EntityInternalError,
-    EntityApplyError,
-    )
+    EntityApplyError, EntitySetupTypeError,
+)
 from .namespaces import (
     DynamicAttrsBase,
     FunctionsNS,
     OperationsNS,
-    Namespace, ThisNS,
+    Namespace, ThisNS, ModelsNS,
 )
 from .meta import (
     TypeInfo,
@@ -49,12 +48,10 @@ from .meta import (
     AttrName,
     Self,
     IFuncArgHint,
-    AttrValue, IExecuteFuncArgHint, ModelType, IInjectFuncArgHint,
+    AttrValue, IExecuteFuncArgHint, ModelType, IInjectFuncArgHint, NoneType,
 )
 # ------------------------------------------------------------
 # interfaces / base classes / internal structs
-# ------------------------------------------------------------
-
 # ------------------------------------------------------------
 
 @dataclass
@@ -99,6 +96,8 @@ class IDotExpressionNode(ABC):
     """ wrapper around one element in DotExpression e.g. M.name.Count()
     .company, .name, .Count() are nodes
     """
+    dexp_validate_type_info_func: Optional[Callable[[Self], None]] = field(repr=False, init=False, default=None)
+
     def clone(self):
         # If already setup then copy it and reuse
         return dataclasses_replace(self)
@@ -122,6 +121,53 @@ class IDotExpressionNode(ABC):
             raise EntityInternalError(owner=self, msg="already finished") 
         self.is_finished = True
 
+# ------------------------------------------------------------
+
+@dataclass
+class DexpValidator:
+    allow_operations: bool = True
+    allow_functions: bool = True
+    allow_namespaces: List[Namespace] = field(default_factory=list)
+    deny_namespaces: List[Namespace] = field(default_factory=list)
+    max_path_depth: Optional[int] = None
+    expected_type_info: Optional[TypeInfo] = None
+
+    def __post_init__(self):
+        if self.allow_namespaces and self.deny_namespaces:
+            raise EntityInternalError(owner=self, msg=f"Not allowed to have allow_namespaces and deny_namespaces")
+        if self.expected_type_info and not isinstance(self.expected_type_info, TypeInfo):
+            raise EntityInternalError(owner=self, msg=f"Expected expected_type_info TypeInfo, got: {self.expected_type_info}")
+
+
+    def validate_namespace(self, dexp: "DotExpression"):
+        if self.allow_namespaces and dexp._namespace not in self.allow_namespaces:
+            raise EntitySetupTypeError(owner=dexp, msg=f"Allowed only namespace(s): {self.allow_namespaces}, got: {dexp._namespace}")
+        elif self.deny_namespaces and dexp._namespace in self.deny_namespaces:
+            raise EntitySetupTypeError(owner=dexp, msg=f"Found denied namespace {dexp._namespace}. List of denied namespace(s): {self.deny_namespaces}")
+
+    def validate_dexp_node(self, dexp_node: IDotExpressionNode):
+        if not self.allow_functions and isinstance(dexp_node, IFunctionDexpNode):
+            raise EntitySetupTypeError(owner=dexp_node, msg=f"Functions are not allowed, got {dexp_node}")
+        if not self.allow_operations and isinstance(dexp_node, Operation):
+            raise EntitySetupTypeError(owner=dexp_node, msg=f"Operations are not allowed, got {dexp_node}")
+
+    def validate_path_depth(self, dexp: "DotExpression"):
+        if not dexp.IsFinished():
+            raise EntityInternalError(owner=self, msg=f"Dot expression not finished")
+
+        if self.max_path_depth and len(dexp.Path) > self.max_path_depth:
+            raise EntitySetupTypeError(owner=dexp, msg=f"Limit of maximal dot expression path depth is {self.max_path_depth}, got {dexp}")
+
+    def validate_type_info(self, dexp_node: IDotExpressionNode):
+        if self.expected_type_info is not None:
+            got_type_info = dexp_node.get_type_info()
+            if got_type_info is None:
+                raise EntityInternalError(owner=dexp_node, msg="No type info")
+            err_msg = self.expected_type_info.check_compatible(got_type_info)
+            if err_msg:
+                raise EntitySetupTypeError(owner=dexp_node, msg=f"Expected type {self.expected_type_info} is not compatible with {got_type_info}: {err_msg}")
+
+    # ------------------------------------------------------------
 
 # ------------------------------------------------------------
 
@@ -138,7 +184,6 @@ class RegistryRootValue:
             raise EntityInternalError(owner=self, msg=f"attr_dexp_node already set to: {self.attr_dexp_node}, got: {attr_dexp_node}")
         self.attr_dexp_node = attr_dexp_node
         return self
-
 
 
 # ------------------------------------------------------------
@@ -185,6 +230,19 @@ class ISetupSession(ABC):
 
     @abstractmethod
     def use_stack_frame(self, frame: "IStackFrame") -> "UseStackFrameCtxManagerBase":
+        """
+        context manager
+        will add new stack frame to the stack and meke it current_frame which will be used
+        """
+        ...
+
+    @abstractmethod
+    def use_changed_current_stack_frame(self, **change_attrs: Dict[str, Any]) -> "UseStackFrameCtxManagerBase":
+        """
+        context manager
+        will modify current_frame with change_attrs, use the same frame (will remain as current_frame)
+        and after usage will restore original attribute to original values
+        """
         ...
 
     # @abstractmethod
@@ -259,6 +317,8 @@ class DotExpression(DynamicAttrsBase):
                            "_node", "_namespace", "_name", "_func_args", "_is_top", "_status",
                            "_is_literal", "_is_internal_use",
                            "_EnsureFinished", "IsFinished",
+                           "_SetDexpValidator"
+                           "_dexp_validator"
                            # "_is_reserved_function",
                            } # "_read_functions",  "_dexp_node_name"
     # RESERVED_FUNCTION_NAMES = ("Value",)
@@ -281,6 +341,7 @@ class DotExpression(DynamicAttrsBase):
         self._name = str(self._node)
         self._is_literal = is_literal
         self._is_internal_use = is_internal_use
+        self._dexp_validator = None
 
         # init Path => to make __str__ works
         self.Path = None 
@@ -335,11 +396,21 @@ class DotExpression(DynamicAttrsBase):
     def IsFinished(self):
         return self._status!=DExpStatusEnum.INITIALIZED
 
-    def _EnsureFinished(self):
-        if self._status!=DExpStatusEnum.INITIALIZED:
+    def _SetDexpValidator(self, dexp_validator: DexpValidator):
+        if self._dexp_validator:
+            raise EntityInternalError(owner=self, msg=f"DotExpression Validation already added: {self._dexp_validator}")
+        if not isinstance(dexp_validator, DexpValidator):
+            raise EntityInternalError(owner=self, msg=f"Expected DexpValidation, got: {dexp_validator}")
+        self._dexp_validator = dexp_validator
+
+    def _EnsureNotFinished(self):
+        if self._status != DExpStatusEnum.INITIALIZED:
             raise EntitySetupError(owner=self, msg=f"Method Setup() already called, further DotExpression building/operator-building is not possible (status={self._status}).")
 
-    def Setup(self, setup_session:ISetupSession, owner:Any) -> Optional['IDotExpressionNode']:
+    def Setup(self, setup_session:ISetupSession,
+              owner:Any,
+              dexp_validator: Optional[DexpValidator] = None
+              ) -> Optional['IDotExpressionNode']:
         """
         Owner used just for reference count.
         """
@@ -351,7 +422,21 @@ class DotExpression(DynamicAttrsBase):
 
         from .expression_evaluators import DotExpressionEvaluator
 
-        self._EnsureFinished()
+        self._EnsureNotFinished()
+
+        if dexp_validator:
+            self._SetDexpValidator(dexp_validator)
+            do_validate_final = False
+        else:
+            # only when it is previously setup (initial) then do final check
+            do_validate_final = bool(self._dexp_validator)
+
+        if self._dexp_validator:
+            self._dexp_validator.validate_namespace(dexp=self)
+
+        # TODO: enable this is obligatory
+        # if self._dexp_validator is None:
+        #     raise EntitySetupError(owner=self, msg=f"Method  called, further DotExpression building/operator-building is not possible (status={self._status}).")
 
         # this_registry = setup_session.current_frame.this_registry if setup_session.current_frame else None
         if self._namespace == ThisNS:
@@ -404,8 +489,12 @@ class DotExpression(DynamicAttrsBase):
                 op_node = bit._node
                 # one level deeper
                 # owner not required, but in this case should be 
-                assert bnr == 1
-                current_dexp_node = op_node.Setup(setup_session=setup_session, owner=owner)
+                if bnr != 1:
+                    raise EntityInternalError(owner=self, msg=f"Operation Dexp should be initial node, got: {bnr}")
+
+                current_dexp_node = op_node.Setup(setup_session=setup_session,
+                                                  owner=owner,
+                                                  dexp_validator=self._dexp_validator)
                 dexp_node_name = bit._node
                 # _read_functions.append(op_node.apply)
 
@@ -428,6 +517,7 @@ class DotExpression(DynamicAttrsBase):
                 else:
                     owner_arg_type_info = None
 
+                # TODO: self._dexp_validator is not passed, so not used
                 # : IFunctionDexpNode
                 current_dexp_node = registry.create_func_node(
                         setup_session=setup_session,
@@ -456,6 +546,9 @@ class DotExpression(DynamicAttrsBase):
                             owner=owner,
                             )
 
+            if self._dexp_validator:
+                self._dexp_validator.validate_dexp_node(current_dexp_node)
+
             # add node to evaluator
             dexp_evaluator.add(current_dexp_node)
 
@@ -480,12 +573,20 @@ class DotExpression(DynamicAttrsBase):
 
         dexp_evaluator.finish()
 
-
         if dexp_evaluator.is_all_ok():
             self._status = DExpStatusEnum.BUILT
             self._all_ok = True
             self._evaluator = dexp_evaluator
             self._dexp_node = dexp_evaluator.last_node()
+
+            if do_validate_final:
+                # check path depth and resulting type_info of the resulting dot-expression
+                self._dexp_validator.validate_path_depth(dexp=self)
+
+                # NOTE: the last validate function needs to be called after type_info is set
+                if self._dexp_validator.expected_type_info:
+                    self._dexp_node.dexp_validate_type_info_func = self._dexp_validator.validate_type_info
+
             setup_session.register_dexp_node(self._dexp_node)
         else:
             # TODO: raise EntitySetupError()
@@ -500,7 +601,7 @@ class DotExpression(DynamicAttrsBase):
     #     return DotExpression( Path=self.Path + "." + str(ind))
 
     def __getattr__(self, aname):
-        self._EnsureFinished()
+        self._EnsureNotFinished()
 
         if aname in self.RESERVED_ATTR_NAMES: # , "%r -> %s" % (self._node, aname):
             raise EntitySetupNameError(owner=self, msg=f"DotExpression's attribute '{aname}' is reserved name, choose another.")
@@ -553,29 +654,29 @@ class DotExpression(DynamicAttrsBase):
 
     # NOTE: Operations are put in internal OperationsNS
 
-    def __eq__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode("==", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
-    def __ne__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode("!=", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
-    def __gt__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode(">" , self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
-    def __ge__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode(">=", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
-    def __lt__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode("<" , self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
-    def __le__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode("<=", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
+    def __eq__(self, other):        self._EnsureNotFinished(); return DotExpression(OperationDexpNode("==", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
+    def __ne__(self, other):        self._EnsureNotFinished(); return DotExpression(OperationDexpNode("!=", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
+    def __gt__(self, other):        self._EnsureNotFinished(); return DotExpression(OperationDexpNode(">", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
+    def __ge__(self, other):        self._EnsureNotFinished(); return DotExpression(OperationDexpNode(">=", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
+    def __lt__(self, other):        self._EnsureNotFinished(); return DotExpression(OperationDexpNode("<", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
+    def __le__(self, other):        self._EnsureNotFinished(); return DotExpression(OperationDexpNode("<=", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
 
     # +, -, *, /
-    def __add__(self, other):       self._EnsureFinished(); return DotExpression(OperationDexpNode("+" , self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
-    def __sub__(self, other):       self._EnsureFinished(); return DotExpression(OperationDexpNode("-" , self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
-    def __mul__(self, other):       self._EnsureFinished(); return DotExpression(OperationDexpNode("*" , self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
-    def __truediv__(self, other):   self._EnsureFinished(); return DotExpression(OperationDexpNode("/" , self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
+    def __add__(self, other):       self._EnsureNotFinished(); return DotExpression(OperationDexpNode("+", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
+    def __sub__(self, other):       self._EnsureNotFinished(); return DotExpression(OperationDexpNode("-", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
+    def __mul__(self, other):       self._EnsureNotFinished(); return DotExpression(OperationDexpNode("*", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
+    def __truediv__(self, other):   self._EnsureNotFinished(); return DotExpression(OperationDexpNode("/", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
 
     # what is this??
-    def __floordiv__(self, other):  self._EnsureFinished(); return DotExpression(OperationDexpNode("//", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
+    def __floordiv__(self, other):  self._EnsureNotFinished(); return DotExpression(OperationDexpNode("//", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
 
     # in
-    def __contains__(self, other):  self._EnsureFinished(); return DotExpression(OperationDexpNode("in", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
+    def __contains__(self, other):  self._EnsureNotFinished(); return DotExpression(OperationDexpNode("in", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
 
     # Bool operators, NOT, AND, OR
-    def __invert__(self):           self._EnsureFinished(); return DotExpression(OperationDexpNode("not", self       ),namespace=OperationsNS, is_internal_use=True)  # ~  # noqa: E702
-    def __and__(self, other):       self._EnsureFinished(); return DotExpression(OperationDexpNode("and", self, other),namespace=OperationsNS, is_internal_use=True)  # &  # noqa: E702
-    def __or__(self, other):        self._EnsureFinished(); return DotExpression(OperationDexpNode("or" , self, other),namespace=OperationsNS, is_internal_use=True)  # |  # noqa: E702
+    def __invert__(self):           self._EnsureNotFinished(); return DotExpression(OperationDexpNode("not", self), namespace=OperationsNS, is_internal_use=True)  # ~  # noqa: E702
+    def __and__(self, other):       self._EnsureNotFinished(); return DotExpression(OperationDexpNode("and", self, other), namespace=OperationsNS, is_internal_use=True)  # &  # noqa: E702
+    def __or__(self, other):        self._EnsureNotFinished(); return DotExpression(OperationDexpNode("or", self, other), namespace=OperationsNS, is_internal_use=True)  # |  # noqa: E702
 
     # ------------------------------------------------------------
 
@@ -859,13 +960,14 @@ class OperationDexpNode(IDotExpressionNode):
         return self._output_type_info
 
     @staticmethod
-    def create_dexp_node(
-                   dexp_or_other: Union[DotExpression, Any], 
-                   title: str,
-                   setup_session: ISetupSession, # noqa: F821
-                   owner: Any) -> IDotExpressionNode:
+    def create_dexp_node(dexp_or_other: Union[DotExpression, Any],
+                         title: str,
+                         setup_session: ISetupSession,  # noqa: F821
+                         owner: Any,
+                         dexp_validator: Optional[DexpValidator],
+                         ) -> IDotExpressionNode:
         if isinstance(dexp_or_other, DotExpression):
-            dexp_node = dexp_or_other.Setup(setup_session, owner=owner)
+            dexp_node = dexp_or_other.Setup(setup_session, owner=owner, dexp_validator=dexp_validator)
         elif isinstance(dexp_or_other, IDotExpressionNode):
             raise NotImplementedError(f"{title}.type unhandled: '{type(dexp_or_other)}' => '{dexp_or_other}'")
             # dexp_node = dexp_or_other
@@ -878,18 +980,27 @@ class OperationDexpNode(IDotExpressionNode):
         return dexp_node
 
 
-    def Setup(self, setup_session: ISetupSession, owner: Any) -> "DotExpressionEvaluator":  # noqa: F821
+    def Setup(self, setup_session: ISetupSession,
+              owner: Any,
+              dexp_validator: Optional[DexpValidator] = None
+              ) -> "DotExpressionEvaluator":  # noqa: F821
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(self)
 
         if not self._status==DExpStatusEnum.INITIALIZED:
             raise EntitySetupError(owner=setup_session, item=self, msg=f"AttrDexpNode not in INIT state, got {self._status}")
 
         # just to check if all ok
-        self._first_dexp_node = self.create_dexp_node(self.first, title="First", setup_session=setup_session, owner=owner)
+        self._first_dexp_node = self.create_dexp_node(self.first, title="First",
+                                                      setup_session=setup_session,
+                                                      owner=owner,
+                                                      dexp_validator=dexp_validator)
         setup_session.register_dexp_node(self._first_dexp_node)
 
         if self.second is not UNDEFINED:
-            self._second_dexp_node = self.create_dexp_node(self.second, title="second", setup_session=setup_session, owner=owner)
+            self._second_dexp_node = self.create_dexp_node(self.second, title="second",
+                                                           setup_session=setup_session,
+                                                           owner=owner,
+                                                           dexp_validator=dexp_validator)
             setup_session.register_dexp_node(self._second_dexp_node)
 
         self._status=DExpStatusEnum.BUILT
@@ -1092,4 +1203,37 @@ class JustDotexprFuncArgHint(IFuncArgHint):
     def __hash__(self):
         return hash((self.__class__.__name__, self.type, self.inner_type))
 
+# ------------------------------------------------------------
+# Common DexpValidator-s and validation functions
+# ------------------------------------------------------------
 
+MAX_BIND_DEPTH = 4
+
+DEXP_VALIDATOR_FOR_BIND = DexpValidator(
+    allow_functions=False,
+    allow_operations=False,
+    allow_namespaces=[ModelsNS],
+    max_path_depth=MAX_BIND_DEPTH,
+)
+
+DEXP_VALIDATOR_FOR_BOOL_TERM = DexpValidator(
+    deny_namespaces=[ModelsNS],
+    expected_type_info=TypeInfo.get_or_create_by_type(bool),
+)
+
+def clean_available(owner: Any, attr_name: str, dexp_or_bool: Union[NoneType, DotExpression, bool]):
+    if dexp_or_bool is not None:
+        if isinstance(dexp_or_bool, DotExpression):
+            dexp_or_bool._SetDexpValidator(DEXP_VALIDATOR_FOR_BOOL_TERM)
+        elif not isinstance(dexp_or_bool, bool):
+            raise EntitySetupValueError(owner=owner,
+                                        msg=f"Argument '{attr_name}' needs to be bool or DotExpression (e.g. F.name != ''), got: {to_repr(dexp_or_bool)}")
+
+
+def clean_dexp_bool_term(owner: Any, attr_name: str, dexp: Union[NoneType, DotExpression]):
+    if dexp is not None:
+        if isinstance(dexp, DotExpression):
+            dexp._SetDexpValidator(DEXP_VALIDATOR_FOR_BOOL_TERM)
+        else:
+            raise EntitySetupValueError(owner=owner,
+                                        msg=f"Argument '{attr_name}' needs to DotExpression (e.g. F.name != ''), got: {to_repr(dexp)}")

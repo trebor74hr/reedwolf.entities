@@ -17,10 +17,10 @@ from typing import List, Optional, Union
 from dataclasses import dataclass, field
 
 from .exceptions import (
-        EntitySetupError,
-        EntityValidationCardinalityError,
-        EntitySetupTypeError,
-        )
+    EntitySetupError,
+    EntityValidationCardinalityError,
+    EntitySetupTypeError, EntityInternalError,
+)
 from .utils import (
         to_int,
         UNDEFINED,
@@ -57,12 +57,12 @@ class ItemsValidationBase(ValidationBase, ABC):
 
 @dataclass
 class ItemsValidation(ItemsValidationBase):
-    ensure          : DotExpression
-    available       : Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
+    ensure:     DotExpression
+    available:  Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
 
-    name            : Optional[str] = field(default=None)
-    error           : Optional[TransMessageType] = field(repr=False, default=None)
-    title           : Optional[TransMessageType] = field(repr=False, default=None)
+    name:       Optional[str] = field(default=None)
+    error:      Optional[TransMessageType] = field(repr=False, default=None)
+    title:      Optional[TransMessageType] = field(repr=False, default=None)
 
     def validate(self, apply_result: IApplyResult) -> Union[NoneType, ValidationFailure]:
         # TODO: check which namespaces are used, ...
@@ -112,19 +112,20 @@ class Cardinality: # namespace holder
             max=None -> any number (>= min)
             min=0    -> same as allow_none in other validations
         """
-        min             : Optional[Union[int, DotExpression]] = None
-        max             : Optional[Union[int, DotExpression]] = None
-        available       : Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
+        min:        Optional[Union[int, DotExpression]] = None
+        max:        Optional[Union[int, DotExpression]] = None
+        available:  Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
 
-        name            : Optional[str] = field(default=None)
-        error           : Optional[TransMessageType] = field(repr=False, default=None)
-        title           : Optional[TransMessageType] = field(repr=False, default=None)
+        name:       Optional[str] = field(default=None)
+        error:      Optional[TransMessageType] = field(repr=False, default=None)
+        title:      Optional[TransMessageType] = field(repr=False, default=None)
 
         # autocomputed
-        parent           : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
-        parent_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+        parent:     Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
+        parent_name: Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
         def __post_init__(self):
+            super().__post_init__()
             if self.min is None and self.max is None:
                 raise EntitySetupError(owner=self, msg="Please provide min and/or max")
             if self.min is not None and (to_int(self.min) is None or to_int(self.min)<0):
@@ -156,16 +157,16 @@ class Cardinality: # namespace holder
     @dataclass
     class Multi(ICardinalityValidation):
         " [0,1]:N "
-        allow_none      : Optional[Union[bool, DotExpression]] = True
-        available       : Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
+        allow_none: Optional[Union[bool, DotExpression]] = True
+        available: Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
 
-        name            : Optional[str] = field(default=None)
-        error           : Optional[TransMessageType] = field(repr=False, default=None)
-        title           : Optional[TransMessageType] = field(repr=False, default=None)
+        name: Optional[str] = field(default=None)
+        error: Optional[TransMessageType] = field(repr=False, default=None)
+        title: Optional[TransMessageType] = field(repr=False, default=None)
 
         # autocomputed
-        parent          : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
-        parent_name     : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+        parent: Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
+        parent_name: Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
         def validate_setup(self):
             model_attr_node = _validate_setup_common(validation=self, allow_none=self.allow_none)
@@ -193,17 +194,17 @@ class Unique: # namespace holder
     class Global(IUniqueValidation):
         " globally - e.g. within table "
         # TODO: do it with M. DotExpression, e.g. fields=[M.name, M.surname]
-        fields          : List[str]
-        ignore_none     : Optional[Union[bool, DotExpression]] = field(default=True)
-        available       : Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
+        fields: List[str]
+        ignore_none: Optional[Union[bool, DotExpression]] = field(default=True)
+        available: Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
 
-        name            : Optional[str] = field(default=None)
-        error           : Optional[TransMessageType] = field(repr=False, default=None)
-        title           : Optional[TransMessageType] = field(repr=False, default=None)
+        name: Optional[str] = field(default=None)
+        error: Optional[TransMessageType] = field(repr=False, default=None)
+        title: Optional[TransMessageType] = field(repr=False, default=None)
 
         # autocomputed
-        parent          : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
-        parent_name     : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+        parent: Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
+        parent_name: Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
         def validate(self, apply_result: IApplyResult) -> Optional[ValidationFailure]:
             raise NotImplementedError()
@@ -212,17 +213,17 @@ class Unique: # namespace holder
     class Items(IUniqueValidation):
         " within subentity_items records "
         # TODO: do it with M. DotExpression, e.g. fields=[M.name, M.surname]
-        fields          : List[str]
-        ignore_none     : Optional[Union[bool, DotExpression]] = field(default=True)
-        available       : Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
+        fields: List[str]
+        ignore_none: Optional[Union[bool, DotExpression]] = field(default=True)
+        available: Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
 
-        name            : Optional[str] = field(default=None)
-        error           : Optional[TransMessageType] = field(repr=False, default=None)
-        title           : Optional[TransMessageType] = field(repr=False, default=None)
+        name: Optional[str] = field(default=None)
+        error: Optional[TransMessageType] = field(repr=False, default=None)
+        title: Optional[TransMessageType] = field(repr=False, default=None)
 
         # autocomputed
-        parent          : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
-        parent_name     : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+        parent: Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
+        parent_name: Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
         def validate(self, apply_result: IApplyResult) -> Optional[ValidationFailure]:
             raise NotImplementedError()
@@ -232,16 +233,16 @@ class Unique: # namespace holder
 @dataclass
 class SingleValidation(ValidationBase):
     " Cardinality validation for for SubEntitySingle case, does not really belong to this module "
-    allow_none      : Union[bool, DotExpression] = True
-    available       : Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
+    allow_none: Union[bool, DotExpression] = True
+    available: Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
 
-    name            : Optional[str] = field(default=None)
-    error           : Optional[TransMessageType] = field(repr=False, default=None)
-    title           : Optional[TransMessageType] = field(repr=False, default=None)
+    name: Optional[str] = field(default=None)
+    error: Optional[TransMessageType] = field(repr=False, default=None)
+    title: Optional[TransMessageType] = field(repr=False, default=None)
 
     # autocomputed
-    parent          : Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
-    parent_name     : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+    parent: Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
+    parent_name: Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
     def validate_setup(self):
         model_attr_node = _validate_setup_common(validation=self, allow_none=self.allow_none)

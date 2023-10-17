@@ -436,6 +436,7 @@ class ComponentsLoader(CallTraceMixin):
 
             kwargs = {}
             for attr_name, attr_value in comp_class_attrs.items():
+                # if attr_name == "available" and "id2" in str(attr_value): print("her333")
                 value = self._load_process_attr_value(attr_value=attr_value, depth=depth)
                 kwargs[attr_name] = value
 

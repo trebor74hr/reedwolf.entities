@@ -102,7 +102,7 @@ class Default(FieldEvaluationBase):
 
     def __post_init__(self):
         # assert isinstance(self.value, DotExpression), self.value
-        pass
+        super().__post_init__()
 
     def execute(self, apply_result: IApplyResult) -> Optional[ExecResult]:
         if isinstance(self.value, DotExpression):

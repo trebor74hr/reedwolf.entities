@@ -746,6 +746,8 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
                 assert isinstance(dexp_node, IDotExpressionNode)
                 # do some basic validate
                 dexp_node.finish()
+                if dexp_node.dexp_validate_type_info_func:
+                    dexp_node.dexp_validate_type_info_func(dexp_node)
 
             registry.finish()
 

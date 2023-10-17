@@ -347,7 +347,7 @@ class BoundModel(NestedBoundModelBase):
     model           : Union[ModelType, DotExpression] = field(repr=False)
 
     name            : Optional[str] = field(default=None)
-    contains        : Optional[List[BoundModelWithHandlers]] = field(repr=False, default_factory=list)
+    contains        : Optional[List[Union[BoundModelWithHandlers, "BoundModel"]]] = field(repr=False, default_factory=list)
 
     # title           : TransMessageType
 

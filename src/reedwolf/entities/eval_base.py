@@ -13,7 +13,7 @@ from .base import (
     IApplyResult,
         )
 from .expressions import (
-    ExecResult, ISetupSession, IThisRegistry,
+    ExecResult, ISetupSession, IThisRegistry, clean_available,
 )
 
 
@@ -28,6 +28,11 @@ class EvaluationBase(ComponentBase, ABC):  # TODO: make it abstract
         current instance/object. The execution should not fail.
     """
     REQUIRES_AUTOCOMPUTE: ClassVar[bool] = field(default=True)
+
+    def __post_init__(self):
+        if hasattr(self, "available"):
+            clean_available(owner=self, attr_name="available", dexp_or_bool=self.available)
+
 
     def create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:
         """

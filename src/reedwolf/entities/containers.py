@@ -10,7 +10,7 @@ from typing import (
     List,
     Optional,
     Union,
-    Type,
+    Type, ClassVar,
 )
 from dataclasses import (
     dataclass,
@@ -61,7 +61,7 @@ from .base import (
 )
 from .expressions import (
     DotExpression,
-    )
+)
 from .bound_models import (
     BoundModel,
     BoundModelWithHandlers,
@@ -102,7 +102,7 @@ from .eval_base import (
     EvaluationBase,
     )
 from .fields import (
-    FieldGroup,
+    FieldGroup, DEXP_VALIDATOR_FOR_BIND,
 )
 from .contexts import (
     IContext,
@@ -216,8 +216,9 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         if not (self.is_subentity() or not is_main_model):
             raise EntitySetupTypeError(owner=self, msg=f"{bound_model.name}: DotExpression should be used only in SubEntity containers and nested BoundModels")
 
-        if model._namespace!=ModelsNS:
-            raise EntitySetupTypeError(owner=self, msg=f"{bound_model.name}: DotExpression should be in ModelsNS namespace, got: {model._namespace}")
+        model._SetDexpValidator(DEXP_VALIDATOR_FOR_BIND)
+        # if model._namespace!=ModelsNS:
+        #     raise EntitySetupTypeError(owner=self, msg=f"{bound_model.name}: DotExpression should be in ModelsNS namespace, got: {model._namespace}")
 
         if setup_session:
             # TODO: not sure if this is the best solution
@@ -233,14 +234,11 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
                 setup_session_from = self.setup_session
 
         attr_node = setup_session_from.get_dexp_node_by_dexp(dexp=model)
-        if not attr_node:
-            # TODO: Since This. registry setup processes bound_model.model
-            #       DotExpressions this case maybe does not happen any more?
-            attr_node = model.Setup(setup_session=setup_session_from, owner=bound_model)
-        else:
-            # NOTE: This. registry setup processes bound_model.model DotExpressions
-            # OLD: raise EntityInternalError(owner=self, msg=f"AttrDexpNode data already in setup_session: {model} -> {attr_node}")
-            ...
+        if attr_node:
+            # NOTE: it seems this does not happen, so I added this exception. Remove it if it will be required in the future
+            raise EntityInternalError(owner=self, msg=f"TODO: AttrDexpNode data already in setup_session: {model} -> {attr_node}")
+
+        attr_node = model.Setup(setup_session=setup_session_from, owner=bound_model)
 
         if not attr_node:
             raise EntityInternalError(owner=self, msg=f"AttrDexpNode not recognized: {model}")
@@ -341,10 +339,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         #   - some standard NS fields (e.g. Instance)
         self._register_model_attr_nodes()
 
-        # FieldsNS
-        self._register_fields_components_attr_nodes()
-
-        # NOTE: ThisNS and FunctionsNS are initialized later
+        # NOTE: FieldNS, ThisNS and FunctionsNS are initialized later
 
         # ----------------------------------------
         # B. other level attr_nodes - recursive
@@ -366,6 +361,10 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
                     component = self, 
                     this_registry = None,
                 )):
+
+            # TODO: FieldsNS - in session - for future improvement - to allow
+            #       use of SubentityItems() (now in denied)
+            self._register_fields_components_attr_nodes()
 
             # ----------------------------------------
             # ModelsNS setup 2/2 phase
@@ -913,6 +912,11 @@ class SubEntityBase(ContainerBase, ABC):
         # self.cardinality.validate_setup()
         return self
 
+    # TODO: should return own fields dataclass after setup
+    # def get_type_info(self) -> TypeInfo:
+    #     return self.get_component_fields_dataclass()
+    #     # NOT this: self.bound_model.get_type_info()
+
 # ------------------------------------------------------------
 
 @dataclass
@@ -930,6 +934,7 @@ class SubEntityItems(SubEntityBase):
     @staticmethod
     def is_subentity_items() -> bool:
         return True
+
 
 # ------------------------------------------------------------
 
@@ -991,3 +996,19 @@ collect_classes(COMPONENTS_REGISTRY, eval_field, ComponentBase)
 collect_classes(COMPONENTS_REGISTRY, eval_items, ComponentBase)
 collect_classes(COMPONENTS_REGISTRY, eval_children, ComponentBase)
 collect_classes(COMPONENTS_REGISTRY, None, ComponentBase)
+
+# ------------------------------------------------------------
+# OBSOLETE - DELETE THIS
+# ------------------------------------------------------------
+# with setup_session_from.use_changed_current_stack_frame(
+# with setup_session_from.use_stack_frame(
+#         SetupStackFrame(
+#             container=self,
+#             component=self,
+#             dexp_validator=DexpValidator(
+#                 allow_functions=False,
+#                 allow_operations=False,
+#                 allow_namespaces=[ModelsNS],
+#                 max_path_depth=self.DEXP_MODELSNS_MAX_PATH_DEPTH)
+#         )):
+

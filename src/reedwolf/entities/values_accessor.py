@@ -184,6 +184,7 @@ class AutodetectValueAccessor(IValueAccessor):
         else:
             setattr(instance, attr_name, new_value)
 
+
 # ------------------------------------------------------------
 # REGISTRY
 # ------------------------------------------------------------

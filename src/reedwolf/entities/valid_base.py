@@ -26,7 +26,7 @@ from .expressions import (
     DotExpression,
     ExecResult,
     NotAvailableExecResult,
-    execute_available_dexp, ISetupSession, IThisRegistry,
+    execute_available_dexp, ISetupSession, IThisRegistry, clean_available, clean_dexp_bool_term,
 )
 
 
@@ -42,9 +42,13 @@ class ValidationBase(ComponentBase, ABC): # TODO: make it abstract
     """
 
     def __post_init__(self):
+        if hasattr(self, "available"):
+             clean_available(owner=self, attr_name="available", dexp_or_bool=self.available)
+
         if hasattr(self, "ensure"):
             if not isinstance(self.ensure, DotExpression):
                 raise EntitySetupError(owner=self, msg=f"ensure must be DotExpression, got: {type(self.ensure)} / {self.ensure}")
+            clean_dexp_bool_term(owner=self, attr_name="ensure", dexp=self.ensure)
 
             if not self.error:
                 self.error = f"Validation failed: {self.ensure}"

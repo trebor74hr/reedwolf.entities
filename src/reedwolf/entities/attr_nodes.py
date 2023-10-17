@@ -148,7 +148,6 @@ class AttrDexpNode(IDotExpressionNode):
 
     def finish(self):
         """ fill type_info, must be available for all nodes - with exceptions those with .denied don't have it """
-        super().finish()
 
         if self.type_info is None:
 
@@ -176,6 +175,8 @@ class AttrDexpNode(IDotExpressionNode):
 
             if not self.denied and not self.type_info:
                 raise EntityInternalError(owner=self, msg=f"For attr_node {self.attr_node_type} .type_info could not not set (type={type(self.data)}).")
+
+        super().finish()
 
 
     def get_type_info(self) -> TypeInfo:

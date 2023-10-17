@@ -52,7 +52,7 @@ from .exceptions import (
 )
 from .namespaces import (
     DynamicAttrsBase,
-    Namespace,
+    Namespace, ModelsNS,
 )
 from .meta import (
     Self,
@@ -88,6 +88,7 @@ from .expressions import (
     IFunctionDexpNode,
     ISetupSession,
     IThisRegistry,
+    DexpValidator,
 )
 from .contexts import (
     IContext,
@@ -144,7 +145,6 @@ def get_name_from_bind(bind: DotExpression):
         name = "__".join([bit._name for bit in bind.Path][1:])
     assert name
     return name
-
 
 
 # ------------------------------------------------------------
@@ -430,7 +430,6 @@ class ComponentBase(SetParentMixin, ABC):
         if self.name not in (None, "", UNDEFINED):
             if not self.name.isidentifier():
                 raise EntitySetupValueError(owner=self, msg="Attribute name needs to be valid python identifier name")
-
 
 
     def _check_cleaners(self, allowed_cleaner_base_list: List[TypingType]):
@@ -1526,24 +1525,34 @@ class UseStackFrameCtxManagerBase(AbstractContextManager):
     """
     owner_session: "IStackOwnerSession"
     frame: IStackFrame
-
+    add_to_stack: bool = True
+    cleanup_callback: Optional[Callable[[], None]] = None
 
     def __post_init__(self):
-        if self.owner_session.stack_frames:
-            previous_frame = self.owner_session.stack_frames[0]
-            self.frame.copy_from_previous_frame(previous_frame)
-        self.frame.post_clean()
-
+        if self.add_to_stack:
+            if self.owner_session.stack_frames:
+                previous_frame = self.owner_session.stack_frames[0]
+                self.frame.copy_from_previous_frame(previous_frame)
+            self.frame.post_clean()
 
     def __enter__(self):
-        self.owner_session.push_frame_to_stack(self.frame)
+        # context manager (with xxx as : ...
+        if self.add_to_stack:
+            self.owner_session.push_frame_to_stack(self.frame)
         return self.frame
 
 
     def __exit__(self, exc_type, exc_value, exc_tb):
-        if not self.owner_session.current_frame == self.frame:
+        if self.owner_session.current_frame != self.frame:
             raise EntityInternalError(owner=self, msg=f"Something wrong with frame stack (2), got {self.owner_session.current_frame}, expected {self.frame}")
-        frame_popped = self.owner_session.pop_frame_from_stack()
+
+        if self.cleanup_callback:
+            self.cleanup_callback()
+
+        if self.add_to_stack:
+            frame_popped = self.owner_session.pop_frame_from_stack()
+        else:
+            frame_popped = self.owner_session.current_frame
         if not exc_type and frame_popped != self.frame:
             raise EntityInternalError(owner=self, msg=f"Something wrong with frame stack, got {frame_popped}, expected {self.frame}")
 
@@ -1592,6 +1601,31 @@ class IStackOwnerSession(ABC):
             raise EntityInternalError(owner=self, msg=f"Expected {self.STACK_FRAME_CLASS}, got frame: {frame}") 
         return self.STACK_FRAME_CTX_MANAGER_CLASS(owner_session = self, frame=frame)
 
+    def use_changed_current_stack_frame(self, **change_attrs) -> "UseStackFrameCtxManagerBase":
+        if not self.current_frame:
+            raise EntityInternalError(owner=self, msg="No current frame")
+        if not change_attrs:
+            raise EntityInternalError(owner=self, msg="Expecting change_attrs")
+
+        orig_attrs: Dict[str, Any] = {}
+        for attr_name, attr_value in change_attrs.items():
+            if not hasattr(self.current_frame, attr_name):
+                raise EntityInternalError(owner=self, msg=f"Unknown attribute: {attr_name} in frame: {self.current_frame}")
+            orig_attrs[attr_name] = getattr(self.current_frame, attr_name)
+            setattr(self.current_frame, attr_name, attr_value)
+
+        def restore_args_to_orig_callback():
+            for attr_name, attr_value in orig_attrs.items():
+                setattr(self.current_frame, attr_name, attr_value)
+
+        return self.STACK_FRAME_CTX_MANAGER_CLASS(
+                    owner_session = self,
+                    frame=self.current_frame,
+                    add_to_stack=False,
+                    cleanup_callback=restore_args_to_orig_callback,
+        )
+
+
     def push_frame_to_stack(self, frame: IStackFrame):
         self.stack_frames.insert(0, frame)
         self.current_frame = frame
@@ -1624,6 +1658,8 @@ class SetupStackFrame(IStackFrame):
     # Computed from container/component
     # used for BoundModelWithHandlers cases (read_handlers()), 
     bound_model: Optional[BoundModelBase] = field(init=False, repr=False, default=None)
+
+    dexp_validator             : Optional[DexpValidator] = field(repr=False, default=None)
 
     # -- autocomputed
     # bound_model_root : Optional[BoundModelBase] = field(repr=False, init=False, default=None)

@@ -77,12 +77,15 @@ from .base import (
     ValidationFailure,
     SetupStackFrame,
     ComponentBase,
-        )
+)
 from .expressions import (
     DotExpression,
     DExpStatusEnum,
     IFunctionDexpNode,
-    ISetupSession, IThisRegistry,
+    ISetupSession,
+    IThisRegistry,
+    DEXP_VALIDATOR_FOR_BIND,
+    clean_available,
 )
 from .attr_nodes import (
     AttrDexpNode
@@ -139,9 +142,6 @@ class AutocomputedEnum(IntEnum):
 # ============================================================
 
 
-MAX_BIND_DEPTH = 4
-
-
 @dataclass
 class FieldBase(ComponentBase, IFieldBase, ABC):
     # abstract property:
@@ -163,7 +163,6 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
     #   default:        Optional[Union[StandardType, DotExpression]] = None
 
     description:    Optional[TransMessageType] = field(repr=False, default=None)
-
 
     available:      Union[bool, DotExpression] = field(repr=False, default=True)
 
@@ -213,14 +212,17 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
         if not isinstance(self.bind, DotExpression):
             raise EntitySetupValueError(owner=self, msg=f"Argument 'bind' needs to be DotExpression (e.g. M.status), got: {to_repr(self.bind)}")
 
-        if self.bind._namespace != ModelsNS:
-            raise EntitySetupValueError(owner=self, msg=f"Argument 'bind' needs to be 'Models.' / 'M.' DotExpression, got: {to_repr(self.bind)}")
+        self.bind._SetDexpValidator(DEXP_VALIDATOR_FOR_BIND)
+        # if self.bind._namespace != ModelsNS:
+        #     raise EntitySetupValueError(owner=self, msg=f"Argument 'bind' needs to be 'Models.' / 'M.' DotExpression, got: {to_repr(self.bind)}")
 
         if not self.name:
             # ModelsNs.person.surname -> surname
             self.name = get_name_from_bind(self.bind)
 
         self.autocomputed = AutocomputedEnum.from_value(self.autocomputed)
+
+        clean_available(owner=self, attr_name="available", dexp_or_bool=self.available)
 
         self._check_cleaners(self._allowed_cleaner_base_list)
 
@@ -232,23 +234,23 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
         super().setup(setup_session=setup_session)
 
         if self.bind:
-            # within all parents catch first with namespace_only attribute
-            # if such - check if namespace of all children are right.
-            # Used for SubEntityItems.
-            namespace_only = ModelsNS
-            parent = self.parent
-            while parent is not None:
-                if hasattr(parent, "namespace_only"):
-                    namespace_only = parent.namespace_only
-                    break
-                parent = parent.parent
+            # # within all parents catch first with namespace_only attribute
+            # # if such - check if namespace of all children are right.
+            # # Used for SubEntityItems.
+            # namespace_only = ModelsNS
+            # parent = self.parent
+            # while parent is not None:
+            #     if hasattr(parent, "namespace_only"):
+            #         namespace_only = parent.namespace_only
+            #         break
+            #     parent = parent.parent
 
-            if self.bind._namespace!=namespace_only:
-                raise EntitySetupValueError(owner=self, msg=f"{self.bind}: 'bind' needs to be in {namespace_only} DotExpression (e.g. M.status).")
+            # if self.bind._namespace!=namespace_only:
+            #     raise EntitySetupValueError(owner=self, msg=f"{self.bind}: 'bind' needs to be in {namespace_only} DotExpression (e.g. M.status).")
 
-            if len(self.bind.Path) not in range(1, MAX_BIND_DEPTH+1):
-                # warn(f"{self.bind}: 'bind' needs to be 1-4 deep DotExpression (e.g. M.status, M.city.country.name ).")
-                raise EntitySetupValueError(owner=self, msg=f"'bind' needs to be 1-{MAX_BIND_DEPTH} deep DotExpression (e.g. M.status, M.city.country.name ), got: {self.bind}")
+            # if len(self.bind.Path) not in range(1, MAX_BIND_DEPTH+1):
+            #     # warn(f"{self.bind}: 'bind' needs to be 1-4 deep DotExpression (e.g. M.status, M.city.country.name ).")
+            #     raise EntitySetupValueError(owner=self, msg=f"'bind' needs to be 1-{MAX_BIND_DEPTH} deep DotExpression (e.g. M.status, M.city.country.name ), got: {self.bind}")
 
             self.bound_attr_node = setup_session.get_dexp_node_by_dexp(self.bind)
             if not self.bound_attr_node:
@@ -482,6 +484,10 @@ class ChoiceOption:
     value:      DotExpression # -> some Standard or Complex type
     title:      TransMessageType
     available:  Optional[Union[DotExpression,bool]] = True # Dexp returns bool
+
+    def __post_init__(self):
+        clean_available(owner=self, attr_name="available", dexp_or_bool=self.available)
+
 
 @dataclass
 class ChoiceField(FieldBase):
@@ -834,6 +840,7 @@ class FieldGroup(ComponentBase, IFieldGroup):
     available:      Union[bool, DotExpression] = field(repr=False, default=True)
 
     def __post_init__(self):
+        clean_available(owner=self, attr_name="available", dexp_or_bool=self.available)
         self._check_cleaners([ChildrenValidationBase, ChildrenEvaluationBase])
         super().__post_init__()
 
