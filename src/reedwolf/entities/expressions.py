@@ -1221,6 +1221,13 @@ DEXP_VALIDATOR_FOR_BOOL_TERM = DexpValidator(
     expected_type_info=TypeInfo.get_or_create_by_type(bool),
 )
 
+# used in Evaluations
+DEXP_VALIDATOR_NOT_MODELS = DexpValidator(
+    deny_namespaces=[ModelsNS],
+    # TODO: compatible type to attached field - can be check after binding
+    #   expected_type_info=TypeInfo.get_or_create_by_type(bool),
+)
+
 def clean_available(owner: Any, attr_name: str, dexp_or_bool: Union[NoneType, DotExpression, bool]):
     if dexp_or_bool is not None:
         if isinstance(dexp_or_bool, DotExpression):

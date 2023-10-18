@@ -33,11 +33,6 @@ class ItemsEvaluationBase(EvaluationBase, ABC):
 
 @dataclass
 class ItemsEvaluation(ItemsEvaluationBase):
-    ensure:         DotExpression
-    name:           Optional[str] = field(default=None)
-    error:          Optional[TransMessageType] = field(repr=False, default=None)
-    available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
-    title:          Optional[TransMessageType] = field(repr=False, default=None)
 
     def execute(self, apply_result: IApplyResult) -> Optional[ExecResult]:
         raise NotImplementedError()

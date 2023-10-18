@@ -63,10 +63,6 @@ class FieldEvaluation(FieldEvaluationBase):
     """
     # TODO: check in Setup phase if type of evaluated DotExpression has correct
     #       type - e.g.  for EnumField evaluated value must be within enum values.
-    value:          DotExpression
-    name:           Optional[str] = field(default=None)
-    title:          Optional[TransMessageType] = field(default=None)
-    available:      Optional[Union[bool, DotExpression]] = field(default=True)
 
     def __post_init__(self):
         if not isinstance(self.value, DotExpression):
