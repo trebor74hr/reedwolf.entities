@@ -569,7 +569,13 @@ class TypeInfo:
     is_optional:    bool = field(init=False, repr=False, default=UNDEFINED)
     is_enum:        bool = field(init=False, repr=False, default=UNDEFINED)
     is_union:       bool = field(init=False, repr=False, default=UNDEFINED)
+
+    # NOTE: custom type hints - see classes that inherit IFuncArgHint.
+    #       This enables custom properties and methods embedded in type-hint object instances.
     is_func_arg_hint: bool = field(init=False, repr=False, default=UNDEFINED)
+
+    # NOTE: Special type of IInjectFuncArgHint (IFuncArgHint)
+    # TODO: explain better
     is_inject_func_arg: bool = field(init=False, repr=False, default=UNDEFINED)
 
     # list of python type underneath - e.g. int, str, list, dict, Person, or list of accepted types

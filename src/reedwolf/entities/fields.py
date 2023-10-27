@@ -228,44 +228,34 @@ class FieldBase(IField, ABC):
 
         self.init_clean_base()
 
+    def _set_bound_attr_node(self, setup_session: ISetupSession):
+        self.bound_attr_node = setup_session.get_dexp_node_by_dexp(self.bind)
+        if not self.bound_attr_node:
+            # TODO: not nice :(
+            parent_container = self.get_first_parent_container(consider_self=True)
+            parent_setup_session = parent_container.parent.setup_session if parent_container.parent else parent_container.setup_session
+            if parent_setup_session != setup_session:
+                # TODO: does not goes deeper - should be done with while loop until the top
+                self.bound_attr_node = parent_setup_session.get_dexp_node_by_dexp(self.bind)
+
+        if not self.bound_attr_node:
+            raise EntitySetupValueError(owner=self, msg=f"Can not fill self.bound_attr_node by bind: {self.bind}")
+
+    # ------------------------------------------------------------
+
+    def setup_phase_one(self, setup_session: ISetupSession):
+        self._set_bound_attr_node(setup_session)
+        self._setup_phase_one_custom(setup_session)
+
+    # ------------------------------------------------------------
 
     def setup(self, setup_session:ISetupSession):
 
         super().setup(setup_session=setup_session)
 
         if self.bind:
-            # # within all parents catch first with namespace_only attribute
-            # # if such - check if namespace of all children are right.
-            # # Used for SubEntityItems.
-            # namespace_only = ModelsNS
-            # parent = self.parent
-            # while parent is not None:
-            #     if hasattr(parent, "namespace_only"):
-            #         namespace_only = parent.namespace_only
-            #         break
-            #     parent = parent.parent
-
-            # if self.bind._namespace!=namespace_only:
-            #     raise EntitySetupValueError(owner=self, msg=f"{self.bind}: 'bind' needs to be in {namespace_only} DotExpression (e.g. M.status).")
-
-            # if len(self.bind.Path) not in range(1, MAX_BIND_DEPTH+1):
-            #     # warn(f"{self.bind}: 'bind' needs to be 1-4 deep DotExpression (e.g. M.status, M.city.country.name ).")
-            #     raise EntitySetupValueError(owner=self, msg=f"'bind' needs to be 1-{MAX_BIND_DEPTH} deep DotExpression (e.g. M.status, M.city.country.name ), got: {self.bind}")
-
-            self.bound_attr_node = setup_session.get_dexp_node_by_dexp(self.bind)
-            if not self.bound_attr_node:
-                # TODO: not nice :(
-                parent_container = self.get_first_parent_container(consider_self=True)
-                parent_setup_session = parent_container.parent.setup_session if parent_container.parent else parent_container.setup_session
-                if parent_setup_session!=setup_session:
-                    # TODO: does not goes deeper - should be done with while loop until the top
-                    self.bound_attr_node = parent_setup_session.get_dexp_node_by_dexp(self.bind)
-
-            # self.attr_node = setup_session.get_attr_node(FieldsNS, self.name, strict=True)
             self.attr_node = setup_session[FieldsNS].get(self.name)
-
             assert self.attr_node
-
             if not self.bound_attr_node:
                 # warn(f"TODO: {self}.bind = {self.bind} -> bound_attr_node can not be found.")
                 raise EntitySetupValueError(owner=self, msg=f"bind={self.bind}: bound_attr_node can not be found.")
@@ -299,8 +289,10 @@ class FieldBase(IField, ABC):
 
     # ------------------------------------------------------------
 
-    def post_setup(self):
+    def _setup_phase_one_custom(self, setup_session: ISetupSession):
         " to validate all internal values "
+        super()._setup_phase_one_custom(setup_session)
+
         if not self.python_type:
             if self.PYTHON_TYPE:
                 self.python_type = self.PYTHON_TYPE
@@ -539,8 +531,7 @@ class ChoiceField(FieldBase):
 
     # ------------------------------------------------------------
 
-    def setup(self, setup_session: ISetupSession):
-
+    def _setup_phase_one_custom(self, setup_session: ISetupSession):
         choices = self.choices
         choices_checked = False
         is_list = UNDEFINED
@@ -657,8 +648,13 @@ class ChoiceField(FieldBase):
 
         if not self.python_type:
             # TODO: implement if missing
-            raise EntityInternalError(owner=self, msg="ChoiceField 'python_type' not set") 
+            raise EntityInternalError(owner=self, msg="ChoiceField 'python_type' not set")
 
+        super()._setup_phase_one_custom(setup_session)
+
+    # ------------------------------------------------------------
+
+    def setup(self, setup_session: ISetupSession):
         # NOTE: must be done after to avoid calling Setup() for choice_value
         #       and choice_title. For these two default This namespace is not
         #       appliable, need special one, This.Instance + This.<model-attrs>
@@ -698,14 +694,7 @@ class EnumField(FieldBase):
 
     enum_value_py_type: Optional[type] = field(init=False, default=None)
 
-    # TODO: možda složiti da radi i za Choice/Enum -> structural pattern
-    #       matching like, samo nisam još našao zgodnu sintaksu.
-    #   enables: Optional[List[IComponent]] = field(repr=False, default=None)
-
-    def setup(self, setup_session: ISetupSession):
-
-        super().setup(setup_session=setup_session)
-
+    def _setup_phase_one_custom(self, setup_session: ISetupSession):
         # TODO: revert to: strict=True - and process exception properly
         attr_node = setup_session.get_dexp_node_by_dexp(dexp=self.bind, strict=False)
         if attr_node:
@@ -758,6 +747,16 @@ class EnumField(FieldBase):
 
         # TODO: on usage normalize concrete all available choices to Enum[ChoiceOption], and define:
         #       https://stackoverflow.com/questions/33690064/dynamically-create-an-enum-with-custom-values-in-python
+
+        super()._setup_phase_one_custom(setup_session)
+
+    # TODO: možda složiti da radi i za Choice/Enum -> structural pattern
+    #       matching like, samo nisam još našao zgodnu sintaksu.
+    #   enables: Optional[List[IComponent]] = field(repr=False, default=None)
+    def setup(self, setup_session: ISetupSession):
+
+        super().setup(setup_session=setup_session)
+
 
         return self
 

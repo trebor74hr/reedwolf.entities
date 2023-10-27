@@ -999,10 +999,21 @@ class IComponent(IBaseComponent, ABC):
             else:
                 if isinstance(self, IField):
                     # evaluate bind: ValueExpression
-                    self.bind.setup(setup_session=setup_session)
+                    self.bind.Setup(setup_session=setup_session, owner=self)
                 else:
                     if hasattr(self, "bind"):
                         raise EntityInternalError(owner=self, msg=f"Only fields expected to have bind attr, got: {type(self)}")
+
+            # Set up dataclass and list of fields for later use in FieldsNS.
+            # Will validate if all type_info are available
+            self.get_component_fields_dataclass(setup_session=setup_session)
+
+            if isinstance(self, IField):
+                assert hasattr(self, "get_type_info")
+                self.setup_phase_one(setup_session)
+                # Check that type_info is set - call will raise error if something is wrong.
+                if not self.get_type_info():
+                    raise EntityInternalError(owner=self, msg="type_info could not be retrieved in setup phase one")
 
         self._setup_phase_one_called = True
 
@@ -1014,9 +1025,9 @@ class IComponent(IBaseComponent, ABC):
     def setup(self, setup_session: ISetupSession):
         ...
 
-    def post_setup(self):
+    def _setup_phase_one_custom(self, setup_session: ISetupSession):
         """
-        to validate all internal values
+        to do some specific actions
         """
         pass
 
@@ -1042,7 +1053,6 @@ class IComponent(IBaseComponent, ABC):
         elif isinstance(component, IComponent):
             assert "Entity(" not in repr(component)
             component.setup(setup_session=setup_session)  # , parent=self)
-            component.post_setup()
             called = True
         elif isinstance(component, (dict, list, tuple)):
             raise EntitySetupValueError(owner=self, msg=f"components should not be dictionaries, lists or tuples, got: {type(component)} / {component}")

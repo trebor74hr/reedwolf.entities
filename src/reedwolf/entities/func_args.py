@@ -66,14 +66,14 @@ class PrepArg:
     caller: Union[Namespace, IDotExpressionNode] = field(repr=False)
 
     # autocomputed
-    # TODO: maybe drop: compare=False and rerp=False + adjust tests
-    is_dot_expr: bool = field(init=False, compare=False, repr=False)
+    # NOTE: dropped compare=False and rerp=False + adjust tests
+    #   is_dot_expr: bool = field(init=False, compare=False, repr=False)
     _type_info: TypeInfo = field(init=False, compare=False, repr=False, default=None)
 
     def __post_init__(self):
         if self.type_info_or_callable is None:
             raise EntityInternalError(owner=self, msg="type_info / 'callable() -> type_info' not supplied")
-        self.is_dot_expr = isinstance(self.value_or_dexp, DotExpression)
+        # self.is_dot_expr = isinstance(self.value_or_dexp, DotExpression)
 
         # TODO: consider:
         #   if self.type_info is None or self.is_none_type():
@@ -209,10 +209,14 @@ class FunctionArguments:
                         arg_name: str, 
                         value_object: Any
                         ) -> PrepArg:
+
         if isinstance(value_object, TypeInfo):
             type_info_or_callable = value_object
             # TODO: should be DotExpression or IDotExpressionNode
-            value_or_dexp = UNDEFINED
+            if not isinstance(caller, (DotExpression, IDotExpressionNode)):
+                raise EntityInternalError(owner=self, msg=f"{value_object} is type_info, expected caller is DotExpression/IDotExpressionNode, got: {caller}")
+            # ORIG: value_or_dexp = UNDEFINED
+            value_or_dexp = caller
 
         elif isinstance(value_object, DotExpression):
             dexp: DotExpression = value_object
@@ -352,7 +356,7 @@ class FunctionArguments:
             expected_args: Dict[str, Optional[PrepArg]],
             ) -> bool:
 
-        # value from chain / stream - previous dot-node. e.g. 
+        # value from chain / stream - previous dot-node. e.g.
         #   M.name.Lower() # value is passed from .name
         if not isinstance(caller, IDotExpressionNode):
             raise EntityInternalError(f"{parent_name}: Caller is not IDotExpressionNode, got: {type(caller)} / {caller}")
@@ -397,10 +401,12 @@ class FunctionArguments:
             for expected_arg in expected_args:
                 func_arg = self.get(expected_arg, UNDEFINED)
                 assert func_arg
+                # Custom hints (IFuncArgHint instances)
                 if func_arg and func_arg.type_info.is_func_arg_hint:
                     func_arg_hint: IFuncArgHint = func_arg.type_info.py_type_hint
                     func_arg_hint.setup_check(setup_session=setup_session, caller=caller, func_arg=func_arg)
 
+                    # NOTE: handle IInjectFuncArgHint custom type hint instance
                     if func_arg.type_info.is_inject_func_arg:
                         inject_type_info = TypeInfo.get_or_create_by_type(py_type_hint=func_arg.type_info.type_,
                                                                           caller=caller)
@@ -432,6 +438,7 @@ class FunctionArguments:
                     expected_args=expected_args, 
                     given_args=args, 
                     given_kwargs=kwargs)
+
             value_arg_implicit = True
 
         return value_arg_implicit
