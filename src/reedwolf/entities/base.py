@@ -420,6 +420,7 @@ class ComponentBase(SetParentMixin, ABC):
     child_field_list: Optional[List[ChildField]] = field(init=False, repr=False, default=None)
     _component_fields_dataclass: Optional[TypingType[IComponentFields]] = field(init=False, repr=False, default=None)
     _this_registry: Union[IThisRegistry, NoneType, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
+    _setup_phase_one_called: bool = field(init=False, repr=False, default=False)
 
     def __post_init__(self):
         self.init_clean_base()
@@ -549,7 +550,14 @@ class ComponentBase(SetParentMixin, ABC):
     # ------------------------------------------------------------
 
     def is_top_parent(self) -> bool:
+        if self.parent is UNDEFINED:
+            raise EntityInternalError(owner=self, msg="Parent is not yet set")
         return not bool(self.parent)
+
+    @staticmethod
+    def is_top_container() -> bool:
+        """ different from is_top_parent since is based on type not on parent setup"""
+        return False
 
     @staticmethod
     def is_container() -> bool:
@@ -825,72 +833,148 @@ class ComponentBase(SetParentMixin, ABC):
 
     # ------------------------------------------------------------
 
-    def fill_components(self, components: Optional[Dict[str, Self]] = None,
-                        parent: Optional[Self] = None) \
+    def _setup_phase_one(self, components: Optional[Dict[str, Self]] = None,
+                         parent: Optional[Self] = None) \
                         -> Dict[str, Self]:
-        """ recursive -> flat dict
-        component can be ComponentBase, Dataprovider, ...
         """
+        does following:
+        - collects components:
+        - set parent
+        - evaluate bound_model - class or M.value_expressions
+        - evaluate bind - M.value_expressions
+        - custom dataclass and fields
 
-        is_top = bool(components is None)
-        if is_top:
-            components = {}
-            # assert not parent
+        collecting components
+        ---------------------
+        except for subentities sub-components
+            it is flattened dict of subcomponents (recursive)
+        i.e. it returns components : Dictionary [component_name: Component]
+            will fill following:
+                all mine sub-components
+                if not subentity
+                    all sub-component sub-components (recursively)
+        it sets parent of all sub-components recursively
+        """
+        if self._setup_phase_one_called:
+            raise EntityInternalError(owner=self, msg="fill_components already called")
 
         # for children/contains attributes - parent is set here
         if not hasattr(self, "name"):
             raise EntitySetupError(owner=self, msg=f"Component should have 'name' attribute, got class: {self.__class__.__name__}")
 
-        if not is_top:
-            # Component
-            assert parent
+        if self.is_container():
+            assert components is None
+            assert self.components is None, self
+
+            components = {}
+
+            if self.is_top_container():
+                # Entity()
+                if not parent is None:
+                    raise EntityInternalError(owner=self, msg=f"Parent should be None, got: {parent}")
+                assert parent is None, parent
+                self.set_parent(None)
+            else:
+                # SubEntityItems()?
+                assert self.is_subentity()
+                assert parent, parent
+                self.set_parent(parent)
+
+            if not self.setup_session:
+                self.create_setup_session()
+
+            setup_session = self.setup_session
+            container = self
+        else:
+            assert isinstance(components, dict)
+            assert parent is not None
             assert parent != self
             self.set_parent(parent)
-        else:
-            if self.parent not in (None, UNDEFINED):
-                # SubEntityItems()
-                assert not parent
-            else:
-                # Entity()
-                assert not parent
-                self.set_parent(None)
+
+            container = self.get_first_parent_container(consider_self=False)
+            setup_session = container.setup_session
 
         self._add_component(component=self, components=components)
 
-        # includes components, cleaners and all other complex objects
-        for subcomponent in self._get_subcomponents_list():
-            component = subcomponent.component
-            if isinstance(component, Namespace):
-                raise EntitySetupValueError(owner=self, msg=f"Subcomponents should not be Namespace instances, got: {subcomponent.name} = {subcomponent.component}")
+        with setup_session.use_stack_frame(
+                SetupStackFrame(
+                    container = container,
+                    component = self,
+                    this_registry = None,
+                )):
+            if self.is_container():
+                # ----------------------------------------
+                # ModelsNS setup 1/2 phase -> bound models
+                # ----------------------------------------
+                #   - direct data models setup (Entity)
+                #   - some standard NS fields (e.g. Instance)
+                # This will call complete setup() for bound_model-s
+                self._register_model_attr_nodes()
 
-            if isinstance(component, DotExpression):
-                pass
-            elif hasattr(component, "fill_components"):
-                if component.is_subentity():
-                    # for subentity_items container don't go deeper into tree (call fill_components)
-                    # it will be called later in container.setup() method
+            # includes components, cleaners and all other complex objects
+            for subcomponent in self._get_subcomponents_list():
+                component = subcomponent.component
+                # if isinstance(component, Namespace):
+                #     raise EntitySetupValueError(owner=self, msg=f"Subcomponents should not be Namespace instances, got: {subcomponent.name} = {subcomponent.component}")
+
+                if isinstance(component, DotExpression):
+                    continue
+
+                if isinstance(component, ComponentBase):
+                    if component.is_subentity():
+                        # component.set_parent(parent=self)
+                        # for subentity_items container don't go deeper into tree (call _fill_components)
+                        # it will be called later in container.setup() method
+                        component._setup_phase_one(components=None, parent=self)
+                        # save only container (top) object
+                        self._add_component(component=component, components=components)
+                    else:
+                        component._setup_phase_one(components=components, parent=self)
+                        # delete this
+                        if component.is_bound_model():
+                            if isinstance(component.model, DotExpression):
+                                assert component.model.IsFinished()
+                            # NOTE: moved from setup_phase_two() - this is required for in_model=False cases,
+                            #       to register non-model attributes
+                            component._register_nested_models(setup_session)
+
+                elif isinstance(component, SetParentMixin):
                     component.set_parent(parent=self)
-                    # save only container (top) object
                     self._add_component(component=component, components=components)
+                    # e.g. BoundModel.model - can be any custom Class(dataclass/pydantic)
                 else:
-                    component.fill_components(components=components, parent=self)
-            elif hasattr(component, "set_parent"):
-                component.set_parent(parent=self)
-                self._add_component(component=component, components=components)
-                # e.g. BoundModel.model - can be any custom Class(dataclass/pydantic)
+                    if component.__class__.__name__ not in ("ChoiceOption", "CustomFunctionFactory", "int", "str"):
+                        raise EntityInternalError(owner=component, msg=f"Strange type of component, check or add to list of ignored types for _setup_phase_one() ")
 
+            if self.is_container():
+                if self.components is not None:
+                    raise EntityInternalError(owner=self, msg=f"components already set: {self.components}")
+                self.components = components
 
-        return components
+                # evaluate bound_model - class or M.value_expression
+                # self.bound_model.setup(setup_session=setup_session)
+            else:
+                if isinstance(self, IFieldBase):
+                    # evaluate bind: ValueExpression
+                    self.bind.setup(setup_session=setup_session)
+                else:
+                    if hasattr(self, "bind"):
+                        raise EntityInternalError(owner=self, msg=f"Only fields expected to have bind attr, got: {type(self)}")
+
+        self._setup_phase_one_called = True
+
+        return None
 
     # ------------------------------------------------------------
 
-    # @abstractmethod
-    # def setup(self, setup_session: ISetupSession):
-    #     ...
+    @abstractmethod
+    def setup(self, setup_session: ISetupSession):
+        ...
 
     def post_setup(self):
         " to validate all internal values "
         pass
+
 
     # ------------------------------------------------------------
 
@@ -1056,7 +1140,12 @@ class ComponentBase(SetParentMixin, ABC):
                     # set only if available, otherwise use existing
                     setup_session.current_frame.set_this_registry(this_registry, force=True)
 
-            ret = self._setup(setup_session=setup_session)
+            if not self.is_finished():
+                ret = self._setup_phase_two(setup_session=setup_session)
+            else:
+                if not self.is_bound_model():
+                    raise EntityInternalError(owner=self, msg=f"_setup_phase_two() is skipped only for bound models, got: {type(self)}")
+                ret = self
 
         return ret
 
@@ -1149,7 +1238,8 @@ class ComponentBase(SetParentMixin, ABC):
             # -------------------------------------------------------------
             # "autocomplete", "evaluate",
             # TODO: not the smartest way how to do this ...
-            if (sub_component_name in ("parent", "parent_name", "parent_container", "parent_setup_session",
+            if (sub_component_name in ("parent", "parent_name", "parent_container",
+                                      # "parent_setup_session",
                                       "name", "title", "datatype", "components", "type", "autocomputed",
                                       "setup_session", "meta",
                                       # NOTE: maybe in the future will have value expressions too
@@ -1238,7 +1328,11 @@ class ComponentBase(SetParentMixin, ABC):
     # ------------------------------------------------------------
 
 
-    def _setup(self, setup_session: ISetupSession):  # noqa: F821
+    def _setup_phase_two(self, setup_session: ISetupSession):  # noqa: F821
+        """
+        phase two -  calls *setup* methods for all components
+        fields, cleaners, and all value expression and
+        """
         if self.parent is UNDEFINED:
             raise EntityInternalError(owner=self, msg="Parent not set")
 
@@ -1356,7 +1450,8 @@ class ComponentBase(SetParentMixin, ABC):
 # ------------------------------------------------------------
 
 class IFieldBase(ABC):
-    ...
+    # to Model attribute
+    bind: DotExpression
 
     # @abstractmethod
     # def get_attr_node(self, setup_session: ISetupSession) -> "AttrDexpNode":  # noqa: F821
@@ -1375,6 +1470,7 @@ class IFieldGroup(ABC):
 
 class IContainerBase(ABC):
 
+    bound_model     : "BoundModelBase" = field(repr=False)
 
     @abstractmethod
     def add_fieldgroup(self, fieldgroup:IFieldGroup):  # noqa: F821

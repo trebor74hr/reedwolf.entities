@@ -83,18 +83,22 @@ class NestedBoundModelBase(BoundModelBase):
         this_registry = ThisRegistry(model_class=model)
         return this_registry
 
+
     def _register_nested_models(self, setup_session:ISetupSession):
+        """
+        called only in _setup_phase_one() phase
+        """
         # ALT: self.get_children()
         if not self.contains:
             return False
 
-        container_parent = self.parent.get_first_parent_container(consider_self=True)
+        if self.models_with_handlers_dict:
+            # NOTE: call already done in setup_one phase, calls to this function from setup() (phase two) are not allowed
+            raise EntityInternalError(owner=self, msg=f"models_with_handlers_dict should be empty, got: {to_repr(self.models_with_handlers_dict)}. Have you called setup for 2nd time?")
 
+        container_parent = self.parent.get_first_parent_container(consider_self=True)
         if not container_parent or not container_parent.is_top_parent():
             raise EntitySetupValueError(owner=self, msg=f"Currently child bound models ('contains') supported only for top contaainers owners (i.e. Entity), got: {self.parent} / {container_parent}")
-
-        if self.models_with_handlers_dict:
-            raise EntityInternalError(owner=self, msg=f"models_with_handlers_dict should be empty, got: {to_repr(self.models_with_handlers_dict)}. Have you called setup for 2nd time?") 
 
         # model_fields = get_model_fields(self.model)
         parent_py_type_hints = extract_py_type_hints(self.model, f"{self}")
@@ -324,7 +328,7 @@ class BoundModelWithHandlers(NestedBoundModelBase):
                 # NOTE: not allowed in SubEntityItems-s for now
                 raise EntitySetupValueError(owner=self, msg=f"BoundModel* nesting (attribute 'contains') is not supported for '{type(container)}'")
 
-        self._register_nested_models(setup_session)
+        # self._register_nested_models(setup_session)
 
         self._finished = True
 
@@ -394,6 +398,8 @@ class BoundModel(NestedBoundModelBase):
             raise EntitySetupValueError(f"Model should be Model class (DC/PYD) or DotExpression, got: {self.model}")
 
         if isinstance(self.model, DotExpression):
+            if not self.model.IsFinished():
+                raise EntityInternalError(owner=self, msg=f"model not setup: {self.model}")
             self.type_info = self.model._evaluator.last_node().type_info
         else:
             self.type_info = TypeInfo.get_or_create_by_type(
@@ -406,7 +412,7 @@ class BoundModel(NestedBoundModelBase):
         if not self.type_info:
             self._set_type_info()
 
-        self._register_nested_models(setup_session)
+        # self._register_nested_models(setup_session)
 
         self._finished = True
 

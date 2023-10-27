@@ -256,7 +256,7 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
             if not self.bound_attr_node:
                 # TODO: not nice :(
                 parent_container = self.get_first_parent_container(consider_self=True)
-                parent_setup_session = getattr(parent_container, "parent_setup_session", parent_container.setup_session)
+                parent_setup_session = parent_container.parent.setup_session if parent_container.parent else parent_container.setup_session
                 if parent_setup_session!=setup_session:
                     # TODO: does not goes deeper - should be done with while loop until the top
                     self.bound_attr_node = parent_setup_session.get_dexp_node_by_dexp(self.bind)

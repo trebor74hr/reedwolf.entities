@@ -584,7 +584,7 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
         if self.container is not None and not isinstance(self.container, IContainerBase):
             raise EntityInternalError(owner=self, msg=f"Expecting container for parent, got: {type(self.container)} / {self.container}")
 
-        self.is_top_setup_session: bool = (self.parent_setup_session is None)
+        self.is_top_setup_session: bool = self.parent_setup_session is None
 
         if self.is_top_setup_session:
             self.top_parent_setup_session = self

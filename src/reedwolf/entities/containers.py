@@ -176,6 +176,38 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
     # ------------------------------------------------------------
 
+    def create_setup_session(self, config: Optional[Config] = None) -> SetupSession:
+        """
+        config param - only for unit testing
+        """
+        #
+        # functions: Optional[List[CustomFunctionFactory]]
+        # context_class: Optional[IContext]
+        assert self.setup_session is None
+
+        functions = self.functions
+        config = config if config else self.config
+        context_class = self.context_class
+
+        setup_session = SetupSession(
+            container=self,
+            functions=functions,
+            parent_setup_session=self.setup_session if self.parent else None,
+            include_builtin_functions=self.is_top_container())
+
+        setup_session.add_registry(ModelsRegistry())
+        setup_session.add_registry(FieldsRegistry())
+        setup_session.add_registry(FunctionsRegistry())
+        setup_session.add_registry(OperationsRegistry())
+        setup_session.add_registry(ContextRegistry(context_class=context_class))
+        setup_session.add_registry(ConfigRegistry(config=config))
+
+        self.setup_session = setup_session
+
+        return setup_session
+
+    # ------------------------------------------------------------
+
     def _register_model_attr_nodes(self):
         # ----------------------------------------
         # A. 1st level attr_nodes
@@ -193,14 +225,13 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         assert isinstance(self.models, dict), self.models
 
         # can have several, first is main model, other are submodels e.g. BoundModelWithHandlers
-        for bound_model_name, bound_model in self.models.items():
+        for nr, (bound_model_name, bound_model) in enumerate(self.models.items()):
             assert bound_model_name.split(".")[-1] == bound_model.name
             self._register_bound_model(bound_model=bound_model)
 
     # ------------------------------------------------------------
 
     def _setup_bound_model_dot_expression(self, bound_model:BoundModelBase, setup_session: Optional[SetupSession] = None) -> AttrDexpNode:
-
         model = bound_model.model
         if not isinstance(model, DotExpression):
             raise EntityInternalError(owner=self, msg=f"Expecting model is DotExpression instance, got: {model}") 
@@ -227,8 +258,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             if is_subentity_main_model:
                 # TODO: DRY this - the only difference is setup_session - extract common logic outside / 
                 # bound attr_node
-                assert hasattr(self, "parent_setup_session")
-                setup_session_from = self.parent_setup_session
+                setup_session_from = self.parent.setup_session
             else:
                 # Entity - top parent container / normal case
                 setup_session_from = self.setup_session
@@ -251,8 +281,6 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
     # ------------------------------------------------------------
 
     def _register_bound_model(self, bound_model:BoundModelBase):
-        # ex. type_info.metadata.get("bind_to_parent_setup_session")
-
         # Entity can have one main bound_model and optionally some dependent
         # models nested in tree structure
 
@@ -298,8 +326,6 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         Traverse the whole tree (recursion) and collect all components into
         simple flat list. It will set parent for each child component.
         """
-        self.components = self.fill_components()
-
         # A.3. COMPONENTS - collect attr_nodes - previously flattened (recursive function fill_components)
         for component_name, component in self.components.items():
             self.setup_session[FieldsNS].register(component)
@@ -317,44 +343,16 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
         if not self.contains:
             raise EntitySetupError(owner=self, msg="'contains' attribute is required with list of components")
 
-        if self.setup_session is not None:
-            raise EntitySetupError(owner=self, msg="SetupSession.setup() should be called only once")
+        if self.is_top_container():
+            # ----------------------------------------
+            # SETUP PHASE one (recursive)
+            # ----------------------------------------
+            # Traverse all subcomponents and call the same method for each (recursion)
+            # NOTE: Will setup all bound_model and bind and ModelsNS.
+            #       In phase two will setup all other components and FieldNS, ThisNS and FunctionsNS.
+            self._setup_phase_one()
 
-        self.setup_session = create_setup_session(
-                                container=self,
-                                functions = self.functions,
-                                config = self.config,
-                                context_class = self.context_class,
-                                )
 
-
-        # ----------------------------------------
-        # A. 1st level attr_nodes
-        # ----------------------------------------
-
-        # ----------------------------------------
-        # ModelsNS setup 1/2 phase -> bound models 
-        # ----------------------------------------
-        #   - direct data models setup (Entity)
-        #   - some standard NS fields (e.g. Instance)
-        self._register_model_attr_nodes()
-
-        # NOTE: FieldNS, ThisNS and FunctionsNS are initialized later
-
-        # ----------------------------------------
-        # B. other level attr_nodes - recursive
-        # ----------------------------------------
-        # now when all attr_nodes are set, now setup() can be called for all
-        # components recursively:
-        #   it will validate every component attribute
-        #   if attribute is another component - it will call recursively component.setup()
-        #   if component attribute is DotExpression -> will call dexp.Setup()
-        #   if component is another container i.e. is_subentity_items() - it will
-        #       process only that component and will not go deeper. later
-        #       subentity_items.setup() will do this within own tree dep (own .components / .setup_session)
-
-        # for containers
-        # iterate all subcomponents and call _setup() for each
         with self.setup_session.use_stack_frame(
                 SetupStackFrame(
                     container = self, 
@@ -367,14 +365,17 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             self._register_fields_components_attr_nodes()
 
             # ----------------------------------------
-            # ModelsNS setup 2/2 phase
+            # SETUP PHASE TWO (recursive)
             # ----------------------------------------
-            #   bound models setup sets:
-            #       - nested models
-            #       - Dot-expression based models (SubEntity*)
-            #   Must be called before because of This registries - need to have
-            #   M. namespace finished.
-            self.bound_model.setup(setup_session=self.setup_session)
+            # iterate all subcomponents and call _setup() for each
+            # now when all attr_nodes are set, now setup() can be called for all
+            # components recursively:
+            #   it will validate every component attribute
+            #   if attribute is another component - it will call recursively component.setup()
+            #   if component attribute is DotExpression -> will call dexp.Setup()
+            #   if component is another container i.e. is_subentity_items() - it will
+            #       process only that component and will not go deeper. later
+            #       subentity_items.setup() will do this within own tree dep (own .components / .setup_session)
 
             # NOTE: setup this_registry objects must be inside of stack_frame due
             #       premature component.bind setup in some ThisRegistryFor* classes.
@@ -386,7 +387,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             # setup me and all my children and children's children and ...
             # ------------------------------------------------------------
             # RECURSION - goes through all tree nodes
-            self._setup(setup_session=self.setup_session)
+            self._setup_phase_two(setup_session=self.setup_session)
             # ------------------------------------------------------------
 
 
@@ -479,27 +480,6 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
 # ------------------------------------------------------------
 
-
-def create_setup_session(
-        container: ContainerBase,
-        config: Config,
-        functions: Optional[List[CustomFunctionFactory]] = None, 
-        context_class: Optional[IContext] = None,
-        ) -> SetupSession:
-    setup_session = SetupSession(
-                    container=container, 
-                    functions=functions,
-                    parent_setup_session=container.setup_session if container.parent else None,
-                    include_builtin_functions=container.is_top_parent())
-
-    setup_session.add_registry(ModelsRegistry())
-    setup_session.add_registry(FieldsRegistry())
-    setup_session.add_registry(FunctionsRegistry())
-    setup_session.add_registry(OperationsRegistry())
-    setup_session.add_registry(ContextRegistry(context_class=context_class))
-    setup_session.add_registry(ConfigRegistry(config=config))
-
-    return setup_session
 
 
 # ------------------------------------------------------------
@@ -677,6 +657,10 @@ class Entity(ContainerBase):
     #     self.setup_session.call_hooks_on_finished_all()
     #     return ret
 
+    @staticmethod
+    def is_top_container() -> bool:
+        return True
+
     def bind_to(self, 
                 bound_model:Optional[BoundModel]=None, 
                 config: Optional[Config]=None,
@@ -835,7 +819,6 @@ class SubEntityBase(ContainerBase, ABC):
     """
     # DotExpression based model -> can be dumped
     bound_model     : Union[BoundModel, BoundModelWithHandlers] = field(repr=False)
-    # metadata={"bind_to_parent_setup_session" : True})
 
     # cardinality     : ICardinalityValidation
     contains        : List[ComponentBase] = field(repr=False)
@@ -867,8 +850,9 @@ class SubEntityBase(ContainerBase, ABC):
     # in parents' chain (including self) -> first container
     parent_container : Union[ContainerBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
 
-    # in parents' chain (not including self) -> first container's setup_session
-    parent_setup_session: Optional[SetupSession] = field(init=False, repr=False, default=None)
+    # NOTE: this is dropped and replaced with parent.setup_session
+    #   in parents' chain (not including self) -> first container's setup_session
+    # parent_setup_session: Optional[SetupSession] = field(init=False, repr=False, default=None)
 
     # copy from first non-self container parent
     context_class   : Optional[Type[IContext]] = field(repr=False, init=False, default=None)
@@ -907,7 +891,6 @@ class SubEntityBase(ContainerBase, ABC):
     def setup(self, setup_session:SetupSession):
         # NOTE: setup_session is not used, can be reached with parent.setup_session(). left param
         #       for same function signature as for components.
-        self.parent_setup_session = setup_session
         super().setup()
         # self.cardinality.validate_setup()
         return self
