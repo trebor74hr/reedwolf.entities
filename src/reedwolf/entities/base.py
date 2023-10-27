@@ -1009,9 +1009,10 @@ class IComponent(IBaseComponent, ABC):
             self.get_component_fields_dataclass(setup_session=setup_session)
 
             if isinstance(self, IField):
-                assert hasattr(self, "get_type_info")
-                self.setup_phase_one(setup_session)
+                self._setup_phase_one_set_type_info(setup_session)
+
                 # Check that type_info is set - call will raise error if something is wrong.
+                assert hasattr(self, "get_type_info")
                 if not self.get_type_info():
                     raise EntityInternalError(owner=self, msg="type_info could not be retrieved in setup phase one")
 
@@ -1024,13 +1025,6 @@ class IComponent(IBaseComponent, ABC):
     @abstractmethod
     def setup(self, setup_session: ISetupSession):
         ...
-
-    def _setup_phase_one_custom(self, setup_session: ISetupSession):
-        """
-        to do some specific actions
-        """
-        pass
-
 
     # ------------------------------------------------------------
 

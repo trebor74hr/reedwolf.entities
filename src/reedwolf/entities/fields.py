@@ -243,11 +243,6 @@ class FieldBase(IField, ABC):
 
     # ------------------------------------------------------------
 
-    def setup_phase_one(self, setup_session: ISetupSession):
-        self._set_bound_attr_node(setup_session)
-        self._setup_phase_one_custom(setup_session)
-
-    # ------------------------------------------------------------
 
     def setup(self, setup_session:ISetupSession):
 
@@ -289,17 +284,26 @@ class FieldBase(IField, ABC):
 
     # ------------------------------------------------------------
 
-    def _setup_phase_one_custom(self, setup_session: ISetupSession):
-        " to validate all internal values "
-        super()._setup_phase_one_custom(setup_session)
+    def _setup_phase_one_set_python_type(self, setup_session: ISetupSession):
+        ...
+
+    def _setup_phase_one_set_type_info(self, setup_session: ISetupSession):
+        """
+        to validate all internal values
+        """
+        self._set_bound_attr_node(setup_session)
+
+        self._setup_phase_one_set_python_type(setup_session)
 
         if not self.python_type:
             if self.PYTHON_TYPE:
                 self.python_type = self.PYTHON_TYPE
             else:
                 raise EntityInternalError(owner=self, msg="python_type must be set in custom setup() method or define PYTHON_TYPE class constant")
+
         self._set_type_info()
 
+    # ------------------------------------------------------------
 
     def create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:
         # ==== similar logic in apply.py :: _apply() ====
@@ -531,7 +535,7 @@ class ChoiceField(FieldBase):
 
     # ------------------------------------------------------------
 
-    def _setup_phase_one_custom(self, setup_session: ISetupSession):
+    def _setup_phase_one_set_python_type(self, setup_session: ISetupSession):
         choices = self.choices
         choices_checked = False
         is_list = UNDEFINED
@@ -650,8 +654,6 @@ class ChoiceField(FieldBase):
             # TODO: implement if missing
             raise EntityInternalError(owner=self, msg="ChoiceField 'python_type' not set")
 
-        super()._setup_phase_one_custom(setup_session)
-
     # ------------------------------------------------------------
 
     def setup(self, setup_session: ISetupSession):
@@ -694,7 +696,7 @@ class EnumField(FieldBase):
 
     enum_value_py_type: Optional[type] = field(init=False, default=None)
 
-    def _setup_phase_one_custom(self, setup_session: ISetupSession):
+    def _setup_phase_one_set_python_type(self, setup_session: ISetupSession):
         # TODO: revert to: strict=True - and process exception properly
         attr_node = setup_session.get_dexp_node_by_dexp(dexp=self.bind, strict=False)
         if attr_node:
@@ -748,7 +750,7 @@ class EnumField(FieldBase):
         # TODO: on usage normalize concrete all available choices to Enum[ChoiceOption], and define:
         #       https://stackoverflow.com/questions/33690064/dynamically-create-an-enum-with-custom-values-in-python
 
-        super()._setup_phase_one_custom(setup_session)
+    # ------------------------------------------------------------
 
     # TODO: možda složiti da radi i za Choice/Enum -> structural pattern
     #       matching like, samo nisam još našao zgodnu sintaksu.
