@@ -17,7 +17,7 @@ from .namespaces import (
 
 class EntityError(Exception, ABC):
     # TODO: validate that every call is marked for translations, check in constructor or using mypy
-    def __init__(self, msg: str, owner: Optional['ComponentBase'] = None, item: Optional['Item'] = None):  # noqa: F821
+    def __init__(self, msg: str, owner: Optional['IComponent'] = None, item: Optional['Item'] = None):  # noqa: F821
         self.parent, self.item = owner, item
         self.set_msg(msg)
 
@@ -159,7 +159,7 @@ class EntityValidationError(EntityError):
     MAX_ERR_DESC_ONE = 200
     MAX_ERR_DESC_ALL = 1000
 
-    def __init__(self, errors: Dict[str, 'ValidationFailure'], owner: 'ComponentBase'):  # noqa: F821
+    def __init__(self, errors: Dict[str, 'ValidationFailure'], owner: 'IComponent'):  # noqa: F821
         """owner is required """
         self.errors = errors
         msg = []

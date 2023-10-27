@@ -52,7 +52,6 @@ from .exceptions import (
 )
 from .namespaces import (
     DynamicAttrsBase,
-    Namespace, ModelsNS,
 )
 from .meta import (
     Self,
@@ -102,8 +101,8 @@ DEXP_PREFIX: str = "DEXP::"
 
 DTO_STRUCT_CHILDREN_SUFFIX: str = "_children"
 
-def warn(msg):
-    print(f"WARNING: {msg}")  # noqa: T001
+def warn(message: str):
+    print(f"WARNING: {message}")  # noqa: T001
 
 
 def repr_obj(obj, limit=100):
@@ -227,6 +226,7 @@ def msg(message: Union[str, TransMessageType]) -> Union[str, TransMessageType]:
 # SetParentMixin
 # ------------------------------------------------------------
 
+@dataclass
 class SetParentMixin:
     """ requires (Protocol):
         name
@@ -235,15 +235,22 @@ class SetParentMixin:
         value_accessor
         entity
     """
+    parent        : Union[Self, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    parent_name   : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+    entity        : Union[Self, "IContainer"] = field(init=False, default=UNDEFINED, repr=False)
+    value_accessor: Union[IValueAccessor, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    # TODO: name          : Optional[str] = field(init=False, default=None)
 
+    name_counter_by_parent_name: Dict[str, int] = field(init=False, repr=False, default_factory=dict)
+    # value_accessor_default: IValueAccessor = field(init=False, repr=False)
 
     # ------------------------------------------------------------
 
-    def set_parent(self, parent: "ComponentBase"):
+    def set_parent(self, parent: Optional["IComponent"]):
         if self.parent is not UNDEFINED:
             raise EntityInternalError(owner=self, msg=f"Parent already defined, got: {parent}")
 
-        assert parent is None or isinstance(parent, ComponentBase), parent
+        assert parent is None or isinstance(parent, IComponent), parent
         self.parent = parent
 
         if self.parent_name is not UNDEFINED:
@@ -276,7 +283,9 @@ class SetParentMixin:
 
 
     def _getset_name(self):
-        " recursive "
+        """
+        recursive
+        """
         assert hasattr(self, "get_path_to_first_parent_container")
 
         if not self.name:
@@ -298,7 +307,7 @@ class SetParentMixin:
                 parent_name = parent._getset_name()
                 keys.append(parent_name)
 
-            if isinstance(self, IFieldBase):
+            if isinstance(self, IField):
                 assert getattr(self, "bind", None)
                 # ModelsNs.person.surname -> surname
                 this_name = get_name_from_bind(self.bind)
@@ -318,6 +327,40 @@ class SetParentMixin:
         self.name_counter_by_parent_name[key] += 1
         return self.name_counter_by_parent_name[key]
 
+    # ------------------------------------------------------------
+
+    def get_first_parent_container(self, consider_self: bool) -> "IContainer":  # noqa: F821
+        # TODO: replace this function and maybe calls with:
+        #       return self.parent_container if consider_self else (self.parent.parent_container if self.parent else None)
+        parents = self.get_path_to_first_parent_container(consider_self=consider_self)
+        return parents[-1] if parents else None
+
+    def get_path_to_first_parent_container(self, consider_self: bool) -> List["IContainer"]:  # noqa: F821
+        """
+        traverses up the component tree up (parents) and find first container
+        including self ( -> if self is container then it returns self)
+        TODO: maybe it is reasonable to cache this
+        """
+        if self.parent is UNDEFINED:
+            raise EntitySetupError(owner=self, msg="Parent is not set. Call .setup() method first.")
+
+        if consider_self and isinstance(self, IContainer):
+            return [self]
+
+        parents = []
+        parent_container = self.parent
+        while parent_container is not None:
+            parents.append(parent_container)
+            if isinstance(parent_container, IContainer):
+                break
+            parent_container = parent_container.parent
+
+        if parent_container in (None, UNDEFINED):
+            if consider_self:
+                raise EntitySetupError(owner=self, msg="Did not found container in parents. Every component needs to be in some container object tree (Entity/SubEntityItems).")
+            return []
+
+        return parents
 
 # ------------------------------------------------------------
 # Subcomponent
@@ -328,7 +371,7 @@ class Subcomponent:
     name        : str # orig: dexp_node_name
     path        : str # orig: var_path
     # TODO: can be some other types too
-    component: Union["ComponentBase", DotExpression]
+    component: Union["IComponent", DotExpression]
     th_field    : Optional[ModelField]
 
 
@@ -342,7 +385,7 @@ class Subcomponent:
             raise EntityInternalError(owner=self, msg=f"name={self.name}, path={self.path}, subcomp={self.component}, th_field={self.th_field}")
 
         # TODO: list all types available and include this check
-        # if not isinstance(self.component, (ComponentBase, DotExpression)):
+        # if not isinstance(self.component, (IComponent, DotExpression)):
         #     raise EntityInternalError(owner=self, msg=f"wrong type of subcomponent {type(self.component)} / {self.component}")
 
 
@@ -402,19 +445,18 @@ def make_component_fields_dataclass(class_name: str, child_field_list: List[Chil
 
 
 # ------------------------------------------------------------
-# ComponentBase
+# IComponent
 # ------------------------------------------------------------
 
 @dataclass
-class ComponentBase(SetParentMixin, ABC):
+class IComponent(SetParentMixin, ABC):
 
     # NOTE: I wanted to skip saving parent reference/object within component - to
     #       preserve single and one-direction references.
-    # NOTE: Not DRY: Entity, SubentityBase and CompoenentBase
-    parent       : Union[Self, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    parent_name  : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
-    entity       : Union[Self, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    value_accessor: Union[IValueAccessor, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    # NOTE: Not DRY: Entity, SubentityBase and ComponentBase
+
+    # TODO: name          : Optional[str] = field(init=False, default=None)
+    # TODO: cleaners:       Optional[List[Union[ICleaner]]] = field(repr=False, default_factory=list)
 
     # lazy init - done in Setup phase
     child_field_list: Optional[List[ChildField]] = field(init=False, repr=False, default=None)
@@ -695,7 +737,8 @@ class ComponentBase(SetParentMixin, ABC):
         return self._get_children_tree(key="_children_tree")
 
 
-    def _get_children_tree(self, key: str, depth:int=0) -> Dict[ComponentNameType, Self]:
+    def _get_children_tree(self, key: str, depth:int=0) -> ComponentTreeType:
+        # Dict[ComponentNameType, Self] = Dict[ComponentNameType, TreeNode])
         if not hasattr(self, key):
             if depth > MAX_RECURSIONS:
                 raise EntityInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
@@ -775,7 +818,7 @@ class ComponentBase(SetParentMixin, ABC):
 
 
             # -- is value supplied i.e. is it different from default
-            if isinstance(attr_value, (ComponentBase, DotExpression)) \
+            if isinstance(attr_value, (IComponent, DotExpression)) \
               or (attr_value is not UNDEFINED 
                   and attr_value is not DC_MISSING 
                   and (attr_default is DC_MISSING or attr_value!=attr_default)
@@ -835,7 +878,7 @@ class ComponentBase(SetParentMixin, ABC):
 
     def _setup_phase_one(self, components: Optional[Dict[str, Self]] = None,
                          parent: Optional[Self] = None) \
-                        -> Dict[str, Self]:
+                        -> NoneType:
         """
         does following:
         - collects components:
@@ -920,7 +963,7 @@ class ComponentBase(SetParentMixin, ABC):
                 if isinstance(component, DotExpression):
                     continue
 
-                if isinstance(component, ComponentBase):
+                if isinstance(component, IComponent):
                     if component.is_subentity():
                         # component.set_parent(parent=self)
                         # for subentity_items container don't go deeper into tree (call _fill_components)
@@ -954,7 +997,7 @@ class ComponentBase(SetParentMixin, ABC):
                 # evaluate bound_model - class or M.value_expression
                 # self.bound_model.setup(setup_session=setup_session)
             else:
-                if isinstance(self, IFieldBase):
+                if isinstance(self, IField):
                     # evaluate bind: ValueExpression
                     self.bind.setup(setup_session=setup_session)
                 else:
@@ -972,7 +1015,9 @@ class ComponentBase(SetParentMixin, ABC):
         ...
 
     def post_setup(self):
-        " to validate all internal values "
+        """
+        to validate all internal values
+        """
         pass
 
 
@@ -986,7 +1031,7 @@ class ComponentBase(SetParentMixin, ABC):
 
         if isinstance(component, (DotExpression,)):
             dexp: DotExpression = component
-            namespace = dexp._namespace
+            # namespace = dexp._namespace
             if dexp.IsFinished():
                 # Setup() was called in container.setup() before or in some
                 #         other dependency
@@ -994,7 +1039,7 @@ class ComponentBase(SetParentMixin, ABC):
             else:
                 dexp.Setup(setup_session=setup_session, owner=self)
                 called = True
-        elif isinstance(component, ComponentBase):
+        elif isinstance(component, IComponent):
             assert "Entity(" not in repr(component)
             component.setup(setup_session=setup_session)  # , parent=self)
             component.post_setup()
@@ -1043,7 +1088,7 @@ class ComponentBase(SetParentMixin, ABC):
                 continue
 
             child_type_info = None
-            if isinstance(child, IFieldBase):
+            if isinstance(child, IField):
                 # ALT: not hasattr(child, "bind")
                 # NOTE: check that sessino is setup correctly for this field?
 
@@ -1162,7 +1207,7 @@ class ComponentBase(SetParentMixin, ABC):
         TODO: document and make it better, pretty hackish.
               the logic behind is to collect all attributes (recurseively) that
               are:
-                1. component (ComponentBase)
+                1. component (IComponent)
                 2. have parent set (SetParentMixin)
                 3. DotExpression
 
@@ -1341,7 +1386,7 @@ class ComponentBase(SetParentMixin, ABC):
 
         for subcomponent in self._get_subcomponents_list():
             component = subcomponent.component
-            if isinstance(component, ComponentBase) \
+            if isinstance(component, IComponent) \
               and (component.is_bound_model() or component.is_subentity()) \
               and component.is_finished():
                 # raise EntityInternalError(owner=self, msg=f"BoundModel.setup() should have been called before ({component})")
@@ -1369,40 +1414,6 @@ class ComponentBase(SetParentMixin, ABC):
     def is_finished(self):
         return getattr(self, "_finished", False)
 
-    # ------------------------------------------------------------
-
-    def get_first_parent_container(self, consider_self: bool) -> "IContainerBase":  # noqa: F821
-        # TODO: replace this function and maybe calls with:
-        #       return self.parent_container if consider_self else (self.parent.parent_container if self.parent else None)
-        parents = self.get_path_to_first_parent_container(consider_self=consider_self)
-        return parents[-1] if parents else None
-
-    def get_path_to_first_parent_container(self, consider_self: bool) -> List["IContainerBase"]:  # noqa: F821
-        """ 
-        traverses up the component tree up (parents) and find first container
-        including self ( -> if self is container then it returns self)
-        TODO: maybe it is reasonable to cache this
-        """
-        if self.parent is UNDEFINED:
-            raise EntitySetupError(owner=self, msg="Parent is not set. Call .setup() method first.")
-
-        if consider_self and isinstance(self, IContainerBase):
-            return [self]
-
-        parents = []
-        parent_container = self.parent
-        while parent_container is not None:
-            parents.append(parent_container)
-            if isinstance(parent_container, IContainerBase):
-                break
-            parent_container = parent_container.parent
-
-        if parent_container in (None, UNDEFINED):
-            if consider_self:
-                raise EntitySetupError(owner=self, msg="Did not found container in parents. Every component needs to be in some container object tree (Entity/SubEntityItems).")
-            return None
-
-        return parents
 
 
     # ------------------------------------------------------------
@@ -1446,10 +1457,10 @@ class ComponentBase(SetParentMixin, ABC):
 
 
 # ------------------------------------------------------------
-# IFieldBase
+# IField
 # ------------------------------------------------------------
 
-class IFieldBase(ABC):
+class IField(IComponent, ABC):
     # to Model attribute
     bind: DotExpression
 
@@ -1465,27 +1476,27 @@ class IFieldGroup(ABC):
     ...
 
 # ------------------------------------------------------------
-# IContainerBase
+# IContainer
 # ------------------------------------------------------------
 
-class IContainerBase(ABC):
+class IContainer(IComponent, ABC):
 
-    bound_model     : "BoundModelBase" = field(repr=False)
+    bound_model     : "IBoundModel" = field(repr=False)
 
     @abstractmethod
     def add_fieldgroup(self, fieldgroup:IFieldGroup):  # noqa: F821
         ...
 
     @abstractmethod
-    def __getitem__(self, name: str) -> ComponentBase:
+    def __getitem__(self, name: str) -> IComponent:
         ...
 
     @abstractmethod
-    def get_component(self, name: str) -> ComponentBase:
+    def get_component(self, name: str) -> IComponent:
         ...
 
     @abstractmethod
-    def setup(self) -> Self:
+    def setup(self, setup_session: ISetupSession) -> Self:
         ...
 
     @abstractmethod
@@ -1510,11 +1521,11 @@ class IContainerBase(ABC):
     #     ...
 
 # ------------------------------------------------------------
-# BoundModelBase
+# IBoundModel
 # ------------------------------------------------------------
 
 @dataclass
-class BoundModelBase(ComponentBase, ABC):
+class IBoundModel(IComponent, ABC):
 
     @abstractmethod
     def get_type_info(self) -> TypeInfo:
@@ -1742,10 +1753,10 @@ class IStackOwnerSession(ABC):
 @dataclass
 class SetupStackFrame(IStackFrame):
     # current container
-    container: IContainerBase = field(repr=False)
+    container: IContainer = field(repr=False)
 
     # current component - can be BoundModel too
-    component: ComponentBase
+    component: IComponent
 
     # # used for ThisNS in some cases
     # local_setup_session: Optional[ISetupSession] = field(repr=False, default=None)
@@ -1753,12 +1764,12 @@ class SetupStackFrame(IStackFrame):
 
     # Computed from container/component
     # used for BoundModelWithHandlers cases (read_handlers()), 
-    bound_model: Optional[BoundModelBase] = field(init=False, repr=False, default=None)
+    bound_model: Optional[IBoundModel] = field(init=False, repr=False, default=None)
 
     dexp_validator             : Optional[DexpValidator] = field(repr=False, default=None)
 
     # -- autocomputed
-    # bound_model_root : Optional[BoundModelBase] = field(repr=False, init=False, default=None)
+    # bound_model_root : Optional[IBoundModel] = field(repr=False, init=False, default=None)
     # current container data instance which will be procesed: changed/validated/evaluated
     # type_info: TypeInfo
 
@@ -1768,12 +1779,12 @@ class SetupStackFrame(IStackFrame):
 
 
     def clean(self):
-        if not isinstance(self.container, IContainerBase):
-            raise EntityInternalError(owner=self, msg=f"Expected IContainerBase, got: {self.container}")
-        if not isinstance(self.component, ComponentBase):
-            raise EntityInternalError(owner=self, msg=f"Expected ComponentBase, got: {self.component}")
+        if not isinstance(self.container, IContainer):
+            raise EntityInternalError(owner=self, msg=f"Expected IContainer, got: {self.container}")
+        if not isinstance(self.component, IComponent):
+            raise EntityInternalError(owner=self, msg=f"Expected IComponent, got: {self.component}")
 
-        if isinstance(self.component, BoundModelBase):
+        if isinstance(self.component, IBoundModel):
             self.bound_model = self.component
         else:
             self.bound_model = self.container.bound_model
@@ -1874,7 +1885,7 @@ class InstanceAttrValue:
 @dataclass
 class InstanceAttrCurrentValue:
     key_string: KeyString = field()
-    component: ComponentBase = field(repr=False)
+    component: IComponent = field(repr=False)
     _value: Union[LiteralType, UndefinedType] = field(init=False, default=UNDEFINED)
     # do not compare - for unit tests
     finished: bool = field(repr=False, init=False, default=False, compare=False)
@@ -1912,9 +1923,9 @@ class ApplyStackFrame(IStackFrame):
     """
     # current container data instance which will be procesed: changed/validated/evaluated
     instance: DataclassType
-    component: ComponentBase
+    component: IComponent
     # main container - class of instance - can be copied too but is a bit complicated
-    container: IContainerBase = field(repr=False)
+    container: IContainer = field(repr=False)
 
     # ---------------------------------------------------------------------------------
     # Following if not provideed are copied from parent frame (previous, parent frame) 
@@ -1941,7 +1952,7 @@ class ApplyStackFrame(IStackFrame):
 
     # TODO: this is ugly 
     # set only in single case: partial mode, in_component_only_tree, component=component_only, instance_new
-    on_component_only: Optional[ComponentBase] = field(repr=False, default=None)
+    on_component_only: Optional[IComponent] = field(repr=False, default=None)
 
     # this is currently created on 1st level and then copied to each next level
     # instance_new_struct_type: Union[StructEnum, NoneType, UndefinedType] = field(repr=False)
@@ -1968,7 +1979,7 @@ class ApplyStackFrame(IStackFrame):
     key_string: Optional[str] = field(init=False, repr=False, default=None)
 
     # used to check root value in models registry 
-    bound_model_root : Optional[BoundModelBase] = field(repr=False, init=False, default=None)
+    bound_model_root : Optional[IBoundModel] = field(repr=False, init=False, default=None)
 
 
     def __post_init__(self):
@@ -1976,10 +1987,10 @@ class ApplyStackFrame(IStackFrame):
 
 
     def clean(self):
-        if not isinstance(self.container, IContainerBase):
-            raise EntityInternalError(owner=self, msg=f"Expected IContainerBase, got: {self.container}")
-        if not isinstance(self.component, ComponentBase):
-            raise EntityInternalError(owner=self, msg=f"Expected ComponentBase, got: {self.component}")
+        if not isinstance(self.container, IContainer):
+            raise EntityInternalError(owner=self, msg=f"Expected IContainer, got: {self.container}")
+        if not isinstance(self.component, IComponent):
+            raise EntityInternalError(owner=self, msg=f"Expected IComponent, got: {self.component}")
 
         if self.index0 is not None and self.index0 < 0:
             raise EntityInternalError(owner=self, msg=f"index0 invalid value: {self.index0}")
@@ -2122,7 +2133,7 @@ class StructEnum(str, Enum):
 
 @dataclass
 class IApplyResult(IStackOwnerSession):
-    entity: IContainerBase = field(repr=False)
+    entity: IContainer = field(repr=False)
     instance: Any = field(repr=False)
     # TODO: consider: instance_new: Union[ModelType, UndefinedType] = UNDEFINED,
     instance_new: Optional[ModelType] = field(repr=False)
@@ -2137,7 +2148,7 @@ class IApplyResult(IStackOwnerSession):
     # ---- automatically computed -----
 
     # extracted from component
-    bound_model : BoundModelBase = field(repr=False, init=False)
+    bound_model : IBoundModel = field(repr=False, init=False)
 
     # final status
     finished: bool = field(repr=False, init=False, default=False)
@@ -2206,14 +2217,14 @@ class IApplyResult(IStackOwnerSession):
     instance_new_struct_type: Optional[StructEnum] = field(repr=False, init=False, default=None)
 
     # computed from component_name_only
-    component_only: Optional[ComponentBase] = field(repr=False, init=False, default=None)
+    component_only: Optional[IComponent] = field(repr=False, init=False, default=None)
 
     # used for cache only
     _component_children_upward_dict: \
             Optional[
                 Dict[
                     ComponentNameType,
-                    Dict[ComponentNameType, ComponentBase]
+                    Dict[ComponentNameType, IComponent]
                 ]
             ]= field(init=False, repr=False, default_factory=dict)
 
@@ -2223,7 +2234,7 @@ class IApplyResult(IStackOwnerSession):
 
     new_id_counter: int = field(init=False, repr=False, default=0)
 
-    def _get_new_id(self) -> str:
+    def _get_new_id(self) -> int:
         self.new_id_counter+=1
         return self.new_id_counter
 
@@ -2249,7 +2260,7 @@ class IApplyResult(IStackOwnerSession):
         ...
 
     @abstractmethod
-    def get_current_value(self, component: ComponentBase, strict: bool) -> LiteralType:
+    def get_current_value(self, component: IComponent, strict: bool) -> LiteralType:
         ...
 
 
@@ -2258,11 +2269,11 @@ class IApplyResult(IStackOwnerSession):
     #     bind_dexp_result = component.get_dexp_result_from_instance(apply_result=self)
     #     return bind_dexp_result.value
 
-    def validate_type(self, component: ComponentBase, strict:bool, value: Any = UNDEFINED):
+    def validate_type(self, component: IComponent, strict:bool, value: Any = UNDEFINED):
         " only Fields can have values - all others components are ignored "
         validation_failure = None
 
-        if isinstance(component, IFieldBase):
+        if isinstance(component, IField):
             if self.defaults_mode:
                 validation_failure = component.validate_type(apply_result=self, strict=strict, value=value)
                 if validation_failure:
@@ -2277,11 +2288,11 @@ class IApplyResult(IStackOwnerSession):
 
 
     @abstractmethod
-    def register_instance_attr_change(self, 
-            component: ComponentBase, 
-            dexp_result: ExecResult,
-            new_value: Any,
-            is_from_init_bind:bool=False) -> InstanceAttrValue:
+    def register_instance_attr_change(self,
+                                      component: IComponent,
+                                      dexp_result: ExecResult,
+                                      new_value: Any,
+                                      is_from_init_bind:bool=False) -> InstanceAttrValue:
         ...
 
     def finish(self):
@@ -2293,24 +2304,22 @@ class IApplyResult(IStackOwnerSession):
 
         self.finished = True
 
-    def register_instance_validation_failed(self, component: ComponentBase, failure: ValidationFailure):
+    def register_instance_validation_failed(self, component: IComponent, failure: ValidationFailure):
         if failure.component_key_string not in self.errors:
             self.errors[failure.component_key_string] = []
         self.errors[failure.component_key_string].append(failure)
         # TODO: mark invalid all children and this component
 
 
-    def get_upward_components_dict(self, component: ComponentBase) \
-            -> Dict[ComponentNameType, ComponentBase]:
+    def get_upward_components_dict(self, component: IComponent) \
+            -> Dict[ComponentNameType, IComponent]:
         # CACHE
         if component.name not in self._component_children_upward_dict:
             components_tree = []
             curr_comp = component
             while curr_comp is not None:
                 if curr_comp in components_tree:
-                    raise EntityInternalError(
-                            parent=component, 
-                            msg=f"Issue with hierarchy tree - duplicate node: {curr_comp.name}")
+                    raise EntityInternalError(owner=component, msg=f"Issue with hierarchy tree - duplicate node: {curr_comp.name}")
                 components_tree.append(curr_comp)
                 curr_comp = curr_comp.parent
 
@@ -2348,14 +2357,14 @@ def extract_type_info(
     instances) member by name 'attr_node_name' -> data (struct, plain value),
     or IFunctionDexpNode instances 
 
-    This function uses specific base interfaces/classes (BoundModelBase,
+    This function uses specific base interfaces/classes (IBoundModel,
     IDotExpressionNode), so it can not be put in meta.py
 
     See 'meta. def get_or_create_by_type()' for further explanation when to use
     this function (preffered) and when directly some other lower level meta.py
     functions.
     """
-    if isinstance(inspect_object, BoundModelBase):
+    if isinstance(inspect_object, IBoundModel):
         inspect_object = inspect_object.model
 
     # function - callable and not class and not pydantic?

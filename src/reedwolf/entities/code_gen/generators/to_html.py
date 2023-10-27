@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import List, Dict
 
 from .base import (
-        ComponentBase,
+    IComponent,
         )
 from ...components import Field, FieldGroup, FieldTypeEnum, ValidationBase, EvaluationBase
 from ...containers import SubEntityItems, Entitiy
@@ -26,7 +26,7 @@ class DumpHtmlLines:
 
 # ------------------------------------------------------------
 
-def dump_to_html(component:ComponentBase, fname:str):
+def dump_to_html(component:IComponent, fname:str):
     lines = dump_html_models_to_str(component=component)
     len_lines = len(lines)
     code = "\n".join(lines)
@@ -52,10 +52,10 @@ def get_html_attrs(common_attrs):
 # ------------------------------------------------------------
 
 def dump_html_models_to_str(
-                         component:ComponentBase,
+                         component:IComponent,
                          path:List[str]=None,
                          depth:int=0,
-                         component_dict: Dict[str, ComponentBase]=None,
+                         component_dict: Dict[str, IComponent]=None,
                          inline:bool=False,
                          ) -> List[str]:
 

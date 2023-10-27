@@ -47,7 +47,7 @@ from .functions import (
 )
 from .base import (
     get_name_from_bind,
-    BoundModelBase,
+    IBoundModel,
     SetupStackFrame,
     IApplyResult,
     ApplyStackFrame,
@@ -67,7 +67,7 @@ class ModelWithHandlers:
     type_info: TypeInfo = field(repr=False)
 
 
-class NestedBoundModelBase(BoundModelBase):
+class NestedBoundModelBase(IBoundModel):
 
     def create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:
         model = self.model
@@ -278,7 +278,7 @@ class BoundModelWithHandlers(NestedBoundModelBase):
     # --- evaluated later
     # Filled from from .read_hanlder -> (.type_info: TypeInfo).type_
     model         : ModelType = field(init=False, metadata={"skip_traverse": True})
-    parent        : Union[BoundModelBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    parent        : Union[IBoundModel, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     parent_name   : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
     type_info     : Union[TypeInfo, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
@@ -356,7 +356,7 @@ class BoundModel(NestedBoundModelBase):
     # title           : TransMessageType
 
     # evaluated later
-    parent          : Union[BoundModelBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    parent          : Union[IBoundModel, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     parent_name     : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
     # Filled from from model

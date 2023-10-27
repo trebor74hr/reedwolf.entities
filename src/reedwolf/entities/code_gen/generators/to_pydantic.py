@@ -13,7 +13,7 @@ from ...utils import (
         PY_INDENT,
         )
 from ...base import (
-        ComponentBase,
+    IComponent,
         )
 
 from .base import (
@@ -80,7 +80,7 @@ class DumpToPydantic(DumpToBase):
 # ------------------------------------------------------------
 
 def dump_to_pydantic_models_as_dict(
-        component:ComponentBase, 
+        component:IComponent,
         file_split_to_depth: Optional[int] = 1,
         flatten: bool = False,
         deps_order: bool = False,
@@ -97,7 +97,7 @@ def dump_to_pydantic_models_as_dict(
 # ------------------------------------------------------------
 
 def dump_to_pydantic_models(
-        component:ComponentBase, 
+        component:IComponent,
         fname_or_dname:str,
         file_split_to_depth: Optional[int] = 1,
         flatten: bool = False,

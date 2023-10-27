@@ -39,7 +39,7 @@ from ...base import (
     IStackOwnerSession,
     IStackFrame,
     UseStackFrameCtxManagerBase,
-    ComponentBase,
+    IComponent,
     MAX_RECURSIONS,
     DTO_STRUCT_CHILDREN_SUFFIX,
 )
@@ -360,7 +360,7 @@ class FileDumpBase:
 class CodegenStackFrame(IStackFrame):
 
     owner_comp_dump: Optional[ComponentDumpBase] = field(repr=False)
-    component: ComponentBase = field(repr=False)
+    component: IComponent = field(repr=False)
     # filename: str = field(kw_only=False)
     file_dump: FileDumpBase = field(init=True)
     path_names: List[str] = field()
@@ -371,7 +371,7 @@ class CodegenStackFrame(IStackFrame):
     component_name: str = field(init=False)
 
     def __post_init__(self):
-        if not isinstance(self.component, ComponentBase):
+        if not isinstance(self.component, IComponent):
             raise EntityInternalError(owner=self, msg=f"Expected Component, got: {self.component}") 
 
         if self.depth==0:
@@ -796,7 +796,7 @@ class DumpToBase(IStackOwnerSession):
 
 def dump_to_models_as_dict(
         KlassDumpTo: type,
-        component:ComponentBase, 
+        component:IComponent,
         file_split_to_depth: Optional[int] = 1,
         flatten: bool = False,
         deps_order: bool = False,
@@ -833,7 +833,7 @@ def dump_to_models_as_dict(
 
 def dump_to_models(
         KlassDumpTo: type,
-        component:ComponentBase, 
+        component:IComponent,
         fname_or_dname:str,
         file_split_to_depth: Optional[int] = 1,
         flatten: bool = False,

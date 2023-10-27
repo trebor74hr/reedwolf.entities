@@ -48,14 +48,14 @@ from .meta import (
     get_dataclass_field_type_info, dataclass_from_dict,
 )
 from .base import (
-    IFieldBase,
+    IField,
     UndefinedType,
     MAX_RECURSIONS,
     AttrValue,
     AttrName,
     GlobalConfig,
     KeyString,
-    ComponentBase,
+    IComponent,
     IApplyResult,
     ApplyStackFrame,
     ValidationFailure,
@@ -65,7 +65,7 @@ from .base import (
     InstanceChange,
     InstanceAttrCurrentValue,
     get_instance_key_string_attrname_pair,
-    UseStackFrameCtxManagerBase, 
+    UseStackFrameCtxManagerBase,
     ChildField,
 )
 from .fields import (
@@ -200,11 +200,11 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def _execute_cleaners(self, 
-            component: ComponentBase, 
-            validation_class: Type[ValidationBase],
-            evaluation_class: Type[EvaluationBase],
-      ) -> ExecResult:
+    def _execute_cleaners(self,
+                          component: IComponent,
+                          validation_class: Type[ValidationBase],
+                          evaluation_class: Type[EvaluationBase],
+                          ) -> ExecResult:
 
         assert issubclass(validation_class, ValidationBase)
         assert issubclass(evaluation_class, EvaluationBase)
@@ -246,7 +246,7 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def _execute_evaluation(self, component: ComponentBase, evaluation:EvaluationBase) -> ExecResult:
+    def _execute_evaluation(self, component: IComponent, evaluation:EvaluationBase) -> ExecResult:
         """ Execute evaluation and if new value is different from existing
             value, update current instance """
         assert isinstance(evaluation, EvaluationBase)
@@ -284,7 +284,7 @@ class ApplyResult(IApplyResult):
     # ------------------------------------------------------------
 
     # value: Any, 
-    def _execute_validation(self, component: ComponentBase, validation:ValidationBase) -> Optional[ValidationFailure]:
+    def _execute_validation(self, component: IComponent, validation:ValidationBase) -> Optional[ValidationFailure]:
         """ Execute validaion - if returns False value then register error and
             mark component and children invalid to prevent further entity execution
         """
@@ -305,11 +305,11 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def register_instance_attr_change(self, 
-            component: ComponentBase, 
-            dexp_result: ExecResult,
-            new_value: Any,
-            is_from_init_bind:bool=False) -> InstanceAttrValue:
+    def register_instance_attr_change(self,
+                                      component: IComponent,
+                                      dexp_result: ExecResult,
+                                      new_value: Any,
+                                      is_from_init_bind:bool=False) -> InstanceAttrValue:
 
         # NOTE: new_value is required - since dexp_result.value
         #       could be unadapted (see field.try_adapt_value()
@@ -390,7 +390,7 @@ class ApplyResult(IApplyResult):
                 if not attr_name_path:
                     raise EntityInternalError(owner=self, msg=f"{component}: attr_name_path is empty")
 
-                if isinstance(component, IFieldBase):
+                if isinstance(component, IField):
                     # TODO: what about Boolean + enables? Better to check .get_children() ?
                     # value accessor should be used from parent of the component
                     assert component.parent
@@ -476,14 +476,14 @@ class ApplyResult(IApplyResult):
     # _apply() -> main apply function
     # ------------------------------------------------------------
 
-    def _apply(self, 
-               # parent: Optional[ComponentBase], 
-               component: ComponentBase, 
+    def _apply(self,
+               # parent: Optional[IComponent],
+               component: IComponent,
 
                # -- RECURSION -- internal props
 
                # see dox below
-               mode_subentity_items:bool = False, 
+               mode_subentity_items:bool = False,
 
                # see dox below
                mode_dexp_dependency: bool = False,
@@ -743,7 +743,7 @@ class ApplyResult(IApplyResult):
         # one level deeper
         new_frame.depth = depth + 1
 
-        if isinstance(component, IFieldBase):
+        if isinstance(component, IField):
             assert getattr(component, "bind", None)
             assert not component.is_container()
 
@@ -903,14 +903,14 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def _apply_subentity_items(self, 
-            component: ComponentBase,
-            # parent: Optional[ComponentBase], 
-            in_component_only_tree:bool,
-            instance_list: List[ModelType],
-            current_instance_list_new: Union[NoneType, UndefinedType, ModelType],
-            depth: int,
-            ):
+    def _apply_subentity_items(self,
+                               component: IComponent,
+                               # parent: Optional[IComponent],
+                               in_component_only_tree:bool,
+                               instance_list: List[ModelType],
+                               current_instance_list_new: Union[NoneType, UndefinedType, ModelType],
+                               depth: int,
+                               ):
         """
         SubEntityItems with item List
         Recursion -> _apply(mode_subentity_items=True) -> ...
@@ -1041,7 +1041,7 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def __check_component_all_dexps(self, component: ComponentBase):
+    def __check_component_all_dexps(self, component: IComponent):
         # used only for testing
         for attr_name, attr_value in vars(component).items():
             if isinstance(attr_value, DotExpression):
@@ -1076,7 +1076,7 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def _detect_instance_new_struct_type(self, component: ComponentBase) -> StructEnum:
+    def _detect_instance_new_struct_type(self, component: IComponent) -> StructEnum:
 
         assert self.instance_new not in (None, UNDEFINED)
 
@@ -1113,7 +1113,7 @@ class ApplyResult(IApplyResult):
     # ------------------------------------------------------------
 
 
-    def _get_current_instance_new(self, component: ComponentBase, in_component_only_tree:bool):
+    def _get_current_instance_new(self, component: IComponent, in_component_only_tree:bool):
         if self.instance_new_struct_type is None:
             current_instance_new = None
         elif self.instance_new_struct_type == StructEnum.MODELS_LIKE:
@@ -1169,7 +1169,7 @@ class ApplyResult(IApplyResult):
     # _update_and_clean - Update, validate, evaluate
     # ============================================================
 
-    def _update_and_clean(self, component: ComponentBase, key_string=KeyString) -> (bool, InstanceAttrCurrentValue):
+    def _update_and_clean(self, component: IComponent, key_string=KeyString) -> (bool, InstanceAttrCurrentValue):
         """ returns if children should be processed 
                 False - when available yields False
                 False - when validation fails
@@ -1192,7 +1192,7 @@ class ApplyResult(IApplyResult):
             if not_available_dexp_result: 
                 return False, None
 
-        if isinstance(component, IFieldBase):
+        if isinstance(component, IField):
             assert getattr(component, "bind", None)
             # --- 1. Fill initial value from instance 
             key_str = self.get_key_string(component)
@@ -1259,7 +1259,7 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def _init_by_bind_dexp(self, component: ComponentBase) -> ExecResult:
+    def _init_by_bind_dexp(self, component: IComponent) -> ExecResult:
         " get initial dexp value, if instance_new try to updated/overwrite with it"
 
         if not isinstance(component, FieldBase):
@@ -1279,7 +1279,7 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def _try_update_by_instance(self, component: ComponentBase, init_bind_dexp_result: ExecResult) \
+    def _try_update_by_instance(self, component: IComponent, init_bind_dexp_result: ExecResult) \
             -> Tuple[ExecResult, bool]:
         """
         try to update if instance_new is provided and yields different value
@@ -1342,7 +1342,7 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def get_key_string(self, component: ComponentBase, depth:int=0, force:bool=False) -> KeyString:
+    def get_key_string(self, component: IComponent, depth:int=0, force:bool=False) -> KeyString:
         """
         Recursion
         Caching is on containers only - by id(indstance)
@@ -1390,7 +1390,7 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def get_key_string_by_instance(self, component: ComponentBase, instance: ModelType, parent_instance: ModelType, index0: Optional[int], force:bool=False) -> str:
+    def get_key_string_by_instance(self, component: IComponent, instance: ModelType, parent_instance: ModelType, index0: Optional[int], force:bool=False) -> str:
         # apply_result:IApplyResult,  -> self
         """
         Two cases - component has .keys or not:
@@ -1462,13 +1462,13 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    # def is_component_instance_processed(self, component: ComponentBase) -> Optional[KeyString]:
+    # def is_component_instance_processed(self, component: IComponent) -> Optional[KeyString]:
     #     # instance is grabbed from current_frame
     #     assert self.stack_frames
     #     key_str = self.get_key_string(component)
     #     return key_str if self.current_values.get(key_str, None) else None
 
-    # def is_apply_component_instance_in_progress(self, component: ComponentBase) -> Optional[KeyString]:
+    # def is_apply_component_instance_in_progress(self, component: IComponent) -> Optional[KeyString]:
     #     if self.stack_frames:
     #         key_str = self.get_key_string(component)
     #         if self.current_values.get(key_str, None) is NA_IN_PROGRESS:
@@ -1477,8 +1477,8 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def get_current_value_instance(self, 
-                                   component: ComponentBase, 
+    def get_current_value_instance(self,
+                                   component: IComponent,
                                    init_when_missing:bool=False
                                    ) -> InstanceAttrCurrentValue:
         """ if not found will return UNDEFINED
@@ -1510,7 +1510,7 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def get_current_value(self, component: ComponentBase, strict:bool) -> LiteralType:
+    def get_current_value(self, component: IComponent, strict:bool) -> LiteralType:
         # apply_result:IApplyResult
         """ Could work on non-stored fields.
             Probaly a bit faster, only dict queries.
@@ -1530,7 +1530,7 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def get_attr_value_by_comp_name(self, component:ComponentBase, instance: ModelType) -> ExecResult:
+    def get_attr_value_by_comp_name(self, component:IComponent, instance: ModelType) -> ExecResult:
         attr_name = component.name
         value = component.value_accessor.get_value(instance=instance, attr_name=attr_name, attr_index=None)
         if value is UNDEFINED:
@@ -1586,12 +1586,12 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def _fill_values_dict(self, 
+    def _fill_values_dict(self,
                           filler:str,
-                          is_init:bool, 
+                          is_init:bool,
                           process_further:bool=True,
                           subentity_items_mode: bool = False,
-                          component: Optional[ComponentBase] = None, 
+                          component: Optional[IComponent] = None,
                           recursive: bool = False,
                           depth: int=0,
                           ) -> ComponentTreeWValuesType:
@@ -1633,7 +1633,7 @@ class ApplyResult(IApplyResult):
         # DEBUG: values_dict["filler"] = filler
         attr_current_value_instance = None
 
-        if isinstance(component, IFieldBase):
+        if isinstance(component, IField):
             assert getattr(component, "bind", None)
             # can trigger recursion - filling tree 
             attr_current_value_instance = \

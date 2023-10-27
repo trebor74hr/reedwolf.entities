@@ -39,9 +39,9 @@ from .meta import (
 # TODO: remove this dependency
 from .base import (
     UndefinedType,
-    ComponentBase,
-    IContainerBase,
-    IFieldBase,
+    IComponent,
+    IContainer,
+    IField,
     IApplyResult,
     ExecResult,
     ReservedAttributeNames,
@@ -92,13 +92,13 @@ class AttrDexpNode(IDotExpressionNode):
         if self.data is None:
             raise EntityInternalError(owner=self, msg=f"Data is not set for {self}")
 
-        if isinstance(self.data, IContainerBase):
+        if isinstance(self.data, IContainer):
             self.attr_node_type = AttrDexpNodeTypeEnum.CONTAINER
             self.data_supplier_name = f"{self.data.name}"
-        elif isinstance(self.data, IFieldBase):
+        elif isinstance(self.data, IField):
             self.attr_node_type = AttrDexpNodeTypeEnum.FIELD
             self.data_supplier_name = f"{self.data.name}"
-        elif isinstance(self.data, ComponentBase):
+        elif isinstance(self.data, IComponent):
             self.attr_node_type = AttrDexpNodeTypeEnum.COMPONENT
             self.data_supplier_name = f"{self.data.name}"
 
@@ -355,7 +355,7 @@ class AttrDexpNode(IDotExpressionNode):
     # def check_root_value_type_info(self, ...):
     #     if root_value and value_new not in ([], {}, None, UNDEFINED):
     #         adapted_value = apply_result.current_frame.component.try_adapt_value(value_new) \
-    #             if isinstance(apply_result.current_frame.component, IFieldBase) \
+    #             if isinstance(apply_result.current_frame.component, IField) \
     #             else value_new
     #         # will be reported later
     #         ignore_list_check = True # apply_result.current_frame.on_component_only is not None

@@ -414,7 +414,7 @@ class DotExpression(DynamicAttrsBase):
         """
         Owner used just for reference count.
         """
-        # TODO: Owner is "ComponentBase" - define some common
+        # TODO: Owner is "IComponent" - define some common
         #       protocol/interface and use it
         # TODO: consider dropping owner parameter and use
         #       setup_session.current_frame.component or owner instead?

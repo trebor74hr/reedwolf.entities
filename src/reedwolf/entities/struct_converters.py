@@ -32,10 +32,10 @@ from .base import (
     DTO_STRUCT_CHILDREN_SUFFIX,
     UseStackFrameCtxManagerBase,
     IStackFrame,
-    ComponentBase,
+    IComponent,
     MAX_RECURSIONS,
     IStackOwnerSession,
-    IContainerBase,
+    IContainer,
 )
 from .fields import (
     FieldBase,
@@ -55,7 +55,7 @@ class UseStructConverternStackFrameCtxManager(UseStackFrameCtxManagerBase):
 @dataclass
 class StructConverterStackFrame(IStackFrame):
 
-    component: ComponentBase = field(repr=False)
+    component: IComponent = field(repr=False)
     path_names: List[str] = field()
     instance: ModelType = field(repr=False)
     dto_class: Type[ModelType] = field(repr=False)
@@ -69,7 +69,7 @@ class StructConverterStackFrame(IStackFrame):
     dto_instance: Union[ModelType, UndefinedType] = field(repr=False, init=False, default=UNDEFINED)
 
     def __post_init__(self):
-        if not isinstance(self.component, ComponentBase):
+        if not isinstance(self.component, IComponent):
             raise EntityInternalError(owner=self, msg=f"Expected Component, got: {self.component}")
         self.component_name = self.component.name
         if self.depth > MAX_RECURSIONS:
@@ -129,7 +129,7 @@ class StructConverterRunner(IStackOwnerSession):
 
 
     def create_dto_instance_from_model_instance(self,
-                                                component: ComponentBase,
+                                                component: IComponent,
                                                 instance: ModelType,
                                                 dto_class: Type[ModelType],
                                                 ) -> ModelType:
@@ -208,7 +208,7 @@ class StructConverterRunner(IStackOwnerSession):
                 if child.is_container():
                     # if not is_model_class(child_dto_class):
                     #     raise EntityTypeError(owner=self, msg=f"Field {child_dto_attr_name} not a class in {dto_class}, got: {child_dto_class}")
-                    container: IContainerBase = child
+                    container: IContainer = child
                     # TODO: container.get_bound_model_attr_node()
                     assert isinstance(container.bound_model.model, DotExpression), container.bound_model.model
                     if len(container.bound_model.model.Path) != 1:

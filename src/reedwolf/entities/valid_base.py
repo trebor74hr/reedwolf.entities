@@ -18,7 +18,7 @@ from .meta import (
         NoneType,
         )
 from .base import (
-    ComponentBase,
+    IComponent,
     IApplyResult,
     ValidationFailure,
         )
@@ -37,7 +37,7 @@ from .expressions import (
 
 
 @dataclass
-class ValidationBase(ComponentBase, ABC): # TODO: make it abstract
+class ValidationBase(IComponent, ABC): # TODO: make it abstract
     """ Executes validate() method which checks all ok
     """
 
@@ -66,7 +66,7 @@ class ValidationBase(ComponentBase, ABC): # TODO: make it abstract
 
 
     # def __repr__(self):
-    #     # due multiple inheritance - to force calling ComponentBase implementation
+    #     # due multiple inheritance - to force calling IComponent implementation
     #     return super().__repr__()
 
     def create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:

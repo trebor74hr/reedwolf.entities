@@ -9,7 +9,7 @@ from typing import (
 from dataclasses import dataclass, field
 
 from .base import (
-    ComponentBase,
+    IComponent,
     IApplyResult,
 )
 from .exceptions import EntitySetupValueError
@@ -31,7 +31,7 @@ from .utils import to_repr
 
 
 @dataclass
-class EvaluationBase(ComponentBase, ABC):  # TODO: make it abstract
+class EvaluationBase(IComponent, ABC):  # TODO: make it abstract
     """ Auto-compute logic - executes 'value' expression, stores into field of
         current instance/object. The execution should not fail.
     """

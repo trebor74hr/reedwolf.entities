@@ -10,7 +10,7 @@ from typing import (
     List,
     Optional,
     Union,
-    Type, ClassVar,
+    Type,
 )
 from dataclasses import (
     dataclass,
@@ -51,9 +51,9 @@ from .meta import (
 )
 from .base import (
     get_name_from_bind,
-    ComponentBase,
-    IContainerBase,
-    BoundModelBase,
+    IComponent,
+    IContainer,
+    IBoundModel,
     GlobalConfig,
     KeyPairs,
     IApplyResult,
@@ -113,7 +113,7 @@ from .config import (
 from .struct_converters import (
     StructConverterRunner,
 )
-# import modules that hold any kind of component - will used for COMPONENTS_REGISTRY
+# import modules that hold any kind of component - will be used for COMPONENTS_REGISTRY
 from . import (
     fields,
     valid_field,
@@ -134,7 +134,7 @@ from .values_accessor import (
 # Entity
 # ------------------------------------------------------------
 
-class ContainerBase(IContainerBase, ComponentBase, ABC):
+class ContainerBase(IContainer, ABC):
 
     @staticmethod
     def is_container() -> bool:
@@ -219,7 +219,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
             raise EntitySetupError(owner=self, msg="Entity(models=List[models]) is required.")
 
         # if not isinstance(self.models, dict):
-        #     # TODO: this never happens - define new test case, implenet (or drop this logic)
+        #     # TODO: this never happens - define new test case, implement (or drop this logic)
         #     self.bound_model.fill_models()
 
         assert isinstance(self.models, dict), self.models
@@ -231,7 +231,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
     # ------------------------------------------------------------
 
-    def _setup_bound_model_dot_expression(self, bound_model:BoundModelBase, setup_session: Optional[SetupSession] = None) -> AttrDexpNode:
+    def _setup_bound_model_dot_expression(self, bound_model:IBoundModel, setup_session: Optional[SetupSession] = None) -> AttrDexpNode:
         model = bound_model.model
         if not isinstance(model, DotExpression):
             raise EntityInternalError(owner=self, msg=f"Expecting model is DotExpression instance, got: {model}") 
@@ -280,12 +280,12 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
     # ------------------------------------------------------------
 
-    def _register_bound_model(self, bound_model:BoundModelBase):
+    def _register_bound_model(self, bound_model:IBoundModel):
         # Entity can have one main bound_model and optionally some dependent
         # models nested in tree structure
 
-        if not isinstance(bound_model, BoundModelBase):
-            raise EntitySetupError(owner=self, msg=f"{bound_model.name}: Needs to be Boundbound_model* instance, got: {bound_model}")
+        if not isinstance(bound_model, IBoundModel):
+            raise EntitySetupError(owner=self, msg=f"{bound_model.name}: Needs to be BoundModel* instance, got: {bound_model}")
 
         attr_node = None
         # alias_saved = False
@@ -415,7 +415,7 @@ class ContainerBase(IContainerBase, ComponentBase, ABC):
 
     # ------------------------------------------------------------
 
-    def get_component(self, name:str) -> ComponentBase:
+    def get_component(self, name:str) -> IComponent:
         # TODO: currently components are retrieved only from contains - but should include validations + cardinality
         if name not in self.components:
             vars_avail = get_available_names_example(name, self.components.keys())
@@ -492,7 +492,7 @@ class KeysBase(ABC):
         ...
 
     @abstractmethod
-    def get_key_pairs(self, instance: ModelType, container: IContainerBase) -> List[Tuple[str, Any]]:
+    def get_key_pairs(self, instance: ModelType, container: IContainer) -> List[Tuple[str, Any]]:
         """ returns list of (key-name, key-value) """
         ...
 
@@ -547,7 +547,7 @@ class KeyFields(KeysBase):
 
 
     def get_key_pairs(self, instance: ModelType, apply_result: IApplyResult) -> KeyPairs:
-        # container: IContainerBase
+        # container: IContainer
         # apply_result:IApplyResult
         # frame = apply_result.current_frame
         # instance = frame.instance
@@ -575,7 +575,7 @@ class KeyFields(KeysBase):
 @dataclass
 class Entity(ContainerBase):
 
-    contains        : List[ComponentBase] = field(repr=False)
+    contains        : List[IComponent] = field(repr=False)
 
     # --- optional - following can be bound later with .bind_to()
     name            : Optional[str] = field(default=None)
@@ -596,10 +596,10 @@ class Entity(ContainerBase):
 
     # --- Evaluated later
     setup_session      : Optional[SetupSession]    = field(init=False, repr=False, default=None)
-    components      : Optional[Dict[str, ComponentBase]]  = field(init=False, repr=False, default=None)
+    components      : Optional[Dict[str, IComponent]]  = field(init=False, repr=False, default=None)
     models          : Dict[str, Union[type, DotExpression]] = field(repr=False, init=False, default_factory=dict)
     # in Entity (top object) this case allways None - since it is top object
-    # NOTE: not DRY: Entity, SubentityBase and CompoenentBase
+    # NOTE: not DRY: Entity, SubentityBase and ComponentBase
     parent           : Union[NoneType, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     parent_name      : Union[str, UndefinedType]  = field(init=False, default=UNDEFINED)
     entity           : Union[ContainerBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
@@ -685,7 +685,7 @@ class Entity(ContainerBase):
         if functions:
             if self.functions:
                 raise EntitySetupError(owner=self, msg="functions already set, late binding not allowed.")
-            self.functinos = functions
+            self.functions = functions
 
         if context_class:
             if self.context_class:
@@ -821,7 +821,7 @@ class SubEntityBase(ContainerBase, ABC):
     bound_model     : Union[BoundModel, BoundModelWithHandlers] = field(repr=False)
 
     # cardinality     : ICardinalityValidation
-    contains        : List[ComponentBase] = field(repr=False)
+    contains        : List[IComponent] = field(repr=False)
 
     # required since if it inherit name from BoundModel then the name will not
     # be unique in self.components (SubEntityItems and BoundModel will share the same name)
@@ -835,12 +835,12 @@ class SubEntityBase(ContainerBase, ABC):
 
     # --- Evaluated later
     setup_session    : Optional[SetupSession] = field(init=False, repr=False, default=None)
-    components       : Optional[Dict[str, ComponentBase]]  = field(init=False, repr=False, default=None)
+    components       : Optional[Dict[str, IComponent]]  = field(init=False, repr=False, default=None)
     models           : Dict[str, Union[type, DotExpression]] = field(init=False, repr=False, default_factory=dict)
 
-    # --- ComponentBase common attrs
-    # NOTE: not DRY: Entity, SubentityBase and CompoenentBase
-    parent           : Union[ComponentBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    # --- IComponent common attrs
+    # NOTE: not DRY: Entity, SubentityBase and ComponentBase
+    parent           : Union[IComponent, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     parent_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
     entity           : Union[ContainerBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     value_accessor   : IValueAccessor = field(init=False, repr=False)
@@ -868,7 +868,7 @@ class SubEntityBase(ContainerBase, ABC):
 
     def __post_init__(self):
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
-        if not (isinstance(self.bound_model, BoundModelBase) and isinstance(self.bound_model.model, DotExpression)):
+        if not (isinstance(self.bound_model, IBoundModel) and isinstance(self.bound_model.model, DotExpression)):
             raise EntityInternalError(owner=self, msg=f"Attribute bound_model='{self.bound_model}' is not BoundModel instance or '.model' is not a DotExpression") 
         if not self.name:
             self.name = get_name_from_bind(self.bound_model.model)
@@ -971,14 +971,14 @@ def collect_classes(componnents_registry: Dict, module: Any, klass_match: type) 
 
 # TODO: not the best way + move function to some utils
 COMPONENTS_REGISTRY = {}
-collect_classes(COMPONENTS_REGISTRY, fields, ComponentBase)
-collect_classes(COMPONENTS_REGISTRY, valid_field, ComponentBase)
-collect_classes(COMPONENTS_REGISTRY, valid_items, ComponentBase)
-collect_classes(COMPONENTS_REGISTRY, valid_children, ComponentBase)
-collect_classes(COMPONENTS_REGISTRY, eval_field, ComponentBase)
-collect_classes(COMPONENTS_REGISTRY, eval_items, ComponentBase)
-collect_classes(COMPONENTS_REGISTRY, eval_children, ComponentBase)
-collect_classes(COMPONENTS_REGISTRY, None, ComponentBase)
+collect_classes(COMPONENTS_REGISTRY, fields, IComponent)
+collect_classes(COMPONENTS_REGISTRY, valid_field, IComponent)
+collect_classes(COMPONENTS_REGISTRY, valid_items, IComponent)
+collect_classes(COMPONENTS_REGISTRY, valid_children, IComponent)
+collect_classes(COMPONENTS_REGISTRY, eval_field, IComponent)
+collect_classes(COMPONENTS_REGISTRY, eval_items, IComponent)
+collect_classes(COMPONENTS_REGISTRY, eval_children, IComponent)
+collect_classes(COMPONENTS_REGISTRY, None, IComponent)
 
 # ------------------------------------------------------------
 # OBSOLETE - DELETE THIS

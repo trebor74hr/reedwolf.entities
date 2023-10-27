@@ -71,12 +71,12 @@ from .meta import (
 from .base import (
     get_name_from_bind,
     warn,
-    IFieldBase,
+    IField,
     IFieldGroup,
     IApplyResult,
     ValidationFailure,
     SetupStackFrame,
-    ComponentBase,
+    IComponent,
 )
 from .expressions import (
     DotExpression,
@@ -143,7 +143,7 @@ class AutocomputedEnum(IntEnum):
 
 
 @dataclass
-class FieldBase(ComponentBase, IFieldBase, ABC):
+class FieldBase(IField, ABC):
     # abstract property:
     PYTHON_TYPE:ClassVar[type(UNDEFINED)] = UNDEFINED
     REQUIRED_VALIDATIONS:ClassVar[Optional[RequiredValidationsType]] = None
@@ -196,7 +196,7 @@ class FieldBase(ComponentBase, IFieldBase, ABC):
     # will be set later
     # is_key:          bool = field(init=False, repr=False, default=False)
 
-    # TODO: found no way to achive this: copied from ComponentBase just to have
+    # TODO: found no way to achive this: copied from IComponent just to have
     #       these field in repr()/str() listed at the end
     #   parent       : Union[Self, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     #   parent_name  : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
@@ -459,7 +459,7 @@ class BooleanField(FieldBase):
 
     # TODO: možda složiti da radi i za Choice/Enum -> structural pattern
     #       matching like, samo nisam još našao zgodnu sintaksu.
-    enables:        Optional[List[ComponentBase]] = field(repr=False, default=None)
+    enables:        Optional[List[IComponent]] = field(repr=False, default=None)
 
     def init_clean(self):
         if self.enables:
@@ -518,7 +518,7 @@ class ChoiceField(FieldBase):
 
     # TODO: možda složiti da radi i za Choice/Enum -> structural pattern
     #       matching like, samo nisam još našao zgodnu sintaksu.
-    #   enables: Optional[List[ComponentBase]] = field(repr=False, default=None)
+    #   enables: Optional[List[IComponent]] = field(repr=False, default=None)
 
     def __post_init__(self):
         super().__post_init__()
@@ -700,7 +700,7 @@ class EnumField(FieldBase):
 
     # TODO: možda složiti da radi i za Choice/Enum -> structural pattern
     #       matching like, samo nisam još našao zgodnu sintaksu.
-    #   enables: Optional[List[ComponentBase]] = field(repr=False, default=None)
+    #   enables: Optional[List[IComponent]] = field(repr=False, default=None)
 
     def setup(self, setup_session: ISetupSession):
 
@@ -832,8 +832,8 @@ class EmailField(FieldBase):
 # ------------------------------------------------------------------------
 
 @dataclass
-class FieldGroup(ComponentBase, IFieldGroup):
-    contains:       List[ComponentBase] = field(repr=False)
+class FieldGroup(IComponent, IFieldGroup):
+    contains:       List[IComponent] = field(repr=False)
     name:           Optional[str] = field(default=None)
     title:          Optional[TransMessageType] = field(repr=False, default=None)
     cleaners:       Optional[List[Union[ChildrenValidationBase, ChildrenEvaluationBase]]] = field(repr=False, default_factory=list)

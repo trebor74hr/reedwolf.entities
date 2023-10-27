@@ -53,13 +53,13 @@ from .meta import (
 from .base import (
     IComponentFields,
     ChildField,
-    IFieldBase,
+    IField,
     IStackOwnerSession,
-    ComponentBase,
-    IContainerBase,
+    IComponent,
+    IContainer,
     extract_type_info,
     IApplyResult,
-    BoundModelBase,
+    IBoundModel,
     ReservedAttributeNames,
     SetupStackFrame,
     UseStackFrameCtxManagerBase,
@@ -194,13 +194,13 @@ class RegistryBase(IRegistry):
     def _register_all_children(self,
                                setup_session: ISetupSession,
                                attr_name: ReservedAttributeNames,
-                               owner: ComponentBase,
+                               owner: IComponent,
                                attr_name_prefix: str = None,
                                ) -> AttrDexpNode:
         """
         This.Children to return instance itself "
         """
-        if not isinstance(owner, ComponentBase):
+        if not isinstance(owner, IComponent):
             raise EntitySetupValueError(owner=self, msg=f"Expected ComponentBase, got: {type(owner)} / {to_repr(owner)}")
 
         component_fields_dataclass, child_field_list = owner.get_component_fields_dataclass(setup_session=setup_session)
@@ -265,12 +265,12 @@ class RegistryBase(IRegistry):
     # --------------------
 
     # def register_items_attr_node(self,
-    #                              owner_component: IContainerBase
+    #                              owner_component: IContainer
     #                              ) -> AttrDexpNode:
     #     " used for This.Items to return list items - each having children "
     #     # for nr, child in enumerate(children, 1):
-    #     #     if not isinstance(child, ComponentBase):
-    #     #         raise EntitySetupValueError(owner=self, msg=f"Child {nr}: Expected ComponentBase, got: {type(child)} / {to_repr(child)} ")
+    #     #     if not isinstance(child, IComponent):
+    #     #         raise EntitySetupValueError(owner=self, msg=f"Child {nr}: Expected IComponent, got: {type(child)} / {to_repr(child)} ")
     #     assert self.is_items_mode
     #     type_info = owner_component.bound_model.get_type_info()
     #     attr_name = ReservedAttributeNames.ITEMS_ATTR_NAME.value
@@ -390,10 +390,10 @@ class RegistryBase(IRegistry):
     # ------------------------------------------------------------
     # create_node -> AttrDexpNode, Operation or IFunctionDexpNode
     # ------------------------------------------------------------
-    def create_node(self, 
-                    dexp_node_name: str, 
-                    owner_dexp_node: IDotExpressionNode, 
-                    owner: ComponentBase,
+    def create_node(self,
+                    dexp_node_name: str,
+                    owner_dexp_node: IDotExpressionNode,
+                    owner: IComponent,
                     ) -> IDotExpressionNode:
         """
         Will create a new attr_node when missing, even in the case when the var
@@ -457,7 +457,7 @@ class RegistryBase(IRegistry):
                 #     inspect_object = owner_dexp_node.data.value
                 # elif isinstance(owner_dexp_node.data, DynamicData):
                 #     raise NotImplementedError("TODO")
-                elif isinstance(owner_dexp_node.data, BoundModelBase):
+                elif isinstance(owner_dexp_node.data, IBoundModel):
                     inspect_object = owner_dexp_node.data.model
                 else:
                     # can be TypeInfo, @dataclass, Pydantic etc.
@@ -515,7 +515,7 @@ class RegistryUseDenied(RegistryBase):
 @dataclass
 class ComponentAttributeAccessor(IAttributeAccessorBase):
     " used in FieldsNS "
-    component: ComponentBase
+    component: IComponent
     instance: ModelType
 
     def get_attribute(self, apply_result:IApplyResult, attr_name: str) -> Self:
@@ -528,7 +528,7 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
         component = children_dict[attr_name]
 
         # OLD: if is_last:
-        if not isinstance(component, IFieldBase):
+        if not isinstance(component, IField):
             # ALT: not hasattr(component, "bind")
             raise EntityApplyNameError(owner=self.component,
                     msg=f"Attribute '{attr_name}' is '{type(component)}' type which has no binding, therefore can not extract value. Use standard *Field components instead.")
@@ -553,7 +553,7 @@ class UseSetupStackFrameCtxManager(UseStackFrameCtxManagerBase):
 @dataclass
 class SetupSessionBase(IStackOwnerSession, ISetupSession):
 
-    container                    : Optional[IContainerBase]
+    container                    : Optional[IContainer]
     parent_setup_session         : Optional[ISetupSession]
 
     # custom_function_factories store 
@@ -581,7 +581,7 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
     STACK_FRAME_CTX_MANAGER_CLASS: ClassVar[type] = UseSetupStackFrameCtxManager
 
     def __post_init__(self):
-        if self.container is not None and not isinstance(self.container, IContainerBase):
+        if self.container is not None and not isinstance(self.container, IContainer):
             raise EntityInternalError(owner=self, msg=f"Expecting container for parent, got: {type(self.container)} / {self.container}")
 
         self.is_top_setup_session: bool = self.parent_setup_session is None

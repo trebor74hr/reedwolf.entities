@@ -36,9 +36,9 @@ from .expressions import (
         Just,
         )
 from .base import (
-        ComponentBase,
-        MAX_RECURSIONS,
-        DEXP_PREFIX,
+    IComponent,
+    MAX_RECURSIONS,
+    DEXP_PREFIX,
         )
 
 
@@ -405,11 +405,11 @@ class DotExpressionLoader(CallTraceMixin):
 class ComponentsLoader(CallTraceMixin):
     call_trace: List[str] = field(init=False, default_factory=list)
 
-    def load_component(self, input_dict: dict) -> ComponentBase:
+    def load_component(self, input_dict: dict) -> IComponent:
         out = self._load_component(input_dict, depth=0)
         return out
 
-    def _load_component(self, input_dict: dict, depth: int) -> ComponentBase:
+    def _load_component(self, input_dict: dict, depth: int) -> IComponent:
         if depth>MAX_RECURSIONS:
             raise EntityInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
 
@@ -462,7 +462,7 @@ class ComponentsLoader(CallTraceMixin):
             value = attr_value_new
         elif isinstance(attr_value, dict) and "type" in attr_value:
             # recursion
-            value: ComponentBase = self._load_component(attr_value, depth=depth+1)
+            value: IComponent = self._load_component(attr_value, depth=depth + 1)
         elif isinstance(attr_value, str) and attr_value.startswith(DEXP_PREFIX):
             code_string = attr_value[len(DEXP_PREFIX):]
             value: DotExpression = load_dot_expression(code_string)
@@ -476,7 +476,7 @@ def load_dot_expression(code_string: str) -> DotExpression:
     return DotExpressionLoader().load_dot_expression(code_string)
 
 
-def load(input: Union[dict, str], format_: DumpFormatEnum = None) -> ComponentBase:
+def load(input: Union[dict, str], format_: DumpFormatEnum = None) -> IComponent:
     if format_ is not None:
         assert isinstance(input , str)
         input_dict = load_from_format(input, format_=format_)

@@ -232,13 +232,13 @@ TreeNode = NewType("TreeNode", Any)
 
 # TreeNode ::
 #   name: str self.name
-#   component: ComponentBase
+#   component: IComponent
 #   children: List[Self]
 ComponentTreeType = NewType("ComponentTreeType", Dict[ComponentNameType, TreeNode])
 
 # TreeNode ::
 #   name: str self.name
-#   component: ComponentBase
+#   component: IComponent
 #   children: List[Self]
 #   attr_current_value_instance: InstanceAttrCurrentValue
 ComponentTreeWValuesType = NewType("ComponentTreeWValuesType", Dict[ComponentNameType, TreeNode])

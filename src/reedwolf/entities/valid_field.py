@@ -82,7 +82,7 @@ class FieldValidation(FieldValidationBase):
         return self._validate_common_impl(apply_result=apply_result)
 
     # def __repr__(self):
-    #     # due multiple inheritance - to force calling ComponentBase implementation
+    #     # due multiple inheritance - to force calling IComponent implementation
     #     return super(ValidationBase).__repr__()
 
 
@@ -319,7 +319,7 @@ class RangeLength(FieldValidationBase):
 
         super().__post_init__()
 
-    # value: Any, component: "ComponentBase", 
+    # value: Any, component: "IComponent",
     def validate(self, apply_result: IApplyResult) -> Optional[ValidationFailure]:
         # TODO: evaluate self.value when DotExpression
         component = apply_result.current_frame.component

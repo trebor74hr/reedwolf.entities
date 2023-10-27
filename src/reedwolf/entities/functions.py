@@ -81,9 +81,9 @@ from .func_args import (
 )
 from .base import (
     AttrDexpNodeTypeEnum,
-    IFieldBase,
+    IField,
     IApplyResult,
-    ComponentBase, SetupStackFrame, ApplyStackFrame,
+    IComponent, SetupStackFrame, ApplyStackFrame,
 )
 
 
@@ -599,10 +599,10 @@ class InjectComponentTreeValuesFuncArgHint(IInjectFuncArgHint):
 
         if not (dexp_node.attr_node_type == AttrDexpNodeTypeEnum.FIELD
                 and dexp_node.namespace == FieldsNS
-                and isinstance(dexp_node.data, IFieldBase)):
+                and isinstance(dexp_node.data, IField)):
             raise EntityInternalError(owner=self, msg=f"Inject function argument value :: PrepArg '{inject_prep_arg.name}' expected DExp(F.<field>) -> Field(),  got: '{dexp_node}' -> '{dexp_node.data}' ")
 
-        component: ComponentBase = dexp_node.data
+        component: IComponent = dexp_node.data
         assert component == apply_result.current_frame.component
 
         key_string = apply_result.get_key_string(component)

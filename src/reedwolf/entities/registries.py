@@ -50,13 +50,13 @@ from .meta import (
 )
 from .base import (
     ReservedAttributeNames,
-    ComponentBase,
-    IFieldBase,
+    IComponent,
+    IField,
     IApplyResult,
-    BoundModelBase,
+    IBoundModel,
     IFieldGroup,
     ISetupSession,
-    IContainerBase,
+    IContainer,
 )
 from .attr_nodes import (
     AttrDexpNode,
@@ -117,7 +117,7 @@ class ModelsRegistry(RegistryBase):
     # NOTE: no register() method due complex logic - see
     #       ContainerBase._register_bound_model()
 
-    def _create_root_attr_node(self, bound_model:BoundModelBase) -> AttrDexpNode:
+    def _create_root_attr_node(self, bound_model:IBoundModel) -> AttrDexpNode:
         " models specific method "
         # standard DTO class attr_node
         # if not bound_model.type_info:
@@ -133,7 +133,7 @@ class ModelsRegistry(RegistryBase):
 
     # ------------------------------------------------------------
 
-    def register_all_nodes(self, root_attr_node: Optional[AttrDexpNode],  bound_model: BoundModelBase, model: ModelType):
+    def register_all_nodes(self, root_attr_node: Optional[AttrDexpNode], bound_model: IBoundModel, model: ModelType):
         " models specific method "
         if not root_attr_node:
             root_attr_node = self._create_root_attr_node(bound_model=bound_model)
@@ -173,10 +173,10 @@ class ModelsRegistry(RegistryBase):
     # ------------------------------------------------------------
 
     def get_attr_node_by_bound_model(self,
-                               bound_model:BoundModelBase,
-                               # default:[None, UndefinedType]=UNDEFINED,
-                               # strict:bool=False
-                               ) -> Union[AttrDexpNode, None, UndefinedType]:
+                                     bound_model:IBoundModel,
+                                     # default:[None, UndefinedType]=UNDEFINED,
+                                     # strict:bool=False
+                                     ) -> Union[AttrDexpNode, None, UndefinedType]:
         " models specific method "
         # attr_node_name = bound_model.name
         # == M.name mode
@@ -244,24 +244,24 @@ class FieldsRegistry(RegistryBase):
 
     NAMESPACE: ClassVar[Namespace] = FieldsNS
 
-    ALLOWED_BASE_TYPES: ClassVar[List[type]] = (IFieldBase, )
+    ALLOWED_BASE_TYPES: ClassVar[List[type]] = (IField,)
 
-    # TODO: zamijeni IContainerBase s; IFieldGroup, IEntityBase, a dodaj u Allowed: ISubentityBase
-    DENIED_BASE_TYPES: ClassVar[List[type]] = (BoundModelBase, ValidationBase, EvaluationBase, IContainerBase, IFieldGroup,)
+    # TODO: zamijeni IContainer s; IFieldGroup, IEntityBase, a dodaj u Allowed: ISubentityBase
+    DENIED_BASE_TYPES: ClassVar[List[type]] = (IBoundModel, ValidationBase, EvaluationBase, IContainer, IFieldGroup,)
 
-    def create_attr_node(self, component:ComponentBase):
+    def create_attr_node(self, component:IComponent):
         # TODO: put class in container and remove these local imports
         # ------------------------------------------------------------
         # A.3. COMPONENTS - collect attr_nodes - previously flattened (recursive function fill_components)
         # ------------------------------------------------------------
-        if not isinstance(component, (ComponentBase, )):
+        if not isinstance(component, (IComponent,)):
             raise EntitySetupError(owner=self, msg=f"Register expexted ComponentBase, got {component} / {type(component)}.")
 
         component_name = component.name
 
         # TODO: to have standard types in some global list in fields.py
         #           containers, validations, evaluations, 
-        if isinstance(component, (IFieldBase, )):
+        if isinstance(component, (IField,)):
             denied = False
             deny_reason = ""
             type_info = component.type_info if component.type_info else None
@@ -299,7 +299,7 @@ class FieldsRegistry(RegistryBase):
         return attr_node
 
 
-    def register(self, component:ComponentBase):
+    def register(self, component:IComponent):
         attr_node = self.create_attr_node(component)
         self.register_attr_node(attr_node) # , is_list=False))
         return attr_node
@@ -329,13 +329,13 @@ class ContextRegistry(RegistryBase):
             self.register_all_nodes()
 
 
-    def create_node(self, 
-                    dexp_node_name: str, 
-                    owner_dexp_node: IDotExpressionNode, 
-                    owner: ComponentBase,
+    def create_node(self,
+                    dexp_node_name: str,
+                    owner_dexp_node: IDotExpressionNode,
+                    owner: IComponent,
                     ) -> IDotExpressionNode:
 
-        if not isinstance(owner, ComponentBase):
+        if not isinstance(owner, IComponent):
             raise EntityInternalError(owner=self, msg=f"Owner needs to be Component, got: {type(owner)} / {owner}")  
 
         if not owner.get_first_parent_container(consider_self=True).context_class:
@@ -442,7 +442,7 @@ class ThisRegistry(IThisRegistry, RegistryBase):
     NAMESPACE: ClassVar[Namespace] = ThisNS
 
     attr_node: Optional[AttrDexpNode] = field(default=None)
-    component: Optional[ComponentBase] = field(default=None)
+    component: Optional[IComponent] = field(default=None)
     model_class: Optional[ModelType] = field(default=None)
     # Used for ItemsFunctions when Item attribute will be available, e.g. This.name -> AttrValue
     # TODO: do I really need this parameter - is it overlapping with is_items_mode?
