@@ -223,11 +223,11 @@ def msg(message: Union[str, TransMessageType]) -> Union[str, TransMessageType]:
 
 
 # ------------------------------------------------------------
-# SetParentMixin
+# IBaseComponent
 # ------------------------------------------------------------
 
 @dataclass
-class SetParentMixin:
+class IBaseComponent:
     """ requires (Protocol):
         name
         parent_name
@@ -449,7 +449,7 @@ def make_component_fields_dataclass(class_name: str, child_field_list: List[Chil
 # ------------------------------------------------------------
 
 @dataclass
-class IComponent(SetParentMixin, ABC):
+class IComponent(IBaseComponent, ABC):
 
     # NOTE: I wanted to skip saving parent reference/object within component - to
     #       preserve single and one-direction references.
@@ -981,7 +981,7 @@ class IComponent(SetParentMixin, ABC):
                             #       to register non-model attributes
                             component._register_nested_models(setup_session)
 
-                elif isinstance(component, SetParentMixin):
+                elif isinstance(component, IBaseComponent):
                     component.set_parent(parent=self)
                     self._add_component(component=component, components=components)
                     # e.g. BoundModel.model - can be any custom Class(dataclass/pydantic)
@@ -1208,7 +1208,7 @@ class IComponent(SetParentMixin, ABC):
               the logic behind is to collect all attributes (recurseively) that
               are:
                 1. component (IComponent)
-                2. have parent set (SetParentMixin)
+                2. have parent set (IBaseComponent)
                 3. DotExpression
 
               all of them have some setup method:
