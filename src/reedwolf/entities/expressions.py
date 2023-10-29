@@ -986,6 +986,7 @@ class OperationDexpNode(IDotExpressionNode):
               ) -> "DotExpressionEvaluator":  # noqa: F821
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(self)
 
+        # TODO: move this to common method: self._EnsureNotFinished()
         if not self._status==DExpStatusEnum.INITIALIZED:
             raise EntitySetupError(owner=setup_session, item=self, msg=f"AttrDexpNode not in INIT state, got {self._status}")
 

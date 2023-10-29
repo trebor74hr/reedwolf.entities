@@ -329,7 +329,6 @@ class BoundModelWithHandlers(NestedBoundModelBase):
                 raise EntitySetupValueError(owner=self, msg=f"BoundModel* nesting (attribute 'contains') is not supported for '{type(container)}'")
 
         # self._register_nested_models(setup_session)
-
         self._finished = True
 
 
@@ -362,7 +361,6 @@ class BoundModel(NestedBoundModelBase):
     # Filled from from model
     type_info : Optional[TypeInfo] = field(init=False, default=None, repr=False)
     models_with_handlers_dict : Dict[str, ModelWithHandlers] = field(init=False, repr=False, default_factory=dict)
-
 
     def __post_init__(self):
         if isinstance(self.model, DotExpression):

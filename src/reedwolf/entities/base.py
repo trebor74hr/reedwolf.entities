@@ -1044,6 +1044,8 @@ class IComponent(IBaseComponent, ABC):
             else:
                 dexp.Setup(setup_session=setup_session, owner=self)
                 called = True
+        # elif isinstance(component, IBoundModel):
+        #     called = False
         elif isinstance(component, IComponent):
             assert "Entity(" not in repr(component)
             component.setup(setup_session=setup_session)  # , parent=self)
@@ -1135,10 +1137,13 @@ class IComponent(IBaseComponent, ABC):
                             # should not be used 
                             this_registry = None,
                         )):
-                    # RECURSION x 2
-                    if child.is_subentity():
-                        child.setup(setup_session=setup_session)
-                    child_component_fields_dataclass, _ = child.get_component_fields_dataclass(setup_session=setup_session) 
+
+                    # NOTE: this is not required any more since setup_phase_one() sets up all type_info-s
+                    #   if child.is_subentity():
+                    #       child.setup(setup_session=setup_session) # recursive
+
+                    # RECURSION:
+                    child_component_fields_dataclass, _ = child.get_component_fields_dataclass(setup_session=setup_session)
 
                 child_type_info = TypeInfo.get_or_create_by_type(child_component_fields_dataclass)
 
@@ -1530,6 +1535,13 @@ class IContainer(IComponent, ABC):
 
 @dataclass
 class IBoundModel(IComponent, ABC):
+
+    _finished: bool = field(init=False, repr=False, default=False)
+
+    def setup(self, setup_session:ISetupSession):
+        if self._finished:
+            raise EntityInternalError(owner=self, msg="Setup already called")
+        super().setup(setup_session=setup_session)
 
     @abstractmethod
     def get_type_info(self) -> TypeInfo:
