@@ -1,27 +1,28 @@
 from abc import (
-        ABC, 
-        abstractmethod,
-        )
+    ABC,
+    abstractmethod,
+)
 from typing import (
     Any,
-    Union, ClassVar, Optional,
+    Union,
+    Optional,
 )
 from dataclasses import dataclass
 
 from .utils import (
-        to_int,
-        )
+    to_int,
+)
 from .exceptions import (
-        EntitySetupError,
-        )
+    EntitySetupError,
+)
 from .meta import (
-        NoneType,
-        )
+    NoneType,
+)
 from .base import (
     IComponent,
     IApplyResult,
     ValidationFailure,
-        )
+)
 from .expressions import (
     DotExpression,
     ExecResult,

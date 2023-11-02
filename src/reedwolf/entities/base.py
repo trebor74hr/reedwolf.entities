@@ -1536,7 +1536,9 @@ class IContainer(IComponent, ABC):
 @dataclass
 class IBoundModel(IComponent, ABC):
 
+    model: ModelType = field(init=False, repr=False)
     _finished: bool = field(init=False, repr=False, default=False)
+
 
     def setup(self, setup_session:ISetupSession):
         if self._finished:
@@ -1867,7 +1869,7 @@ class ChangeOpEnum(str, Enum):
 class InstanceChange:
     key_string: KeyString
     # model_class: Any 
-    key_pairs: KeyPairs = field()
+    key_pairs: Optional[KeyPairs]
     operation: ChangeOpEnum
     instance: ModelType = field(repr=True)
     updated_values: Optional[Dict[AttrName, Tuple[AttrValue, AttrValue]]] = field(default=None)
@@ -2145,7 +2147,32 @@ class StructEnum(str, Enum):
 #           # entity like - follows hierachical structure like defined in entity
 #           pass
 
+@dataclass
+class ValueData:
+    value:          AttrValue
+    value_accessor: IValueAccessor
+    update_history: Dict[KeyString, List[InstanceAttrValue]] = \
+        field(repr=False, init=False, default_factory=dict)
+    current_values: Dict[KeyString, InstanceAttrCurrentValue] = \
+        field(repr=False, init=False, default_factory=dict)
+    changes: List[InstanceChange] = \
+        field(repr=False, init=False, default_factory=list)
+
 # ------------------------------------------------------------
+@dataclass
+class ValueNode:
+    component:  IComponent
+    # contains all fields
+    container_node: Self
+    # TODO: fields? - only for container - includes all children's children
+    #       except Items's children
+
+    # all accessible by . operator in ValueExpressions
+    value_data: Union[UndefinedType, ValueData]
+    children:   Union[UndefinedType, Dict[AttrName, Self]]
+    items:      Union[UndefinedType, List[Self]]
+    parent:     Optional[Self]
+
 
 @dataclass
 class IApplyResult(IStackOwnerSession):
@@ -2153,6 +2180,8 @@ class IApplyResult(IStackOwnerSession):
     instance: Any = field(repr=False)
     # TODO: consider: instance_new: Union[ModelType, UndefinedType] = UNDEFINED,
     instance_new: Optional[ModelType] = field(repr=False)
+
+    # TODO: top_value_node: ValueNode
 
     context: Optional[IContext] = field(repr=False)
     # used in apply_partial

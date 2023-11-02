@@ -66,7 +66,7 @@ from .base import (
     InstanceAttrCurrentValue,
     get_instance_key_string_attrname_pair,
     UseStackFrameCtxManagerBase,
-    ChildField,
+    IContainer,
 )
 from .fields import (
         FieldBase,
@@ -109,7 +109,6 @@ class ApplyResult(IApplyResult):
 
     instance_none_mode:bool = field(init=False, default=False)
 
-
     STACK_FRAME_CLASS = ApplyStackFrame
     STACK_FRAME_CTX_MANAGER_CLASS = UseApplyStackFrameCtxManager
 
@@ -123,7 +122,8 @@ class ApplyResult(IApplyResult):
             if not self.component_only.can_apply_partial():
                 raise EntityApplyError(owner=self, msg=f"Component '{self.component_only}' does not support partial apply. Use SubEntityItems, FieldGroup or similar.")
 
-        self.bound_model = getattr(self.entity, "bound_model")
+        # self.bound_model = getattr(self.entity, "bound_model")
+        self.bound_model = self.entity.bound_model
         if not self.bound_model:
             raise EntityApplyError(owner=self, msg=f"Component object '{self.entity}' has no bound model")
 
@@ -479,25 +479,16 @@ class ApplyResult(IApplyResult):
     def _apply(self,
                # parent: Optional[IComponent],
                component: IComponent,
-
                # -- RECURSION -- internal props
-
                # see dox below
                mode_subentity_items:bool = False,
-
                # see dox below
                mode_dexp_dependency: bool = False,
-
-               entry_call: bool = False,
-
-               # Moved to stack
-               #    # partial apply - passed through recursion further
-               #    in_component_only_tree: bool = False,
-               #    # recursion depth
-               #    depth:int=0, 
-               ):
+               top_call: bool = False,
+        ) -> bool:
         """
         Main entry function 'apply' logic.
+        Return value is "process further / all ok" - not used by caller.
         Recursion in 3 main modes:
 
             normal_mode 
@@ -527,7 +518,7 @@ class ApplyResult(IApplyResult):
         assert not (mode_subentity_items and mode_dexp_dependency)
 
         comp_container = component.get_first_parent_container(consider_self=True)
-        comp_container_model = comp_container.bound_model.get_type_info().type_
+        # comp_container_model = comp_container.bound_model.get_type_info().type_
 
         if mode_dexp_dependency:
             # TODO: self.config.logger.info(f"apply - mode_dexp_dependency - {self.current_frame.component.name} depends on {component.name} - calling apply() ...")
@@ -542,7 +533,7 @@ class ApplyResult(IApplyResult):
             raise EntityInternalError(owner=self, msg="Already finished") 
 
         if self.stack_frames:
-            assert not entry_call
+            assert not top_call
             depth = self.current_frame.depth
             in_component_only_tree = self.current_frame.in_component_only_tree 
 
@@ -562,7 +553,7 @@ class ApplyResult(IApplyResult):
             # TODO: for subentity() any need to check this at all in this phase?
         else:
             # no stack around -> initial call -> depth=0
-            assert entry_call
+            assert top_call
             depth = 0
             in_component_only_tree = False
 
@@ -599,19 +590,17 @@ class ApplyResult(IApplyResult):
 
         if depth==0:
             # ---- Entity case -----
+            container: IContainer = component
 
-            # assert parent is None
-
-            # NOTE: frame not set so 'self.current_frame.instance' is not available
+            # NOTE: frame not yet set so 'self.current_frame.instance' is not available
             #       thus sending 'instance' param
-            component.bound_model._apply_nested_models(
+            container.bound_model._apply_nested_models(
                                         apply_result=self, 
                                         instance=self.instance
                                         )
-
             new_frame = ApplyStackFrame(
-                            container = component, 
-                            component = component, 
+                            container = container,
+                            component = container,
                             instance = self.instance,
                             instance_new = self.instance_new,
                             in_component_only_tree=in_component_only_tree,
@@ -619,8 +608,6 @@ class ApplyResult(IApplyResult):
 
         elif not mode_subentity_items and component.is_subentity():
             # ---- SubEntityItems case -> process single or iterate all items -----
-
-
             component : SubEntityItems = component
             if not isinstance(component.bound_model.model, DotExpression):
                 raise EntityInternalError(owner=self, msg=f"For SubEntityItems `bound_model` needs to be DotExpression, got: {component.bound_model.model}") 
@@ -639,57 +626,14 @@ class ApplyResult(IApplyResult):
                                             in_component_only_tree=in_component_only_tree)
 
             if component.is_subentity_items():
-
-                if instance is None:
-                    # TODO: checkk type_info is optional - similar to single case
-                    ...
-                elif not isinstance(instance, (list, tuple)):
-                    raise EntityApplyValueError(owner=component, msg=f"Expecting list of instances, got: {to_repr(instance)}")
-
-                # ---- SubEntityItems case
-                if not component.is_subentity_items():
-                    raise EntityApplyValueError(owner=component, msg=f"Did not expect list of instances: {to_repr(instance)}") 
-                # enters recursion -> _apply() -> ...
-                # parent_values_subtree = self.current_frame.parent_values_subtree
-
-                self._apply_subentity_items(
+                # RECURSION & finish
+                return self._apply_subentity_items(
                         component=component,
-                        # parent=parent,
                         in_component_only_tree=in_component_only_tree,
                         instance_list=instance,
                         current_instance_list_new=current_instance_new,
                         depth=depth,
                         )
-
-                with self.use_stack_frame(
-                        ApplyStackFrame(
-                            component = component, 
-                            # instance is a list of items
-                            instance = instance, 
-                            instance_is_list = True,
-                            # ALT: self.current_frame.container
-                            container = component,
-                            parent_instance=self.current_frame.instance,
-                            in_component_only_tree=in_component_only_tree,
-                            # NOTE: instance_new skipped - (contains list of
-                            #       new items) are already applied
-                            )) as current_frame:
-
-                    # setup this registry
-                    current_frame.set_this_registry(
-                        component.get_this_registry()
-                    )
-
-                    # finally apply validations on list of items
-                    all_ok = self._execute_cleaners(component,
-                            validation_class=ItemsValidationBase,
-                            evaluation_class=ItemsEvaluationBase,
-                            )
-
-                # ========================================
-                # Finished, processed all children items
-                # ========================================
-                return
                 # ========================================
 
             # ---- SubEntitySingle case
@@ -704,7 +648,7 @@ class ApplyResult(IApplyResult):
                 # TODO: check that type_info.is_optional ...
                 ...
             elif isinstance(instance, (list, tuple)):
-                raise EntityApplyValueError(owner=component, msg=f"Did not expected list/tuple , got: {instance} : {type(instance)}")
+                raise EntityApplyValueError(owner=component, msg=f"Did not expected list/tuple, got: {instance} : {type(instance)}")
 
             elif not is_model_instance(instance):
                 raise EntityApplyValueError(owner=component, msg=f"Expected single model instance, got: {instance} : {type(instance)}")
@@ -735,26 +679,24 @@ class ApplyResult(IApplyResult):
                             #   index0 = self.current_frame.index0,
                             )
 
-
-        process_further = True
-
-        # ------ common setup for new_frame ----------
-
+        # ------ common setup for the new_frame ----------
         # one level deeper
         new_frame.depth = depth + 1
-
         if isinstance(component, IField):
-            assert getattr(component, "bind", None)
-            assert not component.is_container()
-
+            #assert getattr(component, "bind", None)
+            #assert not component.is_container()
             new_frame.set_this_registry(
                 component.get_this_registry()
             )
 
-
         # ------------------------------------------------------------
         # ----- Main processing - must use new stack frame
         # ------------------------------------------------------------
+        # NOTE: did not put this chunk of code in a special function
+        #       in order to have simple stack trace, e.g.
+        #           _apply() -> _apply() -> _apply() ....
+        process_further = True
+
         with self.use_stack_frame(new_frame):
 
             comp_key_str = self.get_key_string(component)
@@ -782,6 +724,7 @@ class ApplyResult(IApplyResult):
                     process_further = all_ok
                     # ============================================================
                     if current_value_instance_new is not None:
+                        # NOTE: not used later on
                         current_value_instance = current_value_instance_new
 
                 if process_further and getattr(component, "enables", None):
@@ -808,7 +751,6 @@ class ApplyResult(IApplyResult):
             # NOTE: used only for test if all Dexp values could evaluate ...
             #       self.__check_component_all_dexps(component)
 
-            # -- fill values dict
             # TODO: consider: recursive=True - currently causes lot of issues
             self._fill_values_dict(filler="_apply", is_init=(depth==0), process_further=process_further) 
 
@@ -819,12 +761,10 @@ class ApplyResult(IApplyResult):
                 children = component.get_children()
                 for child in children:
                     # TODO: self.config.logger.warning(f"{'  ' * self.current_frame.depth} _apply: {component.name} -> {child.name}")
-                    self._apply(
-                                # parent=component, 
-                                # in_component_only_tree=in_component_only_tree,
-                                component=child, 
-                                # depth=depth+1,
-                                )
+                    # --------------------
+                    # RECURSION
+                    # --------------------
+                    self._apply(component=child)
 
                 # TODO: consider to reset - although should not influence since stack_frame will be disposed
                 #           self.current_frame.set_parent_values_subtree(parent_values_subtree)
@@ -836,58 +776,21 @@ class ApplyResult(IApplyResult):
 
                     # == Create This. registry and put in local setup session
                     this_registry = component.get_this_registry()
-                    with self.use_stack_frame(
-                            ApplyStackFrame(
-                                component=self.current_frame.component,
-                                # instance is a single item
-                                instance=self.current_frame.instance,
-                                container=self.current_frame.container,
-                                this_registry=this_registry,
-                                # in_component_only_tree=in_component_only_tree,
-                            )) as current_frame:
+                    with self.use_changed_current_stack_frame(
+                        this_registry=this_registry
+                    ):
                         all_ok = self._execute_cleaners(component,
                                 validation_class=ChildrenValidationBase,
                                 evaluation_class=ChildrenEvaluationBase,
                                 )
-
                     # TODO: not used later
                     process_further = all_ok
 
             # if self.current_frame.component.is_container():
             # Fill internal cache for possible later use by some `dump_` functions
 
-
-
         if depth==0:
-            assert len(self.stack_frames)==0
-
-            # ---------------------------------------------------------------------
-            # For changed attributes -> collect original + new value
-            # ---------------------------------------------------------------------
-            updated_values_dict: Dict[KeyString, Dict[AttrName, Tuple[AttrValue, AttrValue]]] = defaultdict(dict)
-            for key_string, instance_attr_values in self.update_history.items():
-                if len(instance_attr_values)>1:
-                    # any change?
-                    first_val = instance_attr_values[0]
-                    last_val = instance_attr_values[-1]
-                    if last_val.value != first_val.value:
-                        instance_key_string, attrname = \
-                                get_instance_key_string_attrname_pair(key_string)
-                        updated_values_dict[instance_key_string][attrname] = (first_val.value, last_val.value)
-
-            for instance_key_string, updated_values in updated_values_dict.items():
-                instance_updated = self.get_instance_by_key_string(instance_key_string)
-                # TODO: key_pairs are currently not set - should be cached, not so easy to get in this moment
-                #   key = component.get_key_pairs_or_index0(instance_updated, index0)
-                self.changes.append(
-                        InstanceChange(
-                            key_string = instance_key_string,
-                            # see above
-                            key_pairs = None,
-                            operation = ChangeOpEnum.UPDATE,
-                            instance = instance_updated,
-                            updated_values = updated_values,
-                        ))
+            self._apply_collect_changed_values()
 
         # TODO: logger: apply_result.config.logger.debug(f"depth={depth}, comp={component.name}, bind={bind} => {dexp_result}")
 
@@ -899,7 +802,40 @@ class ApplyResult(IApplyResult):
                                dataclass_klass=self.bound_model.model,
                                values_dict=kwargs)
 
-        return
+        return process_further
+
+    # ------------------------------------------------------------
+
+    def _apply_collect_changed_values(self):
+        """
+        For changed attributes -> collect original + new value
+        """
+        assert len(self.stack_frames) == 0
+        updated_values_dict: Dict[KeyString, Dict[AttrName, Tuple[AttrValue, AttrValue]]] = defaultdict(dict)
+        for key_string, instance_attr_values in self.update_history.items():
+            # any change?
+            if len(instance_attr_values) > 1:
+                first_val = instance_attr_values[0]
+                last_val = instance_attr_values[-1]
+                if last_val.value != first_val.value:
+                    instance_key_string, attrname = \
+                        get_instance_key_string_attrname_pair(key_string)
+                    updated_values_dict[KeyString(instance_key_string)][attrname] = \
+                        (first_val.value, last_val.value)
+
+        for instance_key_string, updated_values in updated_values_dict.items():
+            instance_updated = self.get_instance_by_key_string(instance_key_string)
+            # TODO: key_pairs are currently not set - should be cached, not so easy to get in this moment
+            #   key = component.get_key_pairs_or_index0(instance_updated, index0)
+            self.changes.append(
+                InstanceChange(
+                    key_string=instance_key_string,
+                    # see above
+                    key_pairs=None,
+                    operation=ChangeOpEnum.UPDATE,
+                    instance=instance_updated,
+                    updated_values=updated_values,
+                ))
 
     # ------------------------------------------------------------
 
@@ -910,11 +846,22 @@ class ApplyResult(IApplyResult):
                                instance_list: List[ModelType],
                                current_instance_list_new: Union[NoneType, UndefinedType, ModelType],
                                depth: int,
-                               ):
+                               ) -> bool:
         """
         SubEntityItems with item List
         Recursion -> _apply(mode_subentity_items=True) -> ...
         """
+        if instance_list is None:
+            # TODO: checkk type_info is optional - similar to single case
+            ...
+        elif not isinstance(instance_list, (list, tuple)):
+            raise EntityApplyValueError(owner=component, msg=f"Expecting list of instances, got: {to_repr(instance_list)}")
+
+        # ---- SubEntityItems case
+        if not component.is_subentity_items():
+            raise EntityApplyValueError(owner=component, msg=f"Did not expect list of instances: {to_repr(instance_list)}")
+            # enters recursion -> _apply() -> ...
+        # parent_values_subtree = self.current_frame.parent_values_subtree
 
         if instance_list is None:
             # NOTE: found no better way to do it
@@ -1039,6 +986,32 @@ class ApplyResult(IApplyResult):
             # TODO: consider to reset - although should not influence since stack_frame will be disposed
             # self.current_frame.set_parent_values_subtree(parent_values_subtree)
 
+        with self.use_stack_frame(
+                ApplyStackFrame(
+                    component = component,
+                    # instance is a list of items
+                    instance = instance_list,
+                    instance_is_list = True,
+                    # ALT: self.current_frame.container
+                    container = component,
+                    parent_instance=self.current_frame.instance,
+                    in_component_only_tree=in_component_only_tree,
+                    # NOTE: instance_new skipped - (contains list of
+                    #       new items) are already applied
+                )) as current_frame:
+
+            # setup this registry
+            current_frame.set_this_registry(
+                component.get_this_registry()
+            )
+
+            # finally apply validations on list of items
+            all_ok = self._execute_cleaners(component,
+                                            validation_class=ItemsValidationBase,
+                                            evaluation_class=ItemsEvaluationBase,
+                                            )
+        return all_ok
+
     # ------------------------------------------------------------
 
     def __check_component_all_dexps(self, component: IComponent):
@@ -1062,7 +1035,7 @@ class ApplyResult(IApplyResult):
         self._apply(
                 # parent=None, 
                 component=self.entity,
-                entry_call=True,
+                top_call=True,
                 )
         self.finish()
 
