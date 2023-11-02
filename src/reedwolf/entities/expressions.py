@@ -69,7 +69,8 @@ class ExecResult:
 
     # TODO: set compoenent (owner) that triggerred value change
     #       value evaluation - can have attr_node.name
-    value_history : List[Tuple[str, RawAttrValue]] = field(repr=False, init=False, default_factory=list)
+    # value_history : List[Tuple[str, RawAttrValue]] = field(repr=False, init=False, default_factory=list)
+    value_history : List[RawAttrValue] = field(repr=False, init=False, default_factory=list)
 
     @classmethod
     def create(cls, value: Any, attr_name: str="", changer_name: str=""):
@@ -776,6 +777,8 @@ class LiteralDexpNode(IDotExpressionNode):
 
     def __post_init__(self):
         self.dexp_result = ExecResult()
+        if not isinstance(self.value, STANDARD_TYPE_W_NONE_LIST):
+            raise EntitySetupValueError(owner=self, msg=f"Expected some standard type '{STANDARD_TYPE_W_NONE_LIST}', got: {self.value}")
         self.dexp_result.set_value(self.value, attr_name="", changer_name="")
         self.type_info = TypeInfo.get_or_create_by_type(type(self.value), caller=self)
 
@@ -966,7 +969,9 @@ class OperationDexpNode(IDotExpressionNode):
                          owner: Any,
                          dexp_validator: Optional[DexpValidator],
                          ) -> IDotExpressionNode:
-        if isinstance(dexp_or_other, DotExpression):
+        if isinstance(dexp_or_other, Just):
+            dexp_node = LiteralDexpNode(value=dexp_or_other._node)
+        elif isinstance(dexp_or_other, DotExpression):
             dexp_node = dexp_or_other.Setup(setup_session, owner=owner, dexp_validator=dexp_validator)
         elif isinstance(dexp_or_other, IDotExpressionNode):
             raise NotImplementedError(f"{title}.type unhandled: '{type(dexp_or_other)}' => '{dexp_or_other}'")
@@ -1113,7 +1118,7 @@ def execute_dexp_or_node(
 
     # TODO: this function has ugly interface - solve this better
 
-    if isinstance(dexp_or_value, DotExpression):
+    if isinstance(dexp_or_value, DotExpression) and not isinstance(dexp_or_value, Just):
         dexp_result = dexp_or_value._evaluator.execute_dexp(
                             apply_result=apply_result,
                             )

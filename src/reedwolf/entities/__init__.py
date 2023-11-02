@@ -22,6 +22,9 @@ from .exceptions import (
         EntityValidationError,
         EntityNameNotFoundError,
         )
+from .expressions import (
+        Just,
+        )
 from .bound_models import (
         BoundModel,
         BoundModelWithHandlers,
@@ -133,6 +136,9 @@ __all__ = [
     "EntityApplyError",
     "EntityValidationError",
     "EntityNameNotFoundError",
+
+    # expressions
+    "Just",
 
     # models
     "BoundModel",

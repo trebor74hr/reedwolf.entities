@@ -456,13 +456,14 @@ class IComponent(IBaseComponent, ABC):
     # NOTE: Not DRY: Entity, SubentityBase and ComponentBase
 
     # TODO: name          : Optional[str] = field(init=False, default=None)
-    # TODO: cleaners:       Optional[List[Union[ICleaner]]] = field(repr=False, default_factory=list)
+    # TODO: cleaners:       Optional[List["ICleaner"]] = field(repr=False, init=False, default=None)
 
     # lazy init - done in Setup phase
     child_field_list: Optional[List[ChildField]] = field(init=False, repr=False, default=None)
     _component_fields_dataclass: Optional[TypingType[IComponentFields]] = field(init=False, repr=False, default=None)
     _this_registry: Union[IThisRegistry, NoneType, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
     _setup_phase_one_called: bool = field(init=False, repr=False, default=False)
+
 
     def __post_init__(self):
         self.init_clean_base()
@@ -1466,7 +1467,16 @@ class IComponent(IBaseComponent, ABC):
 
 
 # ------------------------------------------------------------
-# IField
+
+class ICleaner(IComponent, ABC):
+    ...
+
+class IValidation(ICleaner, ABC):
+    ...
+
+class IEvaluation(ICleaner, ABC):
+    ...
+
 # ------------------------------------------------------------
 
 class IField(IComponent, ABC):
@@ -1480,6 +1490,8 @@ class IField(IComponent, ABC):
     # @abstractmethod
     # def get_bound_attr_node(self, setup_session: ISetupSession) -> "AttrDexpNode":  # noqa: F821
     #     ...
+
+# ------------------------------------------------------------
 
 class IFieldGroup(ABC):
     ...
@@ -2128,7 +2140,6 @@ class ValidationFailure:
     validation_title: str
     details: Optional[str]
 
-
 # ------------------------------------------------------------
 
 class StructEnum(str, Enum):
@@ -2172,6 +2183,51 @@ class ValueNode:
     children:   Union[UndefinedType, Dict[AttrName, Self]]
     items:      Union[UndefinedType, List[Self]]
     parent:     Optional[Self]
+
+
+class ApplyExecPhasesEnum(str, Enum):
+    EVALUATIONS_PHASE = "EVALUATIONS_PHASE"
+    VALIDATIONS_PHASE = "VALIDATIONS_PHASE"
+    FINISH_COMPONENTS_PHASE= "FINISH_COMPONENTS_PHASE"
+
+
+@dataclass
+class ApplyExecCleaners:
+    """
+    contains all cleaners for single component + stack frame
+    """
+    stack_frame: IStackFrame = field(repr=False)
+    cleaner_list: List[ICleaner]
+    # executor_fn: ExecutorFnType = field(repr=False)
+
+@dataclass
+class ApplyExecCleanersRegistry:
+    exec_cleaners_dict: Dict[ApplyExecPhasesEnum, List[ApplyExecCleaners]] = field(init=False, repr=False, default_factory=dict)
+    finished: bool = field(init=False, repr=False, default=False)
+
+    def finish(self):
+        assert not self.finished
+        self.finished = True
+
+    def get_cleaners(self, apply_exec_phase: ApplyExecPhasesEnum) -> List[ApplyExecCleaners]:
+        return self.exec_cleaners_dict.setdefault(apply_exec_phase, [])
+
+    def register_stack_frame_only(self,
+                                  apply_exec_phase: ApplyExecPhasesEnum,
+                                  stack_frame: IStackFrame):
+        assert not self.finished
+        exec_list = self.exec_cleaners_dict.setdefault(apply_exec_phase, [])
+        exec_cleaner = ApplyExecCleaners(cleaner_list=[], stack_frame=stack_frame)
+        exec_list.append(exec_cleaner)
+
+    def register_cleaner_list(self,
+                              apply_exec_phase: ApplyExecPhasesEnum,
+                              stack_frame: IStackFrame,
+                              cleaner_list: List[ICleaner]):
+        assert not self.finished
+        exec_list = self.exec_cleaners_dict.setdefault(apply_exec_phase, [])
+        exec_cleaner = ApplyExecCleaners(cleaner_list=cleaner_list, stack_frame=stack_frame)
+        exec_list.append(exec_cleaner)
 
 
 @dataclass
@@ -2279,6 +2335,8 @@ class IApplyResult(IStackOwnerSession):
 
     new_id_counter: int = field(init=False, repr=False, default=0)
 
+    exec_cleaners_registry: ApplyExecCleanersRegistry = field(init=False, repr=False, default_factory=ApplyExecCleanersRegistry)
+
     def _get_new_id(self) -> int:
         self.new_id_counter+=1
         return self.new_id_counter
@@ -2345,8 +2403,9 @@ class IApplyResult(IStackOwnerSession):
             raise EntitySetupError(owner=self, msg="Method finish() already called.")
 
         if not len(self.stack_frames) == 0:
-            raise EntityInternalError(owner=self, msg=f"Stack frames not released: {self.stack_frames}") 
+            raise EntityInternalError(owner=self, msg=f"Stack frames not released: {self.stack_frames}")
 
+        self.exec_cleaners_registry.finish()
         self.finished = True
 
     def register_instance_validation_failed(self, component: IComponent, failure: ValidationFailure):

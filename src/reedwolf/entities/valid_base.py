@@ -19,9 +19,9 @@ from .meta import (
     NoneType,
 )
 from .base import (
-    IComponent,
     IApplyResult,
     ValidationFailure,
+    IValidation,
 )
 from .expressions import (
     DotExpression,
@@ -38,7 +38,7 @@ from .expressions import (
 
 
 @dataclass
-class ValidationBase(IComponent, ABC): # TODO: make it abstract
+class ValidationBase(IValidation, ABC): # TODO: make it abstract
     """ Executes validate() method which checks all ok
     """
 

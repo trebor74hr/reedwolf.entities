@@ -3,16 +3,14 @@ from dataclasses import (
         field,
         asdict,
         is_dataclass,
+        replace as dataclass_clone,
         )
 from typing import (
-        Any,
-        Dict,
-        Optional,
-        Tuple,
-        List,
-        Union,
-        Type,
-        )
+    Dict,
+    Optional,
+    Tuple,
+    Type, List,
+)
 from collections import OrderedDict, defaultdict
 
 from .exceptions import (
@@ -49,7 +47,6 @@ from .meta import (
 )
 from .base import (
     IField,
-    UndefinedType,
     MAX_RECURSIONS,
     AttrValue,
     AttrName,
@@ -66,7 +63,7 @@ from .base import (
     InstanceAttrCurrentValue,
     get_instance_key_string_attrname_pair,
     UseStackFrameCtxManagerBase,
-    IContainer,
+    IContainer, ApplyExecPhasesEnum, ApplyExecCleanersRegistry, IValidation, IEvaluation,
 )
 from .fields import (
         FieldBase,
@@ -82,11 +79,11 @@ from .valid_items    import ItemsValidationBase
 from .eval_items     import ItemsEvaluationBase
 
 from .containers import (
-        ContainerBase,
-        MissingKey,
-        Entity,
-        SubEntityItems,
-        )
+    ContainerBase,
+    MissingKey,
+    Entity,
+    SubEntityItems,
+)
 
 
 class UseApplyStackFrameCtxManager(UseStackFrameCtxManagerBase):
@@ -183,14 +180,6 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    # def use_stack_frame(self, frame: ApplyStackFrame) -> UseApplyStackFrameCtxManager:
-    #     if not isinstance(frame, ApplyStackFrame):
-    #         raise EntityInternalError(owner=self, msg=f"Expected ApplyStackFrame, got frame: {frame}") 
-
-    #     return UseApplyStackFrameCtxManager(owner_session=self, frame=frame)
-
-    # ------------------------------------------------------------
-
     def raise_if_failed(self):
         if not self.finished:
             raise EntityApplyError(owner=self, msg="Apply process is not finished")
@@ -200,16 +189,24 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def _execute_cleaners(self,
-                          component: IComponent,
-                          validation_class: Type[ValidationBase],
-                          evaluation_class: Type[EvaluationBase],
-                          ) -> ExecResult:
-
+    def _register_exec_cleaners(self,
+                                validation_class: Type[ValidationBase],
+                                evaluation_class: Type[EvaluationBase],
+                                ) -> bool:
+        """
+        returns all_ok - bool
+        """
         assert issubclass(validation_class, ValidationBase)
         assert issubclass(evaluation_class, EvaluationBase)
 
-        # TODO: provide last value to all evaluations and validations 
+        component = self.current_frame.component
+
+        current_stack_frame = dataclass_clone(self.current_frame)
+
+        validation_list: List[IValidation] = []
+        evaluation_list: List[IEvaluation] = []
+
+        # TODO: provide last value to all evaluations and validations
         #       but be careful with dexp_result.value - it coluld be unadapted
         #       see: field.try_adapt_value(eval_value)
         all_ok = True
@@ -230,26 +227,43 @@ class ApplyResult(IApplyResult):
                     # --- 3.a. run validations
                     # returns validation_failure
                     if not self.defaults_mode:
-                        if self._execute_validation(component=component, validation=cleaner):
-                            all_ok = False
+                        validation_list.append(cleaner)
+                        # ORIG: if self._execute_validation(validation=cleaner):
+                        # ORIG:     all_ok = False
                 elif isinstance(cleaner, evaluation_class):
                     # --- 3.b. run evaluation
                     # if not bind_dexp_result:
                     #     # TODO: this belongs to Setup phase
                     #     raise EntityApplyError(owner=self, msg="Evaluation can be defined only for components with 'bind' defined. Remove 'Evaluation' or define 'bind'.")
-                    self._execute_evaluation(component=component, evaluation=cleaner)
+                    evaluation_list.append(cleaner)
+                    # ORIG: self._execute_evaluation(evaluation=cleaner)
                 elif not (isinstance(cleaner, ValidationBase) or  
                           isinstance(cleaner, EvaluationBase)):
                     raise EntityApplyError(owner=self, msg=f"Unknown cleaner type {type(cleaner)}. Expected *Evaluation or *Validation.")
+
+        if evaluation_list:
+            self.exec_cleaners_registry.register_cleaner_list(
+                apply_exec_phase=ApplyExecPhasesEnum.EVALUATIONS_PHASE,
+                stack_frame=current_stack_frame,
+                cleaner_list=evaluation_list,
+            )
+
+        if validation_list:
+            self.exec_cleaners_registry.register_cleaner_list(
+                apply_exec_phase=ApplyExecPhasesEnum.VALIDATIONS_PHASE,
+                stack_frame=current_stack_frame,
+                cleaner_list=validation_list,
+            )
 
         return all_ok
 
     # ------------------------------------------------------------
 
-    def _execute_evaluation(self, component: IComponent, evaluation:EvaluationBase) -> ExecResult:
+    def _execute_evaluation(self, evaluation:EvaluationBase) -> bool:
         """ Execute evaluation and if new value is different from existing
             value, update current instance """
         assert isinstance(evaluation, EvaluationBase)
+        component: IComponent = self.current_frame.component
         assert component == evaluation.parent
 
         if not component == self.current_frame.component:
@@ -279,16 +293,17 @@ class ApplyResult(IApplyResult):
                     new_value=eval_value
                     )
 
-        return eval_dexp_result
+        return True     # ex. eval_dexp_result
 
     # ------------------------------------------------------------
 
     # value: Any, 
-    def _execute_validation(self, component: IComponent, validation:ValidationBase) -> Optional[ValidationFailure]:
+    def _execute_validation(self, validation:ValidationBase) -> Optional[ValidationFailure]:
         """ Execute validaion - if returns False value then register error and
             mark component and children invalid to prevent further entity execution
         """
         assert isinstance(validation, ValidationBase)
+        component: IComponent = self.current_frame.component
         assert component == validation.parent
         assert not self.defaults_mode
 
@@ -308,7 +323,7 @@ class ApplyResult(IApplyResult):
     def register_instance_attr_change(self,
                                       component: IComponent,
                                       dexp_result: ExecResult,
-                                      new_value: Any,
+                                      new_value: LiteralType,
                                       is_from_init_bind:bool=False) -> InstanceAttrValue:
 
         # NOTE: new_value is required - since dexp_result.value
@@ -401,7 +416,13 @@ class ApplyResult(IApplyResult):
 
                 current_instance_parent = None
                 current_instance = parent_instance
-                for anr, attr_name in  enumerate(attr_name_path,0):
+                attr_name_last = UNDEFINED
+
+                # Attribute path example: "M.access.alive".
+                # Only last, i.e. "alive" in this example, will be updated,
+                # and this for loop reaches instance and current value in this case.
+                for anr, attr_name in enumerate(attr_name_path,0):
+                    attr_name_last = attr_name
                     if current_instance is None:
                         if self.instance_none_mode:
                             # Create all missing intermediate empty dataclass objects 
@@ -445,11 +466,12 @@ class ApplyResult(IApplyResult):
 
                     # self.instance_shadow_dc = temp_dataclass_model()
 
-                # ----------------------------------------
-                # Finally change instance value
-                # ----------------------------------------
+                # ----------------------------------------------------
+                # Finally change instance value by last attribute name
+                # ----------------------------------------------------
+                assert attr_name_last
                 value_accessor.set_value(instance=current_instance_parent,
-                                         attr_name=attr_name,
+                                         attr_name=attr_name_last,
                                          attr_index=None,
                                          new_value=new_value)
                 # setattr(current_instance_parent, attr_name, new_value)
@@ -485,7 +507,7 @@ class ApplyResult(IApplyResult):
                # see dox below
                mode_dexp_dependency: bool = False,
                top_call: bool = False,
-        ) -> bool:
+        ) -> NoneType:
         """
         Main entry function 'apply' logic.
         Return value is "process further / all ok" - not used by caller.
@@ -588,11 +610,12 @@ class ApplyResult(IApplyResult):
 
         if depth>0 and not mode_subentity_items and component.is_subentity_items():
             # ---- SubEntityItems - RECURSION & finish -----
-            return self._apply_subentity_items(
+            self._apply_subentity_items(
                 subentity_items=component,
                 in_component_only_tree=in_component_only_tree,
                 depth=depth,
             )
+            return
             # -----------------------------------------------
 
         new_frame = self._create_apply_stack_frame_for_component(
@@ -633,12 +656,15 @@ class ApplyResult(IApplyResult):
                     # ============================================================
                     # Update, validate, evaluate
                     # ============================================================
-                    all_ok, current_value_instance_new = self._update_and_clean(component=component, key_string=comp_key_str)
-                    process_further = all_ok
-                    # ============================================================
-                    if current_value_instance_new is not None:
-                        # NOTE: not used later on
-                        current_value_instance = current_value_instance_new
+                    # all_ok, current_value_instance_new = self._update_and_clean(component=component, key_string=comp_key_str)
+                    # process_further = all_ok
+                    # # ============================================================
+                    # if current_value_instance_new is not None:
+                    #     # NOTE: not used later on
+                    #     current_value_instance = current_value_instance_new
+                    self._update_and_register_exec_cleaners(component=component)
+                    # , key_string=comp_key_str
+
 
                 if process_further and getattr(component, "enables", None):
                     assert not getattr(component, "contains", None), component
@@ -692,17 +718,21 @@ class ApplyResult(IApplyResult):
                     with self.use_changed_current_stack_frame(
                         this_registry=this_registry
                     ):
-                        all_ok = self._execute_cleaners(component,
-                                validation_class=ChildrenValidationBase,
-                                evaluation_class=ChildrenEvaluationBase,
-                                )
-                    # TODO: not used later
-                    process_further = all_ok
+                        # ORIG: all_ok = \
+                        self._register_exec_cleaners(validation_class=ChildrenValidationBase,
+                                                     evaluation_class=ChildrenEvaluationBase)
+                    # ORIG: # TODO: not used later
+                    # ORIG: process_further = all_ok
 
             # if self.current_frame.component.is_container():
             # Fill internal cache for possible later use by some `dump_` functions
 
         if depth==0:
+            self.finish()
+            self._execute_all_evaluations()
+            self._execute_all_validations()
+            self._execute_all_finish_components()
+
             self._apply_collect_changed_values()
 
         # TODO: logger: apply_result.config.logger.debug(f"depth={depth}, comp={component.name}, bind={bind} => {dexp_result}")
@@ -715,7 +745,44 @@ class ApplyResult(IApplyResult):
                                dataclass_klass=self.bound_model.model,
                                values_dict=kwargs)
 
-        return process_further
+        return #  process_further
+
+    # ------------------------------------------------------------
+
+    def _execute_all_evaluations(self) -> bool:
+        # print(f"exec-evaluations")
+        for exec_cleaner in self.exec_cleaners_registry.get_cleaners(ApplyExecPhasesEnum.EVALUATIONS_PHASE):
+            # print(f"  exec: {exec_cleaner}")
+            with self.use_stack_frame(exec_cleaner.stack_frame):
+                assert exec_cleaner.cleaner_list
+                for cleaner in exec_cleaner.cleaner_list:
+                    self._execute_evaluation(evaluation=cleaner)
+
+
+    # ------------------------------------------------------------
+
+    def _execute_all_validations(self) -> bool:
+        # print(f"exec-validations")
+        all_ok = True
+        for exec_cleaner in self.exec_cleaners_registry.get_cleaners(ApplyExecPhasesEnum.VALIDATIONS_PHASE):
+            # print(f"  exec: {exec_cleaner}")
+            with self.use_stack_frame(exec_cleaner.stack_frame):
+                for cleaner in exec_cleaner.cleaner_list:
+                    if self._execute_validation(validation=cleaner):
+                        all_ok = False
+
+        return all_ok
+
+    # ------------------------------------------------------------
+
+    def _execute_all_finish_components(self):
+        for exec_cleaner in self.exec_cleaners_registry.get_cleaners(ApplyExecPhasesEnum.FINISH_COMPONENTS_PHASE):
+            with self.use_stack_frame(exec_cleaner.stack_frame):
+                assert not exec_cleaner.cleaner_list
+                component = self.current_frame.component
+                comp_key_str = self.get_key_string(component)
+                self._finish_component(comp_key_str)
+        return
 
     # ------------------------------------------------------------
 
@@ -741,8 +808,8 @@ class ApplyResult(IApplyResult):
         instance = dexp_result.value
 
         # new instance if any
-        current_instance_new = self._get_current_instance_new(
-            component=subentity,
+        current_instance_new = self._get_subentity_current_instance_new(
+            subentity=subentity,
             in_component_only_tree=in_component_only_tree)
 
         return instance, current_instance_new
@@ -871,10 +938,10 @@ class ApplyResult(IApplyResult):
     # ------------------------------------------------------------
 
     def _apply_subentity_items(self,
-                               subentity_items: IContainer,
+                               subentity_items: SubEntityItems,
                                in_component_only_tree:bool,
                                depth: int,
-                               ) -> bool:
+                               ) -> NoneType:
         """
         SubEntityItems with item List
         Recursion -> _apply(mode_subentity_items=True) -> ...
@@ -951,7 +1018,7 @@ class ApplyResult(IApplyResult):
                 item_instance_new = None
 
             if key in instances_by_key:
-                raise EntityApplyValueError(owenr=self, msg=f"Found duplicate key {key}:\n  == {instance}\n  == {instances_by_key[key]}")
+                raise EntityApplyValueError(owner=self, msg=f"Found duplicate key {key}:\n  == {instance}\n  == {instances_by_key[key]}")
 
             instances_by_key[key] = (instance, index0, item_instance_new)
 
@@ -1012,6 +1079,8 @@ class ApplyResult(IApplyResult):
             # TODO: consider to reset - although should not influence since stack_frame will be disposed
             # self.current_frame.set_parent_values_subtree(parent_values_subtree)
 
+        this_registry = subentity_items.get_this_registry()
+
         with self.use_stack_frame(
                 ApplyStackFrame(
                     component = subentity_items,
@@ -1022,21 +1091,21 @@ class ApplyResult(IApplyResult):
                     container = subentity_items,
                     parent_instance=self.current_frame.instance,
                     in_component_only_tree=in_component_only_tree,
+                    this_registry=this_registry,
                     # NOTE: instance_new skipped - (contains list of
                     #       new items) are already applied
                 )) as current_frame:
-
-            # setup this registry
-            current_frame.set_this_registry(
-                subentity_items.get_this_registry()
-            )
+            # # NOTE: old logic - if will make problems, return back:
+            # # setup this registry
+            # current_frame.set_this_registry(
+            #     subentity_items.get_this_registry()
+            # )
 
             # finally apply validations on list of items
-            all_ok = self._execute_cleaners(subentity_items,
-                                            validation_class=ItemsValidationBase,
-                                            evaluation_class=ItemsEvaluationBase,
-                                            )
-        return all_ok
+            # ORIG: all_ok = \
+            self._register_exec_cleaners(validation_class=ItemsValidationBase,
+                                         evaluation_class=ItemsEvaluationBase)
+        return #  all_ok
 
     # ------------------------------------------------------------
 
@@ -1063,19 +1132,18 @@ class ApplyResult(IApplyResult):
                 component=self.entity,
                 top_call=True,
                 )
-        self.finish()
 
         return self
 
     # ------------------------------------------------------------
 
-    def get_instance_by_key_string(self, key_string: str) -> ModelType:
+    def get_instance_by_key_string(self, key_string: KeyString) -> ModelType:
         " must exist in cache - see previous method which sets self.get_key_string_by_instance(container) "
         return self.instance_by_key_string_cache[key_string]
 
     # ------------------------------------------------------------
 
-    def _detect_instance_new_struct_type(self, component: IComponent) -> StructEnum:
+    def _detect_instance_new_struct_type(self, component: IComponent) -> None:
 
         assert self.instance_new not in (None, UNDEFINED)
 
@@ -1106,32 +1174,29 @@ class ApplyResult(IApplyResult):
                     msg=f"Object '{instance_to_test}' is not instance of bound model '{model}' and not model class: {type(instance_to_test)}.")
 
         self.instance_new_struct_type = instance_new_struct_type
-        # return instance_new_struct_type
-
+        # return instance_new_struct_type: StructEnum
 
     # ------------------------------------------------------------
 
-
-    def _get_current_instance_new(self, component: IComponent, in_component_only_tree:bool):
+    def _get_subentity_current_instance_new(self, subentity: IContainer, in_component_only_tree:bool):
         if self.instance_new_struct_type is None:
             current_instance_new = None
         elif self.instance_new_struct_type == StructEnum.MODELS_LIKE:
-            assert isinstance(component.bound_model.model, DotExpression), component.bound_model.model
+            assert isinstance(subentity.bound_model.model, DotExpression), subentity.bound_model.model
 
             if self.current_frame.instance_new not in (None, UNDEFINED):
 
                 # if partial - then dexp must know - this value is set only in this case
-                if in_component_only_tree and component is self.component_only:
+                if in_component_only_tree and subentity is self.component_only:
                     # SubEntityItems or FieldGroup is root
-                    on_component_only = component
+                    on_component_only = subentity
                 else:
                     on_component_only = None
 
-                # container = component.get_first_parent_container(consider_self=True) if not component.is_subentity() else component
                 with self.use_stack_frame(
                         ApplyStackFrame(
                             container = self.current_frame.container, 
-                            component = self.current_frame.component, 
+                            component = self.current_frame.component,
                             # only this is changed
                             instance = self.current_frame.instance_new,
                             # should not be used
@@ -1139,7 +1204,7 @@ class ApplyResult(IApplyResult):
                             on_component_only=on_component_only,
                         )) as frame:
                     dexp_result: ExecResult = \
-                                        component \
+                                        subentity \
                                         .bound_model \
                                         .model \
                                         ._evaluator.execute_dexp(
@@ -1148,14 +1213,14 @@ class ApplyResult(IApplyResult):
                 # set new value
                 current_instance_new = dexp_result.value
                 if frame.bound_model_root.type_info.is_list and not isinstance(current_instance_new, (list, tuple)):
-                    # TODO: 
+                    # TODO: temp fallback - resolve properly since this is not normal case ... (raise or ...)
                     current_instance_new = [current_instance_new]
             else:
                 current_instance_new = None
 
         elif self.instance_new_struct_type == StructEnum.ENTITY_LIKE:
             exec_result = self.get_attr_value_by_comp_name(
-                                component=component, 
+                                component=subentity,
                                 instance=self.current_frame.instance_new)
             current_instance_new = exec_result.value
         else: 
@@ -1168,7 +1233,9 @@ class ApplyResult(IApplyResult):
     # _update_and_clean - Update, validate, evaluate
     # ============================================================
 
-    def _update_and_clean(self, component: IComponent, key_string=KeyString) -> (bool, InstanceAttrCurrentValue):
+    def _update_and_register_exec_cleaners(self, component: IComponent):
+        # -> (bool, InstanceAttrCurrentValue):
+        # , key_string: KeyString
         """ returns if children should be processed 
                 False - when available yields False
                 False - when validation fails
@@ -1184,12 +1251,14 @@ class ApplyResult(IApplyResult):
             4. validate type is ok?
         """
 
-        if getattr(component, "available", None):
-            not_available_dexp_result = execute_available_dexp(
-                                                component.available, 
-                                                apply_result=self)
-            if not_available_dexp_result: 
-                return False, None
+        # TODO: available_old_logic - since "available" can use other FieldNS.<name> values
+        #       and they are not yet evaluated, that can lead to inconsistent state. Disabling for now.
+        # ORIG: if getattr(component, "available", None):
+        # ORIG:     not_available_dexp_result = execute_available_dexp(
+        # ORIG:                                         component.available,
+        # ORIG:                                         apply_result=self)
+        # ORIG:     if not_available_dexp_result:
+        # ORIG:         return  #  False , None
 
         if isinstance(component, IField):
             assert getattr(component, "bind", None)
@@ -1217,21 +1286,61 @@ class ApplyResult(IApplyResult):
             bind_dexp_result = None  # noqa: F841
 
         # NOTE: bind_dexp_result not used
-        all_ok = self._execute_cleaners(component,
-                validation_class=FieldValidationBase,
-                evaluation_class=FieldEvaluationBase,
-                )
+        # ORIG: all_ok = \
+        all_ok = True
+        self._register_exec_cleaners(validation_class=FieldValidationBase,
+                                     evaluation_class=FieldEvaluationBase)
 
+        self.exec_cleaners_registry.register_stack_frame_only(
+            apply_exec_phase=ApplyExecPhasesEnum.FINISH_COMPONENTS_PHASE,
+            stack_frame=self.current_frame,
+        )
+
+        # ORIG: if self.defaults_mode and isinstance(component, FieldBase):
+        # ORIG:     # NOTE: change NA_DEFAULTS_MODE to most reasonable and
+        # ORIG:     #       common empty value -> None
+        # ORIG:     value = self.get_current_value(component, strict=False)
+        # ORIG:     if value is NA_DEFAULTS_MODE:
+        # ORIG:         self.register_instance_attr_change(
+        # ORIG:                 component=component,
+        # ORIG:                 dexp_result=None,
+        # ORIG:                 new_value=None
+        # ORIG:                 )
+
+        # ORIG: # --- 4.1 finalize last value and mark as finished
+        # ORIG: current_value_instance = self.current_values[key_string]
+        # ORIG: if current_value_instance is NA_IN_PROGRESS:
+        # ORIG:     current_value_instance = NOT_APPLIABLE
+        # ORIG:     self.current_values[key_string] = current_value_instance
+
+        # ORIG: elif current_value_instance is not UNDEFINED \
+        # ORIG:   and current_value_instance is not NOT_APPLIABLE:
+
+        # ORIG:     if not isinstance(current_value_instance, InstanceAttrCurrentValue):
+        # ORIG:         raise EntityInternalError(owner=self, msg=f"Unexpected current value instance found for {key_string}, got: {current_value_instance}")
+        # ORIG:     current_value_instance.mark_finished()
+
+        # ORIG: # --- 4.2 validate type is ok?
+        # ORIG: # NOTE: initial value from instance is not checked - only
+        # ORIG: #       intermediate and the last value (returns validation_failure)
+        # ORIG: if self.validate_type(component, strict=True):
+        # ORIG:     all_ok = False
+
+        return  #  all_ok, current_value_instance
+
+    def _finish_component(self, key_string: str) -> bool:
+        all_ok = True
+        component = self.current_frame.component
         if self.defaults_mode and isinstance(component, FieldBase):
             # NOTE: change NA_DEFAULTS_MODE to most reasonable and
             #       common empty value -> None
             value = self.get_current_value(component, strict=False)
             if value is NA_DEFAULTS_MODE:
                 self.register_instance_attr_change(
-                        component=component, 
-                        dexp_result=None,
-                        new_value=None
-                        )
+                    component=component,
+                    dexp_result=None,
+                    new_value=None
+                )
 
 
         # --- 4.1 finalize last value and mark as finished
@@ -1241,12 +1350,11 @@ class ApplyResult(IApplyResult):
             self.current_values[key_string] = current_value_instance
 
         elif current_value_instance is not UNDEFINED \
-          and current_value_instance is not NOT_APPLIABLE:
+                and current_value_instance is not NOT_APPLIABLE:
 
             if not isinstance(current_value_instance, InstanceAttrCurrentValue):
-                raise EntityInternalError(owner=self, msg=f"Unexpected current value instance found for {key_string}, got: {current_value_instance}")  
+                raise EntityInternalError(owner=self, msg=f"Unexpected current value instance found for {key_string}, got: {current_value_instance}")
             current_value_instance.mark_finished()
-
 
         # --- 4.2 validate type is ok?
         # NOTE: initial value from instance is not checked - only
@@ -1254,7 +1362,7 @@ class ApplyResult(IApplyResult):
         if self.validate_type(component, strict=True):
             all_ok = False
 
-        return all_ok, current_value_instance
+        return all_ok
 
     # ------------------------------------------------------------
 
@@ -1293,7 +1401,6 @@ class ApplyResult(IApplyResult):
         updated = False
         if self.current_frame.instance_new not in (None, UNDEFINED):
             if self.instance_new_struct_type == StructEnum.MODELS_LIKE:
-
                 with self.use_stack_frame(
                         ApplyStackFrame(container=self.current_frame.container, 
                                    component=self.current_frame.component, 

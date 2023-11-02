@@ -85,7 +85,6 @@ from .expressions import (
     ISetupSession,
     IThisRegistry,
     DEXP_VALIDATOR_FOR_BIND,
-    clean_available,
 )
 from .attr_nodes import (
     AttrDexpNode
@@ -164,7 +163,8 @@ class FieldBase(IField, ABC):
 
     description:    Optional[TransMessageType] = field(repr=False, default=None)
 
-    available:      Union[bool, DotExpression] = field(repr=False, default=True)
+    # NOTE: see available_old_logic
+    #   available:      Union[bool, DotExpression] = field(repr=False, default=True)
 
     # if enables is filled - then it Supports Children* cleaners too since it can have nested field hierarchy
     cleaners:       Optional[List[Union[ChildrenValidationBase, ChildrenEvaluationBase, FieldValidationBase, FieldEvaluationBase]]] = field(repr=False, default_factory=list)
@@ -222,7 +222,8 @@ class FieldBase(IField, ABC):
 
         self.autocomputed = AutocomputedEnum.from_value(self.autocomputed)
 
-        clean_available(owner=self, attr_name="available", dexp_or_bool=self.available)
+        # NOTE: see available_old_logic
+        # clean_available(owner=self, attr_name="available", dexp_or_bool=self.available)
 
         self._check_cleaners(self._allowed_cleaner_base_list)
 
@@ -479,10 +480,14 @@ class BooleanField(FieldBase):
 class ChoiceOption:
     value:      DotExpression # -> some Standard or Complex type
     title:      TransMessageType
-    available:  Optional[Union[DotExpression,bool]] = True # Dexp returns bool
+    # NOTE: see available_old_logic
+    # available:  Optional[Union[DotExpression,bool]] = True # Dexp returns bool
 
     def __post_init__(self):
-        clean_available(owner=self, attr_name="available", dexp_or_bool=self.available)
+        ...
+        # NOTE: see available_old_logic
+        #   clean_available(owner=self, attr_name="available", dexp_or_bool=self.available)
+
 
 
 @dataclass
@@ -838,10 +843,12 @@ class FieldGroup(IComponent, IFieldGroup):
     name:           Optional[str] = field(default=None)
     title:          Optional[TransMessageType] = field(repr=False, default=None)
     cleaners:       Optional[List[Union[ChildrenValidationBase, ChildrenEvaluationBase]]] = field(repr=False, default_factory=list)
-    available:      Union[bool, DotExpression] = field(repr=False, default=True)
+    # NOTE: see available_old_logic
+    #   available:      Union[bool, DotExpression] = field(repr=False, default=True)
 
     def __post_init__(self):
-        clean_available(owner=self, attr_name="available", dexp_or_bool=self.available)
+        # NOTE: see available_old_logic
+        #   clean_available(owner=self, attr_name="available", dexp_or_bool=self.available)
         self._check_cleaners([ChildrenValidationBase, ChildrenEvaluationBase])
         super().__post_init__()
 

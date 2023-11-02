@@ -404,7 +404,8 @@ class RegistryBase(IRegistry):
         """
         # can return DotExpression / class member / object member
         # TODO: circ dep?
-        assert isinstance(dexp_node_name, str), dexp_node_name
+        if not isinstance(dexp_node_name, str):
+            raise EntityInternalError(owner=self, msg=f"dexp_node_name is not a string, got: {dexp_node_name}")
 
         if dexp_node_name.startswith("_"):
             raise EntitySetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': AttrDexpNode '{dexp_node_name}' is invalid, should not start with _")

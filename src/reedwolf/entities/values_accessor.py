@@ -7,8 +7,7 @@ from abc import abstractmethod
 from inspect import isclass
 from typing import (
     Dict,
-    List,
-    Any,
+    Any, Optional,
 )
 
 from .exceptions import (
@@ -52,12 +51,12 @@ class IValueAccessor:
 
     @staticmethod
     @abstractmethod
-    def get_value(instance: ModelType, attr_name: AttrName, attr_index: AttrIndex) -> AttrValue:
+    def get_value(instance: ModelType, attr_name: AttrName, attr_index: Optional[AttrIndex]) -> AttrValue:
         ...
 
     @staticmethod
     @abstractmethod
-    def set_value(instance: ModelType, attr_name: AttrName, attr_index: AttrIndex, new_value: AttrValue) -> None:
+    def set_value(instance: ModelType, attr_name: AttrName, attr_index: Optional[AttrIndex], new_value: AttrValue) -> None:
         ...
 
 
@@ -76,11 +75,11 @@ class AttributeValueAccessor(IValueAccessor):
             raise EntityTypeError(owner=self, msg=f"Expecting instance of bound model '{model_type}', got: {type(instance)} / {to_repr(instance)}.")
 
     @staticmethod
-    def get_value(instance: ModelType, attr_name: AttrName, attr_index: AttrIndex) -> AttrValue:
+    def get_value(instance: ModelType, attr_name: AttrName, attr_index: Optional[AttrIndex]) -> AttrValue:
         return getattr(instance, attr_name, UNDEFINED)
 
     @staticmethod
-    def set_value(instance: ModelType, attr_name: AttrName, attr_index: AttrIndex, new_value: AttrValue) -> None:
+    def set_value(instance: ModelType, attr_name: AttrName, attr_index: Optional[AttrIndex], new_value: AttrValue) -> None:
         setattr(instance, attr_name, new_value)
 
 
@@ -100,13 +99,13 @@ class DictValueAccessor(IValueAccessor):
             raise EntityTypeError(owner=owner_name, msg=f"Expecting a dict instance, got: {type(instance)} / {to_repr(instance)}.")
 
     @staticmethod
-    def get_value(instance: Dict, attr_name: AttrName, attr_index: AttrIndex) -> AttrValue:
+    def get_value(instance: Dict, attr_name: AttrName, attr_index: Optional[AttrIndex]) -> AttrValue:
         if not isinstance(instance, dict):
             raise EntityTypeError(msg=f"Expecting a dict, got: {attr_name} : {type(instance)} == {to_repr(instance)}")
         return instance.get(attr_name, UNDEFINED)
 
     @staticmethod
-    def set_value(instance: Dict, attr_name: AttrName, attr_index: AttrIndex, new_value: AttrValue) -> None:
+    def set_value(instance: Dict, attr_name: AttrName, attr_index: Optional[AttrIndex], new_value: AttrValue) -> None:
         if not isinstance(instance, dict):
             raise EntityTypeError(msg=f"Expecting a dict, got: {attr_name} : {type(instance)} == {to_repr(instance)}")
         instance[attr_name] = new_value
