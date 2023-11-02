@@ -254,7 +254,7 @@ class ApplyResult(IApplyResult):
 
         if not component == self.current_frame.component:
             raise EntityInternalError(owner=self.current_frame.component, 
-                    msg=f"Component in frame {self.current_frame.component} must match component: {component}") 
+                    msg=f"Component in frame {self.current_frame.component} must match component: {component}")
 
         # evaluation_dexp = evaluation.value
         # assert isinstance(evaluation_dexp, DotExpression)
@@ -294,7 +294,7 @@ class ApplyResult(IApplyResult):
 
         if not component == self.current_frame.component:
             raise EntityInternalError(owner=self.current_frame.component, 
-                    msg=f"Component in frame {self.current_frame.component} must match component: {component}") 
+                    msg=f"Component in frame {self.current_frame.component} must match component: {component}")
 
         # value=value, 
         validation_failure = validation.validate(apply_result=self)
@@ -586,108 +586,21 @@ class ApplyResult(IApplyResult):
         if depth > MAX_RECURSIONS:
             raise EntityInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
 
-        new_frame = None
-
-        if depth==0:
-            # ---- Entity case -----
-            container: IContainer = component
-
-            # NOTE: frame not yet set so 'self.current_frame.instance' is not available
-            #       thus sending 'instance' param
-            container.bound_model._apply_nested_models(
-                                        apply_result=self, 
-                                        instance=self.instance
-                                        )
-            new_frame = ApplyStackFrame(
-                            container = container,
-                            component = container,
-                            instance = self.instance,
-                            instance_new = self.instance_new,
-                            in_component_only_tree=in_component_only_tree,
-                            )
-
-        elif not mode_subentity_items and component.is_subentity():
-            # ---- SubEntityItems case -> process single or iterate all items -----
-            component : SubEntityItems = component
-            if not isinstance(component.bound_model.model, DotExpression):
-                raise EntityInternalError(owner=self, msg=f"For SubEntityItems `bound_model` needs to be DotExpression, got: {component.bound_model.model}") 
-
-            if getattr(component.bound_model, "contains", None):
-                raise EntityInternalError(owner=self, msg=f"For SubEntityItems complex `bound_model` is currently not supported (e.g. `contains`), use simple BoundModel, got: {component.bound_model}") 
-
-            # original instance
-            dexp_result: ExecResult = component.bound_model.model \
-                                        ._evaluator.execute_dexp(apply_result=self)
-            instance = dexp_result.value
-
-            # new instance if any
-            current_instance_new = self._get_current_instance_new(
-                                            component=component,
-                                            in_component_only_tree=in_component_only_tree)
-
-            if component.is_subentity_items():
-                # RECURSION & finish
-                return self._apply_subentity_items(
-                        component=component,
-                        in_component_only_tree=in_component_only_tree,
-                        instance_list=instance,
-                        current_instance_list_new=current_instance_new,
-                        depth=depth,
-                        )
-                # ========================================
-
-            # ---- SubEntitySingle case
-            if not component.is_subentity_single():
-                raise EntityApplyValueError(owner=component, msg=f"Did not expect single instance: {to_repr(instance)}") 
-
-            # ========================================
-            # == SubEntityItems with single item ==
-            #    will be processed as any other fields
-            # ========================================
-            if instance is None:
-                # TODO: check that type_info.is_optional ...
-                ...
-            elif isinstance(instance, (list, tuple)):
-                raise EntityApplyValueError(owner=component, msg=f"Did not expected list/tuple, got: {instance} : {type(instance)}")
-
-            elif not is_model_instance(instance):
-                raise EntityApplyValueError(owner=component, msg=f"Expected single model instance, got: {instance} : {type(instance)}")
-
-            new_frame = ApplyStackFrame(
-                            container = component, 
-                            component = component, 
-                            # must inherit previous instance
-                            parent_instance=self.current_frame.instance,
-                            instance = instance,
-                            instance_new = current_instance_new,
-                            in_component_only_tree=in_component_only_tree,
-                            )
-
-        # ------------------------------------------------------------
-
-        if not new_frame:
-            # -- Fallback case --
-            # register non-container frame - only component is new. take instance from previous frame
-            new_frame = ApplyStackFrame(
-                            component = component, 
-                            # copy
-                            instance = self.current_frame.instance,
-                            container = self.current_frame.container, 
-                            in_component_only_tree=in_component_only_tree,
-                            # automatically copied
-                            #   instance_new = self.current_frame.instance_new,
-                            #   index0 = self.current_frame.index0,
-                            )
-
-        # ------ common setup for the new_frame ----------
-        # one level deeper
-        new_frame.depth = depth + 1
-        if isinstance(component, IField):
-            #assert getattr(component, "bind", None)
-            #assert not component.is_container()
-            new_frame.set_this_registry(
-                component.get_this_registry()
+        if depth>0 and not mode_subentity_items and component.is_subentity_items():
+            # ---- SubEntityItems - RECURSION & finish -----
+            return self._apply_subentity_items(
+                subentity_items=component,
+                in_component_only_tree=in_component_only_tree,
+                depth=depth,
             )
+            # -----------------------------------------------
+
+        new_frame = self._create_apply_stack_frame_for_component(
+                                          component=component,
+                                          depth=depth,
+                                          in_component_only_tree=in_component_only_tree,
+                                          mode_subentity_items=mode_subentity_items,
+                                          )
 
         # ------------------------------------------------------------
         # ----- Main processing - must use new stack frame
@@ -706,7 +619,7 @@ class ApplyResult(IApplyResult):
 
             if current_value_instance is NA_IN_PROGRESS:
                 raise EntityApplyError(owner=component, 
-                            msg="The component is already in progress state. Probably circular dependency issue. Fix problematic references to this component and try again.") 
+                            msg="The component is already in progress state. Probably circular dependency issue. Fix problematic references to this component and try again.")
             elif current_value_instance is UNDEFINED:
                 self.current_values[comp_key_str] = NA_IN_PROGRESS
 
@@ -806,6 +719,123 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
+    def _get_subentity_model_instances(self,
+                                       subentity: IContainer,
+                                       in_component_only_tree: bool
+                                       ) -> Tuple[ModelType, ModelType]:
+        """
+        evaluate bound_model.model DotExpression and get instance
+        and instance_new. Applies to SubentityItems and SubentitySingle.
+        """
+        if not isinstance(subentity.bound_model.model, DotExpression):
+            raise EntityInternalError(owner=self,
+                                      msg=f"For SubEntityItems `bound_model` needs to be DotExpression, got: {subentity.bound_model.model}")
+
+        if getattr(subentity.bound_model, "contains", None):
+            raise EntityInternalError(owner=self,
+                                      msg=f"For SubEntityItems complex `bound_model` is currently not supported (e.g. `contains`), use simple BoundModel, got: {subentity.bound_model}")
+
+            # original instance
+        dexp_result: ExecResult = subentity.bound_model.model \
+            ._evaluator.execute_dexp(apply_result=self)
+        instance = dexp_result.value
+
+        # new instance if any
+        current_instance_new = self._get_current_instance_new(
+            component=subentity,
+            in_component_only_tree=in_component_only_tree)
+
+        return instance, current_instance_new
+
+    # ------------------------------------------------------------
+
+    def _create_apply_stack_frame_for_component(self,
+                                                component: IComponent,
+                                                depth: int,
+                                                in_component_only_tree: bool,
+                                                mode_subentity_items: bool,
+                                                ) -> ApplyStackFrame:
+        new_frame = None
+
+        if depth==0:
+            # ---- Entity case -----
+            container: IContainer = component
+
+            # NOTE: frame not yet set so 'self.current_frame.instance' is not available
+            #       thus sending 'instance' param
+            container.bound_model._apply_nested_models(
+                apply_result=self,
+                instance=self.instance
+            )
+            new_frame = ApplyStackFrame(
+                container = container,
+                component = container,
+                instance = self.instance,
+                instance_new = self.instance_new,
+                in_component_only_tree=in_component_only_tree,
+            )
+
+        elif not mode_subentity_items and component.is_subentity():
+
+            # ---- SubEntityItems case -> process single or iterate all items -----
+            instance, current_instance_new = self._get_subentity_model_instances(
+                component, in_component_only_tree)
+
+            # ---- SubEntitySingle case
+            if not component.is_subentity_single():
+                raise EntityApplyValueError(owner=component, msg=f"Did not expect single instance: {to_repr(instance)}")
+
+            # ========================================
+            # == SubEntityItems with single item ==
+            #    will be processed as any other fields
+            # ========================================
+            if instance is None:
+                # TODO: check that type_info.is_optional ...
+                ...
+            elif isinstance(instance, (list, tuple)):
+                raise EntityApplyValueError(owner=component, msg=f"Did not expected list/tuple, got: {instance} : {type(instance)}")
+
+            elif not is_model_instance(instance):
+                raise EntityApplyValueError(owner=component, msg=f"Expected single model instance, got: {instance} : {type(instance)}")
+
+            new_frame = ApplyStackFrame(
+                container = component,
+                component = component,
+                # must inherit previous instance
+                parent_instance=self.current_frame.instance,
+                instance = instance,
+                instance_new = current_instance_new,
+                in_component_only_tree=in_component_only_tree,
+            )
+        else:
+            assert not new_frame
+            # -- Fallback case --
+            # register non-container frame - only component is new. take instance from previous frame
+            new_frame = ApplyStackFrame(
+                component = component,
+                # copy
+                instance = self.current_frame.instance,
+                container = self.current_frame.container,
+                in_component_only_tree=in_component_only_tree,
+                # automatically copied
+                #   instance_new = self.current_frame.instance_new,
+                #   index0 = self.current_frame.index0,
+            )
+        assert new_frame
+
+        # ------ common setup for the new_frame ----------
+        # one level deeper
+        new_frame.depth = depth + 1
+        if isinstance(component, IField):
+            #assert getattr(component, "bind", None)
+            #assert not component.is_container()
+            new_frame.set_this_registry(
+                component.get_this_registry()
+            )
+        return new_frame
+
+    # ------------------------------------------------------------
+
     def _apply_collect_changed_values(self):
         """
         For changed attributes -> collect original + new value
@@ -837,29 +867,30 @@ class ApplyResult(IApplyResult):
                     updated_values=updated_values,
                 ))
 
+
     # ------------------------------------------------------------
 
     def _apply_subentity_items(self,
-                               component: IComponent,
-                               # parent: Optional[IComponent],
+                               subentity_items: IContainer,
                                in_component_only_tree:bool,
-                               instance_list: List[ModelType],
-                               current_instance_list_new: Union[NoneType, UndefinedType, ModelType],
                                depth: int,
                                ) -> bool:
         """
         SubEntityItems with item List
         Recursion -> _apply(mode_subentity_items=True) -> ...
         """
+        instance_list, current_instance_list_new = self._get_subentity_model_instances(
+                    subentity_items, in_component_only_tree)
+
         if instance_list is None:
             # TODO: checkk type_info is optional - similar to single case
             ...
         elif not isinstance(instance_list, (list, tuple)):
-            raise EntityApplyValueError(owner=component, msg=f"Expecting list of instances, got: {to_repr(instance_list)}")
+            raise EntityApplyValueError(owner=subentity_items, msg=f"Expecting list of instances, got: {to_repr(instance_list)}")
 
         # ---- SubEntityItems case
-        if not component.is_subentity_items():
-            raise EntityApplyValueError(owner=component, msg=f"Did not expect list of instances: {to_repr(instance_list)}")
+        if not subentity_items.is_subentity_items():
+            raise EntityApplyValueError(owner=subentity_items, msg=f"Did not expect list of instances: {to_repr(instance_list)}")
             # enters recursion -> _apply() -> ...
         # parent_values_subtree = self.current_frame.parent_values_subtree
 
@@ -867,7 +898,7 @@ class ApplyResult(IApplyResult):
             # NOTE: found no better way to do it
             instance_list = []
         elif not isinstance(instance_list, (list, tuple)):
-            raise EntityApplyValueError(owner=self, msg=f"{component}: Expected list/tuple in the new instance, got: {current_instance_list_new}")
+            raise EntityApplyValueError(owner=self, msg=f"{subentity_items}: Expected list/tuple in the new instance, got: {current_instance_list_new}")
 
         # instance_list = instance
 
@@ -876,13 +907,13 @@ class ApplyResult(IApplyResult):
         new_instances_by_key = None
         if current_instance_list_new not in (None, UNDEFINED):
             if not isinstance(current_instance_list_new, (list, tuple)):
-                raise EntityApplyValueError(owner=self, msg=f"{component}: Expected list/tuple in the new instance, got: {current_instance_list_new}")
+                raise EntityApplyValueError(owner=subentity_items, msg=f"Expected list/tuple in the new instance, got: {current_instance_list_new}")
 
             new_instances_by_key = {}
             for index0, item_instance_new in enumerate(current_instance_list_new, 0):
-                key = component.get_key_pairs_or_index0(instance=item_instance_new, index0=index0, apply_result=self)
+                key = subentity_items.get_key_pairs_or_index0(instance=item_instance_new, index0=index0, apply_result=self)
                 if key in new_instances_by_key:
-                    raise EntityApplyValueError(owner=self, msg=f"{component}: Duplicate key {key}, first item is: {new_instances_by_key[key]}")
+                    raise EntityApplyValueError(owner=subentity_items, msg=f"Duplicate key {key}, first item is: {new_instances_by_key[key]}")
                 new_instances_by_key[key] = item_instance_new
 
 
@@ -893,8 +924,8 @@ class ApplyResult(IApplyResult):
         #       https://stackoverflow.com/questions/39980323/are-dictionaries-ordered-in-python-3-6
         instances_by_key = OrderedDict()
         for index0, instance in enumerate(instance_list, 0):
-            key = component.get_key_pairs_or_index0(instance=instance, index0=index0, apply_result=self)
-            if component.keys:
+            key = subentity_items.get_key_pairs_or_index0(instance=instance, index0=index0, apply_result=self)
+            if subentity_items.keys:
                 missing_keys = [kn for kn, kv in key if isinstance(kv, MissingKey)]
                 if missing_keys:
                     raise EntityApplyValueError(owner=self, msg=f"Instance {instance} has key(s) with value None, got: {', '.join(missing_keys)}")
@@ -903,7 +934,7 @@ class ApplyResult(IApplyResult):
                 item_instance_new = new_instances_by_key.get(key, UNDEFINED)
                 if item_instance_new is UNDEFINED:
                     key_string = self.get_key_string_by_instance(
-                            component = component, 
+                            component = subentity_items,
                             instance = instance, 
                             parent_instance=parent_instance,
                             index0 = index0)
@@ -933,7 +964,7 @@ class ApplyResult(IApplyResult):
                 item_instance_new = new_instances_by_key[key]
 
                 key_string = self.get_key_string_by_instance(
-                                component = component,
+                                component = subentity_items,
                                 instance = item_instance_new, 
                                 parent_instance=parent_instance,
                                 index0 = index0_new)
@@ -949,18 +980,17 @@ class ApplyResult(IApplyResult):
                 index0_new += 1
 
         # Apply for all items
-
         if instances_by_key:
 
             # -- fill values dict
-            self._fill_values_dict(filler="subentity_items", component=component, is_init=False, process_further=True, subentity_items_mode=True)
+            self._fill_values_dict(filler="subentity_items", component=subentity_items, is_init=False, process_further=True, subentity_items_mode=True)
 
             for key, (instance, index0, item_instance_new) in instances_by_key.items():
                 # Go one level deeper 
                 with self.use_stack_frame(
                         ApplyStackFrame(
-                            container = component,
-                            component = component, 
+                            container = subentity_items,
+                            component = subentity_items,
                             index0 = index0,
                             # main instance - original values
                             instance = instance, 
@@ -972,15 +1002,11 @@ class ApplyResult(IApplyResult):
                             depth=depth+1,
                             )):
                     # ------------------------------------------------
-                    # Recursion with prevention to hit this code again
+                    # RECURSION + prevent not to hit this code again
                     # ------------------------------------------------
                     self._apply(
-                                # parent=parent, 
-                                component=component, 
+                                component=subentity_items,
                                 mode_subentity_items=True,
-                                # in_component_only_tree=in_component_only_tree,
-                                # depth=depth+1,
-                                # prevent is_subentity_items_logic again -> infinitive recursion
                                 )
 
             # TODO: consider to reset - although should not influence since stack_frame will be disposed
@@ -988,12 +1014,12 @@ class ApplyResult(IApplyResult):
 
         with self.use_stack_frame(
                 ApplyStackFrame(
-                    component = component,
+                    component = subentity_items,
                     # instance is a list of items
                     instance = instance_list,
                     instance_is_list = True,
                     # ALT: self.current_frame.container
-                    container = component,
+                    container = subentity_items,
                     parent_instance=self.current_frame.instance,
                     in_component_only_tree=in_component_only_tree,
                     # NOTE: instance_new skipped - (contains list of
@@ -1002,11 +1028,11 @@ class ApplyResult(IApplyResult):
 
             # setup this registry
             current_frame.set_this_registry(
-                component.get_this_registry()
+                subentity_items.get_this_registry()
             )
 
             # finally apply validations on list of items
-            all_ok = self._execute_cleaners(component,
+            all_ok = self._execute_cleaners(subentity_items,
                                             validation_class=ItemsValidationBase,
                                             evaluation_class=ItemsEvaluationBase,
                                             )
@@ -1363,7 +1389,7 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def get_key_string_by_instance(self, component: IComponent, instance: ModelType, parent_instance: ModelType, index0: Optional[int], force:bool=False) -> str:
+    def get_key_string_by_instance(self, component: IComponent, instance: ModelType, parent_instance: ModelType, index0: Optional[int], force:bool=False) -> KeyString:
         # apply_result:IApplyResult,  -> self
         """
         Two cases - component has .keys or not:
@@ -1412,7 +1438,7 @@ class ApplyResult(IApplyResult):
                 # if parent_id not in self.key_string_container_cache:
                 #     # must_be_in_cache
                 #     if not self.component_name_only:
-                #         raise EntityInternalError(owner=component, msg=f"Parent instance's key not found in cache, got: {parent_instance}") 
+                #         raise EntityInternalError(owner=component, msg=f"Parent instance's key not found in cache, got: {parent_instance}")
                 #     parent_key_string = f"__PARTIAL__{self.component_name_only}"
                 # else:
                 parent_key_string = self.key_string_container_cache[parent_id]
@@ -1431,7 +1457,7 @@ class ApplyResult(IApplyResult):
 
         # TODO: self.config.logger.debug("cont:", component.name, key_string, f"[{from_cache}]")
 
-        return key_string
+        return KeyString(key_string)
 
     # ------------------------------------------------------------
 
@@ -1550,7 +1576,7 @@ class ApplyResult(IApplyResult):
                 # -- fill values dict
                 assert not (self.current_frame.component==self.entity)
                 # NOTE: can trigger recursion 
-                # subentity_items_mode = False, component = component, 
+                # subentity_items_mode = False, component = component,
                 self._fill_values_dict(filler="get_values_tree", is_init=False, recursive=True)
 
             tree = self.values_tree_by_key_string[key_string]
