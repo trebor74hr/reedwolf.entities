@@ -26,13 +26,13 @@ from .expressions import (
         execute_available_dexp,
         )
 from .utils import (
-        get_available_names_example,
-        UNDEFINED,
-        NA_DEFAULTS_MODE,
-        NA_IN_PROGRESS,
-        NOT_APPLIABLE,
-        to_repr,
-        )
+    get_available_names_example,
+    UNDEFINED,
+    NA_DEFAULTS_MODE,
+    NA_IN_PROGRESS,
+    NOT_APPLIABLE,
+    to_repr, UndefinedType,
+)
 from .meta import (
     Self,
     NoneType,
@@ -69,10 +69,6 @@ from .base import (
     IEvaluation,
     ValueNode,
 )
-from .fields import (
-        FieldBase,
-        )
-
 from .valid_base     import ValidationBase
 from .eval_base      import EvaluationBase
 from .valid_field    import FieldValidationBase
@@ -159,8 +155,6 @@ class ApplyResult(IApplyResult):
                 # change instance state are avoided.
                 # TODO: maybe this could/should be cached by dc_model?
                 temp_dataclass_model = make_dataclass_with_optional_fields(self.bound_model.model)
-
-                # self.instance_shadow_dc = temp_dataclass_model()
 
                 # All fields are made optional and will have value == None
                 # (from field's default)
@@ -284,14 +278,14 @@ class ApplyResult(IApplyResult):
 
         eval_value = eval_dexp_result.value
 
-        if isinstance(component, FieldBase):
+        if isinstance(component, IField):
             eval_value = component.try_adapt_value(eval_value)
 
         # ALT: bind_dexp_result = component.get_dexp_result_from_instance(apply_result)
         orig_value = self.get_current_value(component, strict=False)
 
         if (orig_value != eval_value):
-            self.register_instance_attr_change(
+            self._register_instance_attr_change(
                     component=component, 
                     dexp_result=eval_dexp_result,
                     new_value=eval_value
@@ -324,14 +318,22 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def register_instance_attr_change(self,
-                                      component: IComponent,
-                                      dexp_result: ExecResult,
-                                      new_value: LiteralType,
-                                      is_from_init_bind:bool=False) -> InstanceAttrValue:
-
-        # NOTE: new_value is required - since dexp_result.value
-        #       could be unadapted (see field.try_adapt_value()
+    def _register_instance_attr_change(self,
+                                       component: IComponent,
+                                       dexp_result: ExecResult,
+                                       new_value: LiteralType,
+                                       is_from_init_bind:bool=False) -> InstanceAttrValue:
+        """
+        Changes internal structure and underlying model attributes.
+        Does some internal validations.
+        Change is applied to
+          1) cmodel attribute - not if initial value
+          2) update_history - add new value to list
+          3) ucurrent_values - change value
+        Note: new_value is required - since dexp_result.value
+              could be unadapted (see field.try_adapt_value()
+        """
+        assert component == self.current_frame.component
 
         if new_value is UNDEFINED:
             raise EntityInternalError(owner=component, msg="New value should not be UNDEFINED, fix the caller")
@@ -339,159 +341,170 @@ class ApplyResult(IApplyResult):
         # key_str = component.get_key_string(apply_result=self)
         key_str = self.get_key_string(component)
 
-        if self.update_history.get(key_str, UNDEFINED) == UNDEFINED:
-            if not is_from_init_bind:
-                raise EntityInternalError(owner=component, msg=f"key_str '{key_str}' not found in update_history and this is not initialization")
+        if key_str not in self.current_values:
+            raise EntityInternalError(owner=self, msg=f"key_str not found - current_values[{key_str}]")
 
-            self.init_update_history_for_key(key_str)
+        instance_attr_current_value = self.current_values[key_str]
+        instance_attr_update_history = self.update_history.get(key_str, UNDEFINED)
 
+        if is_from_init_bind:
+            # Initialization - create internal structs
+
+            # --- update_history - initialize
+            if instance_attr_update_history is not UNDEFINED:
+                raise EntityInternalError(owner=component, msg=f"Initialization: key_str '{key_str}' already in update_history.")
+            instance_attr_update_history = []
+            self.update_history[key_str] = instance_attr_update_history
+
+            # --- current_values - initialize
             # Can be various UndefinedType: NA_IN_PROGRESS, NOT_APPLIABLE
-            if self.current_values.get(key_str):
-                raise EntityInternalError(owner=self, msg=f"current_values[{key_str}] ==  {self.current_values[key_str]}") 
-
-            self.current_values[key_str] = InstanceAttrCurrentValue(
+            if not isinstance(instance_attr_current_value, UndefinedType):
+                raise EntityInternalError(owner=self, msg=f"value already set - current_values[{key_str}] :=  {instance_attr_current_value}")
+            instance_attr_current_value = InstanceAttrCurrentValue(
                                                 key_string=key_str, 
                                                 component=component)
+            self.current_values[key_str] = instance_attr_current_value
 
-            # NOTE: initial value from instance is not checked - only
-            #       intermediate and the last value
-            #   self.validate_type(component, new_value)
         else:
-            assert key_str in self.current_values
-            assert component == self.current_frame.component
+            # === Update
+            if not isinstance(instance_attr_current_value, InstanceAttrCurrentValue):
+                raise EntityInternalError(owner=self, msg=f"value not initialized properly - current_values[{key_str}] :=  {instance_attr_current_value}")
 
             if is_from_init_bind:
                 raise EntityInternalError(owner=component, msg=f"key_str '{key_str}' found in update_history and this is initialization")
 
-            if not self.update_history[key_str]:
+            if len(instance_attr_update_history)==0:
                 raise EntityInternalError(owner=component, msg=f"change history for key_str='{key_str}' is empty")
 
             # -- check if current value is different from new one
-            value_current = self.update_history[key_str][-1].value
+            value_current = instance_attr_update_history[-1].value
             if value_current == new_value:
                 raise EntityApplyError(owner=component, msg=f"register change failed, the value is the same: {value_current}")
 
-            # TODO: is this really necessary - will be done in apply() later
-            self.validate_type(component, strict=False, value=new_value)
+        # NOTE: type check is not done on initial or interemediate instance values.
+        #       It is only done on the last value in _apply() -> _finish_component()
+        #           self.validate_type(component, strict=False, value=new_value)
 
-            # -- parent instance
-            # parent_raw_attr_value = dexp_result.value_history[-2]
-            # parent_instance = parent_raw_attr_value.value
+        # === finally update all structures
 
-            parent_instance = self.current_frame.instance
+        if not is_from_init_bind and self.current_frame.instance is not NA_DEFAULTS_MODE:
+            # --- change the model attribute - handle nested cases too e.g. M.company.access.can_delete
+            self._model_instance_attr_change_value(component=component, key_str=key_str, new_value=new_value)
 
-            if parent_instance is not NA_DEFAULTS_MODE:
-                # TODO: not sure if this validation is ok
-                # NOTE: bound_model.model could be VExpr
-                model = self.current_frame.container.bound_model.get_type_info().type_
-                if not self.instance_none_mode \
-                  and not isinstance(parent_instance, model):
-                    raise EntityInternalError(owner=self, msg=f"Parent instance {parent_instance} has wrong type")
+        # --- current value - set to new value
+        instance_attr_current_value.set_value(new_value)
 
-                # -- attr_name - fetch from initial bind dexp (very first)
-                init_instance_attr_value = self.update_history[key_str][0]
-                if not init_instance_attr_value.is_from_bind:
-                    raise EntityInternalError(owner=self, msg=f"{init_instance_attr_value} is not from bind")
-                init_bind_dexp_result = init_instance_attr_value.dexp_result
-                # attribute name is in the last item
-
-                # "for" loop is required for attributes from substructure that
-                # is not done as SubEntity rather direct reference, like: 
-                #   bind=M.access.alive
-                attr_name_path = [init_raw_attr_value.attr_name
-                        for init_raw_attr_value in init_bind_dexp_result.value_history
-                        ]
-                if not attr_name_path:
-                    raise EntityInternalError(owner=self, msg=f"{component}: attr_name_path is empty")
-
-                if isinstance(component, IField):
-                    # TODO: what about Boolean + enables? Better to check .get_children() ?
-                    # value accessor should be used from parent of the component
-                    assert component.parent
-                    value_accessor = component.parent.value_accessor
-                else:
-                    # contaainers + fieldgroup
-                    value_accessor = component.value_accessor
-
-                current_instance_parent = None
-                current_instance = parent_instance
-                attr_name_last = UNDEFINED
-
-                # Attribute path example: "M.access.alive".
-                # Only last, i.e. "alive" in this example, will be updated,
-                # and this for loop reaches instance and current value in this case.
-                for anr, attr_name in enumerate(attr_name_path,0):
-                    attr_name_last = attr_name
-                    if current_instance is None:
-                        if self.instance_none_mode:
-                            # Create all missing intermediate empty dataclass objects 
-                            assert anr > 0
-                            attr_name_prev = attr_name_path[anr-1]
-
-                            current_instance_type_info = get_dataclass_field_type_info(current_instance_parent, attr_name_prev)
-                            if current_instance_type_info is None:
-                                raise EntityInternalError(owner=self, msg=f"Attribute {attr_name} not found in dataclass definition of {current_instance_parent}.") 
-                            if current_instance_type_info.is_list:
-                                raise EntityInternalError(owner=self, msg=f"Attribute {attr_name} of {current_instance_parent} is a list: {current_instance_type_info}.") 
-
-                            current_instance_model = current_instance_type_info.type_
-                            if not is_dataclass(current_instance_model):
-                                raise EntityInternalError(owner=self, msg=f"Attribute {attr_name} of {type(current_instance_parent)} is not a dataclass instance, got: {current_instance_model}") 
-
-                            # set new value of temp instance attribute
-                            # all attrs of a new instance will have None value (dc default)
-                            temp_dataclass_model = make_dataclass_with_optional_fields(current_instance_model)
-                            current_instance = temp_dataclass_model()
-                            value_accessor.set_value(instance=current_instance_parent,
-                                                     attr_name=attr_name_prev,
-                                                     attr_index=None,
-                                                     new_value=current_instance)
-                            # ORIG: setattr(current_instance_parent, attr_name_prev, current_instance)
-                        else:
-                            attr_name_path_prev = ".".join(attr_name_path[:anr])
-                            # TODO: fix this ugly validation message
-                            raise EntityApplyValueError(owner=self, msg=f"Attribute '{attr_name}' can not be set while '{parent_instance}.{attr_name_path_prev}' is not set. Is '{attr_name_path_prev}' obligatory?")
-
-                    current_instance_parent = current_instance
-                    current_instance = value_accessor.get_value(instance=current_instance_parent,
-                                                                attr_name=attr_name,
-                                                                attr_index=None)
-                    if current_instance is UNDEFINED:
-                        raise EntityInternalError(owner=self, msg=f"Missing attribute:\n  Current: {current_instance}.{attr_name}\n Parent: {parent_instance}.{'.'.join(attr_name_path)}")
-                    # ORIG:
-                    # if not hasattr(current_instance, attr_name):
-                    #     raise EntityInternalError(owner=self, msg=f"Missing attribute:\n  Current: {current_instance}.{attr_name}\n Parent: {parent_instance}.{'.'.join(attr_name_path)}")
-                    # current_instance = getattr(current_instance_parent, attr_name)
-
-                    # self.instance_shadow_dc = temp_dataclass_model()
-
-                # ----------------------------------------------------
-                # Finally change instance value by last attribute name
-                # ----------------------------------------------------
-                assert attr_name_last
-                value_accessor.set_value(instance=current_instance_parent,
-                                         attr_name=attr_name_last,
-                                         attr_index=None,
-                                         new_value=new_value)
-                # setattr(current_instance_parent, attr_name, new_value)
-
-            # NOTE: bind_dexp_result last value is not changed
-            #       maybe should be changed but ... 
-
-        # TODO: pass input arg value_parent_name - component.name does not have
-        #       any purpose
+        # --- update_history - add new value
+        # TODO: pass input arg value_parent_name - component.name does not have any purpose
         instance_attr_value = InstanceAttrValue(
-                                value_parent_name=component.name, 
-                                value=new_value,
-                                dexp_result=dexp_result,
-                                is_from_bind = is_from_init_bind,
-                                # TODO: source of change ...
-                                )
-
-        self.register_instance_attr_value_change(key_str=key_str, instance_attr_value = instance_attr_value)
+            value_parent_name=component.name,
+            value=new_value,
+            dexp_result=dexp_result,
+            is_from_bind = is_from_init_bind,
+            # TODO: source of change ...
+        )
+        instance_attr_update_history.append(instance_attr_value)
 
         return instance_attr_value
 
+    # ------------------------------------------------------------
+
+    def _model_instance_attr_change_value(self, component: IComponent, key_str: KeyString, new_value: AttrValue):
+        assert component == self.current_frame.component
+        # key_str = self.get_key_string(component)
+        parent_instance = self.current_frame.instance
+
+        # TODO: not sure if this validation is ok
+        # NOTE: bound_model.model could be VExpr
+        model = self.current_frame.container.bound_model.get_type_info().type_
+        if not self.instance_none_mode \
+                and not isinstance(parent_instance, model):
+            raise EntityInternalError(owner=self, msg=f"Parent instance {parent_instance} has wrong type")
+
+        # -- attr_name - fetch from initial bind dexp (very first)
+        init_instance_attr_value = self.update_history[key_str][0]
+        if not init_instance_attr_value.is_from_bind:
+            raise EntityInternalError(owner=self, msg=f"{init_instance_attr_value} is not from bind")
+        init_bind_dexp_result = init_instance_attr_value.dexp_result
+        # attribute name is in the last item
+
+        # "for" loop is required for attributes from substructure that
+        # is not done as SubEntity rather direct reference, like:
+        #   bind=M.access.alive
+        attr_name_path = [init_raw_attr_value.attr_name
+                          for init_raw_attr_value in init_bind_dexp_result.value_history
+                          ]
+        if not attr_name_path:
+            raise EntityInternalError(owner=self, msg=f"{component}: attr_name_path is empty")
+
+        if isinstance(component, IField):
+            # TODO: what about Boolean + enables? Better to check .get_children() ?
+            # value accessor should be used from parent of the component
+            assert component.parent
+            value_accessor = component.parent.value_accessor
+        else:
+            # contaainers + fieldgroup
+            value_accessor = component.value_accessor
+
+        current_instance_parent = None
+        current_instance = parent_instance
+        attr_name_last = UNDEFINED
+
+        # Attribute path example: "M.access.alive".
+        # Only last, i.e. "alive" in this example, will be updated,
+        # and this for loop reaches instance and current value in this case.
+        for anr, attr_name in enumerate(attr_name_path, 0):
+            attr_name_last = attr_name
+            if current_instance is None:
+                if self.instance_none_mode:
+                    # Create all missing intermediate empty dataclass objects
+                    assert anr > 0
+                    attr_name_prev = attr_name_path[anr - 1]
+
+                    current_instance_type_info = get_dataclass_field_type_info(current_instance_parent, attr_name_prev)
+                    if current_instance_type_info is None:
+                        raise EntityInternalError(owner=self,
+                                                  msg=f"Attribute {attr_name} not found in dataclass definition of {current_instance_parent}.")
+                    if current_instance_type_info.is_list:
+                        raise EntityInternalError(owner=self,
+                                                  msg=f"Attribute {attr_name} of {current_instance_parent} is a list: {current_instance_type_info}.")
+
+                    current_instance_model = current_instance_type_info.type_
+                    if not is_dataclass(current_instance_model):
+                        raise EntityInternalError(owner=self,
+                                                  msg=f"Attribute {attr_name} of {type(current_instance_parent)} is not a dataclass instance, got: {current_instance_model}")
+
+                        # set new value of temp instance attribute
+                    # all attrs of a new instance will have None value (dc default)
+                    temp_dataclass_model = make_dataclass_with_optional_fields(current_instance_model)
+                    current_instance = temp_dataclass_model()
+                    value_accessor.set_value(instance=current_instance_parent,
+                                             attr_name=attr_name_prev,
+                                             attr_index=None,
+                                             new_value=current_instance)
+                    # ORIG: setattr(current_instance_parent, attr_name_prev, current_instance)
+                else:
+                    attr_name_path_prev = ".".join(attr_name_path[:anr])
+                    # TODO: fix this ugly validation message
+                    raise EntityApplyValueError(owner=self,
+                                                msg=f"Attribute '{attr_name}' can not be set while '{parent_instance}.{attr_name_path_prev}' is not set. Is '{attr_name_path_prev}' obligatory?")
+
+            current_instance_parent = current_instance
+            current_instance = value_accessor.get_value(instance=current_instance_parent,
+                                                        attr_name=attr_name,
+                                                        attr_index=None)
+            if current_instance is UNDEFINED:
+                raise EntityInternalError(owner=self,
+                                          msg=f"Missing attribute:\n  Current: {current_instance}.{attr_name}\n Parent: {parent_instance}.{'.'.join(attr_name_path)}")
+
+        # ----------------------------------------------------
+        # Finally change instance value by last attribute name
+        # ----------------------------------------------------
+        assert attr_name_last
+        value_accessor.set_value(instance=current_instance_parent,
+                                 attr_name=attr_name_last,
+                                 attr_index=None,
+                                 new_value=new_value)
 
     # ------------------------------------------------------------
     # _apply() -> main apply function
@@ -588,6 +601,7 @@ class ApplyResult(IApplyResult):
             if mode_subentity_items:
                 # reuse already created in caller
                 assert not self.current_frame.value_node.has_items and self.current_frame.value_node.component.is_subentity_items()
+                # TODO; consider moving logic from the caller here? or just write comment
                 value_node = self.current_frame.value_node
             else:
                 parent_node = self.current_frame.value_node
@@ -1289,29 +1303,33 @@ class ApplyResult(IApplyResult):
         # ORIG:         return  #  False , None
 
         if isinstance(component, IField):
-            assert getattr(component, "bind", None)
-            # --- 1. Fill initial value from instance 
+            # --- 1. Fill initial value from instance
             key_str = self.get_key_string(component)
 
+            # NOTE: this never happens so I put assert guard and commented out the code
+            assert self.current_values.get(key_str, None) in (None, NA_IN_PROGRESS, NOT_APPLIABLE)
             # TODO: NA_DEFAULTS_MODE
-            if self.current_values.get(key_str, None) not in (
-                    None, NA_IN_PROGRESS, NOT_APPLIABLE):
-                # Call to "self._init_by_bind_dexp()" is already done 
-                # in building tree values in some validations. 
-                # In this case fetch that existing value.
-                assert len(self.update_history[key_str]) == 1, "expected only initial value, got updated value too"
-                instance_attr_value = self.update_history[key_str][-1]
-                init_bind_dexp_result = instance_attr_value.dexp_result
-            else:
-                init_bind_dexp_result = self._init_by_bind_dexp(component)
+            # if self.current_values.get(key_str, None) not in (
+            #         None, NA_IN_PROGRESS, NOT_APPLIABLE):
+            #     assert False
+            #     # Call to "self._init_by_bind_dexp()" is already done
+            #     # in building tree values in some validations.
+            #     # In this case fetch that existing value.
+            #     assert len(self.update_history[key_str]) == 1, "expected only initial value, got updated value too"
+            #     instance_attr_value = self.update_history[key_str][-1]
+            #     init_bind_dexp_result = instance_attr_value.dexp_result
+            # else:
+            init_bind_dexp_result = self._init_by_bind_dexp(component)
+            # ---
 
             # --- 2. try to update if instance_new is provided and yields different value
-            bind_dexp_result, _ = self._try_update_by_instance(
+            # bind_dexp_result, _ =
+            self._try_update_by_instance(
                                         component=component, 
                                         init_bind_dexp_result=init_bind_dexp_result)
             # TODO: self.config.logger.warning(f"{'  ' * self.current_frame.depth} update: {component.name}")
-        else:
-            bind_dexp_result = None  # noqa: F841
+        # else:
+        #     bind_dexp_result = None  # noqa: F841
 
         # NOTE: bind_dexp_result not used
         # ORIG: all_ok = \
@@ -1324,47 +1342,17 @@ class ApplyResult(IApplyResult):
             stack_frame=self.current_frame,
         )
 
-        # ORIG: if self.defaults_mode and isinstance(component, FieldBase):
-        # ORIG:     # NOTE: change NA_DEFAULTS_MODE to most reasonable and
-        # ORIG:     #       common empty value -> None
-        # ORIG:     value = self.get_current_value(component, strict=False)
-        # ORIG:     if value is NA_DEFAULTS_MODE:
-        # ORIG:         self.register_instance_attr_change(
-        # ORIG:                 component=component,
-        # ORIG:                 dexp_result=None,
-        # ORIG:                 new_value=None
-        # ORIG:                 )
-
-        # ORIG: # --- 4.1 finalize last value and mark as finished
-        # ORIG: current_value_instance = self.current_values[key_string]
-        # ORIG: if current_value_instance is NA_IN_PROGRESS:
-        # ORIG:     current_value_instance = NOT_APPLIABLE
-        # ORIG:     self.current_values[key_string] = current_value_instance
-
-        # ORIG: elif current_value_instance is not UNDEFINED \
-        # ORIG:   and current_value_instance is not NOT_APPLIABLE:
-
-        # ORIG:     if not isinstance(current_value_instance, InstanceAttrCurrentValue):
-        # ORIG:         raise EntityInternalError(owner=self, msg=f"Unexpected current value instance found for {key_string}, got: {current_value_instance}")
-        # ORIG:     current_value_instance.mark_finished()
-
-        # ORIG: # --- 4.2 validate type is ok?
-        # ORIG: # NOTE: initial value from instance is not checked - only
-        # ORIG: #       intermediate and the last value (returns validation_failure)
-        # ORIG: if self.validate_type(component, strict=True):
-        # ORIG:     all_ok = False
-
         return  #  all_ok, current_value_instance
 
     def _finish_component(self, key_string: str) -> bool:
         all_ok = True
         component = self.current_frame.component
-        if self.defaults_mode and isinstance(component, FieldBase):
+        if self.defaults_mode and isinstance(component, IField):
             # NOTE: change NA_DEFAULTS_MODE to most reasonable and
             #       common empty value -> None
             value = self.get_current_value(component, strict=False)
             if value is NA_DEFAULTS_MODE:
-                self.register_instance_attr_change(
+                self._register_instance_attr_change(
                     component=component,
                     dexp_result=None,
                     new_value=None
@@ -1397,13 +1385,13 @@ class ApplyResult(IApplyResult):
     def _init_by_bind_dexp(self, component: IComponent) -> ExecResult:
         " get initial dexp value, if instance_new try to updated/overwrite with it"
 
-        if not isinstance(component, FieldBase):
+        if not isinstance(component, IField):
             raise EntityInternalError(owner=self, msg=f"Expected FieldBase field, got: {component}")
 
         bind_dexp_result = component.get_dexp_result_from_instance(apply_result=self)
         init_value = bind_dexp_result.value
 
-        self.register_instance_attr_change(
+        self._register_instance_attr_change(
                 component = component, 
                 dexp_result = bind_dexp_result, 
                 new_value = init_value,
@@ -1453,7 +1441,7 @@ class ApplyResult(IApplyResult):
 
                 # adapted new instance value diff from adapted initial value
                 if new_value != last_value:
-                    self.register_instance_attr_change(
+                    self._register_instance_attr_change(
                             component = component, 
                             dexp_result = instance_new_bind_dexp_result, 
                             new_value = new_value,
@@ -1465,7 +1453,7 @@ class ApplyResult(IApplyResult):
         if not updated and init_value != last_value:
             # adapted value => updated = False
             # diff initial value from adapted
-            self.register_instance_attr_change(
+            self._register_instance_attr_change(
                     component=component, 
                     # TODO: how to mark init -> adaptation change?
                     dexp_result=None,
@@ -1478,8 +1466,11 @@ class ApplyResult(IApplyResult):
 
     def get_key_string(self, component: IComponent, depth:int=0, force:bool=False) -> KeyString:
         """
-        Recursion
-        Caching is on containers only - by id(indstance)
+        Recursion one of:
+            component -> container -> container -> ...
+            container -> container -> ...
+
+        CACHING is on containers only - by id(indstance)
         for other components only attach name to it.
         Container - when not found then gets intances and index0 
         from current frame
@@ -1512,7 +1503,7 @@ class ApplyResult(IApplyResult):
             consider_self = False if subentity_items_no_instance_case else True
             container = component.get_first_parent_container(consider_self=consider_self)
 
-            # Recursion
+            # ---- RECURSION ----- only containers
             container_key_string = self.get_key_string(container, depth=depth+1)
 
             # construct

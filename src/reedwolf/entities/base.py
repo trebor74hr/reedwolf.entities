@@ -2492,18 +2492,6 @@ class IApplyResult(IStackOwnerSession):
             raise EntityInternalError(owner=self, msg="Setup session can't be get, no current frame set")
         return self.current_frame.container.setup_session
 
-    def init_update_history_for_key(self, key_str: str) -> None:
-        if key_str in self.update_history:
-            raise EntityInternalError(owner=self, msg=f"key_str={key_str} already set in update_history")
-        self.update_history[key_str] = []
-
-    def register_instance_attr_value_change(self, key_str: str, instance_attr_value: InstanceAttrValue) -> None:
-        if key_str not in self.update_history:
-            raise EntityInternalError(owner=self, msg=f"key_str={key_str} not set in update_history")
-        self.update_history[key_str].append(instance_attr_value)
-        # set current value
-        self.current_values[key_str].set_value(instance_attr_value.value)
-
     @abstractmethod
     def apply(self) -> Self:
         ...
@@ -2537,11 +2525,11 @@ class IApplyResult(IStackOwnerSession):
 
 
     @abstractmethod
-    def register_instance_attr_change(self,
-                                      component: IComponent,
-                                      dexp_result: ExecResult,
-                                      new_value: Any,
-                                      is_from_init_bind:bool=False) -> InstanceAttrValue:
+    def _register_instance_attr_change(self,
+                                       component: IComponent,
+                                       dexp_result: ExecResult,
+                                       new_value: Any,
+                                       is_from_init_bind:bool=False) -> InstanceAttrValue:
         ...
 
     def finish(self):
