@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 import inspect
 from contextlib import AbstractContextManager
 from enum import Enum
+from collections import OrderedDict
 from typing import (
     List,
     Any,
@@ -38,7 +39,7 @@ from .utils import (
     UndefinedType,
     get_available_names_example,
     DumpFormatEnum,
-    dump_to_format,
+    dump_to_format, NOT_APPLIABLE,
 )
 from .exceptions import (
     EntityInternalError,
@@ -1943,6 +1944,160 @@ class InstanceAttrCurrentValue:
 # ------------------------------------------------------------
 
 @dataclass
+class ValueData:
+    # will be set later
+    value:          Union[AttrValue] = UNDEFINED
+    # TODO: value_accessor: IValueAccessor
+    update_history: Dict[KeyString, List[InstanceAttrValue]] = \
+        field(repr=False, init=False, default_factory=dict)
+    current_values: Dict[KeyString, InstanceAttrCurrentValue] = \
+        field(repr=False, init=False, default_factory=dict)
+    changes: List[InstanceChange] = \
+        field(repr=False, init=False, default_factory=list)
+
+# ------------------------------------------------------------
+
+@dataclass
+class ValueNode:
+
+    component:  IComponent = field(repr=False)
+    instance: DataclassType = field(repr=False)
+
+    # ------------------------------------------------------------
+    # Following are all accessible by . operator in ValueExpressions
+    # ------------------------------------------------------------
+    # TODO: fields? - only for container - includes all children's children
+    #       except Items's children
+
+
+    # <field>.Parent
+    # - empty only on top tree node (Entity component)
+    parent_node:  Optional[Self] = field(repr=False)
+
+    # top of the tree - automatically computed
+    top_node:  Self = field(repr=False, init=False)
+
+    # when SubentityItems - hodls 2 types of ValueNodes:
+    #   has_items=True  - container - has filled .items[], has no children
+    #   has_items=False - individual item - with values, has children (some with values)
+    has_items: bool = field(repr=True, default=False)
+
+    # F.<field-name>
+    # - contains all fields accessible in. autocomputed.
+    # TODO: replace with fields_dict: Dict[name, Self] - distribute to all
+    container_node: Self = field(repr=False, init=False, default=None)
+
+    # <field>.Value
+    # - when component has data value - empty ValueData is set in constructor
+    value_data: Union[UndefinedType, ValueData] = field(repr=False, init=False, default=UNDEFINED)
+
+    # <field>.Children
+    # - when component has children - initialized with empty {}, later filled
+    children:   Union[UndefinedType, Dict[AttrName, Self]] = field(repr=False, init=False, default=UNDEFINED)
+
+    # <field>.Items
+    # - when component has items - initialized with empty {}, later filled
+    items:      Union[UndefinedType, List[Self]] = field(repr=False, init=False, default=UNDEFINED)
+
+    # Autocomputed
+    # component's name
+    name:            AttrName = field(init=False, repr=True)
+
+    # TODO: later  - see register_instance_attr_change()
+    # # instance's attribute name
+    # attr_name OR attr_name_path:       Optional[AttrName] = field(init=False, repr=False)
+
+    def __post_init__(self):
+        self.name = self.component.name
+
+        if self.component.is_top_container():
+            assert self.parent_node is None
+            self.container_node = self
+            self.top_node = self
+        else:
+            assert self.parent_node is not None
+            assert self.parent_node.top_node.parent_node is None
+            self.top_node = self.parent_node.top_node
+
+        if self.component.is_subentity_items():
+            if self.has_items:
+                self.items = []
+            # TODO: consider what to do
+            self.container_node = self
+        else:
+            assert not self.has_items
+
+        if not self.has_items and self.component.get_children():
+            # TODO: with py 3.7 {} has ordered items as default behaviour,
+            #       so std {} could be used instead
+            self.children = OrderedDict()
+
+        if self.container_node is None:
+            assert self.parent_node and self.parent_node.container_node
+            self.container_node = self.parent_node.container_node
+
+        if isinstance(self.component, IField):
+            self.value_data = ValueData()
+
+        # TODO: self.key_pairs
+        # TODO: self.key_string
+        # TODO: self.attr_name = self.component.bind ...
+
+    def add_item(self, value_node: Self):
+        assert self.has_items
+        # TODO: assert value_node is not self
+        # TODO: assert value_node.parent_node is not self
+        self.items.append(value_node)
+
+    def add_child(self, value_node: Self):
+        assert not self.has_items
+        if self.children is UNDEFINED:
+            raise EntityInternalError(owner=self, msg=f"failed to add {value_node}, already children dict not initialized")
+        # TODO: assert value_node is not self
+        # TODO: assert value_node.parent_node is not self
+        if value_node.name in self.children:
+            raise EntityInternalError(owner=self, msg=f"failed to add {value_node}, already child added under same name, got : {self.children[value_node.name]}")
+        self.children[value_node.name] = value_node
+
+    def clean(self):
+        if self.component.is_top_container():
+            assert self.parent_node is None
+        else:
+            if self.parent_node is None:
+                raise EntityInternalError(owner=self, msg=f"parent_node not set")
+            # subentity item instance - with children
+            if self.parent_node.has_items and not self.parent_node.component == self.component:
+                # print(f"Dump:\n{self.top_node.dump_to_str()}")
+                raise EntityInternalError(owner=self, msg=f"value:node.has_items, parent_node - component does not match:"
+                                                          f"\n {self.component.parent}"
+                                                          f"\n !=\n {self.parent_node.component}")
+            elif not self.parent_node.has_items and not self.parent_node.component == self.component.parent:
+                # print(f"Dump:\n{self.top_node.dump_to_str()}")
+                raise EntityInternalError(owner=self, msg=f"value:node parent_node component does not match:"
+                                                          f"\n {self.component.parent}"
+                                                          f"\n !=\n {self.parent_node.component}")
+    def dump_to_str(self) -> str:
+        return "\n".join(self.dump_to_strlist())
+
+    def dump_to_strlist(self, depth=0) -> List[str]:
+        lines = []
+        indent = "  " * depth
+        lines.append(f"{indent}{self.name}{'(has_items)' if self.has_items else ''}")
+        if self.has_items:
+            lines.append(f"{indent}- Items[{len(self.items)}]:")
+            for item_node in self.items:
+                add_lines = item_node.dump_to_strlist(depth+1)
+                lines.extend(add_lines)
+        if self.children != UNDEFINED:
+            lines.append(f"{indent}- Children[{len(self.children)}]:")
+            for child_node in self.children.values():
+                add_lines = child_node.dump_to_strlist(depth+1)
+                lines.extend(add_lines)
+        return lines
+
+# ------------------------------------------------------------
+
+@dataclass
 class ApplyStackFrame(IStackFrame):
     """
 
@@ -1952,13 +2107,17 @@ class ApplyStackFrame(IStackFrame):
 
     """
     # current container data instance which will be procesed: changed/validated/evaluated
-    instance: DataclassType
     component: IComponent
     # main container - class of instance - can be copied too but is a bit complicated
     container: IContainer = field(repr=False)
+    instance: DataclassType
+
+    # in value-node-tree current node - holds component/instance/container
+    # can be NOT_APPLIABLE
+    value_node: Union[ValueNode, UndefinedType] = field(repr=False, default=None)
 
     # ---------------------------------------------------------------------------------
-    # Following if not provideed are copied from parent frame (previous, parent frame) 
+    # Following if not provideed are copied from parent frame (previous, parent frame)
     # check UseApplyStackFrame. copy_from_previous_frame
     # ---------------------------------------------------------------------------------
 
@@ -2015,7 +2174,6 @@ class ApplyStackFrame(IStackFrame):
     def __post_init__(self):
         self.clean()
 
-
     def clean(self):
         if not isinstance(self.container, IContainer):
             raise EntityInternalError(owner=self, msg=f"Expected IContainer, got: {self.container}")
@@ -2037,6 +2195,8 @@ class ApplyStackFrame(IStackFrame):
         self._copy_attr_from_previous_frame(previous_frame, "depth",
                                             if_set_must_be_same=False)
         self._copy_attr_from_previous_frame(previous_frame, "parent_values_subtree",
+                                            if_set_must_be_same=False)
+        self._copy_attr_from_previous_frame(previous_frame, "value_node",
                                             if_set_must_be_same=False)
 
         # do not use ==, compare by instance (ALT: use id(instance) )
@@ -2066,6 +2226,16 @@ class ApplyStackFrame(IStackFrame):
 
 
     def post_clean(self):
+        # new logic - must be sure
+        if self.value_node is not NOT_APPLIABLE:
+            if not self.value_node:
+                raise EntityInternalError(owner=self, msg="value_node not set")
+
+            if not self.value_node.component == self.component:
+                raise EntityInternalError(owner=self, msg=f"value_node component is different:\n {self.value_node.component} \n !=\n {self.component}")
+
+            self. value_node.clean()
+
         if self.instance_is_list is None:
             self.instance_is_list = False
 
@@ -2158,32 +2328,6 @@ class StructEnum(str, Enum):
 #           # entity like - follows hierachical structure like defined in entity
 #           pass
 
-@dataclass
-class ValueData:
-    value:          AttrValue
-    value_accessor: IValueAccessor
-    update_history: Dict[KeyString, List[InstanceAttrValue]] = \
-        field(repr=False, init=False, default_factory=dict)
-    current_values: Dict[KeyString, InstanceAttrCurrentValue] = \
-        field(repr=False, init=False, default_factory=dict)
-    changes: List[InstanceChange] = \
-        field(repr=False, init=False, default_factory=list)
-
-# ------------------------------------------------------------
-@dataclass
-class ValueNode:
-    component:  IComponent
-    # contains all fields
-    container_node: Self
-    # TODO: fields? - only for container - includes all children's children
-    #       except Items's children
-
-    # all accessible by . operator in ValueExpressions
-    value_data: Union[UndefinedType, ValueData]
-    children:   Union[UndefinedType, Dict[AttrName, Self]]
-    items:      Union[UndefinedType, List[Self]]
-    parent:     Optional[Self]
-
 
 class ApplyExecPhasesEnum(str, Enum):
     EVALUATIONS_PHASE = "EVALUATIONS_PHASE"
@@ -2237,7 +2381,6 @@ class IApplyResult(IStackOwnerSession):
     # TODO: consider: instance_new: Union[ModelType, UndefinedType] = UNDEFINED,
     instance_new: Optional[ModelType] = field(repr=False)
 
-    # TODO: top_value_node: ValueNode
 
     context: Optional[IContext] = field(repr=False)
     # used in apply_partial
@@ -2247,6 +2390,9 @@ class IApplyResult(IStackOwnerSession):
     defaults_mode: bool = field(repr=False, default=False)
 
     # ---- automatically computed -----
+
+    # top of value tree
+    top_value_node: ValueNode = field(repr=False, init=False, default=UNDEFINED)
 
     # extracted from component
     bound_model : IBoundModel = field(repr=False, init=False)
@@ -2429,7 +2575,7 @@ class IApplyResult(IStackOwnerSession):
 
             children_dict = {}
             # Although no name clash could happen, reverse to have local scopes
-            # overwrite parent's scopes. 
+            # overwrite parent's scopes.
             for curr_comp in reversed(components_tree):
                 comp_children_dict = curr_comp.get_children_tree_flatten_dict()
                 children_dict.update(comp_children_dict)
@@ -2503,7 +2649,7 @@ def extract_type_info(
     if is_parent_dot_expr:
         raise EntitySetupNameNotFoundError(item=inspect_object, msg=f"Attribute '{attr_node_name}' is not member of expression '{parent_object}'.")
 
-    # when parent virtual expression is not assigned to data-type/data-attr_node, 
+    # when parent virtual expression is not assigned to data-type/data-attr_node,
     # then it is sent directly what will later raise error "attribute not found" 
     if not is_parent_dot_expr:
         if is_method_by_name(parent_object, attr_node_name):

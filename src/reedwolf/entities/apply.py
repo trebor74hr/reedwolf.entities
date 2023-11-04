@@ -63,7 +63,11 @@ from .base import (
     InstanceAttrCurrentValue,
     get_instance_key_string_attrname_pair,
     UseStackFrameCtxManagerBase,
-    IContainer, ApplyExecPhasesEnum, ApplyExecCleanersRegistry, IValidation, IEvaluation,
+    IContainer,
+    ApplyExecPhasesEnum,
+    IValidation,
+    IEvaluation,
+    ValueNode,
 )
 from .fields import (
         FieldBase,
@@ -104,7 +108,7 @@ class ApplyResult(IApplyResult):
     Similar is Function -> IFunctionFactory.
     """
 
-    instance_none_mode:bool = field(init=False, default=False)
+    instance_none_mode:bool = field(repr=False, init=False, default=False)
 
     STACK_FRAME_CLASS = ApplyStackFrame
     STACK_FRAME_CTX_MANAGER_CLASS = UseApplyStackFrameCtxManager
@@ -394,12 +398,7 @@ class ApplyResult(IApplyResult):
                 # "for" loop is required for attributes from substructure that
                 # is not done as SubEntity rather direct reference, like: 
                 #   bind=M.access.alive
-                # OLD - very simple logic: 
-                #   init_raw_attr_value = init_bind_dexp_result.value_history[-1]
-                #   attr_name = attr_name_path[-1]
-                #   if not hasattr(parent_instance, attr_name):
-                #       raise EntityInternalError(owner=self, msg=f"Missing {parent_instance}.{attr_name}")
-                attr_name_path = [init_raw_attr_value.attr_name 
+                attr_name_path = [init_raw_attr_value.attr_name
                         for init_raw_attr_value in init_bind_dexp_result.value_history
                         ]
                 if not attr_name_path:
@@ -554,26 +553,7 @@ class ApplyResult(IApplyResult):
         if self.finished:
             raise EntityInternalError(owner=self, msg="Already finished") 
 
-        if self.stack_frames:
-            assert not top_call
-            depth = self.current_frame.depth
-            in_component_only_tree = self.current_frame.in_component_only_tree 
-
-            # check if instance model is ok
-            if not component.is_subentity():
-                if self.defaults_mode:
-                    if self.current_frame.instance is not NA_DEFAULTS_MODE:
-                        raise EntityInternalError(owner=self, msg=f"Defaults mode - current frame's instance's model must be NA_DEFAULTS_MODE, got: {type(self.instance)}") 
-                else:
-                    pass
-                    # TODO: consider adding validation again with:
-                    #   self.component.value_accessor.validate_instance_type(owner_name=self.component.name,
-                    # if not self.instance_none_mode \
-                    #   and not isinstance(self.current_frame.instance, comp_container_model):
-                    #     raise EntityInternalError(owner=self, msg=f"Current frame's instance's model does not corresponds to component's container's model. Expected: {comp_container_model}, got: {type(self.instance)}")
-
-            # TODO: for subentity() any need to check this at all in this phase?
-        else:
+        if not self.stack_frames:
             # no stack around -> initial call -> depth=0
             assert top_call
             depth = 0
@@ -582,12 +562,43 @@ class ApplyResult(IApplyResult):
             if self.defaults_mode:
                 if self.instance is not NA_DEFAULTS_MODE:
                     raise EntityInternalError(owner=self, msg=f"Defaults mode - instance must be NA_DEFAULTS_MODE, got: {type(self.instance)}")
-            # else:
-            #     # NOTE: Dropped this check - it is done before. if it will be required:
-            #     #     self.entity.value_accessor_default.validate_instance_type(instance=self.instance, bound_model=self.bound_model)
-            #     if not self.instance_none_mode \
-            #       and not isinstance(self.instance, comp_container_model):
-            #         raise EntityInternalError(owner=self, msg=f"Entity instance's model does not corresponds to component's container's model. Expected: {comp_container_model}, got: {type(self.instance)}")
+
+            value_node = ValueNode(
+                component=self.entity,
+                parent_node=None,
+                instance=self.instance,
+            )
+            assert not self.top_value_node
+            self.top_value_node = value_node
+        else:
+            # depth > 0 - has stack
+            assert not top_call
+            depth = self.current_frame.depth
+            in_component_only_tree = self.current_frame.in_component_only_tree 
+
+            # check if instance model is ok
+            if not component.is_subentity():
+                if self.defaults_mode:
+                    if self.current_frame.instance is not NA_DEFAULTS_MODE:
+                        raise EntityInternalError(owner=self, msg=f"Defaults mode - current frame's instance's model must be NA_DEFAULTS_MODE, got: {type(self.instance)}")
+                #  TODO: consider adding validation again with:
+                #    else:
+                #      self.component.value_accessor.validate_instance_type(owner_name=self.component.name,
+
+            if mode_subentity_items:
+                # reuse already created in caller
+                assert not self.current_frame.value_node.has_items and self.current_frame.value_node.component.is_subentity_items()
+                value_node = self.current_frame.value_node
+            else:
+                parent_node = self.current_frame.value_node
+                has_items = component.is_subentity_items()
+                value_node = ValueNode(
+                    component = component,
+                    parent_node = parent_node,
+                    instance = self.current_frame.instance,
+                    has_items=has_items,
+                )
+                parent_node.add_child(value_node)
 
         # TODO: in partial mode this raises RecursionError:
         #       component == self.component_only
@@ -612,6 +623,7 @@ class ApplyResult(IApplyResult):
             # ---- SubEntityItems - RECURSION & finish -----
             self._apply_subentity_items(
                 subentity_items=component,
+                value_node=value_node,
                 in_component_only_tree=in_component_only_tree,
                 depth=depth,
             )
@@ -620,6 +632,7 @@ class ApplyResult(IApplyResult):
 
         new_frame = self._create_apply_stack_frame_for_component(
                                           component=component,
+                                          value_node=value_node,
                                           depth=depth,
                                           in_component_only_tree=in_component_only_tree,
                                           mode_subentity_items=mode_subentity_items,
@@ -653,6 +666,7 @@ class ApplyResult(IApplyResult):
                 if current_value_instance:
                     process_further = False
                 else:
+                    self._update_and_register_exec_cleaners(component=component)
                     # ============================================================
                     # Update, validate, evaluate
                     # ============================================================
@@ -662,9 +676,6 @@ class ApplyResult(IApplyResult):
                     # if current_value_instance_new is not None:
                     #     # NOTE: not used later on
                     #     current_value_instance = current_value_instance_new
-                    self._update_and_register_exec_cleaners(component=component)
-                    # , key_string=comp_key_str
-
 
                 if process_further and getattr(component, "enables", None):
                     assert not getattr(component, "contains", None), component
@@ -729,6 +740,7 @@ class ApplyResult(IApplyResult):
 
         if depth==0:
             self.finish()
+            # print(f"here 3333:\n{self.top_value_node.dump_to_str()}")
             self._execute_all_evaluations()
             self._execute_all_validations()
             self._execute_all_finish_components()
@@ -818,6 +830,7 @@ class ApplyResult(IApplyResult):
 
     def _create_apply_stack_frame_for_component(self,
                                                 component: IComponent,
+                                                value_node: ValueNode,
                                                 depth: int,
                                                 in_component_only_tree: bool,
                                                 mode_subentity_items: bool,
@@ -837,6 +850,7 @@ class ApplyResult(IApplyResult):
             new_frame = ApplyStackFrame(
                 container = container,
                 component = container,
+                value_node=value_node,
                 instance = self.instance,
                 instance_new = self.instance_new,
                 in_component_only_tree=in_component_only_tree,
@@ -868,6 +882,7 @@ class ApplyResult(IApplyResult):
             new_frame = ApplyStackFrame(
                 container = component,
                 component = component,
+                value_node=value_node,
                 # must inherit previous instance
                 parent_instance=self.current_frame.instance,
                 instance = instance,
@@ -880,6 +895,7 @@ class ApplyResult(IApplyResult):
             # register non-container frame - only component is new. take instance from previous frame
             new_frame = ApplyStackFrame(
                 component = component,
+                value_node=value_node,
                 # copy
                 instance = self.current_frame.instance,
                 container = self.current_frame.container,
@@ -891,14 +907,13 @@ class ApplyResult(IApplyResult):
         assert new_frame
 
         # ------ common setup for the new_frame ----------
-        # one level deeper
+        # set one level deeper
         new_frame.depth = depth + 1
         if isinstance(component, IField):
-            #assert getattr(component, "bind", None)
-            #assert not component.is_container()
             new_frame.set_this_registry(
                 component.get_this_registry()
             )
+
         return new_frame
 
     # ------------------------------------------------------------
@@ -939,6 +954,7 @@ class ApplyResult(IApplyResult):
 
     def _apply_subentity_items(self,
                                subentity_items: SubEntityItems,
+                               value_node: ValueNode,
                                in_component_only_tree:bool,
                                depth: int,
                                ) -> NoneType:
@@ -1052,12 +1068,23 @@ class ApplyResult(IApplyResult):
             # -- fill values dict
             self._fill_values_dict(filler="subentity_items", component=subentity_items, is_init=False, process_further=True, subentity_items_mode=True)
 
+            # value_node_w_items = self.current_frame.value_node
+
             for key, (instance, index0, item_instance_new) in instances_by_key.items():
-                # Go one level deeper 
+                # Go one level deeper
+                item_value_node = ValueNode(
+                    component = subentity_items,
+                    has_items=False,
+                    parent_node = value_node,
+                    instance = instance,
+                )
+                value_node.add_item(item_value_node)
+
                 with self.use_stack_frame(
                         ApplyStackFrame(
                             container = subentity_items,
                             component = subentity_items,
+                            value_node = item_value_node,
                             index0 = index0,
                             # main instance - original values
                             instance = instance, 
@@ -1086,6 +1113,7 @@ class ApplyResult(IApplyResult):
                     component = subentity_items,
                     # instance is a list of items
                     instance = instance_list,
+                    value_node=value_node,
                     instance_is_list = True,
                     # ALT: self.current_frame.container
                     container = subentity_items,

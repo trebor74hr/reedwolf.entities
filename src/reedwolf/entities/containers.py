@@ -57,7 +57,7 @@ from .base import (
     GlobalConfig,
     KeyPairs,
     IApplyResult,
-    SetupStackFrame,
+    SetupStackFrame, ValueNode,
 )
 from .expressions import (
     DotExpression,
@@ -740,7 +740,7 @@ class Entity(ContainerBase):
         create and config ApplyResult() and call apply_result.apply()
         """
         from .apply import ApplyResult
-        container = self.get_first_parent_container(consider_self=True)
+        # container = self.get_first_parent_container(consider_self=True)
 
         apply_result = \
                 ApplyResult(
@@ -771,8 +771,8 @@ class Entity(ContainerBase):
             - validations are not called
         """
         from .apply import ApplyResult
-        container = self.get_first_parent_container(consider_self=True)
 
+        # container = self.get_first_parent_container(consider_self=True)
         apply_result = \
                 ApplyResult(
                     defaults_mode=True,

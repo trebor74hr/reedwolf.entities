@@ -15,7 +15,7 @@ from .utils import (
     UNDEFINED,
     UndefinedType,
     to_repr,
-    get_available_names_example,
+    get_available_names_example, NOT_APPLIABLE,
 )
 from .exceptions import (
     EntitySetupValueError,
@@ -214,7 +214,8 @@ class NestedBoundModelBase(IBoundModel):
         with apply_result.use_stack_frame(
                 ApplyStackFrame(
                     container = container, 
-                    component = self, 
+                    component = self,
+                    value_node=NOT_APPLIABLE,
                     instance = instance,
                     instance_new = None,
                     this_registry=this_registry,
