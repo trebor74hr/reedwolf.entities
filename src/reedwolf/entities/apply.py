@@ -334,6 +334,9 @@ class ApplyResult(IApplyResult):
               could be unadapted (see field.try_adapt_value()
         """
         assert component == self.current_frame.component
+        assert component == self.current_frame.value_node.component
+
+        value_node = self.current_frame.value_node
 
         if new_value is UNDEFINED:
             raise EntityInternalError(owner=component, msg="New value should not be UNDEFINED, fix the caller")
@@ -345,6 +348,11 @@ class ApplyResult(IApplyResult):
             raise EntityInternalError(owner=self, msg=f"key_str not found - current_values[{key_str}]")
 
         instance_attr_current_value = self.current_values[key_str]
+        if not instance_attr_current_value:
+            assert not value_node.current_value
+        else:
+            if value_node.current_value is not instance_attr_current_value:
+                raise EntityInternalError(owner=self, msg=f"{instance_attr_current_value} != {value_node.current_value}")
         instance_attr_update_history = self.update_history.get(key_str, UNDEFINED)
 
         if is_from_init_bind:
@@ -355,16 +363,16 @@ class ApplyResult(IApplyResult):
                 raise EntityInternalError(owner=component, msg=f"Initialization: key_str '{key_str}' already in update_history.")
             instance_attr_update_history = []
             self.update_history[key_str] = instance_attr_update_history
+            assert value_node.update_history is None
+            value_node.update_history = instance_attr_update_history
 
             # --- current_values - initialize
             # Can be various UndefinedType: NA_IN_PROGRESS, NOT_APPLIABLE
             if not isinstance(instance_attr_current_value, UndefinedType):
                 raise EntityInternalError(owner=self, msg=f"value already set - current_values[{key_str}] :=  {instance_attr_current_value}")
-            instance_attr_current_value = InstanceAttrCurrentValue(
-                                                key_string=key_str, 
-                                                component=component)
+            instance_attr_current_value = InstanceAttrCurrentValue(key_string=key_str)
             self.current_values[key_str] = instance_attr_current_value
-
+            value_node.current_value = instance_attr_current_value
         else:
             # === Update
             if not isinstance(instance_attr_current_value, InstanceAttrCurrentValue):
@@ -380,6 +388,10 @@ class ApplyResult(IApplyResult):
             value_current = instance_attr_update_history[-1].value
             if value_current == new_value:
                 raise EntityApplyError(owner=component, msg=f"register change failed, the value is the same: {value_current}")
+            # TODO: remove some checks
+            value_current2 = instance_attr_current_value.get_value(strict=False)
+            if value_current != value_current2:
+                raise EntityApplyError(owner=component, msg=f"internal check: {value_current} <> {value_current2}")
 
         # NOTE: type check is not done on initial or interemediate instance values.
         #       It is only done on the last value in _apply() -> _finish_component()
@@ -754,12 +766,11 @@ class ApplyResult(IApplyResult):
 
         if depth==0:
             self.finish()
-            # print(f"here 3333:\n{self.top_value_node.dump_to_str()}")
             self._execute_all_evaluations()
             self._execute_all_validations()
             self._execute_all_finish_components()
-
             self._apply_collect_changed_values()
+            # print(f"here 3333:\n{self.top_value_node.dump_to_str()}")
 
         # TODO: logger: apply_result.config.logger.debug(f"depth={depth}, comp={component.name}, bind={bind} => {dexp_result}")
 

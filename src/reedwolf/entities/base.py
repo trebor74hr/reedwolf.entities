@@ -1916,9 +1916,8 @@ class InstanceAttrValue:
 @dataclass
 class InstanceAttrCurrentValue:
     key_string: KeyString = field()
-    component: IComponent = field(repr=False)
     _value: Union[LiteralType, UndefinedType] = field(init=False, default=UNDEFINED)
-    # do not compare - for unit tests
+    # do not compare by this attribute (for easier unit-test checks)
     finished: bool = field(repr=False, init=False, default=False, compare=False)
 
     def set_value(self, value: LiteralType) -> "InstanceAttrCurrentValue":
@@ -1940,20 +1939,6 @@ class InstanceAttrCurrentValue:
         if self.finished: # and self._value is not NA_DEFAULTS_MODE:
             raise EntityInternalError(owner=self, msg=f"Current value already finished, last value: {self._value}") 
         self.finished = True
-
-# ------------------------------------------------------------
-
-@dataclass
-class ValueData:
-    # will be set later
-    value:          Union[AttrValue] = UNDEFINED
-    # TODO: value_accessor: IValueAccessor
-    update_history: Dict[KeyString, List[InstanceAttrValue]] = \
-        field(repr=False, init=False, default_factory=dict)
-    current_values: Dict[KeyString, InstanceAttrCurrentValue] = \
-        field(repr=False, init=False, default_factory=dict)
-    changes: List[InstanceChange] = \
-        field(repr=False, init=False, default_factory=list)
 
 # ------------------------------------------------------------
 
@@ -1989,7 +1974,8 @@ class ValueNode:
 
     # <field>.Value
     # - when component has data value - empty ValueData is set in constructor
-    value_data: Union[UndefinedType, ValueData] = field(repr=False, init=False, default=UNDEFINED)
+    current_value: Union[UndefinedType, InstanceAttrCurrentValue] = \
+        field(repr=False, init=False, default=UNDEFINED)
 
     # <field>.Children
     # - when component has children - initialized with empty {}, later filled
@@ -2002,6 +1988,16 @@ class ValueNode:
     # Autocomputed
     # component's name
     name:            AttrName = field(init=False, repr=True)
+
+    # interrnal structures
+    update_history: Optional[List[InstanceAttrValue]] = \
+        field(repr=False, init=False, default=None)
+
+
+    # TODO:
+    # changes: List[InstanceChange] = \
+    #     field(repr=False, init=False, default_factory=list)
+    # TODO: value_accessor: IValueAccessor
 
     # TODO: later  - see register_instance_attr_change()
     # # instance's attribute name
@@ -2036,8 +2032,8 @@ class ValueNode:
             assert self.parent_node and self.parent_node.container_node
             self.container_node = self.parent_node.container_node
 
-        if isinstance(self.component, IField):
-            self.value_data = ValueData()
+        # if isinstance(self.component, IField):
+        #     self.current_value = ValueData()
 
         # TODO: self.key_pairs
         # TODO: self.key_string
@@ -2082,7 +2078,24 @@ class ValueNode:
     def dump_to_strlist(self, depth=0) -> List[str]:
         lines = []
         indent = "  " * depth
-        lines.append(f"{indent}{self.name}{'(has_items)' if self.has_items else ''}")
+        line = f"{indent}{self.name}{'(has_items)' if self.has_items else ''}"
+        if self.current_value:
+            value = self.current_value.get_value(strict=False)
+            line += f" = {value}"
+            nr_updates = len(self.update_history) - 1
+            if nr_updates > 0:
+                orig_value = self.update_history[0].value
+                # assert orig_value!=value
+                value_type = value.__class__.__name__
+                orig_type = orig_value.__class__.__name__
+                if value_type!=orig_type and not isinstance(value, (NoneType, UndefinedType)) :
+                    line += f":{value_type}"
+                line += f"  (orig: {orig_value}"
+                if value_type!=orig_type and not isinstance(orig_value, (NoneType, UndefinedType)):
+                    line += f":{orig_type}"
+                line += f", ch: {nr_updates})"
+
+        lines.append(line)
         if self.has_items:
             lines.append(f"{indent}- Items[{len(self.items)}]:")
             for item_node in self.items:
