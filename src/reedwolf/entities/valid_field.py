@@ -147,7 +147,9 @@ class Readonly(FieldValidationBase):
             return None
 
         key_string = apply_result.get_key_string(component)
-        update_history = apply_result.update_history.get(key_string)
+        # ORIG: update_history = apply_result.update_history.get(key_string)
+        update_history = apply_result.current_frame.value_node.value_history
+
         if update_history and len(update_history) > 1:
             initial_value = update_history[0].value
             last_value = update_history[-1].value

@@ -551,6 +551,7 @@ class IFunction(IFunctionDexpNode):
         try:
             ouptut_value = self.py_function(**kwargs_all)
         except Exception as ex:
+            # REMOVE_THIS: raise
             raise EntityApplyError(owner=self, msg=f"failed in calling '{self.name}({args}, {kwargs})' => {ex}")
 
         dexp_result.set_value(ouptut_value, attr_name="", changer_name=f"{self.name}")

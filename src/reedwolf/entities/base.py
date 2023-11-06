@@ -1913,32 +1913,32 @@ class InstanceAttrValue:
                 "is_from_bind": self.is_from_bind,
                 }
 
-@dataclass
-class InstanceAttrCurrentValue:
-    key_string: KeyString = field()
-    _value: Union[LiteralType, UndefinedType] = field(init=False, default=UNDEFINED)
-    # do not compare by this attribute (for easier unit-test checks)
-    finished: bool = field(repr=False, init=False, default=False, compare=False)
-
-    def set_value(self, value: LiteralType) -> "InstanceAttrCurrentValue":
-        if self.finished:
-            raise EntityInternalError(owner=self, msg=f"Current value already finished, last value: {self._value}") 
-        self._value = value
-        # if self._value is NA_DEFAULTS_MODE:
-        #     # TODO: check if finish immediatelly
-        #     self.mark_finished()
-        return self
-
-    def get_value(self, strict:bool) -> LiteralType:
-        if strict and not self.finished:
-            # print("TODO: riješi ovu iznimku")
-            raise EntityInternalError(owner=self, msg=f"Current value is not finished, last value: {self._value}") 
-        return self._value
-
-    def mark_finished(self):
-        if self.finished: # and self._value is not NA_DEFAULTS_MODE:
-            raise EntityInternalError(owner=self, msg=f"Current value already finished, last value: {self._value}") 
-        self.finished = True
+# ORIG: @dataclass
+# ORIG: class InstanceAttrCurrentValue:
+# ORIG:     # key_string: KeyString = field()
+# ORIG:     _value: Union[LiteralType, UndefinedType] = field(default=UNDEFINED)
+# ORIG:     # do not compare by this attribute (for easier unit-test checks)
+# ORIG:     finished: bool = field(repr=False, init=False, default=False, compare=False)
+# ORIG:
+# ORIG:     def set_value(self, value: LiteralType) -> "InstanceAttrCurrentValue":
+# ORIG:         if self.finished:
+# ORIG:             raise EntityInternalError(owner=self, msg=f"Current value already finished, last value: {self._value}")
+# ORIG:         self._value = value
+# ORIG:         # if self._value is NA_DEFAULTS_MODE:
+# ORIG:         #     # TODO: check if finish immediatelly
+# ORIG:         #     self.mark_finished()
+# ORIG:         return self
+# ORIG:
+# ORIG:     def get_value(self, strict:bool) -> LiteralType:
+# ORIG:         if strict and not self.finished:
+# ORIG:             # print("TODO: riješi ovu iznimku")
+# ORIG:             raise EntityInternalError(owner=self, msg=f"Current value is not finished, last value: {self._value}")
+# ORIG:         return self._value
+# ORIG:
+# ORIG:     def mark_finished(self):
+# ORIG:         if self.finished: # and self._value is not NA_DEFAULTS_MODE:
+# ORIG:             raise EntityInternalError(owner=self, msg=f"Current value already finished, last value: {self._value}")
+# ORIG:         self.finished = True
 
 # ------------------------------------------------------------
 
@@ -1972,9 +1972,21 @@ class ValueNode:
     # TODO: replace with fields_dict: Dict[name, Self] - distribute to all
     container_node: Self = field(repr=False, init=False, default=None)
 
-    # <field>.Value
-    # - when component has data value - empty ValueData is set in constructor
-    current_value: Union[UndefinedType, InstanceAttrCurrentValue] = \
+    # # <field>.Value
+    # # - when component has data value - empty ValueData is set in constructor
+    # current_value: Union[UndefinedType, InstanceAttrCurrentValue] = \
+    #     field(repr=False, init=False, default=UNDEFINED)
+
+    # # <field>.Value
+    _value: Union[AttrValue, UndefinedType] = field(repr=False, init=False, default=UNDEFINED)
+    # , compare=False ?? do not compare by this attribute (for easier unit-test checks)
+    finished: bool = field(repr=False, init=False, default=False)
+
+    # TODO: consider
+    # key_string: KeyString = field()
+
+    # initial value - Just value - no wrapper
+    init_value: Union[UndefinedType, AttrValue] = \
         field(repr=False, init=False, default=UNDEFINED)
 
     # <field>.Children
@@ -1987,12 +1999,11 @@ class ValueNode:
 
     # Autocomputed
     # component's name
-    name:            AttrName = field(init=False, repr=True)
+    name:       AttrName = field(init=False, repr=True)
 
     # interrnal structures
-    update_history: Optional[List[InstanceAttrValue]] = \
-        field(repr=False, init=False, default=None)
-
+    value_history: Union[UndefinedType, List[InstanceAttrValue]] = \
+        field(repr=False, init=False, default=UNDEFINED)
 
     # TODO:
     # changes: List[InstanceChange] = \
@@ -2039,6 +2050,26 @@ class ValueNode:
         # TODO: self.key_string
         # TODO: self.attr_name = self.component.bind ...
 
+    def set_value(self, value: AttrValue) -> Self:
+        if self.finished:
+            raise EntityInternalError(owner=self, msg=f"Current value already finished, last value: {self._value}")
+        self._value = value
+        # if self._value is NA_DEFAULTS_MODE:
+        #     # TODO: check if finish immediatelly
+        #     self.mark_finished()
+        return self
+
+    def get_value(self, strict:bool) -> AttrValue:
+        if strict and not self.finished:
+            # print("TODO: riješi ovu iznimku")
+            raise EntityInternalError(owner=self, msg=f"Current value is not finished, last value: {self._value}")
+        return self._value
+
+    def mark_finished(self):
+        if self.finished: # and self._value is not NA_DEFAULTS_MODE:
+            raise EntityInternalError(owner=self, msg=f"Current value already finished, last value: {self._value}")
+        self.finished = True
+
     def add_item(self, value_node: Self):
         assert self.has_items
         # TODO: assert value_node is not self
@@ -2079,20 +2110,21 @@ class ValueNode:
         lines = []
         indent = "  " * depth
         line = f"{indent}{self.name}{'(has_items)' if self.has_items else ''}"
-        if self.current_value:
-            value = self.current_value.get_value(strict=False)
+        value = self.get_value(strict=False)
+        if isinstance(value, UndefinedType):
             line += f" = {value}"
-            nr_updates = len(self.update_history) - 1
+            nr_updates = len(self.value_history) - 1
             if nr_updates > 0:
-                orig_value = self.update_history[0].value
-                # assert orig_value!=value
+                # orig_value = self.value_history[0].value
+                init_value = self.init_value
+                # assert init_value!=value
                 value_type = value.__class__.__name__
-                orig_type = orig_value.__class__.__name__
-                if value_type!=orig_type and not isinstance(value, (NoneType, UndefinedType)) :
+                init_type = init_value.__class__.__name__
+                if value_type!=init_type and not isinstance(value, (NoneType, UndefinedType)) :
                     line += f":{value_type}"
-                line += f"  (orig: {orig_value}"
-                if value_type!=orig_type and not isinstance(orig_value, (NoneType, UndefinedType)):
-                    line += f":{orig_type}"
+                line += f"  (orig: {init_value}"
+                if value_type!=init_type and not isinstance(init_value, (NoneType, UndefinedType)):
+                    line += f":{init_type}"
                 line += f", ch: {nr_updates})"
 
         lines.append(line)
@@ -2450,14 +2482,14 @@ class IApplyResult(IStackOwnerSession):
     update_history: Dict[KeyString, List[InstanceAttrValue]] = \
                             field(repr=False, init=False, default_factory=dict)
 
-    # Current value of the instance's attribute.
-    # The value equals to last value in .update_history for the same key_string
-    # On value change for an attr, object InstanceAttrCurrentValue() is not
-    # replaced, but updated, leaving allways the same instance holding the
-    # value.
-    # Done in .register_instance_attr_change()
-    current_values: Dict[KeyString, InstanceAttrCurrentValue] = \
-                            field(repr=False, init=False, default_factory=dict)
+    # ORIG2: # Current value of the instance's attribute.
+    # ORIG2: # The value equals to last value in .update_history for the same key_string
+    # ORIG2: # On value change for an attr, object InstanceAttrCurrentValue() is not
+    # ORIG2: # replaced, but updated, leaving allways the same instance holding the
+    # ORIG2: # value.
+    # ORIG2: # Done in .register_instance_attr_change()
+    # ORIG2: current_values: Dict[KeyString, InstanceAttrCurrentValue] = \
+    # ORIG2:                         field(repr=False, init=False, default_factory=dict)
 
     # final list of created/deleted/changed instances and sub-instances 
     # (operation + orig values). If instance is not changed, no record will be registered.

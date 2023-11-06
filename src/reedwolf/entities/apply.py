@@ -60,7 +60,6 @@ from .base import (
     ChangeOpEnum,
     InstanceAttrValue,
     InstanceChange,
-    InstanceAttrCurrentValue,
     get_instance_key_string_attrname_pair,
     UseStackFrameCtxManagerBase,
     IContainer,
@@ -328,10 +327,11 @@ class ApplyResult(IApplyResult):
         Does some internal validations.
         Change is applied to
           1) cmodel attribute - not if initial value
-          2) update_history - add new value to list
+          2) value_history - add new value to list
           3) ucurrent_values - change value
         Note: new_value is required - since dexp_result.value
               could be unadapted (see field.try_adapt_value()
+        TODO: remove some checks
         """
         assert component == self.current_frame.component
         assert component == self.current_frame.value_node.component
@@ -343,55 +343,59 @@ class ApplyResult(IApplyResult):
 
         # key_str = component.get_key_string(apply_result=self)
         key_str = self.get_key_string(component)
+        # ORIG2: if key_str not in self.current_values:
+        # ORIG2:     raise EntityInternalError(owner=self, msg=f"key_str not found - current_values[{key_str}]")
 
-        if key_str not in self.current_values:
-            raise EntityInternalError(owner=self, msg=f"key_str not found - current_values[{key_str}]")
+        # ORIG: instance_attr_current_value = self.current_values[key_str]
+        # ORIG2: instance_attr_current_value = value_node.current_value
+        # ORIG2: if not instance_attr_current_value:
+        # ORIG2:     assert not value_node.current_value
+        current_value = value_node.get_value(strict=False)
 
-        instance_attr_current_value = self.current_values[key_str]
-        if not instance_attr_current_value:
-            assert not value_node.current_value
-        else:
-            if value_node.current_value is not instance_attr_current_value:
-                raise EntityInternalError(owner=self, msg=f"{instance_attr_current_value} != {value_node.current_value}")
-        instance_attr_update_history = self.update_history.get(key_str, UNDEFINED)
+        # ORIG: instance_attr_update_history = self.update_history.get(key_str, UNDEFINED)
+        instance_attr_update_history = value_node.value_history
 
         if is_from_init_bind:
             # Initialization - create internal structs
 
             # --- update_history - initialize
             if instance_attr_update_history is not UNDEFINED:
-                raise EntityInternalError(owner=component, msg=f"Initialization: key_str '{key_str}' already in update_history.")
+                raise EntityInternalError(owner=component, msg=f"Initialization: key_str '{key_str}' already in value_history.")
             instance_attr_update_history = []
             self.update_history[key_str] = instance_attr_update_history
-            assert value_node.update_history is None
-            value_node.update_history = instance_attr_update_history
+            assert value_node.value_history is UNDEFINED
+            value_node.value_history = instance_attr_update_history
 
             # --- current_values - initialize
             # Can be various UndefinedType: NA_IN_PROGRESS, NOT_APPLIABLE
-            if not isinstance(instance_attr_current_value, UndefinedType):
-                raise EntityInternalError(owner=self, msg=f"value already set - current_values[{key_str}] :=  {instance_attr_current_value}")
-            instance_attr_current_value = InstanceAttrCurrentValue(key_string=key_str)
-            self.current_values[key_str] = instance_attr_current_value
-            value_node.current_value = instance_attr_current_value
+            if not isinstance(current_value, UndefinedType):
+                raise EntityInternalError(owner=self, msg=f"value already set - current_values[{key_str}] :=  {current_value}")
+            # ORIG2: instance_attr_current_value = InstanceAttrCurrentValue() # ORIG: key_string=key_str)
+            # ORIG2: self.current_values[key_str] = instance_attr_current_value
+            # ORIG2: value_node.current_value = instance_attr_current_value
+
+            # --- init_value ---
+            assert value_node.init_value is UNDEFINED
+            value_node.init_value = new_value
         else:
             # === Update
-            if not isinstance(instance_attr_current_value, InstanceAttrCurrentValue):
-                raise EntityInternalError(owner=self, msg=f"value not initialized properly - current_values[{key_str}] :=  {instance_attr_current_value}")
+            # ORIG2: if not isinstance(instance_attr_current_value, InstanceAttrCurrentValue):
+            if current_value is not NA_DEFAULTS_MODE and isinstance(current_value, UndefinedType):
+                raise EntityInternalError(owner=self, msg=f"value not initialized properly - current_values[{key_str}] :=  {current_value}")
 
             if is_from_init_bind:
-                raise EntityInternalError(owner=component, msg=f"key_str '{key_str}' found in update_history and this is initialization")
+                raise EntityInternalError(owner=component, msg=f"key_str '{key_str}' found in value_history and this is initialization")
 
             if len(instance_attr_update_history)==0:
                 raise EntityInternalError(owner=component, msg=f"change history for key_str='{key_str}' is empty")
 
             # -- check if current value is different from new one
-            value_current = instance_attr_update_history[-1].value
-            if value_current == new_value:
-                raise EntityApplyError(owner=component, msg=f"register change failed, the value is the same: {value_current}")
+            last_value = instance_attr_update_history[-1].value
+            if last_value == new_value:
+                raise EntityApplyError(owner=component, msg=f"register change failed, the value is the same: {last_value}")
             # TODO: remove some checks
-            value_current2 = instance_attr_current_value.get_value(strict=False)
-            if value_current != value_current2:
-                raise EntityApplyError(owner=component, msg=f"internal check: {value_current} <> {value_current2}")
+            if last_value != current_value:
+                raise EntityApplyError(owner=component, msg=f"internal check: {last_value} <> {current_value}")
 
         # NOTE: type check is not done on initial or interemediate instance values.
         #       It is only done on the last value in _apply() -> _finish_component()
@@ -404,7 +408,8 @@ class ApplyResult(IApplyResult):
             self._model_instance_attr_change_value(component=component, key_str=key_str, new_value=new_value)
 
         # --- current value - set to new value
-        instance_attr_current_value.set_value(new_value)
+        # ORIG2: instance_attr_current_value.set_value(new_value)
+        value_node.set_value(new_value)
 
         # --- update_history - add new value
         # TODO: pass input arg value_parent_name - component.name does not have any purpose
@@ -434,7 +439,8 @@ class ApplyResult(IApplyResult):
             raise EntityInternalError(owner=self, msg=f"Parent instance {parent_instance} has wrong type")
 
         # -- attr_name - fetch from initial bind dexp (very first)
-        init_instance_attr_value = self.update_history[key_str][0]
+        # ORIG: init_instance_attr_value = self.update_history[key_str][0]
+        init_instance_attr_value = self.current_frame.value_node.value_history[0]
         if not init_instance_attr_value.is_from_bind:
             raise EntityInternalError(owner=self, msg=f"{init_instance_attr_value} is not from bind")
         init_bind_dexp_result = init_instance_attr_value.dexp_result
@@ -677,19 +683,22 @@ class ApplyResult(IApplyResult):
             comp_key_str = self.get_key_string(component)
 
             # try to initialize (create value instance), but if exists, check for circular dependency loop
-            current_value_instance = self.current_values.get(comp_key_str, UNDEFINED)
+            # ORIG2: current_value_instance = self.current_values.get(comp_key_str, UNDEFINED)
+            value_node = self.current_frame.value_node
+            current_value = value_node.get_value(strict=False)
 
-            if current_value_instance is NA_IN_PROGRESS:
+            if current_value is NA_IN_PROGRESS:
                 raise EntityApplyError(owner=component, 
                             msg="The component is already in progress state. Probably circular dependency issue. Fix problematic references to this component and try again.")
-            elif current_value_instance is UNDEFINED:
-                self.current_values[comp_key_str] = NA_IN_PROGRESS
+            elif current_value is UNDEFINED:
+                # self.current_values[comp_key_str] = NA_IN_PROGRESS
+                value_node.set_value(NA_IN_PROGRESS)
 
             # only when full apply or partial apply
             if not (self.component_only and not in_component_only_tree):
 
                 # TODO: maybe a bit too late to check this but this works
-                if current_value_instance:
+                if current_value:
                     process_further = False
                 else:
                     self._update_and_register_exec_cleaners(component=component)
@@ -1315,10 +1324,13 @@ class ApplyResult(IApplyResult):
 
         if isinstance(component, IField):
             # --- 1. Fill initial value from instance
-            key_str = self.get_key_string(component)
 
+            current_value = self.current_frame.value_node.get_value(strict=False)
             # NOTE: this never happens so I put assert guard and commented out the code
-            assert self.current_values.get(key_str, None) in (None, NA_IN_PROGRESS, NOT_APPLIABLE)
+            assert current_value in (None, NA_IN_PROGRESS, NOT_APPLIABLE)
+            # ORIG2: key_str = self.get_key_string(component)
+            # ORIG2: assert self.current_values.get(key_str, None) in (None, NA_IN_PROGRESS, NOT_APPLIABLE)
+
             # TODO: NA_DEFAULTS_MODE
             # if self.current_values.get(key_str, None) not in (
             #         None, NA_IN_PROGRESS, NOT_APPLIABLE):
@@ -1371,17 +1383,21 @@ class ApplyResult(IApplyResult):
 
 
         # --- 4.1 finalize last value and mark as finished
-        current_value_instance = self.current_values[key_string]
-        if current_value_instance is NA_IN_PROGRESS:
-            current_value_instance = NOT_APPLIABLE
-            self.current_values[key_string] = current_value_instance
+        value_node = self.current_frame.value_node
+        # current_value_instance = self.current_values[key_string]
+        current_value = value_node.get_value(strict=False)
+        if current_value is NA_IN_PROGRESS:
+            current_value = NOT_APPLIABLE
+            # self.current_values[key_string] = current_value
+            value_node.set_value(current_value)
 
-        elif current_value_instance is not UNDEFINED \
-                and current_value_instance is not NOT_APPLIABLE:
+        elif current_value is not UNDEFINED \
+                and current_value is not NOT_APPLIABLE:
 
-            if not isinstance(current_value_instance, InstanceAttrCurrentValue):
-                raise EntityInternalError(owner=self, msg=f"Unexpected current value instance found for {key_string}, got: {current_value_instance}")
-            current_value_instance.mark_finished()
+            # if not isinstance(current_value, InstanceAttrCurrentValue):
+            if isinstance(current_value, UndefinedType):
+                    raise EntityInternalError(owner=self, msg=f"Unexpected current value instance found for {key_string}, got: {current_value}")
+            value_node.mark_finished()
 
         # --- 4.2 validate type is ok?
         # NOTE: initial value from instance is not checked - only
@@ -1616,12 +1632,16 @@ class ApplyResult(IApplyResult):
     def get_current_value_instance(self,
                                    component: IComponent,
                                    init_when_missing:bool=False
-                                   ) -> InstanceAttrCurrentValue:
+                                   ) -> AttrValue:
+        # InstanceAttrCurrentValue:
         """ if not found will return UNDEFINED
             Probaly a bit faster, only dict queries.
         """
         key_str = self.get_key_string(component)
-        if key_str not in self.current_values:
+        current_value = self.current_frame.value_node.get_value(strict=False)
+
+        # ORIG2: if key_str not in self.current_values:
+        if current_value is UNDEFINED:
             if not init_when_missing:
                 raise EntityInternalError(owner=component, msg="Value fetch too early") 
 
@@ -1638,11 +1658,16 @@ class ApplyResult(IApplyResult):
             # This yields RECURSION! See doc for _apply() - mode_dexp_dependency
             # ------------------------------------------------------------
             self._apply(component=component, mode_dexp_dependency=True)
-            # self._init_by_bind_dexp(component)
 
-        attr_current_value_instance = self.current_values[key_str]
-        # TODO: self.config.logger.warning(f"{'  ' * self.current_frame.depth} value: {component.name}")
-        return attr_current_value_instance
+            current_value = self.current_frame.value_node.get_value(strict=False)
+            if current_value is UNDEFINED:
+                raise EntityInternalError(owner=component, msg="Value fetch too early")
+
+        return current_value
+
+        # ROIG: attr_current_value_instance = self.current_values[key_str]
+        # ROIG: # TODO: self.config.logger.warning(f"{'  ' * self.current_frame.depth} value: {component.name}")
+        # ROIG: return attr_current_value_instance
 
     # ------------------------------------------------------------
 
@@ -1659,10 +1684,14 @@ class ApplyResult(IApplyResult):
         #       bind_dexp._evaluator.execute()
         # key_str = component.get_key_string(apply_result=self)
         key_str = self.get_key_string(component)
-        if key_str not in self.current_values:
-            raise EntityInternalError(owner=component, msg=f"{key_str} not found in current values") 
-        attr_current_value_instance = self.current_values[key_str]
-        return attr_current_value_instance.get_value(strict=strict)
+        current_value = self.current_frame.value_node.get_value(strict=strict)
+        if current_value is UNDEFINED:
+            raise EntityInternalError(owner=component, msg=f"{key_str} not found in current values")
+        return current_value
+        # ORIG2: if key_str not in self.current_values:
+        # ORIG2:     raise EntityInternalError(owner=component, msg=f"{key_str} not found in current values")
+        # ORIG2: attr_current_value_instance = self.current_values[key_str]
+        # ORIG2: return attr_current_value_instance.get_value(strict=strict)
 
     # ------------------------------------------------------------
 
@@ -1706,9 +1735,9 @@ class ApplyResult(IApplyResult):
             tree = self.values_tree
         else:
             if key_string not in self.values_tree_by_key_string.keys():
-                if key_string not in self.current_values:
-                    names_avail = get_available_names_example(key_string, self.values_tree_by_key_string.keys())
-                    raise EntityInternalError(owner=self, msg=f"Key string not found in values tree, got: {key_string}. Available: {names_avail}") 
+                # ORIG2: if key_string not in self.current_values:
+                # ORIG2:     names_avail = get_available_names_example(key_string, self.values_tree_by_key_string.keys())
+                # ORIG2:     raise EntityInternalError(owner=self, msg=f"Key string not found in values tree, got: {key_string}. Available: {names_avail}")
 
                 # -- fill values dict
                 assert not (self.current_frame.component==self.entity)
@@ -1767,24 +1796,22 @@ class ApplyResult(IApplyResult):
 
         values_dict["name"] = component.name
         # DEBUG: values_dict["filler"] = filler
-        attr_current_value_instance = None
+        # ORIG2: current_value = None
+        current_value = UNDEFINED
 
         if isinstance(component, IField):
             assert getattr(component, "bind", None)
             # can trigger recursion - filling tree 
-            attr_current_value_instance = \
-                    self.get_current_value_instance(
-                        component=component, init_when_missing=True)
-
-            if attr_current_value_instance is not NOT_APPLIABLE:
-                if attr_current_value_instance is UNDEFINED:
+            current_value = self.get_current_value_instance(component=component, init_when_missing=True)
+            # ORIG2: if current_value in not NOT_APPLIABLE:
+            if current_value not in (NOT_APPLIABLE, NA_DEFAULTS_MODE):
+                if current_value is UNDEFINED:
                     raise EntityInternalError(owner=component, msg="Not expected to have undefined current instance value") 
             else:
-                attr_current_value_instance = None
+                current_value = None
 
-        if attr_current_value_instance is not None:
-            values_dict["value_instance"] = attr_current_value_instance
-            # values_dict["key_string"] = attr_current_value_instance.key_string
+        if current_value is not UNDEFINED:
+            values_dict["value_instance"] = current_value
 
         # -- add to parent object or call recursion and fill the tree completely
 
@@ -1872,7 +1899,8 @@ class ApplyResult(IApplyResult):
         output["name"] = tree["name"]
 
         if "value_instance" in tree:
-            output["value"] = tree["value_instance"].get_value(strict=True)
+            output["value"] = tree["value_instance"]
+            # ORIG2:.get_value(strict=True)
 
         self._dump_values_children(tree=tree, output=output, key_name="contains", depth=depth)
         self._dump_values_children(tree=tree, output=output, key_name="subentity_items", depth=depth)
