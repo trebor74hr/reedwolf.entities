@@ -319,7 +319,7 @@ class ApplyResult(IApplyResult):
 
     def _register_instance_attr_change(self,
                                        component: IComponent,
-                                       dexp_result: ExecResult,
+                                       dexp_result: Optional[ExecResult],
                                        new_value: LiteralType,
                                        is_from_init_bind:bool=False) -> InstanceAttrValue:
         """
@@ -331,6 +331,8 @@ class ApplyResult(IApplyResult):
           3) ucurrent_values - change value
         Note: new_value is required - since dexp_result.value
               could be unadapted (see field.try_adapt_value()
+        TODO: consider to merge this logic into ValueNode.set_value() - or maybe not?
+              lot of logic in _model_instance_attr_change_value
         TODO: remove some checks
         """
         assert component == self.current_frame.component
@@ -409,7 +411,7 @@ class ApplyResult(IApplyResult):
 
         # --- current value - set to new value
         # ORIG2: instance_attr_current_value.set_value(new_value)
-        value_node.set_value(new_value)
+        value_node.set_value(new_value, dexp_result=dexp_result)
 
         # --- update_history - add new value
         # TODO: pass input arg value_parent_name - component.name does not have any purpose
@@ -441,10 +443,16 @@ class ApplyResult(IApplyResult):
         # -- attr_name - fetch from initial bind dexp (very first)
         # ORIG: init_instance_attr_value = self.update_history[key_str][0]
         # TODO: save dexp_result in ValueNode or get from component.bind ?
-        init_instance_attr_value = self.current_frame.value_node.value_history[0]
-        if not init_instance_attr_value.is_from_bind:
-            raise EntityInternalError(owner=self, msg=f"{init_instance_attr_value} is not from bind")
-        init_bind_dexp_result = init_instance_attr_value.dexp_result
+        value_node = self.current_frame.value_node
+        init_bind_dexp_result = value_node.init_dexp_result
+        if not init_bind_dexp_result:
+            raise EntityInternalError(owner=self, msg=f"init_bind_dexp_result is not set, got: {value_node} . {init_bind_dexp_result}")
+        # init_instance_attr_value = value_node.value_history[0]
+        # if not init_instance_attr_value.is_from_bind:
+        #     raise EntityInternalError(owner=self, msg=f"{init_instance_attr_value} is not from bind")
+        # init_bind_dexp_result = init_instance_attr_value.dexp_result
+
+
         # attribute name is in the last item
 
         # "for" loop is required for attributes from substructure that
@@ -681,7 +689,7 @@ class ApplyResult(IApplyResult):
 
         with self.use_stack_frame(new_frame):
 
-            comp_key_str = self.get_key_string(component)
+            # comp_key_str = self.get_key_string(component)
 
             # try to initialize (create value instance), but if exists, check for circular dependency loop
             # ORIG2: current_value_instance = self.current_values.get(comp_key_str, UNDEFINED)
@@ -693,7 +701,7 @@ class ApplyResult(IApplyResult):
                             msg="The component is already in progress state. Probably circular dependency issue. Fix problematic references to this component and try again.")
             elif current_value is UNDEFINED:
                 # self.current_values[comp_key_str] = NA_IN_PROGRESS
-                value_node.set_value(NA_IN_PROGRESS)
+                value_node.set_value(NA_IN_PROGRESS, dexp_result=None)
 
             # only when full apply or partial apply
             if not (self.component_only and not in_component_only_tree):
@@ -1390,7 +1398,7 @@ class ApplyResult(IApplyResult):
         if current_value is NA_IN_PROGRESS:
             current_value = NOT_APPLIABLE
             # self.current_values[key_string] = current_value
-            value_node.set_value(current_value)
+            value_node.set_value(current_value, dexp_result=None)
 
         elif current_value is not UNDEFINED \
                 and current_value is not NOT_APPLIABLE:
@@ -1638,7 +1646,7 @@ class ApplyResult(IApplyResult):
         """ if not found will return UNDEFINED
             Probaly a bit faster, only dict queries.
         """
-        key_str = self.get_key_string(component)
+        # key_str = self.get_key_string(component)
         current_value = self.current_frame.value_node.get_value(strict=False)
 
         # ORIG2: if key_str not in self.current_values:

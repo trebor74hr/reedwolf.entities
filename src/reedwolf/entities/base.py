@@ -39,7 +39,7 @@ from .utils import (
     UndefinedType,
     get_available_names_example,
     DumpFormatEnum,
-    dump_to_format, NOT_APPLIABLE,
+    dump_to_format, NOT_APPLIABLE, NA_IN_PROGRESS,
 )
 from .exceptions import (
     EntityInternalError,
@@ -1982,12 +1982,18 @@ class ValueNode:
     # , compare=False ?? do not compare by this attribute (for easier unit-test checks)
     finished: bool = field(repr=False, init=False, default=False)
 
-    # TODO: consider
-    # key_string: KeyString = field()
-
     # initial value - Just value - no wrapper
     init_value: Union[UndefinedType, AttrValue] = \
         field(repr=False, init=False, default=UNDEFINED)
+
+    # NOTE: used only in ApplyResult._model_instance_attr_change_value
+    #       to set new value on model instance.
+    # ALT: Could be done with bind.Path() too.
+    init_dexp_result: Union[UndefinedType, NoneType, ExecResult] = \
+        field(repr=False, init=False, default=UNDEFINED)
+
+    # TODO: consider having this for all - enables better introspection / debug / trace / log
+    # key_string: KeyString = field()
 
     # <field>.Children
     # - when component has children - initialized with empty {}, later filled
@@ -2050,9 +2056,24 @@ class ValueNode:
         # TODO: self.key_string
         # TODO: self.attr_name = self.component.bind ...
 
-    def set_value(self, value: AttrValue) -> Self:
+    def set_value(self, value: AttrValue, dexp_result: Optional[ExecResult]) -> Self:
+        """
+        - when setting initial value dexp_result is stored into init_dexp_result
+        - dexp_result can be None too - in NA_* some undefined values
+        - fills value_history objects only in "trace" mode
+        """
         if self.finished:
             raise EntityInternalError(owner=self, msg=f"Current value already finished, last value: {self._value}")
+
+        if dexp_result is not None and self.init_dexp_result is UNDEFINED:
+            if not self._value in (NA_IN_PROGRESS, UNDEFINED):
+                raise EntityInternalError(owner=self, msg=f"self._value already set to: {self._value}")
+            # if not dexp_result:
+            #     raise EntityInternalError(owner=self, msg=f"dexp_result is empty: {dexp_result}")
+            self.init_dexp_result = dexp_result
+
+        # TODO: if config.trace - then update values_history
+
         self._value = value
         # if self._value is NA_DEFAULTS_MODE:
         #     # TODO: check if finish immediatelly
