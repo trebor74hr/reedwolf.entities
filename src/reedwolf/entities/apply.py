@@ -353,18 +353,18 @@ class ApplyResult(IApplyResult):
         current_value = value_node.get_value(strict=False)
 
         # ORIG: instance_attr_update_history = self.update_history.get(key_str, UNDEFINED)
-        instance_attr_update_history = value_node.value_history
+        value_history = value_node.value_history
 
         if is_from_init_bind:
             # Initialization - create internal structs
 
             # --- update_history - initialize
-            if instance_attr_update_history is not UNDEFINED:
+            if value_history is not UNDEFINED:
                 raise EntityInternalError(owner=component, msg=f"Initialization: key_str '{key_str}' already in value_history.")
-            instance_attr_update_history = []
-            self.update_history[key_str] = instance_attr_update_history
+            value_history = []
+            self.update_history[key_str] = value_history
             assert value_node.value_history is UNDEFINED
-            value_node.value_history = instance_attr_update_history
+            value_node.value_history = value_history
 
             # --- current_values - initialize
             # Can be various UndefinedType: NA_IN_PROGRESS, NOT_APPLIABLE
@@ -386,11 +386,11 @@ class ApplyResult(IApplyResult):
             if is_from_init_bind:
                 raise EntityInternalError(owner=component, msg=f"key_str '{key_str}' found in value_history and this is initialization")
 
-            if len(instance_attr_update_history)==0:
+            if len(value_history)==0:
                 raise EntityInternalError(owner=component, msg=f"change history for key_str='{key_str}' is empty")
 
             # -- check if current value is different from new one
-            last_value = instance_attr_update_history[-1].value
+            last_value = value_history[-1].value
             if last_value == new_value:
                 raise EntityApplyError(owner=component, msg=f"register change failed, the value is the same: {last_value}")
             # TODO: remove some checks
@@ -420,7 +420,7 @@ class ApplyResult(IApplyResult):
             is_from_bind = is_from_init_bind,
             # TODO: source of change ...
         )
-        instance_attr_update_history.append(instance_attr_value)
+        value_history.append(instance_attr_value)
 
         return instance_attr_value
 
@@ -440,6 +440,7 @@ class ApplyResult(IApplyResult):
 
         # -- attr_name - fetch from initial bind dexp (very first)
         # ORIG: init_instance_attr_value = self.update_history[key_str][0]
+        # TODO: save dexp_result in ValueNode or get from component.bind ?
         init_instance_attr_value = self.current_frame.value_node.value_history[0]
         if not init_instance_attr_value.is_from_bind:
             raise EntityInternalError(owner=self, msg=f"{init_instance_attr_value} is not from bind")
