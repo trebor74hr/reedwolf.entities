@@ -1944,6 +1944,14 @@ class InstanceAttrValue:
 
 @dataclass
 class ValueNode:
+    """
+    Don't want to store apply_result into this class,
+    so "setup_key_string()" method needs to be called
+    just after object instatiation, e.g.
+
+        ValueNode(...).setup_key_string(apply_result=...)
+
+    """
 
     component:  IComponent = field(repr=False)
     instance: DataclassType = field(repr=False)
@@ -1967,6 +1975,9 @@ class ValueNode:
     #   has_items=False - individual item - with values, has children (some with values)
     has_items: bool = field(repr=True, default=False)
 
+    # set only when item of parent.items (parent is SubentityItems)
+    index0: int = field(repr=False, default=None)
+
     # F.<field-name>
     # - contains all fields accessible in. autocomputed.
     # TODO: replace with fields_dict: Dict[name, Self] - distribute to all
@@ -1988,12 +1999,13 @@ class ValueNode:
 
     # NOTE: used only in ApplyResult._model_instance_attr_change_value
     #       to set new value on model instance.
-    # ALT: Could be done with bind.Path() too.
+    # TODO: consider ALT: Could be done with bind.Path() too.
+    #       attr_name_path: Optional[List[AttrName]] = field(init=False, repr=False)
     init_dexp_result: Union[UndefinedType, NoneType, ExecResult] = \
         field(repr=False, init=False, default=UNDEFINED)
 
-    # TODO: consider having this for all - enables better introspection / debug / trace / log
-    # key_string: KeyString = field()
+    # Should be used only for better introspection / debug / trace / log
+    key_string: KeyString = field(init=False, repr=True, default=UNDEFINED)
 
     # <field>.Children
     # - when component has children - initialized with empty {}, later filled
@@ -2005,7 +2017,7 @@ class ValueNode:
 
     # Autocomputed
     # component's name
-    name:       AttrName = field(init=False, repr=True)
+    name:       AttrName = field(init=False, repr=False)
 
     # interrnal structures
     value_history: Union[UndefinedType, List[InstanceAttrValue]] = \
@@ -2016,9 +2028,9 @@ class ValueNode:
     #     field(repr=False, init=False, default_factory=list)
     # TODO: value_accessor: IValueAccessor
 
+    # TODO: self.key_pairs
+    # TODO: self.attr_name = self.component.bind ...
     # TODO: later  - see register_instance_attr_change()
-    # # instance's attribute name
-    # attr_name OR attr_name_path:       Optional[AttrName] = field(init=False, repr=False)
 
     def __post_init__(self):
         self.name = self.component.name
@@ -2032,7 +2044,7 @@ class ValueNode:
             assert self.parent_node.top_node.parent_node is None
             self.top_node = self.parent_node.top_node
 
-        if self.component.is_subentity_items():
+        if self.component.is_subentity():
             if self.has_items:
                 self.items = []
             # TODO: consider what to do
@@ -2049,12 +2061,70 @@ class ValueNode:
             assert self.parent_node and self.parent_node.container_node
             self.container_node = self.parent_node.container_node
 
-        # if isinstance(self.component, IField):
-        #     self.current_value = ValueData()
 
-        # TODO: self.key_pairs
-        # TODO: self.key_string
-        # TODO: self.attr_name = self.component.bind ...
+    def setup_key_string(self, apply_result: "IApplyResult") -> Self:
+        """
+        Two cases - component has .keys or not:
+
+        a) with keys:
+            For containers which have keys defined, it is assumed that one key is
+            globally unique within SubEntityItems components, so no need to prefix key
+            with parent key_string. Example:
+
+                 address_set_ext[id2=1]
+
+            if for each key that is not not set in instance, a special
+            key is generated using:
+
+                apply_result._get_new_id()
+
+        b) without keys - index0 based:
+            In other cases item index in list is used (index0), and then this is
+            only locally within one instance of parent, therefore parent
+            key_string is required. Example:
+
+                 company_entity::address_set_ext[0]
+
+        """
+        component = self.component
+
+        # default case
+        key_string = component.name
+        if not self.has_items and isinstance(component, IContainer):
+            # Part of key_string that includes instance identificators
+            # i.e. key_pairs / index in a list
+            if component.keys:
+                key_pairs = component.get_key_pairs(self.instance, apply_result=apply_result)
+                assert key_pairs
+                key_string = "{}[{}]".format(
+                    component.name,
+                    GlobalConfig.ID_NAME_SEPARATOR.join(
+                        [f"{name}={value}" for name, value in key_pairs]
+                    ))
+            elif self.index0 is not None:
+                key_string = f"{component.name}[{self.index0}]"
+
+        if not self.is_top_node():
+            if not self.is_top_node() and self.container_node is self:
+                container_node = self.container_node.parent_node.container_node
+            else:
+                container_node = self.container_node
+            # TODO: consider to remove_this, just to have the same logic as before
+            if container_node.has_items:
+                container_node = container_node.parent_node.container_node
+
+            key_string = f"{container_node.key_string}{GlobalConfig.ID_NAME_SEPARATOR}{key_string}"
+
+        self.key_string = KeyString(key_string)
+
+        return self
+
+    def is_top_node(self):
+        # ALT: self.container_node and self.container_node is not self:
+        # ALT: self.parent_node is None
+        return self is self.top_node
+
+
 
     def set_value(self, value: AttrValue, dexp_result: Optional[ExecResult]) -> Optional[InstanceAttrValue]:
         """

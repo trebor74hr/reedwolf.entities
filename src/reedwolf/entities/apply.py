@@ -596,10 +596,11 @@ class ApplyResult(IApplyResult):
                     raise EntityInternalError(owner=self, msg=f"Defaults mode - instance must be NA_DEFAULTS_MODE, got: {type(self.instance)}")
 
             value_node = ValueNode(
-                component=self.entity,
-                parent_node=None,
-                instance=self.instance,
-            )
+                    component=self.entity,
+                    parent_node=None,
+                    instance=self.instance,
+                ).setup_key_string(apply_result=self)
+
             assert not self.top_value_node
             self.top_value_node = value_node
         else:
@@ -626,11 +627,11 @@ class ApplyResult(IApplyResult):
                 parent_node = self.current_frame.value_node
                 has_items = component.is_subentity_items()
                 value_node = ValueNode(
-                    component = component,
-                    parent_node = parent_node,
-                    instance = self.current_frame.instance,
-                    has_items=has_items,
-                )
+                        component = component,
+                        parent_node = parent_node,
+                        instance = self.current_frame.instance,
+                        has_items=has_items,
+                    ).setup_key_string(apply_result=self)
                 parent_node.add_child(value_node)
 
         # TODO: in partial mode this raises RecursionError:
@@ -680,8 +681,13 @@ class ApplyResult(IApplyResult):
         process_further = True
 
         with self.use_stack_frame(new_frame):
-
-            # comp_key_str = self.get_key_string(component)
+            # NOTE: internal check - if value_node.key_string is identical to original way how to get key_string:
+            #   import re
+            #   key_string1 = re.sub(r"_MK_\d+", "_MK_XX", value_node.key_string)
+            #   key_string2 = re.sub(r"_MK_\d+", "_MK_XX", self.get_key_string(component))
+            #   if key_string1 != key_string2:
+            #       raise EntityInternalError(owner=self, msg=f"diff key_string:\n  {key_string1}\n  !=\n  { key_string2}")
+            #   comp_key_str = self.get_key_string(component)
 
             # try to initialize (create value instance), but if exists, check for circular dependency loop
             # ORIG2: current_value_instance = self.current_values.get(comp_key_str, UNDEFINED)
@@ -1108,11 +1114,13 @@ class ApplyResult(IApplyResult):
             for key, (instance, index0, item_instance_new) in instances_by_key.items():
                 # Go one level deeper
                 item_value_node = ValueNode(
-                    component = subentity_items,
-                    has_items=False,
-                    parent_node = value_node,
-                    instance = instance,
-                )
+                        component = subentity_items,
+                        has_items=False,
+                        parent_node = value_node,
+                        instance = instance,
+                        index0=index0,
+                    ).setup_key_string(apply_result=self)
+
                 value_node.add_item(item_value_node)
 
                 with self.use_stack_frame(
