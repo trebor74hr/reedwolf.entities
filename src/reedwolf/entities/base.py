@@ -2056,11 +2056,11 @@ class ValueNode:
         # TODO: self.key_string
         # TODO: self.attr_name = self.component.bind ...
 
-    def set_value(self, value: AttrValue, dexp_result: Optional[ExecResult]) -> Self:
+    def set_value(self, value: AttrValue, dexp_result: Optional[ExecResult]) -> Optional[InstanceAttrValue]:
         """
         - when setting initial value dexp_result is stored into init_dexp_result
         - dexp_result can be None too - in NA_* some undefined values
-        - fills value_history objects only in "trace" mode
+        - fills value_history objects only in "trace" mode - only in the case when value is not of type UndefinedType
         """
         if self.finished:
             raise EntityInternalError(owner=self, msg=f"Current value already finished, last value: {self._value}")
@@ -2071,6 +2071,9 @@ class ValueNode:
             # if not dexp_result:
             #     raise EntityInternalError(owner=self, msg=f"dexp_result is empty: {dexp_result}")
             self.init_dexp_result = dexp_result
+            is_from_init_bind = True
+        else:
+            is_from_init_bind = True
 
         # TODO: if config.trace - then update values_history
 
@@ -2078,7 +2081,23 @@ class ValueNode:
         # if self._value is NA_DEFAULTS_MODE:
         #     # TODO: check if finish immediatelly
         #     self.mark_finished()
-        return self
+
+        # --- update_history - add new value
+        # TODO: pass input arg value_parent_name - component.name does not have any purpose
+
+        if value is not NA_IN_PROGRESS and value is not NOT_APPLIABLE and value is not NA_DEFAULTS_MODE:
+            instance_attr_value = InstanceAttrValue(
+                value_parent_name=self.component.name,
+                value=value,
+                dexp_result=dexp_result,
+                is_from_bind = is_from_init_bind,
+                # TODO: source of change ...
+            )
+            self.value_history.append(instance_attr_value)
+        else:
+            instance_attr_value = None
+
+        return instance_attr_value  #  self
 
     def get_value(self, strict:bool) -> AttrValue:
         if strict and not self.finished:

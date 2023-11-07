@@ -357,7 +357,10 @@ class ApplyResult(IApplyResult):
         # ORIG: instance_attr_update_history = self.update_history.get(key_str, UNDEFINED)
         value_history = value_node.value_history
 
-        if is_from_init_bind:
+        if is_from_init_bind or \
+          (value_history is UNDEFINED
+           and isinstance(current_value, UndefinedType)
+           and not isinstance(new_value, UndefinedType)):
             # Initialization - create internal structs
 
             # --- update_history - initialize
@@ -379,14 +382,14 @@ class ApplyResult(IApplyResult):
             # --- init_value ---
             assert value_node.init_value is UNDEFINED
             value_node.init_value = new_value
+        elif current_value is NA_DEFAULTS_MODE:
+            if len(value_history) != 0:
+                raise EntityInternalError(owner=component, msg=f"change history for key_str='{key_str}' should be empty in NA_DEFAULTS_MODE")
         else:
-            # === Update
+            # === Update - do some checks
             # ORIG2: if not isinstance(instance_attr_current_value, InstanceAttrCurrentValue):
-            if current_value is not NA_DEFAULTS_MODE and isinstance(current_value, UndefinedType):
+            if isinstance(current_value, UndefinedType):
                 raise EntityInternalError(owner=self, msg=f"value not initialized properly - current_values[{key_str}] :=  {current_value}")
-
-            if is_from_init_bind:
-                raise EntityInternalError(owner=component, msg=f"key_str '{key_str}' found in value_history and this is initialization")
 
             if len(value_history)==0:
                 raise EntityInternalError(owner=component, msg=f"change history for key_str='{key_str}' is empty")
@@ -411,18 +414,7 @@ class ApplyResult(IApplyResult):
 
         # --- current value - set to new value
         # ORIG2: instance_attr_current_value.set_value(new_value)
-        value_node.set_value(new_value, dexp_result=dexp_result)
-
-        # --- update_history - add new value
-        # TODO: pass input arg value_parent_name - component.name does not have any purpose
-        instance_attr_value = InstanceAttrValue(
-            value_parent_name=component.name,
-            value=new_value,
-            dexp_result=dexp_result,
-            is_from_bind = is_from_init_bind,
-            # TODO: source of change ...
-        )
-        value_history.append(instance_attr_value)
+        instance_attr_value = value_node.set_value(new_value, dexp_result=dexp_result)
 
         return instance_attr_value
 
