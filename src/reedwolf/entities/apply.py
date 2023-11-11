@@ -52,7 +52,6 @@ from .base import (
     IField,
     MAX_RECURSIONS,
     AttrValue,
-    AttrName,
     GlobalConfig,
     KeyString,
     IComponent,
@@ -63,7 +62,6 @@ from .base import (
     ChangeOpEnum,
     InstanceAttrValue,
     InstanceChange,
-    get_instance_key_string_attrname_pair,
     UseStackFrameCtxManagerBase,
     IContainer,
     ApplyExecPhasesEnum,
@@ -796,8 +794,8 @@ class ApplyResult(IApplyResult):
             self._execute_all_evaluations()
             self._execute_all_validations()
             self._execute_all_finish_components()
-            # OLD: self._apply_collect_changed_values() -> self.get_changes()
-            # print(f"here 3333:\n{self.top_value_node.dump_to_str()}")
+
+            # TODO: logger(f"dump of value tree:\n{self.top_value_node.dump_to_str()}")
 
         # TODO: logger: apply_result.config.logger.debug(f"depth={depth}, comp={component.name}, bind={bind} => {dexp_result}")
 
@@ -970,13 +968,13 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def get_changes(self) -> List[InstanceChange]:
+    def get_changes(self) -> List[ValueNode]:
         """
-        Lazy, cached in self._changes
+        Lazy, cached in self._instance_change_list
         Iterates through all ValueNode-s and registers only changed nodes in a special structure
         """
-        if self._changes is not UNDEFINED:
-            return self._changes
+        if self._instance_change_list is not UNDEFINED:
+            return self._instance_change_list
 
         if not len(self.stack_frames) == 0:
             raise EntityInternalError(owner=self, msg="get_changes() should be called after everything is finished.")
@@ -986,26 +984,13 @@ class ApplyResult(IApplyResult):
         for value_node in self.value_node_list:
             if not value_node.is_changed():
                 continue
-
-            # for instance_key_string, updated_values in updated_values_dict.items():
-            # instance_updated = self.get_instance_by_key_string(instance_key_string)
-            if value_node.change_op is None:
-                change_op = ChangeOpEnum.UPDATE
-                # TODO: value_node.init_dexp_result - should attr_name
-                attr_name = value_node.name
-                updated_values = {attr_name: (value_node.init_value, value_node._value)}
-            else:
-                change_op = value_node.change_op
-                updated_values = None
-
             changes.append(
                 InstanceChange(
-                    key_string=value_node.parent_node.key_string,
-                    key=value_node.key,
-                    change_op=change_op,
-                    instance=value_node.instance,
-                    updated_values=updated_values,
-                ))
+                    key_string=value_node.key_string,
+                    change_op=ChangeOpEnum.UPDATE if not value_node.change_op else value_node.change_op,
+                    init_value=value_node.init_value if not value_node.change_op else UNDEFINED,
+                    value = value_node._value if not value_node.change_op else UNDEFINED,
+            ))
         self._changes = changes
         return self._changes
 
@@ -1017,7 +1002,7 @@ class ApplyResult(IApplyResult):
     #     For changed attributes -> collect original + new value
     #     """
     #     if self._get_changes_is_done:
-    #         return self._changes
+    #         return self._instance_change_list
     #     if not len(self.stack_frames) == 0:
     #         raise EntityInternalError(owner=self, msg="get_changes() should be called after everything is finished.")
     #     updated_values_dict: Dict[KeyString, Dict[AttrName, Tuple[AttrValue, AttrValue]]] = defaultdict(dict)
@@ -1032,7 +1017,7 @@ class ApplyResult(IApplyResult):
     #                 updated_values_dict[KeyString(instance_key_string)][attrname] = \
     #                     (first_val.value, last_val.value)
     #     # RT: changes: List[InstanceChange] = []
-    #     changes: List[InstanceChange] = self._changes
+    #     changes: List[InstanceChange] = self._instance_change_list
     #     for instance_key_string, updated_values in updated_values_dict.items():
     #         instance_updated = self.get_instance_by_key_string(instance_key_string)
     #         # TODO: key_pairs are currently not set - should be cached, not so easy to get in this moment
@@ -1046,9 +1031,9 @@ class ApplyResult(IApplyResult):
     #                 instance=instance_updated,
     #                 updated_values=updated_values,
     #             ))
-    #     self._changes = changes
+    #     self._instance_change_list = changes
     #     self._get_changes_is_done = True
-    #     return self._changes
+    #     return self._instance_change_list
 
 
     # ------------------------------------------------------------
@@ -1124,7 +1109,7 @@ class ApplyResult(IApplyResult):
                     #         instance = instance,
                     #         parent_instance=parent_instance,
                     #         index0 = index0)
-                    # self._changes.append(
+                    # self._instance_change_list.append(
                     #         InstanceChange(
                     #             key_string = key_string,
                     #             key= key,
@@ -1157,7 +1142,7 @@ class ApplyResult(IApplyResult):
                 #                 instance = item_instance_new,
                 #                 parent_instance=parent_instance,
                 #                 index0 = index0_new)
-                # self._changes.append(
+                # self._instance_change_list.append(
                 #         InstanceChange(
                 #             key_string = key_string,
                 #             key= key,

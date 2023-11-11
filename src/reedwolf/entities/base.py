@@ -23,6 +23,7 @@ from dataclasses import (
     fields,
     MISSING as DC_MISSING,
     make_dataclass,
+    asdict,
 )
 from types import (
     MappingProxyType,
@@ -1882,13 +1883,20 @@ class ChangeOpEnum(str, Enum):
 
 @dataclass
 class InstanceChange:
-    key_string: KeyString
-    key: Optional[KeyType]
-    change_op: ChangeOpEnum
-    instance: ModelType = field(repr=True)
-    # updated_values is set when change_op is ChangeOpEnum.UPDATE
-    #   AttrValue, AttrValue  == old-value -> new-value
-    updated_values: Optional[Dict[AttrName, Tuple[AttrValue, AttrValue]]] = field(default=None)
+    """
+    Used only for displaying detected changes
+    use ApplyResult.get_changes() to get list of all changes.
+    Use intesively in unit tests.
+    """
+    key_string: str # KeyString
+    change_op: Union[ChangeOpEnum, str]
+    # Next two are set when ChangeOpEnum.UPDATE
+    init_value: Optional[AttrValue]
+    value: Optional[AttrValue]
+
+    def __post_init__(self):
+        if isinstance(self.change_op, ChangeOpEnum):
+            self.change_op = self.change_op.value
 
 @dataclass
 class InstanceAttrValue:
@@ -2625,12 +2633,10 @@ class IApplyResult(IStackOwnerSession):
     # ORIG2: current_values: Dict[KeyString, InstanceAttrCurrentValue] = \
     # ORIG2:                         field(repr=False, init=False, default_factory=dict)
 
-    # final list of created/deleted/changed instances and sub-instances 
-    # (operation + orig values). If instance is not changed, no record will be registered.
-    # For updated checks the first and the last value of `update_history` to
-    # detect if instance attribute has changed.
-    # Done in ._apply(),
-    _changes: Union[List[InstanceChange], UndefinedType] = field(repr=False, init=False, default=UNDEFINED)
+    # Final list of created/deleted/updated list of changes - should be used only for display
+    # Do not use directly, use get_changes() - list is lazy initialized and cached.
+    # For any serious job use value_node_list or top_value_node
+    _instance_change_list: Union[List[InstanceChange], UndefinedType] = field(repr=False, init=False, default=UNDEFINED)
 
     # When first argument is <type> and second is <type> then call function Callable
     # which will adapt second type to first one. Example: <string> + <int> -> <string> + str(<int>)
@@ -2760,13 +2766,11 @@ class IApplyResult(IStackOwnerSession):
 
         return self._component_children_upward_dict[component.name]
 
-    def get_update_history_as_dict(self) -> Dict[str, List[str]]:
-        return {
-            key: [instance_attr_value.value
-                  for instance_attr_value in inst_attr_list]
-            for key, inst_attr_list in self.update_history.items()
-        }
-
+    def get_changes_as_list_dict(self) -> List[Dict[str, Any]]:
+        """
+        used only in unit-tests for now
+        """
+        return [asdict(instance_change) for instance_change in self.get_changes()]
 
 # ------------------------------------------------------------
 

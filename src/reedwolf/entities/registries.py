@@ -205,7 +205,6 @@ class ModelsRegistry(RegistryBase):
 
         # bound_model = apply_result.current_frame.container.bound_model
         bound_model_root = apply_result.current_frame.bound_model_root
-        # if not bound_model_root: print("here33")
 
         expected_type = bound_model_root.type_info.type_ \
                         if isinstance(bound_model_root.model, DotExpression) \

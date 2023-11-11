@@ -164,7 +164,7 @@ class StructConverterRunner(IStackOwnerSession):
             dto_class.update_forward_refs()
             dto_class.construct()
 
-        # print("here2", self.current_frame.path_names, self.current_frame.dto_class, self.current_frame.dto_kwargs)
+        # TODO: logger ("frame.path_names:", self.current_frame.path_names, self.current_frame.dto_class, self.current_frame.dto_kwargs)
 
         is_field = isinstance(component, FieldBase)
         if is_field:
