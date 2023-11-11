@@ -43,7 +43,10 @@ from .meta import (
     ComponentTreeWValuesType,
     LiteralType,
     make_dataclass_with_optional_fields,
-    get_dataclass_field_type_info, dataclass_from_dict,
+    get_dataclass_field_type_info,
+    dataclass_from_dict,
+    Index0Type,
+    KeyType,
 )
 from .base import (
     IField,
@@ -92,6 +95,14 @@ class UseApplyStackFrameCtxManager(UseStackFrameCtxManagerBase):
 
 
 # ============================================================
+
+@dataclass
+class InstanceItem:
+    key: KeyType
+    instance: ModelType = field(repr=False)
+    index0: Index0Type = field(repr=False)
+    item_instance_new: ModelType = field(repr=False)
+    change_op: Optional[ChangeOpEnum] = field(repr=True)
 
 
 @dataclass
@@ -599,7 +610,7 @@ class ApplyResult(IApplyResult):
                     component=self.entity,
                     parent_node=None,
                     instance=self.instance,
-                ).setup_key_string(apply_result=self)
+                ).setup(apply_result=self)
 
             assert not self.top_value_node
             self.top_value_node = value_node
@@ -631,7 +642,7 @@ class ApplyResult(IApplyResult):
                         parent_node = parent_node,
                         instance = self.current_frame.instance,
                         has_items=has_items,
-                    ).setup_key_string(apply_result=self)
+                    ).setup(apply_result=self)
                 parent_node.add_child(value_node)
 
         # TODO: in partial mode this raises RecursionError:
@@ -785,7 +796,7 @@ class ApplyResult(IApplyResult):
             self._execute_all_evaluations()
             self._execute_all_validations()
             self._execute_all_finish_components()
-            self._apply_collect_changed_values()
+            # OLD: self._apply_collect_changed_values() -> self.get_changes()
             # print(f"here 3333:\n{self.top_value_node.dump_to_str()}")
 
         # TODO: logger: apply_result.config.logger.debug(f"depth={depth}, comp={component.name}, bind={bind} => {dexp_result}")
@@ -959,36 +970,85 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def _apply_collect_changed_values(self):
+    def get_changes(self) -> List[InstanceChange]:
         """
-        For changed attributes -> collect original + new value
+        Lazy, cached in self._changes
+        Iterates through all ValueNode-s and registers only changed nodes in a special structure
         """
-        assert len(self.stack_frames) == 0
-        updated_values_dict: Dict[KeyString, Dict[AttrName, Tuple[AttrValue, AttrValue]]] = defaultdict(dict)
-        for key_string, instance_attr_values in self.update_history.items():
-            # any change?
-            if len(instance_attr_values) > 1:
-                first_val = instance_attr_values[0]
-                last_val = instance_attr_values[-1]
-                if last_val.value != first_val.value:
-                    instance_key_string, attrname = \
-                        get_instance_key_string_attrname_pair(key_string)
-                    updated_values_dict[KeyString(instance_key_string)][attrname] = \
-                        (first_val.value, last_val.value)
+        if self._changes is not UNDEFINED:
+            return self._changes
 
-        for instance_key_string, updated_values in updated_values_dict.items():
-            instance_updated = self.get_instance_by_key_string(instance_key_string)
-            # TODO: key_pairs are currently not set - should be cached, not so easy to get in this moment
-            #   key = component.get_key_pairs_or_index0(instance_updated, index0)
-            self.changes.append(
+        if not len(self.stack_frames) == 0:
+            raise EntityInternalError(owner=self, msg="get_changes() should be called after everything is finished.")
+
+        changes: List[InstanceChange] = []
+
+        for value_node in self.value_node_list:
+            if not value_node.is_changed():
+                continue
+
+            # for instance_key_string, updated_values in updated_values_dict.items():
+            # instance_updated = self.get_instance_by_key_string(instance_key_string)
+            if value_node.change_op is None:
+                change_op = ChangeOpEnum.UPDATE
+                # TODO: value_node.init_dexp_result - should attr_name
+                attr_name = value_node.name
+                updated_values = {attr_name: (value_node.init_value, value_node._value)}
+            else:
+                change_op = value_node.change_op
+                updated_values = None
+
+            changes.append(
                 InstanceChange(
-                    key_string=instance_key_string,
-                    # see above
-                    key_pairs=None,
-                    operation=ChangeOpEnum.UPDATE,
-                    instance=instance_updated,
+                    key_string=value_node.parent_node.key_string,
+                    key=value_node.key,
+                    change_op=change_op,
+                    instance=value_node.instance,
                     updated_values=updated_values,
                 ))
+        self._changes = changes
+        return self._changes
+
+    # ------------------------------------------------------------
+
+    # def get_changes_OLD(self) -> List[InstanceChange]:
+    #     """
+    #     CACHED
+    #     For changed attributes -> collect original + new value
+    #     """
+    #     if self._get_changes_is_done:
+    #         return self._changes
+    #     if not len(self.stack_frames) == 0:
+    #         raise EntityInternalError(owner=self, msg="get_changes() should be called after everything is finished.")
+    #     updated_values_dict: Dict[KeyString, Dict[AttrName, Tuple[AttrValue, AttrValue]]] = defaultdict(dict)
+    #     for key_string, instance_attr_values in self.update_history.items():
+    #         # any change?
+    #         if len(instance_attr_values) > 1:
+    #             first_val = instance_attr_values[0]
+    #             last_val = instance_attr_values[-1]
+    #             if last_val.value != first_val.value:
+    #                 instance_key_string, attrname = \
+    #                     get_instance_key_string_attrname_pair(key_string)
+    #                 updated_values_dict[KeyString(instance_key_string)][attrname] = \
+    #                     (first_val.value, last_val.value)
+    #     # RT: changes: List[InstanceChange] = []
+    #     changes: List[InstanceChange] = self._changes
+    #     for instance_key_string, updated_values in updated_values_dict.items():
+    #         instance_updated = self.get_instance_by_key_string(instance_key_string)
+    #         # TODO: key_pairs are currently not set - should be cached, not so easy to get in this moment
+    #         #   key = component.get_key_pairs_or_index0(instance_updated, index0)
+    #         changes.append(
+    #             InstanceChange(
+    #                 key_string=instance_key_string,
+    #                 # see above
+    #                 key=None,
+    #                 change_op=ChangeOpEnum.UPDATE,
+    #                 instance=instance_updated,
+    #                 updated_values=updated_values,
+    #             ))
+    #     self._changes = changes
+    #     self._get_changes_is_done = True
+    #     return self._changes
 
 
     # ------------------------------------------------------------
@@ -1046,7 +1106,8 @@ class ApplyResult(IApplyResult):
         # NOTE: considered to use dict() since dictionaries are ordered in Python 3.6+ 
         #       ordering-perserving As of Python 3.7, this is a guaranteed, i.e.  Dict keeps insertion order
         #       https://stackoverflow.com/questions/39980323/are-dictionaries-ordered-in-python-3-6
-        instances_by_key = OrderedDict()
+        instances_by_key: Dict[KeyType, InstanceItem] = OrderedDict()
+
         for index0, instance in enumerate(instance_list, 0):
             key = subentity_items.get_key_pairs_or_index0(instance=instance, index0=index0, apply_result=self)
             if subentity_items.keys:
@@ -1054,30 +1115,35 @@ class ApplyResult(IApplyResult):
                 if missing_keys:
                     raise EntityApplyValueError(owner=self, msg=f"Instance {instance} has key(s) with value None, got: {', '.join(missing_keys)}")
 
+            change_op: Optional[ChangeOpEnum]  = None
             if current_instance_list_new not in (None, UNDEFINED):
                 item_instance_new = new_instances_by_key.get(key, UNDEFINED)
                 if item_instance_new is UNDEFINED:
-                    key_string = self.get_key_string_by_instance(
-                            component = subentity_items,
-                            instance = instance, 
-                            parent_instance=parent_instance,
-                            index0 = index0)
-
-                    self.changes.append(
-                            InstanceChange(
-                                key_string = key_string,
-                                key_pairs = key,
-                                operation = ChangeOpEnum.DELETE,
-                                instance = instance,
-                            ))
+                    # key_string = self.get_key_string_by_instance(
+                    #         component = subentity_items,
+                    #         instance = instance,
+                    #         parent_instance=parent_instance,
+                    #         index0 = index0)
+                    # self._changes.append(
+                    #         InstanceChange(
+                    #             key_string = key_string,
+                    #             key= key,
+                    #             change_op= ChangeOpEnum.DELETE,
+                    #             instance = instance,
+                    #         ))
                     item_instance_new = None
+                    change_op = ChangeOpEnum.DELETE
             else:
                 item_instance_new = None
 
             if key in instances_by_key:
                 raise EntityApplyValueError(owner=self, msg=f"Found duplicate key {key}:\n  == {instance}\n  == {instances_by_key[key]}")
 
-            instances_by_key[key] = (instance, index0, item_instance_new)
+            instances_by_key[key] = InstanceItem(key=key,
+                                                 instance=instance,
+                                                 index0=index0,
+                                                 item_instance_new=item_instance_new,
+                                                 change_op=change_op)
 
 
         if new_instances_by_key:
@@ -1086,21 +1152,23 @@ class ApplyResult(IApplyResult):
             # register new items and add to processing
             for key in new_keys:
                 item_instance_new = new_instances_by_key[key]
-
-                key_string = self.get_key_string_by_instance(
-                                component = subentity_items,
-                                instance = item_instance_new, 
-                                parent_instance=parent_instance,
-                                index0 = index0_new)
-
-                self.changes.append(
-                        InstanceChange(
-                            key_string = key_string,
-                            key_pairs = key,
-                            operation = ChangeOpEnum.CREATE,
-                            instance = item_instance_new,
-                        ))
-                instances_by_key[key] = (item_instance_new, index0_new, None)
+                # key_string = self.get_key_string_by_instance(
+                #                 component = subentity_items,
+                #                 instance = item_instance_new,
+                #                 parent_instance=parent_instance,
+                #                 index0 = index0_new)
+                # self._changes.append(
+                #         InstanceChange(
+                #             key_string = key_string,
+                #             key= key,
+                #             change_op= ChangeOpEnum.ADDED,
+                #             instance = item_instance_new,
+                #         ))
+                instances_by_key[key] = InstanceItem(key=key,
+                                                     instance=item_instance_new,
+                                                     index0=index0_new,
+                                                     item_instance_new=None,
+                                                     change_op=ChangeOpEnum.ADDED)
                 index0_new += 1
 
         # Apply for all items
@@ -1111,15 +1179,21 @@ class ApplyResult(IApplyResult):
 
             # value_node_w_items = self.current_frame.value_node
 
-            for key, (instance, index0, item_instance_new) in instances_by_key.items():
+            for key, instance_item in instances_by_key.items():
+                instance, index0, item_instance_new = \
+                    instance_item.instance, instance_item.index0, instance_item.item_instance_new
                 # Go one level deeper
                 item_value_node = ValueNode(
                         component = subentity_items,
+                        # empahsize distinction of item's parent node (also subentity, but collection)
                         has_items=False,
                         parent_node = value_node,
                         instance = instance,
+                        # specific when instance is item in items collection (of parent)
                         index0=index0,
-                    ).setup_key_string(apply_result=self)
+                        key=key,
+                        change_op=instance_item.change_op,
+                    ).setup(apply_result=self)
 
                 value_node.add_item(item_value_node)
 
@@ -1551,7 +1625,8 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def get_key_string_by_instance(self, component: IComponent, instance: ModelType, parent_instance: ModelType, index0: Optional[int], force:bool=False) -> KeyString:
+    def get_key_string_by_instance(self, component: IComponent, instance: ModelType, parent_instance: ModelType,
+                                   index0: Optional[Index0Type], force:bool=False) -> KeyString:
         # apply_result:IApplyResult,  -> self
         """
         Two cases - component has .keys or not:

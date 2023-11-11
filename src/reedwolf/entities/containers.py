@@ -47,7 +47,10 @@ from .meta import (
     get_model_fields,
     ModelType,
     DataclassType,
-    Self, NoneType,
+    Self,
+    NoneType,
+    Index0Type,
+    KeyType,
 )
 from .base import (
     get_name_from_bind,
@@ -438,9 +441,11 @@ class ContainerBase(IContainer, ABC):
     def get_key_pairs_or_index0(self,
                                 apply_result: IApplyResult,
                                 instance: ModelType,
-                                index0: int,
-                                ) -> Union[Tuple[(str, Any)], int]:
-        " index0 is 0 based index of item in the list"
+                                index0: Index0Type,
+                                ) -> KeyType:
+        """
+        index0 is 0 based index of item in the list
+        """
         # TODO: move to ApplyResult:IApplyResult?
         if self.keys:
             ret = self.get_key_pairs(instance, apply_result=apply_result)
@@ -449,7 +454,8 @@ class ContainerBase(IContainer, ABC):
         return ret
 
 
-    def get_key_pairs(self, instance: ModelType, apply_result: IApplyResult) -> Tuple[(str, Any)]:
+    def get_key_pairs(self, instance: ModelType, apply_result: IApplyResult) \
+            -> KeyPairs:
         if not self.keys:
             raise EntityInternalError(msg="get_key_pairs() should be called only when 'keys' are defined")
         key_pairs = self.keys.get_key_pairs(instance, apply_result=apply_result)
@@ -492,7 +498,7 @@ class KeysBase(ABC):
         ...
 
     @abstractmethod
-    def get_key_pairs(self, instance: ModelType, container: IContainer) -> List[Tuple[str, Any]]:
+    def get_key_pairs(self, instance: ModelType, container: IContainer) -> KeyPairs:
         """ returns list of (key-name, key-value) """
         ...
 

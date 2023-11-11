@@ -80,6 +80,8 @@ from .meta import (
     KeyString,
     AttrName,
     AttrValue,
+    Index0Type,
+    KeyType,
 )
 from .expressions import (
     DotExpression,
@@ -1874,17 +1876,18 @@ def get_instance_key_string_attrname_pair(key_string: str) -> Tuple[str, str]:
 # --------------------------------------------------
 
 class ChangeOpEnum(str, Enum):
-    CREATE = "CREATE"
+    ADDED  = "ADDED"
     DELETE = "DELETE"
     UPDATE = "UPDATE"
 
 @dataclass
 class InstanceChange:
     key_string: KeyString
-    # model_class: Any 
-    key_pairs: Optional[KeyPairs]
-    operation: ChangeOpEnum
+    key: Optional[KeyType]
+    change_op: ChangeOpEnum
     instance: ModelType = field(repr=True)
+    # updated_values is set when change_op is ChangeOpEnum.UPDATE
+    #   AttrValue, AttrValue  == old-value -> new-value
     updated_values: Optional[Dict[AttrName, Tuple[AttrValue, AttrValue]]] = field(default=None)
 
 @dataclass
@@ -1976,7 +1979,12 @@ class ValueNode:
     has_items: bool = field(repr=True, default=False)
 
     # set only when item of parent.items (parent is SubentityItems)
-    index0: int = field(repr=False, default=None)
+    # set only when item is deleted (DELETE) or item is added (ADDED)
+    change_op: Optional[ChangeOpEnum] = field(repr=True, default=None)
+
+    # set only when item of parent.items (parent is SubentityItems)
+    index0: Optional[Index0Type] = field(repr=False, default=None)
+    key: Optional[KeyType] = field(repr=False, default=None)
 
     # F.<field-name>
     # - contains all fields accessible in. autocomputed.
@@ -2062,8 +2070,14 @@ class ValueNode:
             self.container_node = self.parent_node.container_node
 
 
-    def setup_key_string(self, apply_result: "IApplyResult") -> Self:
+    def setup(self, apply_result: "IApplyResult") -> Self:
         """
+        will:
+            - calculate and set key_string
+            - register within apply_result
+
+        Calculate and set key_string
+        ----------------------------
         Two cases - component has .keys or not:
 
         a) with keys:
@@ -2117,6 +2131,8 @@ class ValueNode:
 
         self.key_string = KeyString(key_string)
 
+        apply_result.register_value_node(value_node=self)
+
         return self
 
     def is_top_node(self):
@@ -2124,7 +2140,12 @@ class ValueNode:
         # ALT: self.parent_node is None
         return self is self.top_node
 
-
+    def is_changed(self) -> bool:
+        # if not self.finished:
+        #     raise EntityInternalError(owner=self, msg="not finished yet")
+        if self.change_op is not None:
+            return True
+        return self._value!=self.init_value
 
     def set_value(self, value: AttrValue, dexp_result: Optional[ExecResult]) -> Optional[InstanceAttrValue]:
         """
@@ -2302,7 +2323,7 @@ class ApplyStackFrame(IStackFrame):
     # instance_new_struct_type: Union[StructEnum, NoneType, UndefinedType] = field(repr=False)
 
     # filled only when container list member
-    index0: Optional[int] = None
+    index0: Optional[Index0Type] = None
 
     # parent instance / parent_instance_new - currenntly used for key_string logic
     parent_instance: Optional[ModelType] = field(repr=False, default=None)
@@ -2546,8 +2567,11 @@ class IApplyResult(IStackOwnerSession):
 
     # ---- automatically computed -----
 
-    # top of value tree
+    # top of value tree - head of the tree
     top_value_node: ValueNode = field(repr=False, init=False, default=UNDEFINED)
+
+    # list of all value trees - currently no need to have Dict
+    value_node_list: List[ValueNode] = field(repr=False, init=False, default_factory=list)
 
     # extracted from component
     bound_model : IBoundModel = field(repr=False, init=False)
@@ -2605,8 +2629,8 @@ class IApplyResult(IStackOwnerSession):
     # (operation + orig values). If instance is not changed, no record will be registered.
     # For updated checks the first and the last value of `update_history` to
     # detect if instance attribute has changed.
-    # Done in ._apply(), 
-    changes: List[InstanceChange] = field(repr=False, init=False, default_factory=list)
+    # Done in ._apply(),
+    _changes: Union[List[InstanceChange], UndefinedType] = field(repr=False, init=False, default=UNDEFINED)
 
     # When first argument is <type> and second is <type> then call function Callable
     # which will adapt second type to first one. Example: <string> + <int> -> <string> + str(<int>)
@@ -2655,6 +2679,9 @@ class IApplyResult(IStackOwnerSession):
     def get_current_value(self, component: IComponent, strict: bool) -> LiteralType:
         ...
 
+    @abstractmethod
+    def get_changes(self) -> List[InstanceChange]:
+        ...
 
     # def get_current_component_bind_value(self):
     #     component = self.current_frame.component
@@ -2686,6 +2713,12 @@ class IApplyResult(IStackOwnerSession):
                                        new_value: Any,
                                        is_from_init_bind:bool=False) -> InstanceAttrValue:
         ...
+
+
+    def register_value_node(self, value_node: ValueNode):
+        assert not self.finished
+        self.value_node_list.append(value_node)
+
 
     def finish(self):
         if self.finished:

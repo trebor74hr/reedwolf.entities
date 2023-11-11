@@ -211,6 +211,8 @@ TransMessageType        = NewType("TransMessageType", str)
 _ = TransMessageType
 
 KeyPairs = NewType("KeyPairs", SequenceType[Tuple[str, Any]])
+Index0Type = int
+KeyType = Union[KeyPairs, Index0Type]
 
 InstanceId = NewType("InstanceId", int)
 
