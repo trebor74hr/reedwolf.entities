@@ -20,11 +20,23 @@ class Config:
     and belonging.
     This is plain class, no setup()/Setup() process.
     """
-    debug: bool = False
     # if not set will use default ValueExpress
     value_accessor: Optional[IValueAccessor] = field(default=None, metadata={"dexp_exposed": False})
+
+    # -----------------------------------------------------------
+    # Tracing, analytics, debug ...
+    # -----------------------------------------------------------
+    debug: bool = False
+
+    # Should all changes of values are collected in
+    # ApplyResult.value_history_dict and ValueNode.value_history
+    collect_value_history: bool = False
 
     # def set_value_accessor(self, value_accessor: IValueAccessor) -> None:
     #     assert isinstance(value_accessor, IValueAccessor)
     #     assert self.value_accessor is None
     #     self.value_accessor = value_accessor
+
+    @property
+    def should_collect_value_history(self) -> bool:
+        return self.debug or self.collect_value_history

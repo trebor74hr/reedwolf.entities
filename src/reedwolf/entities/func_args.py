@@ -215,7 +215,6 @@ class FunctionArguments:
             # TODO: should be DotExpression or IDotExpressionNode
             if not isinstance(caller, (DotExpression, IDotExpressionNode)):
                 raise EntityInternalError(owner=self, msg=f"{value_object} is type_info, expected caller is DotExpression/IDotExpressionNode, got: {caller}")
-            # ORIG: value_or_dexp = UNDEFINED
             value_or_dexp = caller
 
         elif isinstance(value_object, DotExpression):

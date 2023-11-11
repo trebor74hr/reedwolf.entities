@@ -1123,7 +1123,6 @@ class IComponent(IBaseComponent, ABC):
                 #           # ALT: more complex way - it seems to work, but I prefer
                 #           #      simplier solution:
                 #           attr_node = container._setup_bound_model_dot_expression(bound_model=child.bound_model, setup_session=setup_session)
-                #           # ORIG: child.bound_model.model.Setup(setup_session=setup_session, owner=component)
                 #
                 #       # ALT: attr_node = child.bound_model.model._dexp_node
                 #       #      child_type_info = attr_node.get_type_info()
@@ -1924,33 +1923,6 @@ class InstanceAttrValue:
                 "is_from_bind": self.is_from_bind,
                 }
 
-# ORIG: @dataclass
-# ORIG: class InstanceAttrCurrentValue:
-# ORIG:     # key_string: KeyString = field()
-# ORIG:     _value: Union[LiteralType, UndefinedType] = field(default=UNDEFINED)
-# ORIG:     # do not compare by this attribute (for easier unit-test checks)
-# ORIG:     finished: bool = field(repr=False, init=False, default=False, compare=False)
-# ORIG:
-# ORIG:     def set_value(self, value: LiteralType) -> "InstanceAttrCurrentValue":
-# ORIG:         if self.finished:
-# ORIG:             raise EntityInternalError(owner=self, msg=f"Current value already finished, last value: {self._value}")
-# ORIG:         self._value = value
-# ORIG:         # if self._value is NA_DEFAULTS_MODE:
-# ORIG:         #     # TODO: check if finish immediatelly
-# ORIG:         #     self.mark_finished()
-# ORIG:         return self
-# ORIG:
-# ORIG:     def get_value(self, strict:bool) -> LiteralType:
-# ORIG:         if strict and not self.finished:
-# ORIG:             # print("TODO: riješi ovu iznimku")
-# ORIG:             raise EntityInternalError(owner=self, msg=f"Current value is not finished, last value: {self._value}")
-# ORIG:         return self._value
-# ORIG:
-# ORIG:     def mark_finished(self):
-# ORIG:         if self.finished: # and self._value is not NA_DEFAULTS_MODE:
-# ORIG:             raise EntityInternalError(owner=self, msg=f"Current value already finished, last value: {self._value}")
-# ORIG:         self.finished = True
-
 # ------------------------------------------------------------
 
 @dataclass
@@ -1973,6 +1945,7 @@ class ValueNode:
     # TODO: fields? - only for container - includes all children's children
     #       except Items's children
 
+    should_collect_value_history: bool = field(repr=False)
 
     # <field>.Parent
     # - empty only on top tree node (Entity component)
@@ -1999,14 +1972,9 @@ class ValueNode:
     # TODO: replace with fields_dict: Dict[name, Self] - distribute to all
     container_node: Self = field(repr=False, init=False, default=None)
 
-    # # <field>.Value
-    # # - when component has data value - empty ValueData is set in constructor
-    # current_value: Union[UndefinedType, InstanceAttrCurrentValue] = \
-    #     field(repr=False, init=False, default=UNDEFINED)
-
-    # # <field>.Value
+    # <field>.Value
     _value: Union[AttrValue, UndefinedType] = field(repr=False, init=False, default=UNDEFINED)
-    # , compare=False ?? do not compare by this attribute (for easier unit-test checks)
+    # TODO: consider compare=False ?? do not compare by this attribute (for easier unit-test checks)
     finished: bool = field(repr=False, init=False, default=False)
 
     # initial value - Just value - no wrapper
@@ -2155,7 +2123,7 @@ class ValueNode:
             return True
         return self._value!=self.init_value
 
-    def set_value(self, value: AttrValue, dexp_result: Optional[ExecResult]) -> Optional[InstanceAttrValue]:
+    def set_value(self, value: AttrValue, dexp_result: Optional[ExecResult]) -> NoneType:
         """
         - when setting initial value dexp_result is stored into init_dexp_result
         - dexp_result can be None too - in NA_* some undefined values
@@ -2181,10 +2149,11 @@ class ValueNode:
         #     # TODO: check if finish immediatelly
         #     self.mark_finished()
 
-        # --- update_history - add new value
+        # --- value_history - add new value
         # TODO: pass input arg value_parent_name - component.name does not have any purpose
 
-        if value is not NA_IN_PROGRESS and value is not NOT_APPLIABLE and value is not NA_DEFAULTS_MODE:
+        if self.should_collect_value_history and value is not NA_IN_PROGRESS \
+          and value is not NOT_APPLIABLE and value is not NA_DEFAULTS_MODE:
             instance_attr_value = InstanceAttrValue(
                 value_parent_name=self.component.name,
                 value=value,
@@ -2193,10 +2162,8 @@ class ValueNode:
                 # TODO: source of change ...
             )
             self.value_history.append(instance_attr_value)
-        else:
-            instance_attr_value = None
-
-        return instance_attr_value  #  self
+        # else: instance_attr_value = None
+        return  #  instance_attr_value  : Optional[InstanceAttrValue]
 
     def get_value(self, strict:bool) -> AttrValue:
         if strict and not self.finished:
@@ -2614,28 +2581,25 @@ class IApplyResult(IStackOwnerSession):
         # dataclass instance which is used for AttributeNode's DotExpression-s.
         # instance_shadow_dc: DataclassType = field(init=False, repr=False)
 
-    # Central registry of attribute values. Contains initial, intermediate and
-    # final values of each instance field/attribute. 
-    # If initial is different from final, it is registered as UPDATE
-    # InstanceChange() in `changes`.
-    # Last value for key_string euqals to current_values value for the same
-    # key_string.
-    # Done in .register_instance_attr_change()
-    update_history: Dict[KeyString, List[InstanceAttrValue]] = \
+    # Registry of history of attribute values for each ValueNode.
+    # Filled only when Config.collect_value_history =True (see .register_instance_attr_change()).
+    # Use .get_value_history() to fetch values.
+    # Used only for analytical purposes and unit testing.
+    # For any serious jobs ValueNode-s are used i.e. value_node_list and top_value_node members.
+    #
+    # Contains initial (first member), intermediate and
+    # last values of each instance field/attribute.
+    # If initial/first is different from final/last, then this value is changed.
+    #
+    # See .get_changes() for simplier struct - it does not require special Config param set.
+    _value_history_dict: Dict[KeyString, List[InstanceAttrValue]] = \
                             field(repr=False, init=False, default_factory=dict)
-
-    # ORIG2: # Current value of the instance's attribute.
-    # ORIG2: # The value equals to last value in .update_history for the same key_string
-    # ORIG2: # On value change for an attr, object InstanceAttrCurrentValue() is not
-    # ORIG2: # replaced, but updated, leaving allways the same instance holding the
-    # ORIG2: # value.
-    # ORIG2: # Done in .register_instance_attr_change()
-    # ORIG2: current_values: Dict[KeyString, InstanceAttrCurrentValue] = \
-    # ORIG2:                         field(repr=False, init=False, default_factory=dict)
 
     # Final list of created/deleted/updated list of changes - should be used only for display
     # Do not use directly, use get_changes() - list is lazy initialized and cached.
     # For any serious job use value_node_list or top_value_node
+    #
+    # See _value_history_dict for more complex struct - it requires special Config param previously set.
     _instance_change_list: Union[List[InstanceChange], UndefinedType] = field(repr=False, init=False, default=UNDEFINED)
 
     # When first argument is <type> and second is <type> then call function Callable
@@ -2688,6 +2652,13 @@ class IApplyResult(IStackOwnerSession):
     @abstractmethod
     def get_changes(self) -> List[InstanceChange]:
         ...
+
+    @property
+    def value_history_dict(self) -> Dict[KeyString, List[InstanceAttrValue]]:
+        if not self.entity.config.should_collect_value_history:
+            raise EntityApplyError(owner=self, msg="Value history is not collected. Pass Config(..., collect_value_history=True) and try again.")
+        # assert self._value_history_dict
+        return self._value_history_dict
 
     # def get_current_component_bind_value(self):
     #     component = self.current_frame.component
