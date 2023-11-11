@@ -13,8 +13,8 @@ from typing import (
     Optional,
     Tuple,
     ClassVar,
-    Callable, 
-    Type as TypingType,
+    Callable,
+    Type as TypingType, Type,
 )
 from dataclasses import (
     dataclass,
@@ -23,7 +23,7 @@ from dataclasses import (
     fields,
     MISSING as DC_MISSING,
     make_dataclass,
-    asdict,
+    asdict, is_dataclass,
 )
 from types import (
     MappingProxyType,
@@ -76,13 +76,12 @@ from .meta import (
     STANDARD_TYPE_LIST,
     TransMessageType,
     get_dataclass_fields,
-    KeyPairs,
     InstanceId,
     KeyString,
     AttrName,
     AttrValue,
     Index0Type,
-    KeyType,
+    KeyType, get_dataclass_field_type_info, make_dataclass_with_optional_fields,
 )
 from .expressions import (
     DotExpression,
@@ -95,6 +94,9 @@ from .expressions import (
 )
 from .contexts import (
     IContext,
+)
+from .config import (
+    Config,
 )
 from .values_accessor import IValueAccessor
 
@@ -1505,7 +1507,7 @@ class IFieldGroup(ABC):
 
 class IContainer(IComponent, ABC):
 
-    bound_model     : "IBoundModel" = field(repr=False)
+    bound_model: "IBoundModel" = field(repr=False)
 
     @abstractmethod
     def add_fieldgroup(self, fieldgroup:IFieldGroup):  # noqa: F821
@@ -1527,7 +1529,6 @@ class IContainer(IComponent, ABC):
     def get_bound_model_attr_node(self) -> "AttrDexpNode":  # noqa: F821
         ...
 
-
     @abstractmethod
     def pprint(self):
         """ pretty print - prints to stdout all components """
@@ -1543,6 +1544,10 @@ class IContainer(IComponent, ABC):
     #     This is @staticmethod
     #     """
     #     ...
+
+class IEntity(IContainer, ABC):
+    config: Config = field(repr=False, )
+    context_class: Optional[Type[IContext]] = field(repr=False, default=None)
 
 # ------------------------------------------------------------
 # IBoundModel
@@ -1938,6 +1943,8 @@ class ValueNode:
 
     component:  IComponent = field(repr=False)
     instance: DataclassType = field(repr=False)
+    container: IContainer = field(repr=False)
+    instance_none_mode: bool = field(repr=False)
 
     # ------------------------------------------------------------
     # Following are all accessible by . operator in ValueExpressions
@@ -2170,6 +2177,112 @@ class ValueNode:
             # print("TODO: riješi ovu iznimku")
             raise EntityInternalError(owner=self, msg=f"Current value is not finished, last value: {self._value}")
         return self._value
+
+    # ------------------------------------------------------------
+
+    def apply_value_to_instance_attr(self):
+        new_value = self._value
+        component = self.component
+        parent_instance = self.instance
+
+        # TODO: not sure if this validation is ok
+        # NOTE: bound_model.model could be VExpr
+        model = self.container.bound_model.get_type_info().type_
+        if not self.instance_none_mode \
+                and not isinstance(parent_instance, model):
+            raise EntityInternalError(owner=self, msg=f"Parent instance {parent_instance} has wrong type")
+
+        # -- attr_name - fetch from initial bind dexp (very first)
+        # TODO: save dexp_result in ValueNode or get from component.bind ?
+        init_bind_dexp_result = self.init_dexp_result
+        if not init_bind_dexp_result:
+            raise EntityInternalError(owner=self, msg=f"init_bind_dexp_result is not set, got: {self} . {init_bind_dexp_result}")
+        # init_instance_attr_value = value_node.value_history[0]
+        # if not init_instance_attr_value.is_from_bind:
+        #     raise EntityInternalError(owner=self, msg=f"{init_instance_attr_value} is not from bind")
+        # init_bind_dexp_result = init_instance_attr_value.dexp_result
+
+
+        # attribute name is in the last item
+
+        # "for" loop is required for attributes from substructure that
+        # is not done as SubEntity rather direct reference, like:
+        #   bind=M.access.alive
+        attr_name_path = [init_raw_attr_value.attr_name
+                          for init_raw_attr_value in init_bind_dexp_result.value_history
+                          ]
+        if not attr_name_path:
+            raise EntityInternalError(owner=self, msg=f"{component}: attr_name_path is empty")
+
+        if isinstance(component, IField):
+            # TODO: what about Boolean + enables? Better to check .get_children() ?
+            # value accessor should be used from parent of the component
+            assert component.parent
+            value_accessor = component.parent.value_accessor
+        else:
+            # contaainers + fieldgroup
+            value_accessor = component.value_accessor
+
+        current_instance_parent = None
+        current_instance = parent_instance
+        attr_name_last = UNDEFINED
+
+        # Attribute path example: "M.access.alive".
+        # Only last, i.e. "alive" in this example, will be updated,
+        # and this for loop reaches instance and current value in this case.
+        for anr, attr_name in enumerate(attr_name_path, 0):
+            attr_name_last = attr_name
+            if current_instance is None:
+                if self.instance_none_mode:
+                    # Create all missing intermediate empty dataclass objects
+                    assert anr > 0
+                    attr_name_prev = attr_name_path[anr - 1]
+
+                    current_instance_type_info = get_dataclass_field_type_info(current_instance_parent, attr_name_prev)
+                    if current_instance_type_info is None:
+                        raise EntityInternalError(owner=self,
+                                                  msg=f"Attribute {attr_name} not found in dataclass definition of {current_instance_parent}.")
+                    if current_instance_type_info.is_list:
+                        raise EntityInternalError(owner=self,
+                                                  msg=f"Attribute {attr_name} of {current_instance_parent} is a list: {current_instance_type_info}.")
+
+                    current_instance_model = current_instance_type_info.type_
+                    if not is_dataclass(current_instance_model):
+                        raise EntityInternalError(owner=self,
+                                                  msg=f"Attribute {attr_name} of {type(current_instance_parent)} is not a dataclass instance, got: {current_instance_model}")
+
+                        # set new value of temp instance attribute
+                    # all attrs of a new instance will have None value (dc default)
+                    temp_dataclass_model = make_dataclass_with_optional_fields(current_instance_model)
+                    current_instance = temp_dataclass_model()
+                    value_accessor.set_value(instance=current_instance_parent,
+                                             attr_name=attr_name_prev,
+                                             attr_index=None,
+                                             new_value=current_instance)
+                else:
+                    attr_name_path_prev = ".".join(attr_name_path[:anr])
+                    # TODO: fix this ugly validation message
+                    raise EntityApplyValueError(owner=self,
+                                                msg=f"Attribute '{attr_name}' can not be set while '{parent_instance}.{attr_name_path_prev}' is not set. Is '{attr_name_path_prev}' obligatory?")
+
+            current_instance_parent = current_instance
+            current_instance = value_accessor.get_value(instance=current_instance_parent,
+                                                        attr_name=attr_name,
+                                                        attr_index=None)
+            if current_instance is UNDEFINED:
+                raise EntityInternalError(owner=self,
+                                          msg=f"Missing attribute:\n  Current: {current_instance}.{attr_name}\n Parent: {parent_instance}.{'.'.join(attr_name_path)}")
+
+        # ----------------------------------------------------
+        # Finally change instance value by last attribute name
+        # ----------------------------------------------------
+        assert attr_name_last
+        value_accessor.set_value(instance=current_instance_parent,
+                                 attr_name=attr_name_last,
+                                 attr_index=None,
+                                 new_value=new_value)
+
+    # ------------------------------------------------------------
 
     def mark_finished(self):
         if self.finished: # and self._value is not NA_DEFAULTS_MODE:
@@ -2527,7 +2640,7 @@ class ApplyExecCleanersRegistry:
 
 @dataclass
 class IApplyResult(IStackOwnerSession):
-    entity: IContainer = field(repr=False)
+    entity: IEntity = field(repr=False)
     instance: Any = field(repr=False)
     # TODO: consider: instance_new: Union[ModelType, UndefinedType] = UNDEFINED,
     instance_new: Optional[ModelType] = field(repr=False)

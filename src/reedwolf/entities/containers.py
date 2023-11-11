@@ -51,6 +51,7 @@ from .meta import (
     NoneType,
     Index0Type,
     KeyType,
+    KeyPairs,
 )
 from .base import (
     get_name_from_bind,
@@ -58,9 +59,8 @@ from .base import (
     IContainer,
     IBoundModel,
     GlobalConfig,
-    KeyPairs,
     IApplyResult,
-    SetupStackFrame, ValueNode,
+    SetupStackFrame, ValueNode, IEntity,
 )
 from .expressions import (
     DotExpression,
@@ -579,7 +579,7 @@ class KeyFields(KeysBase):
 
 
 @dataclass
-class Entity(ContainerBase):
+class Entity(IEntity, ContainerBase):
 
     contains        : List[IComponent] = field(repr=False)
 

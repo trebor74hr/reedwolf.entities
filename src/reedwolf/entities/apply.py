@@ -349,7 +349,6 @@ class ApplyResult(IApplyResult):
         if new_value is UNDEFINED:
             raise EntityInternalError(owner=component, msg="New value should not be UNDEFINED, fix the caller")
 
-        # key_str = component.get_key_string(apply_result=self)
         key_str = self.get_key_string(component)
         current_value = value_node.get_value(strict=False)
 
@@ -403,120 +402,129 @@ class ApplyResult(IApplyResult):
 
         # === finally update all structures
 
-        if not is_from_init_bind and self.current_frame.instance is not NA_DEFAULTS_MODE:
-            # --- change the model attribute - handle nested cases too e.g. M.company.access.can_delete
-            self._model_instance_attr_change_value(component=component, key_str=key_str, new_value=new_value)
-
         # --- current value - set to new value
         # instance_attr_value =
         value_node.set_value(new_value, dexp_result=dexp_result)
 
-        return #  instance_attr_value
+        if not is_from_init_bind and self.current_frame.instance is not NA_DEFAULTS_MODE:
+            # --- change the model attribute - handle nested cases too e.g. M.company.access.can_delete
+            # component = component,
+            # self._model_instance_attr_change_value(new_value=new_value)
+            # self._model_instance_attr_change_value(value_node=value_node)
+            value_node.apply_value_to_instance_attr()
+
+        return
 
     # ------------------------------------------------------------
 
-    def _model_instance_attr_change_value(self, component: IComponent, key_str: KeyString, new_value: AttrValue):
-        assert component == self.current_frame.component
-        # key_str = self.get_key_string(component)
-        parent_instance = self.current_frame.instance
+    # ORIG: def _model_instance_attr_change_value_ORIG(self, value_node: ValueNode):
+    # ORIG:     new_value = value_node._value
+    # ORIG:     # component = self.current_frame.component
+    # ORIG:     # parent_instance = self.current_frame.instance
+    # ORIG:     # value_node = self.current_frame.value_node
+    # ORIG:     # container = self.current_frame.container
+    # ORIG:     # instance_none_mode = self.instance_none_mode
+    # ORIG:     component = value_node.component
+    # ORIG:     parent_instance = value_node.instance
+    # ORIG:     container = value_node.container
+    # ORIG:     instance_none_mode = value_node.instance_none_mode
 
-        # TODO: not sure if this validation is ok
-        # NOTE: bound_model.model could be VExpr
-        model = self.current_frame.container.bound_model.get_type_info().type_
-        if not self.instance_none_mode \
-                and not isinstance(parent_instance, model):
-            raise EntityInternalError(owner=self, msg=f"Parent instance {parent_instance} has wrong type")
+    # ORIG:     # TODO: not sure if this validation is ok
+    # ORIG:     # NOTE: bound_model.model could be VExpr
+    # ORIG:     model = container.bound_model.get_type_info().type_
+    # ORIG:     if not instance_none_mode \
+    # ORIG:             and not isinstance(parent_instance, model):
+    # ORIG:         raise EntityInternalError(owner=self, msg=f"Parent instance {parent_instance} has wrong type")
 
-        # -- attr_name - fetch from initial bind dexp (very first)
-        # TODO: save dexp_result in ValueNode or get from component.bind ?
-        value_node = self.current_frame.value_node
-        init_bind_dexp_result = value_node.init_dexp_result
-        if not init_bind_dexp_result:
-            raise EntityInternalError(owner=self, msg=f"init_bind_dexp_result is not set, got: {value_node} . {init_bind_dexp_result}")
-        # init_instance_attr_value = value_node.value_history[0]
-        # if not init_instance_attr_value.is_from_bind:
-        #     raise EntityInternalError(owner=self, msg=f"{init_instance_attr_value} is not from bind")
-        # init_bind_dexp_result = init_instance_attr_value.dexp_result
+    # ORIG:     # -- attr_name - fetch from initial bind dexp (very first)
+    # ORIG:     # TODO: save dexp_result in ValueNode or get from component.bind ?
+    # ORIG:     init_bind_dexp_result = value_node.init_dexp_result
+    # ORIG:     if not init_bind_dexp_result:
+    # ORIG:         raise EntityInternalError(owner=self, msg=f"init_bind_dexp_result is not set, got: {value_node} . {init_bind_dexp_result}")
+    # ORIG:     # init_instance_attr_value = value_node.value_history[0]
+    # ORIG:     # if not init_instance_attr_value.is_from_bind:
+    # ORIG:     #     raise EntityInternalError(owner=self, msg=f"{init_instance_attr_value} is not from bind")
+    # ORIG:     # init_bind_dexp_result = init_instance_attr_value.dexp_result
 
 
-        # attribute name is in the last item
+    # ORIG:     # attribute name is in the last item
 
-        # "for" loop is required for attributes from substructure that
-        # is not done as SubEntity rather direct reference, like:
-        #   bind=M.access.alive
-        attr_name_path = [init_raw_attr_value.attr_name
-                          for init_raw_attr_value in init_bind_dexp_result.value_history
-                          ]
-        if not attr_name_path:
-            raise EntityInternalError(owner=self, msg=f"{component}: attr_name_path is empty")
+    # ORIG:     # "for" loop is required for attributes from substructure that
+    # ORIG:     # is not done as SubEntity rather direct reference, like:
+    # ORIG:     #   bind=M.access.alive
+    # ORIG:     attr_name_path = [init_raw_attr_value.attr_name
+    # ORIG:                       for init_raw_attr_value in init_bind_dexp_result.value_history
+    # ORIG:                       ]
+    # ORIG:     if not attr_name_path:
+    # ORIG:         raise EntityInternalError(owner=self, msg=f"{component}: attr_name_path is empty")
 
-        if isinstance(component, IField):
-            # TODO: what about Boolean + enables? Better to check .get_children() ?
-            # value accessor should be used from parent of the component
-            assert component.parent
-            value_accessor = component.parent.value_accessor
-        else:
-            # contaainers + fieldgroup
-            value_accessor = component.value_accessor
+    # ORIG:     if isinstance(component, IField):
+    # ORIG:         # TODO: what about Boolean + enables? Better to check .get_children() ?
+    # ORIG:         # value accessor should be used from parent of the component
+    # ORIG:         assert component.parent
+    # ORIG:         value_accessor = component.parent.value_accessor
+    # ORIG:     else:
+    # ORIG:         # contaainers + fieldgroup
+    # ORIG:         value_accessor = component.value_accessor
 
-        current_instance_parent = None
-        current_instance = parent_instance
-        attr_name_last = UNDEFINED
+    # ORIG:     current_instance_parent = None
+    # ORIG:     current_instance = parent_instance
+    # ORIG:     attr_name_last = UNDEFINED
 
-        # Attribute path example: "M.access.alive".
-        # Only last, i.e. "alive" in this example, will be updated,
-        # and this for loop reaches instance and current value in this case.
-        for anr, attr_name in enumerate(attr_name_path, 0):
-            attr_name_last = attr_name
-            if current_instance is None:
-                if self.instance_none_mode:
-                    # Create all missing intermediate empty dataclass objects
-                    assert anr > 0
-                    attr_name_prev = attr_name_path[anr - 1]
+    # ORIG:     # Attribute path example: "M.access.alive".
+    # ORIG:     # Only last, i.e. "alive" in this example, will be updated,
+    # ORIG:     # and this for loop reaches instance and current value in this case.
+    # ORIG:     for anr, attr_name in enumerate(attr_name_path, 0):
+    # ORIG:         attr_name_last = attr_name
+    # ORIG:         if current_instance is None:
+    # ORIG:             if instance_none_mode:
+    # ORIG:                 # Create all missing intermediate empty dataclass objects
+    # ORIG:                 assert anr > 0
+    # ORIG:                 attr_name_prev = attr_name_path[anr - 1]
 
-                    current_instance_type_info = get_dataclass_field_type_info(current_instance_parent, attr_name_prev)
-                    if current_instance_type_info is None:
-                        raise EntityInternalError(owner=self,
-                                                  msg=f"Attribute {attr_name} not found in dataclass definition of {current_instance_parent}.")
-                    if current_instance_type_info.is_list:
-                        raise EntityInternalError(owner=self,
-                                                  msg=f"Attribute {attr_name} of {current_instance_parent} is a list: {current_instance_type_info}.")
+    # ORIG:                 current_instance_type_info = get_dataclass_field_type_info(current_instance_parent, attr_name_prev)
+    # ORIG:                 if current_instance_type_info is None:
+    # ORIG:                     raise EntityInternalError(owner=self,
+    # ORIG:                                               msg=f"Attribute {attr_name} not found in dataclass definition of {current_instance_parent}.")
+    # ORIG:                 if current_instance_type_info.is_list:
+    # ORIG:                     raise EntityInternalError(owner=self,
+    # ORIG:                                               msg=f"Attribute {attr_name} of {current_instance_parent} is a list: {current_instance_type_info}.")
 
-                    current_instance_model = current_instance_type_info.type_
-                    if not is_dataclass(current_instance_model):
-                        raise EntityInternalError(owner=self,
-                                                  msg=f"Attribute {attr_name} of {type(current_instance_parent)} is not a dataclass instance, got: {current_instance_model}")
+    # ORIG:                 current_instance_model = current_instance_type_info.type_
+    # ORIG:                 if not is_dataclass(current_instance_model):
+    # ORIG:                     raise EntityInternalError(owner=self,
+    # ORIG:                                               msg=f"Attribute {attr_name} of {type(current_instance_parent)} is not a dataclass instance, got: {current_instance_model}")
 
-                        # set new value of temp instance attribute
-                    # all attrs of a new instance will have None value (dc default)
-                    temp_dataclass_model = make_dataclass_with_optional_fields(current_instance_model)
-                    current_instance = temp_dataclass_model()
-                    value_accessor.set_value(instance=current_instance_parent,
-                                             attr_name=attr_name_prev,
-                                             attr_index=None,
-                                             new_value=current_instance)
-                else:
-                    attr_name_path_prev = ".".join(attr_name_path[:anr])
-                    # TODO: fix this ugly validation message
-                    raise EntityApplyValueError(owner=self,
-                                                msg=f"Attribute '{attr_name}' can not be set while '{parent_instance}.{attr_name_path_prev}' is not set. Is '{attr_name_path_prev}' obligatory?")
+    # ORIG:                     # set new value of temp instance attribute
+    # ORIG:                 # all attrs of a new instance will have None value (dc default)
+    # ORIG:                 temp_dataclass_model = make_dataclass_with_optional_fields(current_instance_model)
+    # ORIG:                 current_instance = temp_dataclass_model()
+    # ORIG:                 value_accessor.set_value(instance=current_instance_parent,
+    # ORIG:                                          attr_name=attr_name_prev,
+    # ORIG:                                          attr_index=None,
+    # ORIG:                                          new_value=current_instance)
+    # ORIG:             else:
+    # ORIG:                 attr_name_path_prev = ".".join(attr_name_path[:anr])
+    # ORIG:                 # TODO: fix this ugly validation message
+    # ORIG:                 raise EntityApplyValueError(owner=self,
+    # ORIG:                                             msg=f"Attribute '{attr_name}' can not be set while '{parent_instance}.{attr_name_path_prev}' is not set. Is '{attr_name_path_prev}' obligatory?")
 
-            current_instance_parent = current_instance
-            current_instance = value_accessor.get_value(instance=current_instance_parent,
-                                                        attr_name=attr_name,
-                                                        attr_index=None)
-            if current_instance is UNDEFINED:
-                raise EntityInternalError(owner=self,
-                                          msg=f"Missing attribute:\n  Current: {current_instance}.{attr_name}\n Parent: {parent_instance}.{'.'.join(attr_name_path)}")
+    # ORIG:         current_instance_parent = current_instance
+    # ORIG:         current_instance = value_accessor.get_value(instance=current_instance_parent,
+    # ORIG:                                                     attr_name=attr_name,
+    # ORIG:                                                     attr_index=None)
+    # ORIG:         if current_instance is UNDEFINED:
+    # ORIG:             raise EntityInternalError(owner=self,
+    # ORIG:                                       msg=f"Missing attribute:\n  Current: {current_instance}.{attr_name}\n Parent: {parent_instance}.{'.'.join(attr_name_path)}")
 
-        # ----------------------------------------------------
-        # Finally change instance value by last attribute name
-        # ----------------------------------------------------
-        assert attr_name_last
-        value_accessor.set_value(instance=current_instance_parent,
-                                 attr_name=attr_name_last,
-                                 attr_index=None,
-                                 new_value=new_value)
+    # ORIG:     # ----------------------------------------------------
+    # ORIG:     # Finally change instance value by last attribute name
+    # ORIG:     # ----------------------------------------------------
+    # ORIG:     assert attr_name_last
+    # ORIG:     value_accessor.set_value(instance=current_instance_parent,
+    # ORIG:                              attr_name=attr_name_last,
+    # ORIG:                              attr_index=None,
+    # ORIG:                              new_value=new_value)
 
     # ------------------------------------------------------------
     # _apply() -> main apply function
@@ -590,6 +598,8 @@ class ApplyResult(IApplyResult):
 
             value_node = ValueNode(
                     component=self.entity,
+                    container=self.entity,
+                    instance_none_mode=self.instance_none_mode,
                     parent_node=None,
                     instance=self.instance,
                     should_collect_value_history=self.entity.config.should_collect_value_history,
@@ -622,6 +632,8 @@ class ApplyResult(IApplyResult):
                 has_items = component.is_subentity_items()
                 value_node = ValueNode(
                         component = component,
+                        container = comp_container,
+                        instance_none_mode=self.instance_none_mode,
                         parent_node = parent_node,
                         instance = self.current_frame.instance,
                         should_collect_value_history=self.entity.config.should_collect_value_history,
@@ -1154,6 +1166,8 @@ class ApplyResult(IApplyResult):
                 # Go one level deeper
                 item_value_node = ValueNode(
                         component = subentity_items,
+                        container= subentity_items,
+                        instance_none_mode=self.instance_none_mode,
                         parent_node = value_node,
                         instance = instance,
                         should_collect_value_history=self.entity.config.should_collect_value_history,
