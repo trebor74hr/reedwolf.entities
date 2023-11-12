@@ -2077,8 +2077,8 @@ class ValueNode:
     def setup(self, apply_result: "IApplyResult") -> Self:
         """
         will:
-            - calculate and set key_string
-            - register within apply_result
+            1) calculate and set key_string
+            2) register within apply_result
 
         Calculate and set key_string
         ----------------------------
@@ -2104,7 +2104,12 @@ class ValueNode:
                  company_entity::address_set_ext[0]
 
         """
+        if self.key_string:
+            raise EntityInternalError(owner=self, msg="value node already setup")
+
         component = self.component
+
+        # ---- 1) calculate and set key_string
 
         # default case
         key_string = component.name
@@ -2128,6 +2133,7 @@ class ValueNode:
             else:
                 container_node = self.container_node
             # TODO: consider to remove_this, just to have the same logic as before
+            # ignore self.parent_node.has_items parent value_node - will introduce redunant markup
             if container_node.has_items:
                 container_node = container_node.parent_node.container_node
 
@@ -2135,6 +2141,7 @@ class ValueNode:
 
         self.key_string = KeyString(key_string)
 
+        # ---- 2) register within apply_result - regsiter node to value_node_list
         apply_result.register_value_node(value_node=self)
 
         return self
@@ -2658,7 +2665,7 @@ class StructEnum(str, Enum):
 class ApplyExecPhasesEnum(str, Enum):
     EVALUATIONS_PHASE = "EVALUATIONS_PHASE"
     VALIDATIONS_PHASE = "VALIDATIONS_PHASE"
-    FINISH_COMPONENTS_PHASE= "FINISH_COMPONENTS_PHASE"
+    # FINISH_COMPONENTS_PHASE= "FINISH_COMPONENTS_PHASE"
 
 
 @dataclass
@@ -2682,13 +2689,13 @@ class ApplyExecCleanersRegistry:
     def get_cleaners(self, apply_exec_phase: ApplyExecPhasesEnum) -> List[ApplyExecCleaners]:
         return self.exec_cleaners_dict.setdefault(apply_exec_phase, [])
 
-    def register_stack_frame_only(self,
-                                  apply_exec_phase: ApplyExecPhasesEnum,
-                                  stack_frame: IStackFrame):
-        assert not self.finished
-        exec_list = self.exec_cleaners_dict.setdefault(apply_exec_phase, [])
-        exec_cleaner = ApplyExecCleaners(cleaner_list=[], stack_frame=stack_frame)
-        exec_list.append(exec_cleaner)
+    # def register_stack_frame_only(self,
+    #                               apply_exec_phase: ApplyExecPhasesEnum,
+    #                               stack_frame: IStackFrame):
+    #     assert not self.finished
+    #     exec_list = self.exec_cleaners_dict.setdefault(apply_exec_phase, [])
+    #     exec_cleaner = ApplyExecCleaners(cleaner_list=[], stack_frame=stack_frame)
+    #     exec_list.append(exec_cleaner)
 
     def register_cleaner_list(self,
                               apply_exec_phase: ApplyExecPhasesEnum,
@@ -2821,7 +2828,7 @@ class IApplyResult(IStackOwnerSession):
         ...
 
     @abstractmethod
-    def get_current_value(self, component: IComponent, strict: bool) -> LiteralType:
+    def get_current_value(self, strict: bool) -> LiteralType:
         ...
 
     @abstractmethod

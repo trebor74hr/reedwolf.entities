@@ -1064,18 +1064,12 @@ class ApplyResult(IApplyResult):
         # ---- SubEntityItems case
         if not subentity_items.is_subentity_items():
             raise EntityApplyValueError(owner=subentity_items, msg=f"Did not expect list of instances: {to_repr(instance_list)}")
-            # enters recursion -> _apply() -> ...
-        # parent_values_subtree = self.current_frame.parent_values_subtree
 
         if instance_list is None:
             # NOTE: found no better way to do it
             instance_list = []
         elif not isinstance(instance_list, (list, tuple)):
             raise EntityApplyValueError(owner=self, msg=f"{subentity_items}: Expected list/tuple in the new instance, got: {current_instance_list_new}")
-
-        # instance_list = instance
-
-        # TODO: validate cardinality before or after changes
 
         new_instances_by_key = None
         if current_instance_list_new not in (None, UNDEFINED):
@@ -1092,7 +1086,7 @@ class ApplyResult(IApplyResult):
 
         parent_instance = self.current_frame.instance
 
-        # NOTE: considered to use dict() since dictionaries are ordered in Python 3.6+ 
+        # NOTE: considered to use dict() since dictionaries are ordered in Python 3.6+
         #       ordering-perserving As of Python 3.7, this is a guaranteed, i.e.  Dict keeps insertion order
         #       https://stackoverflow.com/questions/39980323/are-dictionaries-ordered-in-python-3-6
         instances_by_key: Dict[KeyType, InstanceItem] = OrderedDict()
@@ -1192,7 +1186,8 @@ class ApplyResult(IApplyResult):
             # TODO: consider to reset - although should not influence since stack_frame will be disposed
             # self.current_frame.set_parent_values_subtree(parent_values_subtree)
 
-        # TODO: put this on top of this function or around call?
+        # NOTE: this should not go on top of this function or around call to this function?
+        #       Nothing is lost by doing it like this.
         this_registry = subentity_items.get_this_registry()
 
         with self.use_stack_frame(
@@ -1393,10 +1388,10 @@ class ApplyResult(IApplyResult):
         self._register_exec_cleaners(validation_class=FieldValidationBase,
                                      evaluation_class=FieldEvaluationBase)
 
-        self.exec_cleaners_registry.register_stack_frame_only(
-            apply_exec_phase=ApplyExecPhasesEnum.FINISH_COMPONENTS_PHASE,
-            stack_frame=self.current_frame,
-        )
+        # self.exec_cleaners_registry.register_stack_frame_only(
+        #     apply_exec_phase=ApplyExecPhasesEnum.FINISH_COMPONENTS_PHASE,
+        #     stack_frame=self.current_frame,
+        # )
 
         return  #  all_ok, current_value_instance
 
@@ -1563,7 +1558,7 @@ class ApplyResult(IApplyResult):
             container = component.get_first_parent_container(consider_self=consider_self)
 
             # ---- RECURSION ----- only containers
-            container_key_string = self.get_key_string(container, depth=depth+1)
+            container_key_string = self.get_key_string(container, depth=depth + 1)
 
             # construct
             key_string = GlobalConfig.ID_NAME_SEPARATOR.join(
@@ -1683,10 +1678,9 @@ class ApplyResult(IApplyResult):
     # ------------------------------------------------------------
 
     def get_current_value(self, strict:bool) -> LiteralType:
-        # apply_result:IApplyResult
         """
-        Could work on non-stored fields.
-        Probaly a bit faster, only dict queries.
+        This is just a shortcut function to:
+            self.current_frame.value_node.get_value(...)
         """
         return self.current_frame.value_node.get_value(strict=strict)
 
