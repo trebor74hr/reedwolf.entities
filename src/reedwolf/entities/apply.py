@@ -402,12 +402,14 @@ class ApplyResult(IApplyResult):
         # instance_attr_value =
         value_node.set_value(new_value, dexp_result=dexp_result)
 
+        # TODO: prebaci se na drugi mod - pa ovo zakomentiraj - pogledaj
+        #       value_node.set_instance_attr_to_value()
         if not is_from_init_bind and self.current_frame.instance is not NA_DEFAULTS_MODE:
             # --- change the model attribute - handle nested cases too e.g. M.company.access.can_delete
             # component = component,
             # self._model_instance_attr_change_value(new_value=new_value)
             # self._model_instance_attr_change_value(value_node=value_node)
-            value_node.apply_value_to_instance_attr()
+            value_node.set_instance_attr_to_value()
 
         return
 
@@ -809,7 +811,6 @@ class ApplyResult(IApplyResult):
                 for cleaner in exec_cleaner.cleaner_list:
                     self._execute_evaluation(evaluation=cleaner)
 
-
     # ------------------------------------------------------------
 
     def _execute_all_validations(self) -> bool:
@@ -837,8 +838,27 @@ class ApplyResult(IApplyResult):
         for value_node in self.value_node_list:
             with self.use_stack_frame(value_node.apply_stack_frame):
                 self._finish_component()
-                # if not value_node.finished:
-                #     raise EntityInternalError(owner=value_node, msg=f"Value not not marked finished, and it should.")
+
+                # --------------------------------------------------
+                # TODO: ovo uključi nakon što se values_dict - pa zakomentiraj
+                #           value_node.set_instance_attr_to_value()
+                #       možda i bolje ime funkcije?
+                # --------------------------------------------------
+                # TODO: if not value_node.is_changed():
+                # TODO:     continue
+                # TODO: # and self.current_frame.instance is not NA_DEFAULTS_MODE:
+                # TODO: assert value_node.change_op
+                # TODO: if value_node.change_op == ChangeOpEnum.UPDATE:
+                # TODO:     value_node.set_instance_attr_to_value()
+                # TODO: elif value_node.change_op == ChangeOpEnum.ADDED:
+                # TODO:     # TODO: HM, what to do?
+                # TODO:     ...
+                # TODO: elif value_node.change_op == ChangeOpEnum.DELETE:
+                # TODO:     # TODO: HM, what to do?
+                # TODO:     ...
+                # TODO: else:
+                # TODO:     raise EntityInternalError(owner=self, msg=f"invalid change_op: {value_node.change_op}")
+
         return
 
     # ------------------------------------------------------------
@@ -986,17 +1006,22 @@ class ApplyResult(IApplyResult):
         changes: List[InstanceChange] = []
 
         for value_node in self.value_node_list:
-            if not value_node.is_changed():
+            if not value_node.finished:
+                raise EntityInternalError(owner=value_node, msg=f"ValueNode not finished")
+            if value_node.has_items or not value_node.is_changed():
                 continue
+
+            assert value_node.change_op
             changes.append(
                 InstanceChange(
                     key_string=value_node.key_string,
-                    change_op=ChangeOpEnum.UPDATE if not value_node.change_op else value_node.change_op,
-                    init_value=value_node.init_value if not value_node.change_op else UNDEFINED,
-                    value = value_node._value if not value_node.change_op else UNDEFINED,
+                    change_op=value_node.change_op,
+                    init_value=value_node.init_value if value_node.change_op == ChangeOpEnum.UPDATE else UNDEFINED,
+                    value = value_node._value if value_node.change_op == ChangeOpEnum.UPDATE else UNDEFINED,
             ))
-        self._changes = changes
-        return self._changes
+
+        self._instance_change_list = changes
+        return self._instance_change_list
 
     # ------------------------------------------------------------
 
@@ -1231,7 +1256,6 @@ class ApplyResult(IApplyResult):
         if not ok - errors contain all details.
         """
         self._apply(
-                # parent=None, 
                 component=self.entity,
                 top_call=True,
                 )
@@ -1352,7 +1376,7 @@ class ApplyResult(IApplyResult):
             4. validate type is ok?
         """
 
-        # TODO: available_old_logic - since "available" can use other FieldNS.<name> values
+        # TODO: available_old_logic - since "available" can use other FieldsNS.<name> values
         #       and they are not yet evaluated, that can lead to inconsistent state. Disabling for now.
         if isinstance(component, IField):
             # --- 1. Fill initial value from instance
@@ -1377,9 +1401,8 @@ class ApplyResult(IApplyResult):
 
             # --- 2. try to update if instance_new is provided and yields different value
             # bind_dexp_result, _ =
-            self._try_update_by_instance(
-                                        component=component, 
-                                        init_bind_dexp_result=init_bind_dexp_result)
+            self._try_update_by_instance(component=component,
+                                         init_bind_dexp_result=init_bind_dexp_result)
             # TODO: self.config.logger.warning(f"{'  ' * self.current_frame.depth} update: {component.name}")
         # else:
         #     bind_dexp_result = None  # noqa: F841
@@ -1430,7 +1453,8 @@ class ApplyResult(IApplyResult):
             #       intermediate and the last value (returns validation_failure)
             if self.validate_type(component):
                 all_ok = False
-
+        else:
+            value_node.mark_finished()
 
         return all_ok
 

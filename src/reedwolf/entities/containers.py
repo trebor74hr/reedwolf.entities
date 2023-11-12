@@ -352,7 +352,7 @@ class ContainerBase(IContainer, ABC):
             # ----------------------------------------
             # Traverse all subcomponents and call the same method for each (recursion)
             # NOTE: Will setup all bound_model and bind and ModelsNS.
-            #       In phase two will setup all other components and FieldNS, ThisNS and FunctionsNS.
+            #       In phase two will setup all other components and FieldsNS, ThisNS and FunctionsNS.
             self._setup_phase_one()
 
 
@@ -746,7 +746,6 @@ class Entity(IEntity, ContainerBase):
         create and config ApplyResult() and call apply_result.apply()
         """
         from .apply import ApplyResult
-        # container = self.get_first_parent_container(consider_self=True)
 
         apply_result = \
                 ApplyResult(

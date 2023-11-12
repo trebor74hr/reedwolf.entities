@@ -1997,8 +1997,9 @@ class ValueNode:
     init_value: Union[UndefinedType, AttrValue] = \
         field(repr=False, init=False, default=UNDEFINED)
 
-    # NOTE: used only in ApplyResult._model_instance_attr_change_value
+    # NOTE: used only in .set_instance_attr_to_value()
     #       to set new value on model instance.
+    #       Result of Field.bind=M.<field> DotExpression execution.
     # TODO: consider ALT: Could be done with bind.Path() too.
     #       attr_name_path: Optional[List[AttrName]] = field(init=False, repr=False)
     init_dexp_result: Union[UndefinedType, NoneType, ExecResult] = \
@@ -2166,8 +2167,9 @@ class ValueNode:
         return self is self.top_node
 
     def is_changed(self) -> bool:
-        # if not self.finished:
-        #     raise EntityInternalError(owner=self, msg="not finished yet")
+        """
+        redundant code in mark_finished()
+        """
         if self.change_op is not None:
             return True
         return self._value!=self.init_value
@@ -2184,8 +2186,6 @@ class ValueNode:
         if dexp_result is not None and self.init_dexp_result is UNDEFINED:
             if not self._value in (NA_IN_PROGRESS, UNDEFINED):
                 raise EntityInternalError(owner=self, msg=f"self._value already set to: {self._value}")
-            # if not dexp_result:
-            #     raise EntityInternalError(owner=self, msg=f"dexp_result is empty: {dexp_result}")
             self.init_dexp_result = dexp_result
             is_from_init_bind = True
         else:
@@ -2222,10 +2222,11 @@ class ValueNode:
 
     # ------------------------------------------------------------
 
-    def apply_value_to_instance_attr(self):
+    def set_instance_attr_to_value(self):
         """
         will set instance.<attr-name> = self._value
         attr-name could be nested (e.g. M.access.can_delete)
+        Functino name is odd.
         """
         # TODO: not sure if this validation is ok
         model = self.container.bound_model.get_type_info().type_
@@ -2241,6 +2242,8 @@ class ValueNode:
 
         if self._instance_parent is UNDEFINED:
             self._init_instance_attr_access_objects()
+
+        assert not isinstance(self._value, UndefinedType)
 
         # Finally change instance value by last attribute name
         assert self._attr_name_last
@@ -2354,8 +2357,13 @@ class ValueNode:
 
 
     def mark_finished(self):
+        """
+        redundant code in is_changed()
+        """
         if self.finished: # and self._value is not NA_DEFAULTS_MODE:
             raise EntityInternalError(owner=self, msg=f"Current value already finished, last value: {self._value}")
+        if self.change_op is None and self._value != self.init_value:
+            self.change_op = ChangeOpEnum.UPDATE
         self.finished = True
 
     def add_item(self, value_node: Self):
