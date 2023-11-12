@@ -385,7 +385,7 @@ class FieldBase(IField, ABC):
         return value
 
 
-    def validate_type(self, apply_result: IApplyResult, strict:bool, value: Any = UNDEFINED) -> Optional[ValidationFailure]:
+    def validate_type(self, apply_result: IApplyResult, value: Any = UNDEFINED) -> Optional[ValidationFailure]:
         """
         returns None if all ok, otherwise ValidationFailure()
         """
@@ -395,7 +395,7 @@ class FieldBase(IField, ABC):
             raise EntityInternalError(owner=self, msg=f"Current frame component should match current objects (self), got:\n  {component}\n  !=\n  {self}") 
 
         if value is UNDEFINED:
-            value = apply_result.get_current_value(component, strict=strict)
+            value = apply_result.get_current_value(strict=True)
 
         # NA_DEFAULTS_MODE - no value is evaluated in defaults_mode -> no
         # validation 

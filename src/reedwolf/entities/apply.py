@@ -2,7 +2,6 @@ from dataclasses import (
         dataclass,
         field,
         asdict,
-        is_dataclass,
         replace as dataclass_clone,
         )
 from typing import (
@@ -11,7 +10,7 @@ from typing import (
     Tuple,
     Type, List,
 )
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 
 from .exceptions import (
         EntityApplyError,
@@ -23,10 +22,8 @@ from .expressions import (
         ExecResult,
         NotAvailableExecResult,
         DotExpression,
-        execute_available_dexp,
         )
 from .utils import (
-    get_available_names_example,
     UNDEFINED,
     NA_DEFAULTS_MODE,
     NA_IN_PROGRESS,
@@ -43,7 +40,6 @@ from .meta import (
     ComponentTreeWValuesType,
     LiteralType,
     make_dataclass_with_optional_fields,
-    get_dataclass_field_type_info,
     dataclass_from_dict,
     Index0Type,
     KeyType,
@@ -60,7 +56,6 @@ from .base import (
     ValidationFailure,
     StructEnum,
     ChangeOpEnum,
-    InstanceAttrValue,
     InstanceChange,
     UseStackFrameCtxManagerBase,
     IContainer,
@@ -207,6 +202,7 @@ class ApplyResult(IApplyResult):
 
         component = self.current_frame.component
 
+        # TODO: make a copy to preserve original values. Maybe is not necessary.
         current_stack_frame = dataclass_clone(self.current_frame)
 
         validation_list: List[IValidation] = []
@@ -287,7 +283,7 @@ class ApplyResult(IApplyResult):
             eval_value = component.try_adapt_value(eval_value)
 
         # ALT: bind_dexp_result = component.get_dexp_result_from_instance(apply_result)
-        orig_value = self.get_current_value(component, strict=False)
+        orig_value = self.get_current_value(strict=False)
 
         if (orig_value != eval_value):
             self._register_instance_attr_change(
@@ -656,7 +652,6 @@ class ApplyResult(IApplyResult):
             # NOTE: self.component_only should be found 
             in_component_only_tree = True
 
-
         if depth > MAX_RECURSIONS:
             raise EntityInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
 
@@ -678,6 +673,7 @@ class ApplyResult(IApplyResult):
                                           in_component_only_tree=in_component_only_tree,
                                           mode_subentity_items=mode_subentity_items,
                                           )
+        value_node.set_apply_stack_frame(apply_stack_frame=new_frame)
 
         # ------------------------------------------------------------
         # ----- Main processing - must use new stack frame
@@ -727,7 +723,7 @@ class ApplyResult(IApplyResult):
                 if process_further and getattr(component, "enables", None):
                     assert not getattr(component, "contains", None), component
 
-                    value = self.get_current_value(component, strict=False)
+                    value = self.get_current_value(strict=False)
 
                     # OLD: delete this - not good in mode_dexp_dependency mode
                     #       bind_dexp_result = component.get_dexp_result_from_instance(apply_result=self)
@@ -831,12 +827,18 @@ class ApplyResult(IApplyResult):
     # ------------------------------------------------------------
 
     def _execute_all_finish_components(self):
-        for exec_cleaner in self.exec_cleaners_registry.get_cleaners(ApplyExecPhasesEnum.FINISH_COMPONENTS_PHASE):
-            with self.use_stack_frame(exec_cleaner.stack_frame):
-                assert not exec_cleaner.cleaner_list
-                component = self.current_frame.component
-                comp_key_str = self.get_key_string(component)
-                self._finish_component(comp_key_str)
+        # ORIG: for exec_cleaner in self.exec_cleaners_registry.get_cleaners(ApplyExecPhasesEnum.FINISH_COMPONENTS_PHASE):
+        # ORIG:     with self.use_stack_frame(exec_cleaner.stack_frame):
+        # ORIG:         assert not exec_cleaner.cleaner_list
+        # ORIG:         component = self.current_frame.component
+        # ORIG:         comp_key_str = self.get_key_string(component)
+        # ORIG:         self._finish_component(comp_key_str)
+
+        for value_node in self.value_node_list:
+            with self.use_stack_frame(value_node.apply_stack_frame):
+                self._finish_component()
+                # if not value_node.finished:
+                #     raise EntityInternalError(owner=value_node, msg=f"Value not not marked finished, and it should.")
         return
 
     # ------------------------------------------------------------
@@ -932,8 +934,14 @@ class ApplyResult(IApplyResult):
                 instance_new = current_instance_new,
                 in_component_only_tree=in_component_only_tree,
             )
+        elif mode_subentity_items:
+            # clone existing frame - the easiest solution for now
+            # but must be done in order to set this_registry - later
+            assert self.current_frame.value_node == value_node
+            assert self.current_frame.component == component
+            assert in_component_only_tree == in_component_only_tree
+            new_frame = dataclass_clone(self.current_frame)
         else:
-            assert not new_frame
             # -- Fallback case --
             # register non-container frame - only component is new. take instance from previous frame
             new_frame = ApplyStackFrame(
@@ -1100,18 +1108,6 @@ class ApplyResult(IApplyResult):
             if current_instance_list_new not in (None, UNDEFINED):
                 item_instance_new = new_instances_by_key.get(key, UNDEFINED)
                 if item_instance_new is UNDEFINED:
-                    # key_string = self.get_key_string_by_instance(
-                    #         component = subentity_items,
-                    #         instance = instance,
-                    #         parent_instance=parent_instance,
-                    #         index0 = index0)
-                    # self._instance_change_list.append(
-                    #         InstanceChange(
-                    #             key_string = key_string,
-                    #             key= key,
-                    #             change_op= ChangeOpEnum.DELETE,
-                    #             instance = instance,
-                    #         ))
                     item_instance_new = None
                     change_op = ChangeOpEnum.DELETE
             else:
@@ -1133,18 +1129,6 @@ class ApplyResult(IApplyResult):
             # register new items and add to processing
             for key in new_keys:
                 item_instance_new = new_instances_by_key[key]
-                # key_string = self.get_key_string_by_instance(
-                #                 component = subentity_items,
-                #                 instance = item_instance_new,
-                #                 parent_instance=parent_instance,
-                #                 index0 = index0_new)
-                # self._instance_change_list.append(
-                #         InstanceChange(
-                #             key_string = key_string,
-                #             key= key,
-                #             change_op= ChangeOpEnum.ADDED,
-                #             instance = item_instance_new,
-                #         ))
                 instances_by_key[key] = InstanceItem(key=key,
                                                      instance=item_instance_new,
                                                      index0=index0_new,
@@ -1157,9 +1141,7 @@ class ApplyResult(IApplyResult):
 
             # -- fill values dict
             self._fill_values_dict(filler="subentity_items", component=subentity_items, is_init=False, process_further=True, subentity_items_mode=True)
-
             # value_node_w_items = self.current_frame.value_node
-
             for key, instance_item in instances_by_key.items():
                 instance, index0, item_instance_new = \
                     instance_item.instance, instance_item.index0, instance_item.item_instance_new
@@ -1196,17 +1178,21 @@ class ApplyResult(IApplyResult):
                             in_component_only_tree=in_component_only_tree,
                             depth=depth+1,
                             )):
+                    # TODO: self.current_frame is just temp stack which won't be
+                    #       actually used for evaluations, rather is used as
+                    #       a template for new stack_frame in _apply() - which
+                    #       will be used for evaluations. Thus this is skipped:
+                    #           item_value_node.set_apply_stack_frame(apply_stack_frame=current_frame)
                     # ------------------------------------------------
                     # RECURSION + prevent not to hit this code again
                     # ------------------------------------------------
-                    self._apply(
-                                component=subentity_items,
-                                mode_subentity_items=True,
-                                )
+                    self._apply(component=subentity_items,
+                                mode_subentity_items=True)
 
             # TODO: consider to reset - although should not influence since stack_frame will be disposed
             # self.current_frame.set_parent_values_subtree(parent_values_subtree)
 
+        # TODO: put this on top of this function or around call?
         this_registry = subentity_items.get_this_registry()
 
         with self.use_stack_frame(
@@ -1223,14 +1209,8 @@ class ApplyResult(IApplyResult):
                     this_registry=this_registry,
                     # NOTE: instance_new skipped - (contains list of
                     #       new items) are already applied
-                )):
-
-            # # NOTE: old logic - if will make problems, return back:
-            # # setup this registry
-            # current_frame.set_this_registry(
-            #     subentity_items.get_this_registry()
-            # )
-
+                )) as current_frame:
+            value_node.set_apply_stack_frame(apply_stack_frame=current_frame)
             self._register_exec_cleaners(validation_class=ItemsValidationBase,
                                          evaluation_class=ItemsEvaluationBase)
         return
@@ -1420,13 +1400,14 @@ class ApplyResult(IApplyResult):
 
         return  #  all_ok, current_value_instance
 
-    def _finish_component(self, key_string: str) -> bool:
+    def _finish_component(self) -> bool:
         all_ok = True
         component = self.current_frame.component
+        key_string = self.current_frame.value_node.key_string
         if self.defaults_mode and isinstance(component, IField):
             # NOTE: change NA_DEFAULTS_MODE to most reasonable and
             #       common empty value -> None
-            value = self.get_current_value(component, strict=False)
+            value = self.get_current_value(strict=False)
             if value is NA_DEFAULTS_MODE:
                 self._register_instance_attr_change(
                     component=component,
@@ -1434,26 +1415,27 @@ class ApplyResult(IApplyResult):
                     new_value=None
                 )
 
-
         # --- 4.1 finalize last value and mark as finished
         value_node = self.current_frame.value_node
         current_value = value_node.get_value(strict=False)
         if current_value is NA_IN_PROGRESS:
+            # partial mode / defaults mode?
             current_value = NOT_APPLIABLE
             value_node.set_value(current_value, dexp_result=None)
+            value_node.mark_finished()
+            # --- 4.2 validate type - not done in this (partial) mode
 
-        elif current_value is not UNDEFINED \
-                and current_value is not NOT_APPLIABLE:
-
+        elif current_value is not UNDEFINED and current_value is not NOT_APPLIABLE:
             if isinstance(current_value, UndefinedType):
-                    raise EntityInternalError(owner=self, msg=f"Unexpected current value instance found for {key_string}, got: {current_value}")
+                raise EntityInternalError(owner=self, msg=f"Unexpected current value instance found for {key_string}, got: {current_value}")
             value_node.mark_finished()
 
-        # --- 4.2 validate type is ok?
-        # NOTE: initial value from instance is not checked - only
-        #       intermediate and the last value (returns validation_failure)
-        if self.validate_type(component, strict=True):
-            all_ok = False
+            # --- 4.2 validate type - not done in partial mode - NOT_APPLIABLE
+            # NOTE: initial value from instance is not checked - only
+            #       intermediate and the last value (returns validation_failure)
+            if self.validate_type(component):
+                all_ok = False
+
 
         return all_ok
 
@@ -1700,23 +1682,13 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def get_current_value(self, component: IComponent, strict:bool) -> LiteralType:
+    def get_current_value(self, strict:bool) -> LiteralType:
         # apply_result:IApplyResult
-        """ Could work on non-stored fields.
-            Probaly a bit faster, only dict queries.
         """
-        # ALT: from value_history_dict:
-        #       instance_attr_value = apply_result.value_history_dict[key_str][-1]
-        #       return instance_attr_value.value
-        # ALT: fetch from:
-        #       bind_dexp: DotExpression = getattr(component, "bind", None)
-        #       bind_dexp._evaluator.execute()
-        # key_str = component.get_key_string(apply_result=self)
-        key_str = self.get_key_string(component)
-        current_value = self.current_frame.value_node.get_value(strict=strict)
-        if current_value is UNDEFINED:
-            raise EntityInternalError(owner=component, msg=f"{key_str} not found in current values")
-        return current_value
+        Could work on non-stored fields.
+        Probaly a bit faster, only dict queries.
+        """
+        return self.current_frame.value_node.get_value(strict=strict)
 
     # ------------------------------------------------------------
 

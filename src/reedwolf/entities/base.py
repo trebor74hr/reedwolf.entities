@@ -23,6 +23,7 @@ from dataclasses import (
     fields,
     MISSING as DC_MISSING,
     make_dataclass,
+    replace as dataclass_clone,
     asdict, is_dataclass,
 )
 from types import (
@@ -1488,6 +1489,11 @@ class IField(IComponent, ABC):
     # to Model attribute
     bind: DotExpression
 
+    @abstractmethod
+    def validate_type(self, apply_result: "IApplyResult", value: Any = UNDEFINED) \
+        -> Optional["ValidationFailure"]:
+        ...
+
     # @abstractmethod
     # def get_attr_node(self, setup_session: ISetupSession) -> "AttrDexpNode":  # noqa: F821
     #     ...
@@ -1734,10 +1740,13 @@ class UseStackFrameCtxManagerBase(AbstractContextManager):
 
 class IStackOwnerSession(ABC):
     """
-    must have:
-        stack_frames: List[IStackFrame]
-        current_frame: IStackFrame
+    to override:
+        stack_frames
+        current_frame
     """
+    stack_frames: List[IStackFrame] = field(repr=False, init=False, default_factory=list)
+    current_frame: Optional[IStackFrame] = field(repr=False, init=False, default=None)
+
     STACK_FRAME_CLASS: ClassVar[type] = IStackFrame
     STACK_FRAME_CTX_MANAGER_CLASS: ClassVar[type] = UseStackFrameCtxManagerBase
 
@@ -1996,7 +2005,12 @@ class ValueNode:
         field(repr=False, init=False, default=UNDEFINED)
 
     # Should be used only for better introspection / debug / trace / log
+    # set later by calling .setup(apply_result)
     key_string: KeyString = field(init=False, repr=True, default=UNDEFINED)
+
+    # Setup later when ApplyStackFrame() is created, set with .set_apply_stack_frame()
+    # this is cross reference, since stack_frame has ref to ValueNode too
+    apply_stack_frame: Union[IStackFrame, UndefinedType] = field(repr=False, default=UNDEFINED)
 
     # <field>.Children
     # - when component has children - initialized with empty {}, later filled
@@ -2124,6 +2138,20 @@ class ValueNode:
         apply_result.register_value_node(value_node=self)
 
         return self
+
+    def set_apply_stack_frame(self, apply_stack_frame: IStackFrame):
+        """
+        called when creating ApplyStackFrame
+        will be used in _finish_component()
+        """
+        assert apply_stack_frame
+        if not apply_stack_frame.value_node == self:
+            raise EntityInternalError(owner=self, msg=f"apply_stack_frame has diff value_node: {self.apply_stack_frame.value_node}")
+        if self.apply_stack_frame:
+            raise EntityInternalError(owner=self, msg=f"apply_stack_frame is already set: {self.apply_stack_frame}")
+        # TODO: make a copy to preserve original values. Maybe is not necessary.
+        apply_stack_frame_copy = dataclass_clone(apply_stack_frame)
+        self.apply_stack_frame = apply_stack_frame_copy
 
     def is_top_node(self):
         # ALT: self.container_node and self.container_node is not self:
@@ -2812,20 +2840,27 @@ class IApplyResult(IStackOwnerSession):
     #     bind_dexp_result = component.get_dexp_result_from_instance(apply_result=self)
     #     return bind_dexp_result.value
 
-    def validate_type(self, component: IComponent, strict:bool, value: Any = UNDEFINED):
+    def validate_type(self, component: IComponent, value: Any = UNDEFINED):
         " only Fields can have values - all others components are ignored "
         validation_failure = None
-
         if isinstance(component, IField):
-            if self.defaults_mode:
-                validation_failure = component.validate_type(apply_result=self, strict=strict, value=value)
-                if validation_failure:
-                    raise EntityInternalError(owner=self, msg="TODO: Type validation failed in defaults_mode - probably should default value to None ") 
-                validation_failure = None
-            else:
-                validation_failure = component.validate_type(apply_result=self, strict=strict, value=value)
-                if validation_failure:
-                    self.register_instance_validation_failed(component, validation_failure)
+            validation_failure = component.validate_type(apply_result=self, value=value)
+            if validation_failure:
+                if self.defaults_mode:
+                    raise EntityInternalError(owner=self,
+                                          msg="TODO: Type validation failed in defaults_mode - probably should default value to None ")
+                self.register_instance_validation_failed(component, validation_failure)
+
+            # ORIG: if self.defaults_mode:
+            # ORIG:     validation_failure = component.validate_type(apply_result=self, strict=strict, value=value)
+            # ORIG:     if validation_failure:
+            # ORIG:         raise EntityInternalError(owner=self, msg="TODO: Type validation failed in defaults_mode - probably should default value to None ")
+            # ORIG:     validation_failure = None
+            # ORIG: else:
+            # ORIG:     validation_failure = component.validate_type(apply_result=self, strict=strict, value=value)
+            # ORIG:     if validation_failure:
+            # ORIG:         self.register_instance_validation_failed(component, validation_failure)
+
 
         return validation_failure
 

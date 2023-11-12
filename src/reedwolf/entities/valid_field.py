@@ -100,7 +100,7 @@ class Required(FieldValidationBase):
 
     def validate(self, apply_result: IApplyResult) -> Optional[ValidationFailure]:
         component = apply_result.current_frame.component
-        value = apply_result.get_current_value(component, strict=False)
+        value = apply_result.get_current_value(strict=False)
         if value is None:
             return ValidationFailure(
                             component_key_string = apply_result.get_key_string(component),
@@ -190,7 +190,7 @@ class MinValue(FieldValidationBase):
     def validate(self, apply_result: IApplyResult) -> Optional[ValidationFailure]:
         # TODO: evaluate self.value when DotExpression
         component = apply_result.current_frame.component
-        value = apply_result.get_current_value(component, strict=False)
+        value = apply_result.get_current_value(strict=False)
         if not is_none_value(value) and value < self.value:
             return ValidationFailure(
                             component_key_string = apply_result.get_key_string(component),
@@ -218,7 +218,7 @@ class ExactLength(FieldValidationBase):
     def validate(self, apply_result: IApplyResult) -> Optional[ValidationFailure]:
         # TODO: evaluate self.value when DotExpression
         component = apply_result.current_frame.component
-        value = apply_result.get_current_value(component, strict=False)
+        value = apply_result.get_current_value(strict=False)
         if value and hasattr(value, "__len__") and len(value) != self.value:
             return ValidationFailure(
                             component_key_string = apply_result.get_key_string(component),
@@ -247,7 +247,7 @@ class MaxLength(FieldValidationBase):
     def validate(self, apply_result: IApplyResult) -> Optional[ValidationFailure]:
         # TODO: evaluate self.value when DotExpression
         component = apply_result.current_frame.component
-        value = apply_result.get_current_value(component, strict=False)
+        value = apply_result.get_current_value(strict=False)
         if value and hasattr(value, "__len__") and len(value) > self.value:
             return ValidationFailure(
                             component_key_string = apply_result.get_key_string(component),
@@ -277,7 +277,7 @@ class MinLength(FieldValidationBase):
     def validate(self, apply_result: IApplyResult) -> Optional[ValidationFailure]:
         # TODO: evaluate self.value when DotExpression
         component = apply_result.current_frame.component
-        value = apply_result.get_current_value(component, strict=False)
+        value = apply_result.get_current_value(strict=False)
         if value and hasattr(value, "__len__") and len(value) < self.value:
             return ValidationFailure(
                             component_key_string = apply_result.get_key_string(component),
@@ -324,7 +324,7 @@ class RangeLength(FieldValidationBase):
     def validate(self, apply_result: IApplyResult) -> Optional[ValidationFailure]:
         # TODO: evaluate self.value when DotExpression
         component = apply_result.current_frame.component
-        value = apply_result.get_current_value(component, strict=False)
+        value = apply_result.get_current_value(strict=False)
         if hasattr(value, "__len__"):
             if self.min and value and len(value) < self.min:
                 return ValidationFailure(
