@@ -2014,6 +2014,13 @@ class ValueNode:
     value_history: Union[UndefinedType, List[InstanceAttrValue]] = \
         field(repr=False, init=False, default=UNDEFINED)
 
+    # cached values used in set_value() logic
+    # see . _init_instance_attr_access_objects()
+    _instance_parent: Union[ModelType, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
+    _attr_name_last: Union[AttrName, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
+    _value_accessor: Union[IValueAccessor, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
+
+
     # TODO:
     # changes: List[InstanceChange] = \
     #     field(repr=False, init=False, default_factory=list)
@@ -2181,35 +2188,51 @@ class ValueNode:
     # ------------------------------------------------------------
 
     def apply_value_to_instance_attr(self):
-        new_value = self._value
-        component = self.component
-        parent_instance = self.instance
-
+        """
+        will set instance.<attr-name> = self._value
+        attr-name could be nested (e.g. M.access.can_delete)
+        """
         # TODO: not sure if this validation is ok
-        # NOTE: bound_model.model could be VExpr
         model = self.container.bound_model.get_type_info().type_
         if not self.instance_none_mode \
-                and not isinstance(parent_instance, model):
-            raise EntityInternalError(owner=self, msg=f"Parent instance {parent_instance} has wrong type")
+                and not isinstance(self.instance, model):
+            raise EntityInternalError(owner=self, msg=f"Parent instance {self.instance} has wrong type")
 
         # -- attr_name - fetch from initial bind dexp (very first)
         # TODO: save dexp_result in ValueNode or get from component.bind ?
         init_bind_dexp_result = self.init_dexp_result
         if not init_bind_dexp_result:
             raise EntityInternalError(owner=self, msg=f"init_bind_dexp_result is not set, got: {self} . {init_bind_dexp_result}")
-        # init_instance_attr_value = value_node.value_history[0]
-        # if not init_instance_attr_value.is_from_bind:
-        #     raise EntityInternalError(owner=self, msg=f"{init_instance_attr_value} is not from bind")
-        # init_bind_dexp_result = init_instance_attr_value.dexp_result
 
+        if self._instance_parent is UNDEFINED:
+            self._init_instance_attr_access_objects()
 
-        # attribute name is in the last item
+        # Finally change instance value by last attribute name
+        assert self._attr_name_last
+        self._value_accessor.set_value(instance=self._instance_parent,
+                                 attr_name=self._attr_name_last,
+                                 attr_index=None,
+                                 new_value=self._value)
 
+    # ------------------------------------------------------------
+
+    def _init_instance_attr_access_objects(self):
+        """
+        initialize:
+            self._instance_parent
+            self._attr_name_last
+            self._value_accessor
+
+        used in call to:
+           self._value_accessor.set_value()
+        """
+        assert self._instance_parent is UNDEFINED
+        component = self.component
         # "for" loop is required for attributes from substructure that
         # is not done as SubEntity rather direct reference, like:
         #   bind=M.access.alive
         attr_name_path = [init_raw_attr_value.attr_name
-                          for init_raw_attr_value in init_bind_dexp_result.value_history
+                          for init_raw_attr_value in self.init_dexp_result.value_history
                           ]
         if not attr_name_path:
             raise EntityInternalError(owner=self, msg=f"{component}: attr_name_path is empty")
@@ -2224,6 +2247,7 @@ class ValueNode:
             value_accessor = component.value_accessor
 
         current_instance_parent = None
+        parent_instance = self.instance
         current_instance = parent_instance
         attr_name_last = UNDEFINED
 
@@ -2234,26 +2258,16 @@ class ValueNode:
             attr_name_last = attr_name
             if current_instance is None:
                 if self.instance_none_mode:
+                    # -------------------------------------------------------
                     # Create all missing intermediate empty dataclass objects
+                    # -------------------------------------------------------
                     assert anr > 0
                     attr_name_prev = attr_name_path[anr - 1]
-
-                    current_instance_type_info = get_dataclass_field_type_info(current_instance_parent, attr_name_prev)
-                    if current_instance_type_info is None:
-                        raise EntityInternalError(owner=self,
-                                                  msg=f"Attribute {attr_name} not found in dataclass definition of {current_instance_parent}.")
-                    if current_instance_type_info.is_list:
-                        raise EntityInternalError(owner=self,
-                                                  msg=f"Attribute {attr_name} of {current_instance_parent} is a list: {current_instance_type_info}.")
-
-                    current_instance_model = current_instance_type_info.type_
-                    if not is_dataclass(current_instance_model):
-                        raise EntityInternalError(owner=self,
-                                                  msg=f"Attribute {attr_name} of {type(current_instance_parent)} is not a dataclass instance, got: {current_instance_model}")
-
-                        # set new value of temp instance attribute
-                    # all attrs of a new instance will have None value (dc default)
-                    temp_dataclass_model = make_dataclass_with_optional_fields(current_instance_model)
+                    temp_dataclass_model= self._make_dataclass_with_opt_fields(
+                        current_instance_parent=current_instance_parent,
+                        attr_name_prev=attr_name_prev,
+                        attr_name=attr_name,
+                    )
                     current_instance = temp_dataclass_model()
                     value_accessor.set_value(instance=current_instance_parent,
                                              attr_name=attr_name_prev,
@@ -2273,16 +2287,36 @@ class ValueNode:
                 raise EntityInternalError(owner=self,
                                           msg=f"Missing attribute:\n  Current: {current_instance}.{attr_name}\n Parent: {parent_instance}.{'.'.join(attr_name_path)}")
 
-        # ----------------------------------------------------
-        # Finally change instance value by last attribute name
-        # ----------------------------------------------------
-        assert attr_name_last
-        value_accessor.set_value(instance=current_instance_parent,
-                                 attr_name=attr_name_last,
-                                 attr_index=None,
-                                 new_value=new_value)
+        self._instance_parent = current_instance_parent
+        # attribute name is in the last item
+        self._attr_name_last = attr_name_last
+        self._value_accessor = value_accessor
+
 
     # ------------------------------------------------------------
+    def _make_dataclass_with_opt_fields(self,
+                        current_instance_parent: ModelType,
+                        attr_name_prev: AttrName,
+                        attr_name: AttrName,
+                        ) -> ModelType:
+        current_instance_type_info = get_dataclass_field_type_info(current_instance_parent, attr_name_prev)
+        if current_instance_type_info is None:
+            raise EntityInternalError(owner=self,
+                                      msg=f"Attribute {attr_name} not found in dataclass definition of {current_instance_parent}.")
+        if current_instance_type_info.is_list:
+            raise EntityInternalError(owner=self,
+                                      msg=f"Attribute {attr_name} of {current_instance_parent} is a list: {current_instance_type_info}.")
+
+        current_instance_model = current_instance_type_info.type_
+        if not is_dataclass(current_instance_model):
+            raise EntityInternalError(owner=self,
+                                      msg=f"Attribute {attr_name} of {type(current_instance_parent)} is not a dataclass instance, got: {current_instance_model}")
+
+            # set new value of temp instance attribute
+        # all attrs of a new instance will have None value (dc default)
+        temp_dataclass_model = make_dataclass_with_optional_fields(current_instance_model)
+        return temp_dataclass_model
+
 
     def mark_finished(self):
         if self.finished: # and self._value is not NA_DEFAULTS_MODE:
