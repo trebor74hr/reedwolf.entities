@@ -55,7 +55,7 @@ from .meta import (
 # ------------------------------------------------------------
 
 @dataclass
-class RawAttrValue:
+class DexpValueNode:
     value: Any
     attr_name: str
     changer_name: str
@@ -65,12 +65,12 @@ class RawAttrValue:
 @dataclass
 class ExecResult:
     # last value, mutable
-    value: Any  = field(init=False, default=UNDEFINED)
+    value: AttrValue  = field(init=False, default=UNDEFINED)
 
-    # TODO: set compoenent (owner) that triggerred value change
+    # Every DotExpression member (e.g. Fn.name.Fun().member) will get one DexpValueNode.
+    # TODO: consider adding set compoenent (owner) that triggerred value change
     #       value evaluation - can have attr_node.name
-    # value_history : List[Tuple[str, RawAttrValue]] = field(repr=False, init=False, default_factory=list)
-    value_history : List[RawAttrValue] = field(repr=False, init=False, default_factory=list)
+    dexp_value_node_list : List[DexpValueNode] = field(repr=False, init=False, default_factory=list)
 
     @classmethod
     def create(cls, value: Any, attr_name: str="", changer_name: str=""):
@@ -79,8 +79,8 @@ class ExecResult:
         return instance
 
     def set_value(self, value: Any, attr_name: str, changer_name: str):
-        self.value_history.append(
-                RawAttrValue(value=value, attr_name=attr_name, changer_name=changer_name)
+        self.dexp_value_node_list.append(
+                DexpValueNode(value=value, attr_name=attr_name, changer_name=changer_name)
                 )
         self.value = value
 

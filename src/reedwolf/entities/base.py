@@ -1920,14 +1920,17 @@ class InstanceAttrValue:
     #   this .value could be unadapted value version (field.try_adapt_value())
     #   therefore value is in a special field.
     # * second+ - are from evaluation results
-    dexp_result: ExecResult = field(repr=False, compare=False)
+    # Only in UNIT TESTS None is used
+    dexp_result: Optional[ExecResult] = field(repr=False, compare=False, default=None)
 
     # TODO: this is not filled good - allways component.name
     # just to have track who read/set this value
-    value_parent_name: str = field(repr=False, compare=False)
+    # Only in UNIT TESTS "" is used
+    value_parent_name: str = field(repr=False, compare=False, default="")
 
-    # is from bind
-    is_from_bind: bool = field(repr=False, compare=False, default=False)
+    # is from bind or some other phase
+    # Only in UNIT TESTS "UNDEFINED" is used
+    value_set_phase: "ValueSetPhase" = field(repr=False, compare=False, default="UNEDFINED")
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -1938,6 +1941,36 @@ class InstanceAttrValue:
                 }
 
 # ------------------------------------------------------------
+class ValueSetPhase(str, Enum):
+    """
+    Two phases:
+        - initial - fill from bind, update by instance_new and adapt type
+        - evaluation - run evaluations and change / fill the value
+    It is important to preserve the same index INIT_ / EVAL_, since some logic depends on it,
+    see ValueNode.set_value()
+    """
+    # initial value - filling from evaluation of model's .bind Dexp
+    INIT_BY_BIND = "INIT_BY_BIND"
+
+    # udpate by instance_new + adapting this new value with type adapter
+    INIT_BY_NEW_INSTANCE = "INIT_BY_NEW_INSTANCE"
+
+    # no changes by instance_new - change by adapting to type of an initial value
+    INIT_ADAPT_TYPE_ONLY = "INIT_ADAPT_TYPE_ONLY"
+
+    # direct use of set_value - to set value to NA_IN_PROGRESS - to detect circular dependency
+    # done when traversing all components, before running evaluations
+    # TODO: after proper order of evaluation sis setup already in setup phase, this detection will become obsolete.
+    INIT_NA_IN_PROGRESS = "INIT_NA_IN_PROGRESS"
+
+    # running evaluations and applying results
+    EVAL_PHASE = "EVAL_PHASE"
+
+    # in finish phase if defaults mode - setting to reasonable default => None
+    EVAL_SET_NONE = "EVAL_SET_NONE"
+
+    # used only for unit tests
+    UNDEFINED = "UNDEFINED"
 
 @dataclass
 class ValueNode:
@@ -1990,6 +2023,12 @@ class ValueNode:
 
     # <field>.Value
     _value: Union[AttrValue, UndefinedType] = field(repr=False, init=False, default=UNDEFINED)
+
+    # initial value is filled, ready for evaluations
+    initialized: bool = field(repr=False, init=False, default=False)
+
+    # process of update/evaluate is finished - no more changes to values
+    # ready for validations
     # TODO: consider compare=False ?? do not compare by this attribute (for easier unit-test checks)
     finished: bool = field(repr=False, init=False, default=False)
 
@@ -2174,7 +2213,8 @@ class ValueNode:
             return True
         return self._value!=self.init_value
 
-    def set_value(self, value: AttrValue, dexp_result: Optional[ExecResult]) -> NoneType:
+
+    def set_value(self, value: AttrValue, dexp_result: Optional[ExecResult], value_set_phase: ValueSetPhase) -> NoneType:
         """
         - when setting initial value dexp_result is stored into init_dexp_result
         - dexp_result can be None too - in NA_* some undefined values
@@ -2184,12 +2224,17 @@ class ValueNode:
             raise EntityInternalError(owner=self, msg=f"Current value already finished, last value: {self._value}")
 
         if dexp_result is not None and self.init_dexp_result is UNDEFINED:
+            assert value_set_phase == ValueSetPhase.INIT_BY_BIND, value_set_phase
             if not self._value in (NA_IN_PROGRESS, UNDEFINED):
                 raise EntityInternalError(owner=self, msg=f"self._value already set to: {self._value}")
             self.init_dexp_result = dexp_result
-            is_from_init_bind = True
         else:
-            is_from_init_bind = True
+            assert value_set_phase != ValueSetPhase.INIT_BY_BIND, value_set_phase
+
+        if not self.initialized and not value_set_phase.startswith("INIT_"):
+            raise EntityInternalError(owner=self, msg=f"Setting value in init phase '{value_set_phase}' can be done before marking 'initialized'. Last_value: {self._value}")
+        elif self.initialized and not value_set_phase.startswith("EVAL_"):
+            raise EntityInternalError(owner=self, msg=f"Setting value in eval phase '{value_set_phase}' can be done after marking 'initialized'. Last_value: {self._value}")
 
         # TODO: if config.trace - then update values_history
 
@@ -2207,7 +2252,7 @@ class ValueNode:
                 value_parent_name=self.component.name,
                 value=value,
                 dexp_result=dexp_result,
-                is_from_bind = is_from_init_bind,
+                value_set_phase=value_set_phase
                 # TODO: source of change ...
             )
             self.value_history.append(instance_attr_value)
@@ -2270,7 +2315,7 @@ class ValueNode:
         # is not done as SubEntity rather direct reference, like:
         #   bind=M.access.alive
         attr_name_path = [init_raw_attr_value.attr_name
-                          for init_raw_attr_value in self.init_dexp_result.value_history
+                          for init_raw_attr_value in self.init_dexp_result.dexp_value_node_list
                           ]
         if not attr_name_path:
             raise EntityInternalError(owner=self, msg=f"{component}: attr_name_path is empty")
@@ -2355,13 +2400,22 @@ class ValueNode:
         temp_dataclass_model = make_dataclass_with_optional_fields(current_instance_model)
         return temp_dataclass_model
 
+    def mark_initialized(self):
+        if self.initialized:
+            raise EntityInternalError(owner=self, msg=f"Init phase already marked, last value: {self._value}")
+        if self.finished: # and self._value is not NA_DEFAULTS_MODE:
+            raise EntityInternalError(owner=self, msg=f"Invalid state, already marked as finished, last value: {self._value}")
+        self.initialized = True
 
     def mark_finished(self):
         """
         redundant code in is_changed()
         """
+        if not self.initialized:
+            raise EntityInternalError(owner=self, msg=f"Init phase should have been finished first, last value: {self._value}")
         if self.finished: # and self._value is not NA_DEFAULTS_MODE:
             raise EntityInternalError(owner=self, msg=f"Current value already finished, last value: {self._value}")
+
         if self.change_op is None and self._value != self.init_value:
             self.change_op = ChangeOpEnum.UPDATE
         self.finished = True
@@ -2885,7 +2939,8 @@ class IApplyResult(IStackOwnerSession):
                                        component: IComponent,
                                        dexp_result: ExecResult,
                                        new_value: Any,
-                                       is_from_init_bind:bool=False) -> InstanceAttrValue:
+                                       value_set_phase: ValueSetPhase,
+                                       ) -> InstanceAttrValue:
         ...
 
 
@@ -2902,6 +2957,10 @@ class IApplyResult(IStackOwnerSession):
             raise EntityInternalError(owner=self, msg=f"Stack frames not released: {self.stack_frames}")
 
         self.exec_cleaners_registry.finish()
+
+        for value_node in self.value_node_list:
+            value_node.mark_initialized()
+
         self.finished = True
 
     def register_instance_validation_failed(self, component: IComponent, failure: ValidationFailure):

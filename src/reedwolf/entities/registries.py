@@ -308,6 +308,7 @@ class FieldsRegistry(RegistryBase):
         # container = apply_result.current_frame.component.get_first_parent_container(consider_self=True)
         component = apply_result.current_frame.component
         instance  = apply_result.current_frame.instance
+        # value_node = apply_result.current_frame.value_node
         top_attr_accessor = ComponentAttributeAccessor(component, instance)
         return RegistryRootValue(top_attr_accessor, None)
 
@@ -423,7 +424,7 @@ class ConfigRegistry(RegistryBase):
 class ThisRegistry(IThisRegistry, RegistryBase):
     """
     General idea/overview:
-                                                Field   bool-ena field-gr subent-sin subent-its FuncArg: Filter(T.) FuncArg: T.attr
+                                                Field   bool-ena field-gr subent-sin subent-lst FuncArg: Filter(T.) FuncArg: T.attr
                                                 ------- -------- -------- ---------- ---------- ------------------- ---------------
     a) .<field-name>     - direktno             -       yes      yes      yes        yes (*1)   - (vidi f)          yes- if Item
     b) This.Value                               yes     yes      -        -          -          -                   yes- if std.
@@ -573,9 +574,13 @@ class ThisRegistry(IThisRegistry, RegistryBase):
                 # with 2nd param like this -> fetch further by attr_name
                 atrr_name_to_fetch = attr_name
 
-            root_value = RegistryRootValue(apply_result.current_frame.instance, atrr_name_to_fetch)
+            root_value = RegistryRootValue(value_root=apply_result.current_frame.instance,
+                                           attr_name_new=atrr_name_to_fetch)
 
         if self.component:
+            if root_value:
+                raise EntityInternalError(owner=self, msg=f"component mode and some other mode clash, root_value already set: {root_value}")
+            # TODO: root_value could be already defined, should I put "elif ..." instead?
             if self.is_items_mode:
                 # multiple items case
                 if attr_name == ReservedAttributeNames.ITEMS_ATTR_NAME.value:
@@ -615,7 +620,8 @@ class ThisRegistry(IThisRegistry, RegistryBase):
                 else:
                     # with 2nd param like this -> fetch further by attr_name
                     atrr_name_to_fetch = attr_name
-                root_value = RegistryRootValue(apply_result.current_frame.instance, atrr_name_to_fetch)
+                root_value = RegistryRootValue(value_root=apply_result.current_frame.instance,
+                                               attr_name_new=atrr_name_to_fetch)
 
         if not root_value:
             raise EntityInternalError(owner=self, msg="Invalid case")

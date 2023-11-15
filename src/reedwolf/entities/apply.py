@@ -62,7 +62,7 @@ from .base import (
     ApplyExecPhasesEnum,
     IValidation,
     IEvaluation,
-    ValueNode,
+    ValueNode, ValueSetPhase,
 )
 from .valid_base     import ValidationBase
 from .eval_base      import EvaluationBase
@@ -289,8 +289,9 @@ class ApplyResult(IApplyResult):
             self._register_instance_attr_change(
                     component=component, 
                     dexp_result=eval_dexp_result,
-                    new_value=eval_value
-                    )
+                    new_value=eval_value,
+                    value_set_phase=ValueSetPhase.EVAL_PHASE,
+            )
 
         return True     # ex. eval_dexp_result
 
@@ -323,7 +324,8 @@ class ApplyResult(IApplyResult):
                                        component: IComponent,
                                        dexp_result: Optional[ExecResult],
                                        new_value: LiteralType,
-                                       is_from_init_bind:bool=False) -> NoneType:
+                                       value_set_phase: ValueSetPhase,
+                                       ) -> NoneType:
         """
         Changes internal structure and underlying model attributes.
         Does some internal validations.
@@ -348,7 +350,7 @@ class ApplyResult(IApplyResult):
         key_str = self.get_key_string(component)
         current_value = value_node.get_value(strict=False)
 
-        if is_from_init_bind or \
+        if value_set_phase == ValueSetPhase.INIT_BY_BIND or \
           (current_value is UNDEFINED and not isinstance(new_value, UndefinedType)):
 
             if value_node.should_collect_value_history:
@@ -388,7 +390,7 @@ class ApplyResult(IApplyResult):
                 if last_value != current_value:
                     raise EntityApplyError(owner=component, msg=f"internal check: {last_value} <> {current_value}")
 
-        if not (is_from_init_bind and new_value is NA_DEFAULTS_MODE) and current_value == new_value:
+        if not (value_set_phase == ValueSetPhase.INIT_BY_BIND and new_value is NA_DEFAULTS_MODE) and current_value == new_value:
             #  current_value is NA_IN_PROGRESS
             raise EntityApplyError(owner=component, msg=f"register change failed, current value is the same: {current_value}")
 
@@ -400,11 +402,11 @@ class ApplyResult(IApplyResult):
 
         # --- current value - set to new value
         # instance_attr_value =
-        value_node.set_value(new_value, dexp_result=dexp_result)
+        value_node.set_value(new_value, dexp_result=dexp_result, value_set_phase=value_set_phase)
 
         # TODO: prebaci se na drugi mod - pa ovo zakomentiraj - pogledaj
         #       value_node.set_instance_attr_to_value()
-        if not is_from_init_bind and self.current_frame.instance is not NA_DEFAULTS_MODE:
+        if value_set_phase != ValueSetPhase.INIT_BY_BIND and self.current_frame.instance is not NA_DEFAULTS_MODE:
             # --- change the model attribute - handle nested cases too e.g. M.company.access.can_delete
             # component = component,
             # self._model_instance_attr_change_value(new_value=new_value)
@@ -702,7 +704,7 @@ class ApplyResult(IApplyResult):
                 raise EntityApplyError(owner=component, 
                             msg="The component is already in progress state. Probably circular dependency issue. Fix problematic references to this component and try again.")
             elif current_value is UNDEFINED:
-                value_node.set_value(NA_IN_PROGRESS, dexp_result=None)
+                value_node.set_value(NA_IN_PROGRESS, dexp_result=None, value_set_phase=ValueSetPhase.INIT_NA_IN_PROGRESS)
 
             # only when full apply or partial apply
             if not (self.component_only and not in_component_only_tree):
@@ -1430,7 +1432,8 @@ class ApplyResult(IApplyResult):
                 self._register_instance_attr_change(
                     component=component,
                     dexp_result=None,
-                    new_value=None
+                    new_value=None,
+                    value_set_phase = ValueSetPhase.EVAL_SET_NONE,
                 )
 
         # --- 4.1 finalize last value and mark as finished
@@ -1439,7 +1442,8 @@ class ApplyResult(IApplyResult):
         if current_value is NA_IN_PROGRESS:
             # partial mode / defaults mode?
             current_value = NOT_APPLIABLE
-            value_node.set_value(current_value, dexp_result=None)
+            # TODO: check why this is not set in other place where ValueSetPhase.EVAL_SET_NONE is used
+            value_node.set_value(current_value, dexp_result=None, value_set_phase=ValueSetPhase.EVAL_SET_NONE)
             value_node.mark_finished()
             # --- 4.2 validate type - not done in this (partial) mode
 
@@ -1473,7 +1477,8 @@ class ApplyResult(IApplyResult):
                 component = component, 
                 dexp_result = bind_dexp_result, 
                 new_value = init_value,
-                is_from_init_bind = True)
+                value_set_phase=ValueSetPhase.INIT_BY_BIND,
+        )
 
         return bind_dexp_result
 
@@ -1523,6 +1528,7 @@ class ApplyResult(IApplyResult):
                             component = component, 
                             dexp_result = instance_new_bind_dexp_result, 
                             new_value = new_value,
+                            value_set_phase=ValueSetPhase.INIT_BY_NEW_INSTANCE,
                             )
                     last_value = new_value 
                     bind_dexp_result = instance_new_bind_dexp_result
@@ -1535,8 +1541,9 @@ class ApplyResult(IApplyResult):
                     component=component, 
                     # TODO: how to mark init -> adaptation change?
                     dexp_result=None,
-                    new_value=last_value
-                    )
+                    new_value=last_value,
+                    value_set_phase=ValueSetPhase.INIT_ADAPT_TYPE_ONLY,
+            )
 
         return bind_dexp_result, updated
 
