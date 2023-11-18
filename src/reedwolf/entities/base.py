@@ -14,7 +14,8 @@ from typing import (
     Tuple,
     ClassVar,
     Callable,
-    Type as TypingType, Type,
+    # TODO: rename must be done - some test is failing
+    Type as TypingType,
 )
 from dataclasses import (
     dataclass,
@@ -255,7 +256,10 @@ class IBaseComponent:
 
     def set_parent(self, parent: Optional["IComponent"]):
         if self.parent is not UNDEFINED:
-            raise EntityInternalError(owner=self, msg=f"Parent already defined, got: {parent}")
+            # ORIG: raise EntityInternalError(owner=self, msg=f"Parent already defined, got: {parent}")
+            if self.parent is not parent:
+                raise EntityInternalError(owner=self, msg=f"Parent already set to different, have: {self.parent}, got: {parent}")
+            return
 
         assert parent is None or isinstance(parent, IComponent), parent
         self.parent = parent
@@ -476,6 +480,9 @@ class IComponent(IBaseComponent, ABC):
         self.init_clean_base()
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
 
+    def is_unbound(self) -> bool:
+        return self.entity.is_unbound()
+
     def init_clean_base(self):
         # when not set then will be later defined - see set_parent()
         if self.name not in (None, "", UNDEFINED):
@@ -502,6 +509,8 @@ class IComponent(IBaseComponent, ABC):
         from .registries import (
             ThisRegistry,
         )
+        if self.is_entity_model():
+            raise EntityInternalError(owner=self, msg=f"For BoundModel create_this_registry() needs to be overridden.")
 
         has_children = bool(self.get_children())
 
@@ -509,7 +518,7 @@ class IComponent(IBaseComponent, ABC):
             raise EntityInternalError(owner=self, msg="Non-fields should have children")
 
         this_registry = ThisRegistry(component=self)
-        # # and not self.is_bound_model()
+        # # and not self.is_entity_model()
         # if self.is_subentity_items():
         #     # Items -> This.Items
         #     this_registry = ThisRegistry(component=self)
@@ -605,7 +614,7 @@ class IComponent(IBaseComponent, ABC):
         return not bool(self.parent)
 
     @staticmethod
-    def is_top_container() -> bool:
+    def is_entity() -> bool:
         """ different from is_top_parent since is based on type not on parent setup"""
         return False
 
@@ -614,7 +623,7 @@ class IComponent(IBaseComponent, ABC):
         return False
 
     @staticmethod
-    def is_bound_model() -> bool:
+    def is_entity_model() -> bool:
         return False
 
     @staticmethod
@@ -884,9 +893,7 @@ class IComponent(IBaseComponent, ABC):
 
     # ------------------------------------------------------------
 
-    def _setup_phase_one(self, components: Optional[Dict[str, Self]] = None,
-                         parent: Optional[Self] = None) \
-                        -> NoneType:
+    def _setup_phase_one(self, components: Optional[Dict[str, Self]] = None) -> NoneType:
         """
         does following:
         - collects components:
@@ -919,17 +926,18 @@ class IComponent(IBaseComponent, ABC):
 
             components = {}
 
-            if self.is_top_container():
+            if self.is_entity():
                 # Entity()
-                if not parent is None:
-                    raise EntityInternalError(owner=self, msg=f"Parent should be None, got: {parent}")
-                assert parent is None, parent
+                # ORIG: if not parent is None:
+                # ORIG:     raise EntityInternalError(owner=self, msg=f"Parent should be None, got: {parent}")
+                # ORIG: assert parent is None, parent
                 self.set_parent(None)
             else:
                 # SubEntityItems()?
                 assert self.is_subentity()
-                assert parent, parent
-                self.set_parent(parent)
+                # ORIG: assert parent, parent
+                # ORIG: assert self.parent is parent
+                # ORIG: self.set_parent(parent)
 
             if not self.setup_session:
                 self.create_setup_session()
@@ -938,10 +946,10 @@ class IComponent(IBaseComponent, ABC):
             container = self
         else:
             assert isinstance(components, dict)
-            assert parent is not None
-            assert parent != self
-            self.set_parent(parent)
-
+            # ORIG: assert parent is not None
+            # ORIG: assert parent != self
+            # ORIG: assert parent is self.parent
+            # ORIG: self.set_parent(parent)
             container = self.get_first_parent_container(consider_self=False)
             setup_session = container.setup_session
 
@@ -953,36 +961,45 @@ class IComponent(IBaseComponent, ABC):
                     component = self,
                     this_registry = None,
                 )):
-            if self.is_container():
+            if isinstance(self, IContainer):
                 # ----------------------------------------
                 # ModelsNS setup 1/2 phase -> bound models
                 # ----------------------------------------
                 #   - direct data models setup (Entity)
                 #   - some standard NS fields (e.g. Instance)
                 # This will call complete setup() for bound_model-s
-                self._register_model_attr_nodes()
+                if not self.is_unbound():
+                    self.bound_model.set_parent(self)
+                    self._register_model_attr_nodes()
 
             # includes components, cleaners and all other complex objects
             for subcomponent in self._get_subcomponents_list():
                 component = subcomponent.component
+
                 # if isinstance(component, Namespace):
                 #     raise EntitySetupValueError(owner=self, msg=f"Subcomponents should not be Namespace instances, got: {subcomponent.name} = {subcomponent.component}")
 
                 if isinstance(component, DotExpression):
+                    # NOTE:
+                    #   1) phase_one sets: Field.bind, Container.bound_model.model (BoundModel) on other place
+                    #      bound_model.model Dexp build for bound case is done before, and for unbound after
+                    #   2) phase_two sets all other: evaluation.ensure, Validation.ensure etc.
                     continue
 
                 if isinstance(component, IComponent):
+                    component.set_parent(self)
+                    # ALT: component.is_subentity()
                     if component.is_subentity():
                         # component.set_parent(parent=self)
                         # for subentity_items container don't go deeper into tree (call _fill_components)
                         # it will be called later in container.setup() method
-                        component._setup_phase_one(components=None, parent=self)
+                        component._setup_phase_one(components=None)
                         # save only container (top) object
                         self._add_component(component=component, components=components)
                     else:
-                        component._setup_phase_one(components=components, parent=self)
+                        component._setup_phase_one(components=components)
                         # delete this
-                        if component.is_bound_model():
+                        if component.is_entity_model() and not component.entity.is_unbound():
                             if isinstance(component.model, DotExpression):
                                 assert component.model.IsFinished()
                             # NOTE: moved from setup_phase_two() - this is required for in_model=False cases,
@@ -997,7 +1014,7 @@ class IComponent(IBaseComponent, ABC):
                     if component.__class__.__name__ not in ("ChoiceOption", "CustomFunctionFactory", "int", "str"):
                         raise EntityInternalError(owner=component, msg=f"Strange type of component, check or add to list of ignored types for _setup_phase_one() ")
 
-            if self.is_container():
+            if isinstance(self, IContainer):
                 if self.components is not None:
                     raise EntityInternalError(owner=self, msg=f"components already set: {self.components}")
                 self.components = components
@@ -1007,22 +1024,32 @@ class IComponent(IBaseComponent, ABC):
             else:
                 if isinstance(self, IField):
                     # evaluate bind: ValueExpression
+                    if self.is_unbound():
+                        # do it before
+                        self._setup_phase_one_set_type_info(setup_session)
+
                     self.bind.Setup(setup_session=setup_session, owner=self)
                 else:
                     if hasattr(self, "bind"):
                         raise EntityInternalError(owner=self, msg=f"Only fields expected to have bind attr, got: {type(self)}")
 
-            # Set up dataclass and list of fields for later use in FieldsNS.
-            # Will validate if all type_info are available
-            self.get_component_fields_dataclass(setup_session=setup_session)
+            if self.get_children():
+                # Set up dataclass and list of fields for later use in FieldsNS.
+                # Will validate if all type_info are available
+                self.get_component_fields_dataclass(setup_session=setup_session)
 
             if isinstance(self, IField):
-                self._setup_phase_one_set_type_info(setup_session)
+                if not self.is_unbound():
+                    # do it after
+                    # Check that type_info is set - call will raise error if something is wrong.
+                    self._setup_phase_one_set_type_info(setup_session)
 
-                # Check that type_info is set - call will raise error if something is wrong.
                 assert hasattr(self, "get_type_info")
                 if not self.get_type_info():
                     raise EntityInternalError(owner=self, msg="type_info could not be retrieved in setup phase one")
+            elif self.is_container():
+                if self.is_unbound() and not isinstance(self.bound_model, IUnboundModel):
+                    self._replace_modelsns_registry(setup_session)
 
         self._setup_phase_one_called = True
 
@@ -1070,7 +1097,7 @@ class IComponent(IBaseComponent, ABC):
 
     # ------------------------------------------------------------
 
-    def get_component_fields_dataclass(self, setup_session: ISetupSession) \
+    def get_component_fields_dataclass(self, setup_session: Optional[ISetupSession]) \
             -> Tuple[TypingType[IComponentFields], List[ChildField]]:
         # TODO: not happy with this
         """
@@ -1085,8 +1112,14 @@ class IComponent(IBaseComponent, ABC):
             assert self.child_field_list is not None
             return self._component_fields_dataclass, self.child_field_list
 
+        if not setup_session:
+            raise EntityInternalError(owner=self, msg="_component_fields_dataclass not set and setup_session not provided")
+
         # TODO: to have deep_collect or not??
         children = self.get_children(deep_collect=True)
+
+        if not children:
+            raise EntityInternalError(owner=self, msg="No children found.")
 
         container = setup_session.current_frame.container
 
@@ -1098,7 +1131,7 @@ class IComponent(IBaseComponent, ABC):
 
         for nr, child in enumerate(children, 1):
 
-            if child.is_bound_model():
+            if child.is_entity_model():
                 continue
 
             child_type_info = None
@@ -1204,7 +1237,7 @@ class IComponent(IBaseComponent, ABC):
             if not self.is_finished():
                 ret = self._setup_phase_two(setup_session=setup_session)
             else:
-                if not self.is_bound_model():
+                if not self.is_entity_model():
                     raise EntityInternalError(owner=self, msg=f"_setup_phase_two() is skipped only for bound models, got: {type(self)}")
                 ret = self
 
@@ -1316,6 +1349,7 @@ class IComponent(IBaseComponent, ABC):
                                       "value_accessor",
                                       "value_accessor_default",
                                       "value_accessor_class_registry",
+                                      "name_counter_by_parent_name",
                                       # "value",
                                       # "enum",
                                       )
@@ -1325,6 +1359,7 @@ class IComponent(IBaseComponent, ABC):
                   (hasattr(sub_component, "setup") or hasattr(sub_component, "setup")):
                     raise EntityInternalError(f"ignored attribute name '{sub_component_name}' has setup()/Setup(). Is attribute list ok or value is not proper class (got component='{sub_component}').")
                 continue
+
 
             if not th_field or getattr(th_field, "init", True) is False:
                 # warn(f"TODO: _get_subcomponents_list: {self} -> {sub_component_name} -> {th_field}")
@@ -1403,7 +1438,7 @@ class IComponent(IBaseComponent, ABC):
         for subcomponent in self._get_subcomponents_list():
             component = subcomponent.component
             if isinstance(component, IComponent) \
-              and (component.is_bound_model() or component.is_subentity()) \
+              and (component.is_entity_model() or component.is_subentity()) \
               and component.is_finished():
                 # raise EntityInternalError(owner=self, msg=f"BoundModel.setup() should have been called before ({component})")
                 continue
@@ -1490,6 +1525,14 @@ class IField(IComponent, ABC):
     bind: DotExpression
 
     @abstractmethod
+    def get_type_info(self) -> TypeInfo:
+        ...
+
+    @abstractmethod
+    def _setup_phase_one_set_type_info(self, setup_session: ISetupSession):
+        ...
+
+    @abstractmethod
     def validate_type(self, apply_result: "IApplyResult", value: Any = UNDEFINED) \
         -> Optional["ValidationFailure"]:
         ...
@@ -1513,7 +1556,20 @@ class IFieldGroup(ABC):
 
 class IContainer(IComponent, ABC):
 
-    bound_model: "IBoundModel" = field(repr=False)
+    bound_model     : "IBoundModel" = field(repr=False)
+    contains        : List[IComponent] = field(repr=False, init=False)
+    # NOTE: used only internally in fill_models, so I removed the references
+    # models          : Dict[str, Union[type, DotExpression]] = field(init=False, repr=False, default_factory=dict)
+    components      : Optional[Dict[str, IComponent]]  = field(init=False, repr=False, default=None)
+    setup_session   : Optional[ISetupSession]    = field(init=False, repr=False, default=None)
+
+    @abstractmethod
+    def _register_model_attr_nodes(self):
+        ...
+
+    @abstractmethod
+    def get_type_info(self) -> TypeInfo:
+        ...
 
     @abstractmethod
     def add_fieldgroup(self, fieldgroup:IFieldGroup):  # noqa: F821
@@ -1553,7 +1609,7 @@ class IContainer(IComponent, ABC):
 
 class IEntity(IContainer, ABC):
     config: Config = field(repr=False, )
-    context_class: Optional[Type[IContext]] = field(repr=False, default=None)
+    context_class: Optional[TypingType[IContext]] = field(repr=False, default=None)
 
 # ------------------------------------------------------------
 # IBoundModel
@@ -1565,7 +1621,6 @@ class IBoundModel(IComponent, ABC):
     model: ModelType = field(init=False, repr=False)
     _finished: bool = field(init=False, repr=False, default=False)
 
-
     def setup(self, setup_session:ISetupSession):
         if self._finished:
             raise EntityInternalError(owner=self, msg="Setup already called")
@@ -1576,7 +1631,7 @@ class IBoundModel(IComponent, ABC):
         ...
 
     @staticmethod
-    def is_bound_model() -> bool:
+    def is_entity_model() -> bool:
         return True
 
     def is_top_parent(self):
@@ -1586,8 +1641,9 @@ class IBoundModel(IComponent, ABC):
         if not hasattr(self, "_name"):
             if depth > MAX_RECURSIONS:
                 raise EntityInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
+            if not init:
+                raise EntityInternalError(owner=self, msg=f"Expectedc init mode")
 
-            assert init
             names = []
             if parent:
                 # recusion
@@ -1611,6 +1667,7 @@ class IBoundModel(IComponent, ABC):
         if hasattr(self, "contains"):
             for dep_bound_model in self.contains:
                 # recursion
+                dep_bound_model.set_parent(parent=self)
                 dep_bound_model.fill_models(models=models, parent=self)
         return models
 
@@ -1618,6 +1675,11 @@ class IBoundModel(IComponent, ABC):
     # def get_attr_node(self, setup_session: ISetupSession) -> Union["AttrDexpNode", UndefinedType]:  # noqa: F821
     #     return setup_session.models_registry.get_attr_node_by_bound_model(bound_model=self)
 
+class IUnboundModel(IBoundModel, ABC):
+    """
+    see bound_models.py :: class UnboundModel
+    """
+    pass
 
 # ============================================================
 
@@ -2047,6 +2109,7 @@ class ValueNode:
     # Should be used only for better introspection / debug / trace / log
     # set later by calling .setup(apply_result)
     key_string: KeyString = field(init=False, repr=True, default=UNDEFINED)
+    # TODO: consider to have key_pairs too?
 
     # Setup later when ApplyStackFrame() is created, set with .set_apply_stack_frame()
     # this is cross reference, since stack_frame has ref to ValueNode too
@@ -2055,6 +2118,12 @@ class ValueNode:
     # <field>.Children
     # - when component has children - initialized with empty {}, later filled
     children:   Union[UndefinedType, Dict[AttrName, Self]] = field(repr=False, init=False, default=UNDEFINED)
+
+    # TODO: # F.<field-name>
+    # TODO: # originally initialized in conteiner_node and all children (except SubEntityItems),
+    # TODO: # all children use the same dictionary.
+    # TODO: # TODO: When name clashes (e.g. SubentitySingle), then ...
+    # TODO: fields_dict:   Union[UndefinedType, Dict[AttrName, Self]] = field(repr=False, init=False, default=UNDEFINED)
 
     # <field>.Items
     # - when component has items - initialized with empty {}, later filled
@@ -2075,19 +2144,10 @@ class ValueNode:
     _value_accessor: Union[IValueAccessor, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
 
 
-    # TODO:
-    # changes: List[InstanceChange] = \
-    #     field(repr=False, init=False, default_factory=list)
-    # TODO: value_accessor: IValueAccessor
-
-    # TODO: self.key_pairs
-    # TODO: self.attr_name = self.component.bind ...
-    # TODO: later  - see register_instance_attr_change()
-
     def __post_init__(self):
         self.name = self.component.name
 
-        if self.component.is_top_container():
+        if self.component.is_entity():
             assert self.parent_node is None
             self.container_node = self
             self.top_node = self
@@ -2437,7 +2497,7 @@ class ValueNode:
         self.children[value_node.name] = value_node
 
     def clean(self):
-        if self.component.is_top_container():
+        if self.component.is_entity():
             assert self.parent_node is None
         else:
             if self.parent_node is None:
@@ -3004,11 +3064,8 @@ class IApplyResult(IStackOwnerSession):
 def extract_type_info(
         attr_node_name: str,
         inspect_object: Any,
-        ) -> Tuple[
-                TypeInfo, 
-                Optional[ModelField], 
-                Optional[IFunctionDexpNode]  # noqa: F821
-                ]:
+        ) -> Tuple[TypeInfo, Optional[ModelField]]:
+    # Optional[IFunctionDexpNode]  # noqa: F821
     """
     Main logic for extraction from parent object (dataclass, py class, dexp
     instances) member by name 'attr_node_name' -> data (struct, plain value),

@@ -28,7 +28,7 @@ from .exceptions import (
     EntitySetupValueError,
 )
 from .namespaces import (
-    Namespace,
+    Namespace, ModelsNS,
 )
 from .expressions import (
     DotExpression,
@@ -124,6 +124,11 @@ class RegistryBase(IRegistry):
     # TODO: with 3.11 - Protocol
     NAMESPACE : ClassVar[Namespace] = None
     ROOT_VALUE_NEEDS_FETCH_BY_NAME: ClassVar[bool] = True
+
+    @staticmethod
+    def is_unbound_models_registry() -> bool:
+        """ default implementation """
+        return False
 
     def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName, caller: Optional[str] = None) -> RegistryRootValue: # noqa: F821
         # TODO: same method declared in IRegistry
@@ -387,6 +392,7 @@ class RegistryBase(IRegistry):
                     )
         return func_node
 
+
     # ------------------------------------------------------------
     # create_node -> AttrDexpNode, Operation or IFunctionDexpNode
     # ------------------------------------------------------------
@@ -430,10 +436,15 @@ class RegistryBase(IRegistry):
             # get() -> TOP LEVEL - only level that is stored
             # --------------------------------------------------
             # e.g. M.company Predefined before in Entity.setup() function.
-            if full_dexp_node_name not in self.store:
-                names_avail = get_available_names_example(full_dexp_node_name, self.store.keys(), max_display=7)
-                valid_names = f"Valid attributes: {names_avail}" if self.store.keys() else "Namespace has no attributes at all."
-                raise EntitySetupNameNotFoundError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': Invalid attribute name '{full_dexp_node_name}'. {valid_names}")
+            if owner.is_unbound() and self.NAMESPACE == ModelsNS:
+                if full_dexp_node_name in self.store:
+                    raise EntitySetupNameError(owner=self, msg=f"full_dexp_node_name={full_dexp_node_name} already in store: {self.store[full_dexp_node_name]}")
+                self.register_unbound_attr_node(component=owner, full_dexp_node_name=full_dexp_node_name)
+            else:
+                if full_dexp_node_name not in self.store:
+                    names_avail = get_available_names_example(full_dexp_node_name, list(self.store.keys()), max_display=7)
+                    valid_names = f"Valid attributes: {names_avail}" if self.store.keys() else "Namespace has no attributes at all."
+                    raise EntitySetupNameNotFoundError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': Invalid attribute name '{full_dexp_node_name}'. {valid_names}")
 
             attr_node_template = self.store.get(full_dexp_node_name)
 
@@ -466,8 +477,7 @@ class RegistryBase(IRegistry):
 
             try:
                 # , func_node
-                type_info, th_field = \
-                        extract_type_info(
+                type_info, th_field = extract_type_info(
                             attr_node_name=dexp_node_name,
                             inspect_object=inspect_object, 
                             )
@@ -627,12 +637,16 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
 
     # ------------------------------------------------------------
 
-    def add_registry(self, registry: IRegistry):
+    def add_registry(self, registry: IRegistry, replace: bool = False):
         if self.finished:
             raise EntityInternalError(owner=self, msg=f"Registry already in finished satte, adding '{registry}' not possible.")
         ns_name = registry.NAMESPACE._name
         if ns_name in self._registry_dict:
-            raise EntityInternalError(owner=self, msg=f"Registry {registry} already in registry")
+            if not replace:
+                raise EntityInternalError(owner=self, msg=f"Registry {registry} already in registry")
+        else:
+            if replace:
+                raise EntityInternalError(owner=self, msg=f"Registry {registry} to replace should be in registry")
         self._registry_dict[ns_name] = registry
         registry.setup(setup_session=self)
 
@@ -666,9 +680,8 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
 
         return self._registry_dict[namespace._name]
 
-
-    def __getitem__(self, namespace: Namespace) -> IRegistry:
-        return self._registry_dict[namespace._name]
+    # def __getitem__(self, namespace: Namespace) -> IRegistry:
+    #     return self._registry_dict[namespace._name]
 
 
     # ------------------------------------------------------------

@@ -14,7 +14,7 @@ Notes:
         Only initial value is unchanged. See also BooleanField.enables.
 
 """
-from abc import ABC
+from abc import ABC, abstractmethod
 from typing import (
     Union,
     List,
@@ -244,15 +244,14 @@ class FieldBase(IField, ABC):
 
     # ------------------------------------------------------------
 
-
     def setup(self, setup_session:ISetupSession):
 
         super().setup(setup_session=setup_session)
 
         if self.bind:
-            self.attr_node = setup_session[FieldsNS].get(self.name)
+            self.attr_node = setup_session.get_registry(FieldsNS).get(self.name)
             assert self.attr_node
-            if not self.bound_attr_node:
+            if not self.is_unbound() and not self.bound_attr_node:
                 # warn(f"TODO: {self}.bind = {self.bind} -> bound_attr_node can not be found.")
                 raise EntitySetupValueError(owner=self, msg=f"bind={self.bind}: bound_attr_node can not be found.")
 
@@ -286,13 +285,17 @@ class FieldBase(IField, ABC):
     # ------------------------------------------------------------
 
     def _setup_phase_one_set_python_type(self, setup_session: ISetupSession):
-        ...
+        """
+        for special cases method to setup python type and override default logic.
+        """
+        pass
 
     def _setup_phase_one_set_type_info(self, setup_session: ISetupSession):
         """
         to validate all internal values
         """
-        self._set_bound_attr_node(setup_session)
+        if not self.is_unbound():
+            self._set_bound_attr_node(setup_session)
 
         self._setup_phase_one_set_python_type(setup_session)
 
@@ -342,7 +345,7 @@ class FieldBase(IField, ABC):
 
     # ------------------------------------------------------------
 
-    def get_type_info(self):
+    def get_type_info(self) -> TypeInfo:
         if not self.type_info:
             raise EntityInternalError(owner=self, msg="type_info is not yet set, probably setup was not called")
         return self.type_info
@@ -361,19 +364,23 @@ class FieldBase(IField, ABC):
                                 )
 
         expected_type_info = None
-        if self.bound_attr_node:
-            if isinstance(self.bound_attr_node.data, TypeInfo):
-                expected_type_info = self.bound_attr_node.data
-            elif hasattr(self.bound_attr_node.data, "type_info"):
-                expected_type_info = self.bound_attr_node.data.type_info
+        if self.is_unbound():
+            assert not self.bound_attr_node
+            expected_type_info = base_type_info
+        else:
+            if self.bound_attr_node:
+                if isinstance(self.bound_attr_node.data, TypeInfo):
+                    expected_type_info = self.bound_attr_node.data
+                elif hasattr(self.bound_attr_node.data, "type_info"):
+                    expected_type_info = self.bound_attr_node.data.type_info
 
-        if not expected_type_info:
-            raise EntityInternalError(owner=self, msg=f"Can't extract type_info from bound_attr_node: {self.bound_attr_node} ")
+            if not expected_type_info:
+                raise EntityInternalError(owner=self, msg=f"Can't extract type_info from bound_attr_node: {self.bound_attr_node} ")
 
-        err_msg = expected_type_info.check_compatible(base_type_info)
-        if err_msg:
-            expected_type_info.check_compatible(base_type_info)
-            raise EntitySetupTypeError(owner=self, msg=f"Given data type '{base_type_info}' is not compatible underneath model type '{expected_type_info}: {err_msg}'")
+            err_msg = expected_type_info.check_compatible(base_type_info)
+            if err_msg:
+                expected_type_info.check_compatible(base_type_info)
+                raise EntitySetupTypeError(owner=self, msg=f"Given data type '{base_type_info}' is not compatible underneath model type '{expected_type_info}: {err_msg}'")
 
         # if all ok, set to more richer type_info
         self.type_info = expected_type_info
@@ -698,59 +705,68 @@ class EnumField(FieldBase):
     PYTHON_TYPE:ClassVar[type] = UNDEFINED
 
     enum: Optional[Union[Enum, DotExpression]] = None
-
     enum_value_py_type: Optional[type] = field(init=False, default=None)
 
     def _setup_phase_one_set_python_type(self, setup_session: ISetupSession):
         # TODO: revert to: strict=True - and process exception properly
         attr_node = setup_session.get_dexp_node_by_dexp(dexp=self.bind, strict=False)
-        if attr_node:
 
-            if isinstance(self.enum, DotExpression):
-                # EnumField(... enum=S.CompanyTypes)
-                enum_attr_node = setup_session.get_dexp_node_by_dexp(dexp=self.enum)
-                if not enum_attr_node:
-                    enum_attr_node = self.enum.Setup(setup_session=setup_session, owner=self)
+        if not (attr_node or self.is_unbound()):
+            # TODO: should this be an error?
+            #       when not found -> it will be raised in other place
+            return
 
-                # self.enum = enum_attr_node.data.value
-                self.enum = enum_attr_node.data
-                # EnumMembers
-                if not self.enum:
-                    raise EntitySetupValueError(owner=self, msg="Underlying data type of attr_node expression is not enum. You should use: functions=[... Fn.EnumMembers(enum=<EnumType>)]")
-                elif not is_enum(self.enum):
-                    raise EntitySetupValueError(owner=self, msg=f"Data type of attr_node expression {self.enum} should Enum, got: {type(self.enum)}. You should use: functions=[... Fn.EnumMembers(enum=<EnumType>)]")
-                # attr_node.data.py_type_hint
+        if isinstance(self.enum, DotExpression):
+            # EnumField(... enum=S.CompanyTypes)
+            if self.is_unbound():
+                raise EntitySetupValueError(owner=self, msg=f"Enum should not be bound to DotExpression, expecting Enum, got: {self.enum}")
+            enum_attr_node = setup_session.get_dexp_node_by_dexp(dexp=self.enum)
+            if not enum_attr_node:
+                enum_attr_node = self.enum.Setup(setup_session=setup_session, owner=self)
 
-            # when not found -> it will be raised in other place
+            # self.enum = enum_attr_node.data.value
+            self.enum = enum_attr_node.data
+            # EnumMembers
+            if not self.enum:
+                raise EntitySetupValueError(owner=self, msg="Underlying data type of attr_node expression is not enum. You should use: functions=[... Fn.EnumMembers(enum=<EnumType>)]")
+            elif not is_enum(self.enum):
+                raise EntitySetupValueError(owner=self, msg=f"Data type of attr_node expression {self.enum} should Enum, got: {type(self.enum)}. You should use: functions=[... Fn.EnumMembers(enum=<EnumType>)]")
+            # attr_node.data.py_type_hint
+
+        # when not found -> it will be raised in other place
+        if self.is_unbound():
+            py_hint_type = self.enum
+            if not is_enum(py_hint_type):
+                raise EntitySetupValueError(owner=self, msg=f"In unbound mode, provide type to enum attribute, got: {py_hint_type}")
+        else:
             if not isinstance(attr_node.data, TypeInfo):
                 raise EntitySetupValueError(owner=self, msg=f"Data type of attr_node {attr_node} should be TypeInfo, got: {type(attr_node.data)}")
-
             py_hint_type = attr_node.data.py_type_hint
 
-            if not is_enum(py_hint_type):
-                # enum
-                if not self.enum:
-                    raise EntitySetupValueError(owner=self, msg=f"Data type (hint) of attr_node {attr_node} should be Enum or supply EnumField.enum. Got: {py_hint_type}")
+        if not is_enum(py_hint_type):
+            # enum
+            if not self.enum:
+                raise EntitySetupValueError(owner=self, msg=f"Data type (hint) of attr_node {attr_node} should be Enum or supply EnumField.enum. Got: {py_hint_type}")
 
-                enum_member_py_type = get_enum_member_py_type(self.enum)
-                # if not issubclass(self.enum, py_hint_type)
-                #     and (type(py_hint_type)==type and py_hint_type!=enum_member_py_type)):  # noqa: E129
-                if not (py_hint_type in inspect.getmro(self.enum)
-                        or py_hint_type==enum_member_py_type):
-                    raise EntitySetupValueError(owner=self, msg=f"Data type of attr_node {attr_node} should be the same as supplied Enum. Enum {self.enum}/{enum_member_py_type} is not {py_hint_type}.")
-            else:
-                # EnumField(... enum=CompanyTypeEnum)
-                if self.enum and self.enum!=py_hint_type:
-                    raise EntitySetupValueError(owner=self, msg=f"AttrDexpNode {attr_node} has predefined enum {self.enum} what is different from type_hint: {py_hint_type}")
-                self.enum = py_hint_type
-                enum_member_py_type = get_enum_member_py_type(self.enum)
+            enum_member_py_type = get_enum_member_py_type(self.enum)
+            # if not issubclass(self.enum, py_hint_type)
+            #     and (type(py_hint_type)==type and py_hint_type!=enum_member_py_type)):  # noqa: E129
+            if not (py_hint_type in inspect.getmro(self.enum)
+                    or py_hint_type==enum_member_py_type):
+                raise EntitySetupValueError(owner=self, msg=f"Data type of attr_node {attr_node} should be the same as supplied Enum. Enum {self.enum}/{enum_member_py_type} is not {py_hint_type}.")
+        else:
+            # EnumField(... enum=CompanyTypeEnum)
+            if self.enum and self.enum!=py_hint_type:
+                raise EntitySetupValueError(owner=self, msg=f"AttrDexpNode {attr_node} has predefined enum {self.enum} what is different from type_hint: {py_hint_type}")
+            self.enum = py_hint_type
+            enum_member_py_type = get_enum_member_py_type(self.enum)
 
-            self.python_type = enum_member_py_type
+        self.python_type = enum_member_py_type
 
-            # TODO: check this in Default() implementation
-            # if self.default is not None:
-            #     if not isinstance(self.default, self.enum):
-            #         raise EntitySetupValueError(owner=self, msg=f"Default should be an Enum {self.enum} value, got: {self.default}")
+        # TODO: check this in Default() implementation
+        # if self.default is not None:
+        #     if not isinstance(self.default, self.enum):
+        #         raise EntitySetupValueError(owner=self, msg=f"Default should be an Enum {self.enum} value, got: {self.default}")
 
         # TODO: on usage normalize concrete all available choices to Enum[ChoiceOption], and define:
         #       https://stackoverflow.com/questions/33690064/dynamically-create-an-enum-with-custom-values-in-python

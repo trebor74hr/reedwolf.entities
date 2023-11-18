@@ -90,6 +90,44 @@ class FunctionsRegistry(RegistryUseDenied):
 class OperationsRegistry(RegistryUseDenied):
     NAMESPACE: ClassVar[Namespace] = OperationsNS
 
+# ------------------------------------------------------------
+
+@dataclass
+class UnboundModelsRegistry(IThisRegistry, RegistryBase):
+    """
+    This is temporary registry used only in unbound mode.
+    It has not predefined registry entries, rather will acceept all new
+    fiedls and register them in a store.
+    Later this registry is replaced and this instance and store is rejected.
+    """
+    NAMESPACE: ClassVar[Namespace] = ModelsNS
+
+    @staticmethod
+    def is_unbound_models_registry() -> bool:
+        return True
+
+    def register_unbound_attr_node(self, component: Union[IField, IContainer], full_dexp_node_name: AttrName) -> AttrDexpNode:
+        type_info = component.get_type_info()
+        # python_type = field.python_type
+        # if not field.PYTHON_TYPE:
+        #     raise EntityInternalError(owner=self, msg=f"Python type not yet set.")
+        # type_info = TypeInfo.get_or_create_by_type(python_type)
+        attr_node = AttrDexpNode(
+            name=full_dexp_node_name,
+            data=type_info, # must be like this
+            namespace=self.NAMESPACE,
+            type_info=type_info,
+            th_field=type_info.type_,
+        )
+        self.register_attr_node(attr_node, alt_attr_node_name=None)
+        return attr_node
+
+    # ------------------------------------------------------------
+
+    def _apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RegistryRootValue:
+        raise NotImplementedError()
+
+# ------------------------------------------------------------
 
 @dataclass
 class ModelsRegistry(RegistryBase):
@@ -133,7 +171,10 @@ class ModelsRegistry(RegistryBase):
 
     # ------------------------------------------------------------
 
-    def register_all_nodes(self, root_attr_node: Optional[AttrDexpNode], bound_model: IBoundModel, model: ModelType):
+    def register_all_nodes(self, root_attr_node: Optional[AttrDexpNode],
+                           bound_model: IBoundModel,
+                           model: ModelType,
+                           unbound_mode: bool = False):
         " models specific method "
         if not root_attr_node:
             root_attr_node = self._create_root_attr_node(bound_model=bound_model)
@@ -142,7 +183,7 @@ class ModelsRegistry(RegistryBase):
             raise EntityInternalError(owner=self, msg=f"Model {bound_model.name} already set {self.models_dict[bound_model.name]}, got: {model}")
         self.models_dict[bound_model.name] = model
 
-        name = bound_model.get_full_name()
+        name = bound_model.get_full_name(init=unbound_mode)
         is_root = "." not in name # TODO: hack
         if name in self.root_attr_nodes:
             raise EntityInternalError(owner=self, msg=f"Duplicate {name} -> {self.root_attr_nodes[name]}, already set, failed to set: {root_attr_node}")

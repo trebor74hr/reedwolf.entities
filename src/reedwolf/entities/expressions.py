@@ -18,7 +18,7 @@ from typing import (
     Union,
     Any,
     Callable,
-    Tuple, Type, Generic, Dict,
+    Tuple, Type, Generic, Dict, ClassVar,
 )
 
 from .utils import (
@@ -192,12 +192,30 @@ class RegistryRootValue:
 
 class IRegistry:
 
+    NAMESPACE: ClassVar[Namespace] = None
+
     @abstractmethod
     def setup(self, setup_session: "ISetupSession") -> None:
         ...
 
     @abstractmethod
+    def register_all_nodes(self, root_attr_node: Optional["AttrDexpNode"], bound_model: "IBoundModel", model: ModelType, unbound_mode: bool = False):
+        ...
+
+    @abstractmethod
+    def register(self, component:"IComponent"):
+        ...
+
+    @abstractmethod
     def finish(self) -> None:
+        ...
+
+    @abstractmethod
+    def is_unbound_models_registry(self) -> bool:
+        """
+        == isinstance(self, UnboundModelRegistry)
+        Currently not in use
+        """
         ...
 
     @abstractmethod
@@ -262,9 +280,9 @@ class ISetupSession(ABC):
     def get_registry(self, namespace: Namespace, strict: bool = True, is_internal_use: bool = False) -> IRegistry:
         ...
 
-    @abstractmethod
-    def __getitem__(self, namespace: Namespace) -> IRegistry:
-        ...
+    # @abstractmethod
+    # def get_registry(self, namespace: Namespace) -> IRegistry:
+    #     ...
 
     @abstractmethod
     def register_dexp_node(self, dexp_node: IDotExpressionNode):
@@ -464,9 +482,9 @@ class DotExpression(DynamicAttrsBase):
         if self._namespace != registry.NAMESPACE:
             raise EntityInternalError(owner=self, msg=f"Registry has diff namespace from variable: {self._namespace} != {registry.NAMESPACE}")
 
-        current_dexp_node = None
+        # current_dexp_node = None
         last_dexp_node = None
-        dexp_node_name = None
+        # dexp_node_name = None
         dexp_evaluator = DotExpressionEvaluator()
 
         for bnr, bit in enumerate(self.Path, 1):

@@ -50,10 +50,10 @@ from .base import (
     IBoundModel,
     SetupStackFrame,
     IApplyResult,
-    ApplyStackFrame,
+    ApplyStackFrame, IUnboundModel,
 )
 from .registries import (
-    ThisRegistry,
+    ThisRegistry, UnboundModelsRegistry,
 )
 
 
@@ -261,6 +261,26 @@ class NestedBoundModelBase(IBoundModel):
                                                 apply_result=apply_result, 
                                                 instance=child_instance)
 
+@dataclass
+class UnboundModel(IUnboundModel):
+    """
+    This is a dummy class, just to mark unbound mode
+    """
+    name            : Optional[str] = field(default=None, init=False)
+
+    # model           : Union[ModelType, UndefinedType] = field(repr=False, init=False, default=UNDEFINED)
+    # parent          : Union[IBoundModel, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    # parent_name     : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+    # type_info : Optional[TypeInfo] = field(init=False, default=None, repr=False)
+
+    def get_type_info(self):
+        raise EntityInternalError(owner=self, msg="Method should not be called")
+
+    def create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:
+        """
+        all referenced nodes should be added as they are referenced
+        """
+        return UnboundModelsRegistry()
 
 # ------------------------------------------------------------
 # BoundModelWithHandlers
