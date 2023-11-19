@@ -220,7 +220,8 @@ class AttrDexpNode(IDotExpressionNode):
                 registry = apply_result.current_frame.this_registry
             else:
                 # take from setup_session
-                registry = apply_result.get_setup_session().get_registry(self.namespace)
+                setup_session = apply_result.get_setup_session()
+                registry = setup_session.get_registry(self.namespace)
 
             # get starting instance
             root_value = registry.apply_to_get_root_value(apply_result=apply_result, attr_name=attr_name, caller=self)

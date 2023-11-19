@@ -164,9 +164,10 @@ class ApplyResult(IApplyResult):
                 self.instance = temp_dataclass_model()
 
             else:
-                self.entity.value_accessor_default.validate_instance_type(owner_name=self.entity.name,
-                                                                          instance=self.instance,
-                                                                          model_type=self.bound_model.model)
+                if not self.entity.is_unbound():
+                    self.entity.value_accessor_default.validate_instance_type(owner_name=self.entity.name,
+                                                                              instance=self.instance,
+                                                                              model_type=self.bound_model.model)
 
             if self.instance_new is not None and not self.component_name_only:
                 self._detect_instance_new_struct_type(self.entity)
@@ -910,10 +911,11 @@ class ApplyResult(IApplyResult):
 
             # NOTE: frame not yet set so 'self.current_frame.instance' is not available
             #       thus sending 'instance' param
-            container.bound_model._apply_nested_models(
-                apply_result=self,
-                instance=self.instance
-            )
+            if not self.entity.is_unbound():
+                container.bound_model._apply_nested_models(
+                    apply_result=self,
+                    instance=self.instance
+                )
             new_frame = ApplyStackFrame(
                 container = container,
                 component = container,
@@ -1276,31 +1278,35 @@ class ApplyResult(IApplyResult):
 
         assert self.instance_new not in (None, UNDEFINED)
 
-        if isinstance(component, ContainerBase):
-            # full or partial on container
-            model = component.bound_model.type_info.type_
-        else:
-            # FieldGroup supported only - partial with matched compoonent
-            # raise NotImplementedError(f"TODO: currently not supported: {component}")
-            container = component.get_first_parent_container(consider_self=True)
-            model = container.bound_model.type_info.type_
-
-        if isinstance(self.instance_new, (list, tuple)):
-            if not self.instance_new:
-                raise EntityInternalError(owner=self, msg="Instance is an empty list, can not detect type of base  structure")
-            # test only first
-            instance_to_test = self.instance_new[0]
-        else:
-            instance_to_test = self.instance_new
-
-        if isinstance(instance_to_test, model):
-            instance_new_struct_type = StructEnum.MODELS_LIKE
-        elif is_model_class(instance_to_test.__class__):
-            # TODO: it could be StructEnum.MODELS_LIKE too, but how to detect this? input param or?
+        if self.entity.is_unbound():
+            # TODO: for unbound - currently StructEnum.ENTITY_LIKE only this is supported
             instance_new_struct_type = StructEnum.ENTITY_LIKE
         else:
-            raise EntityApplyError(owner=self, 
-                    msg=f"Object '{instance_to_test}' is not instance of bound model '{model}' and not model class: {type(instance_to_test)}.")
+            if isinstance(component, ContainerBase):
+                # full or partial on container
+                model = component.bound_model.type_info.type_
+            else:
+                # FieldGroup supported only - partial with matched compoonent
+                # raise NotImplementedError(f"TODO: currently not supported: {component}")
+                container = component.get_first_parent_container(consider_self=True)
+                model = container.bound_model.type_info.type_
+
+            if isinstance(self.instance_new, (list, tuple)):
+                if not self.instance_new:
+                    raise EntityInternalError(owner=self, msg="Instance is an empty list, can not detect type of base  structure")
+                # test only first
+                instance_to_test = self.instance_new[0]
+            else:
+                instance_to_test = self.instance_new
+
+            if isinstance(instance_to_test, model):
+                instance_new_struct_type = StructEnum.MODELS_LIKE
+            elif is_model_class(instance_to_test.__class__):
+                # TODO: it could be StructEnum.MODELS_LIKE too, but how to detect this? input param or?
+                instance_new_struct_type = StructEnum.ENTITY_LIKE
+            else:
+                raise EntityApplyError(owner=self,
+                        msg=f"Object '{instance_to_test}' is not instance of bound model '{model}' and not model class: {type(instance_to_test)}.")
 
         self.instance_new_struct_type = instance_new_struct_type
         # return instance_new_struct_type: StructEnum
@@ -1311,7 +1317,8 @@ class ApplyResult(IApplyResult):
         if self.instance_new_struct_type is None:
             current_instance_new = None
         elif self.instance_new_struct_type == StructEnum.MODELS_LIKE:
-            assert isinstance(subentity.bound_model.model, DotExpression), subentity.bound_model.model
+            if not isinstance(subentity.bound_model.model, DotExpression):
+                raise EntityInternalError(owner=self, msg=f"For subentity {subentity} expected bound_model based on DotExpression, got: {subentity.bound_model.model}")
 
             if self.current_frame.instance_new not in (None, UNDEFINED):
 

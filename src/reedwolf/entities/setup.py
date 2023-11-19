@@ -756,6 +756,8 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
             raise EntityInternalError(owner=self, msg=f"Stack frames not released: {self.stack_frames}") 
 
         for ns, registry in self._registry_dict.items():
+            if registry.is_unbound_models_registry():
+                raise EntityInternalError(owner=self, msg=f"Found unbound models registry for ns={ns} and it should have been replaced. Got: {registry}")
             for vname, dexp_node in registry.items():
                 assert isinstance(dexp_node, IDotExpressionNode)
                 # do some basic validate

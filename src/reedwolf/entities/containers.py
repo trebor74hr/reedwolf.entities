@@ -363,13 +363,21 @@ class ContainerBase(IContainer, ABC):
     # ------------------------------------------------------------
     def _replace_modelsns_registry(self, setup_session: SetupSession):
         # subentity case
-        assert (self.is_unbound() and not isinstance(self.bound_model, IUnboundModel))
+        assert (self.is_unbound())
         self.bound_model.set_parent(self)
-        # model_dexp_node: IDotExpressionNode
-        if not isinstance(self.bound_model.model, DotExpression):
-            raise EntityInternalError(owner=self, msg=f"In unbound mode bound_model is expected to be DotExpression, got: {self.bound_model}")
-        # Setup must be called before - in order to set type_info
-        self.bound_model.model.Setup(setup_session=setup_session, owner=self)
+
+        if isinstance(self.bound_model, IUnboundModel):
+            assert self.is_entity()
+            # setup_session=None - dataclass should be already created
+            fields_dataclass, _ = self.get_component_fields_dataclass(setup_session=None)
+            self.bound_model = BoundModel(model=fields_dataclass)
+        else:
+            assert not self.is_entity()
+            # model_dexp_node: IDotExpressionNode
+            if not isinstance(self.bound_model.model, DotExpression):
+                raise EntityInternalError(owner=self, msg=f"In unbound mode bound_model is expected to be DotExpression, got: {self.bound_model}")
+            # Setup must be called before - in order to set type_info
+            self.bound_model.model.Setup(setup_session=setup_session, owner=self)
 
         models_registry = self.setup_session.get_registry(ModelsNS)
         assert models_registry.is_unbound_models_registry()

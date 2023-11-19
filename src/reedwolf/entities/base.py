@@ -509,7 +509,7 @@ class IComponent(IBaseComponent, ABC):
         from .registries import (
             ThisRegistry,
         )
-        if self.is_entity_model():
+        if self.is_bound_model():
             raise EntityInternalError(owner=self, msg=f"For BoundModel create_this_registry() needs to be overridden.")
 
         has_children = bool(self.get_children())
@@ -623,7 +623,7 @@ class IComponent(IBaseComponent, ABC):
         return False
 
     @staticmethod
-    def is_entity_model() -> bool:
+    def is_bound_model() -> bool:
         return False
 
     @staticmethod
@@ -999,7 +999,7 @@ class IComponent(IBaseComponent, ABC):
                     else:
                         component._setup_phase_one(components=components)
                         # delete this
-                        if component.is_entity_model() and not component.entity.is_unbound():
+                        if component.is_bound_model() and not component.entity.is_unbound():
                             if isinstance(component.model, DotExpression):
                                 assert component.model.IsFinished()
                             # NOTE: moved from setup_phase_two() - this is required for in_model=False cases,
@@ -1013,6 +1013,7 @@ class IComponent(IBaseComponent, ABC):
                 else:
                     if component.__class__.__name__ not in ("ChoiceOption", "CustomFunctionFactory", "int", "str"):
                         raise EntityInternalError(owner=component, msg=f"Strange type of component, check or add to list of ignored types for _setup_phase_one() ")
+            # end for
 
             if isinstance(self, IContainer):
                 if self.components is not None:
@@ -1048,7 +1049,8 @@ class IComponent(IBaseComponent, ABC):
                 if not self.get_type_info():
                     raise EntityInternalError(owner=self, msg="type_info could not be retrieved in setup phase one")
             elif self.is_container():
-                if self.is_unbound() and not isinstance(self.bound_model, IUnboundModel):
+                if self.is_unbound():
+                # ORIG: and not isinstance(self.bound_model, IUnboundModel):
                     self._replace_modelsns_registry(setup_session)
 
         self._setup_phase_one_called = True
@@ -1131,7 +1133,7 @@ class IComponent(IBaseComponent, ABC):
 
         for nr, child in enumerate(children, 1):
 
-            if child.is_entity_model():
+            if child.is_bound_model():
                 continue
 
             child_type_info = None
@@ -1237,7 +1239,7 @@ class IComponent(IBaseComponent, ABC):
             if not self.is_finished():
                 ret = self._setup_phase_two(setup_session=setup_session)
             else:
-                if not self.is_entity_model():
+                if not self.is_bound_model():
                     raise EntityInternalError(owner=self, msg=f"_setup_phase_two() is skipped only for bound models, got: {type(self)}")
                 ret = self
 
@@ -1438,7 +1440,7 @@ class IComponent(IBaseComponent, ABC):
         for subcomponent in self._get_subcomponents_list():
             component = subcomponent.component
             if isinstance(component, IComponent) \
-              and (component.is_entity_model() or component.is_subentity()) \
+              and (component.is_bound_model() or component.is_subentity()) \
               and component.is_finished():
                 # raise EntityInternalError(owner=self, msg=f"BoundModel.setup() should have been called before ({component})")
                 continue
@@ -1631,7 +1633,7 @@ class IBoundModel(IComponent, ABC):
         ...
 
     @staticmethod
-    def is_entity_model() -> bool:
+    def is_bound_model() -> bool:
         return True
 
     def is_top_parent(self):
@@ -2334,10 +2336,18 @@ class ValueNode:
         Functino name is odd.
         """
         # TODO: not sure if this validation is ok
-        model = self.container.bound_model.get_type_info().type_
-        if not self.instance_none_mode \
-                and not isinstance(self.instance, model):
-            raise EntityInternalError(owner=self, msg=f"Parent instance {self.instance} has wrong type")
+        type_info = self.container.bound_model.get_type_info()
+        if self.container.entity.is_unbound():
+            # TODO: check if it has attribute and it has corresponding type
+            #       check with value_accessor
+            # attr_name = self._attr_name_last, model=
+            pass
+        else:
+            model = type_info.type_
+            # TODO: check with value_accessor?
+            if not self.instance_none_mode \
+                    and not isinstance(self.instance, model):
+                raise EntityInternalError(owner=self, msg=f"Parent instance {self.instance} has wrong type")
 
         # -- attr_name - fetch from initial bind dexp (very first)
         # TODO: save dexp_result in ValueNode or get from component.bind ?
