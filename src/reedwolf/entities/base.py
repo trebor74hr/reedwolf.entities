@@ -445,7 +445,7 @@ def make_component_fields_dataclass(class_name: str, child_field_list: List[Chil
     """
     # name, type, optional[field]
     # ('z', int, field(default=5))],
-    children_fields = [(child_field.Name, child_field.Type)
+    children_fields = [(child_field.Name, child_field._type_info.py_type_hint)
                         for child_field in child_field_list]
     new_dataclass: TypingType = make_dataclass(
                 cls_name=class_name, 
@@ -1187,6 +1187,8 @@ class IComponent(IBaseComponent, ABC):
                     # RECURSION:
                     child_component_fields_dataclass, _ = child.get_component_fields_dataclass(setup_session=setup_session)
 
+                if child.is_subentity_items():
+                    child_component_fields_dataclass = List[child_component_fields_dataclass]
                 child_type_info = TypeInfo.get_or_create_by_type(child_component_fields_dataclass)
 
             # elif child.is_fieldgroup():
