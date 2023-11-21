@@ -256,7 +256,6 @@ class IBaseComponent:
 
     def set_parent(self, parent: Optional["IComponent"]):
         if self.parent is not UNDEFINED:
-            # ORIG: raise EntityInternalError(owner=self, msg=f"Parent already defined, got: {parent}")
             if self.parent is not parent:
                 raise EntityInternalError(owner=self, msg=f"Parent already set to different, have: {self.parent}, got: {parent}")
             return
@@ -927,17 +926,11 @@ class IComponent(IBaseComponent, ABC):
             components = {}
 
             if self.is_entity():
-                # Entity()
-                # ORIG: if not parent is None:
-                # ORIG:     raise EntityInternalError(owner=self, msg=f"Parent should be None, got: {parent}")
-                # ORIG: assert parent is None, parent
+                # Entityy()
                 self.set_parent(None)
             else:
-                # SubEntityItems()?
+                # SubEntityItems() / SubEntitySingle()
                 assert self.is_subentity()
-                # ORIG: assert parent, parent
-                # ORIG: assert self.parent is parent
-                # ORIG: self.set_parent(parent)
 
             if not self.setup_session:
                 self.create_setup_session()
@@ -946,10 +939,6 @@ class IComponent(IBaseComponent, ABC):
             container = self
         else:
             assert isinstance(components, dict)
-            # ORIG: assert parent is not None
-            # ORIG: assert parent != self
-            # ORIG: assert parent is self.parent
-            # ORIG: self.set_parent(parent)
             container = self.get_first_parent_container(consider_self=False)
             setup_session = container.setup_session
 
@@ -1052,7 +1041,6 @@ class IComponent(IBaseComponent, ABC):
                     raise EntityInternalError(owner=self, msg="type_info could not be retrieved in setup phase one")
             elif self.is_container():
                 if self.is_unbound():
-                # ORIG: and not isinstance(self.bound_model, IUnboundModel):
                     self._replace_modelsns_registry(setup_session)
 
         self._setup_phase_one_called = True
@@ -2993,17 +2981,6 @@ class IApplyResult(IStackOwnerSession):
                     raise EntityInternalError(owner=self,
                                           msg="TODO: Type validation failed in defaults_mode - probably should default value to None ")
                 self.register_instance_validation_failed(component, validation_failure)
-
-            # ORIG: if self.defaults_mode:
-            # ORIG:     validation_failure = component.validate_type(apply_result=self, strict=strict, value=value)
-            # ORIG:     if validation_failure:
-            # ORIG:         raise EntityInternalError(owner=self, msg="TODO: Type validation failed in defaults_mode - probably should default value to None ")
-            # ORIG:     validation_failure = None
-            # ORIG: else:
-            # ORIG:     validation_failure = component.validate_type(apply_result=self, strict=strict, value=value)
-            # ORIG:     if validation_failure:
-            # ORIG:         self.register_instance_validation_failed(component, validation_failure)
-
 
         return validation_failure
 
