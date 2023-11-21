@@ -641,7 +641,7 @@ class Entity(IEntity, ContainerBase):
     title           : Optional[TransMessageType] = field(repr=False, default=None)
 
     # binding interface - not dumped/exported
-    bound_model     : Optional[BoundModel] = field(repr=False, default=None, metadata={"skip_dump": True})
+    bound_model     : Optional[Union[BoundModel, ModelType]] = field(repr=False, default=None, metadata={"skip_dump": True})
     # will be filled automatically with Config() if not supplied
     config          : Optional[Config] = field(repr=False, default=None, metadata={"skip_dump": True})
     context_class   : Optional[Type[IContext]] = field(repr=False, default=None, metadata={"skip_dump": True})
@@ -688,8 +688,11 @@ class Entity(IEntity, ContainerBase):
 
     def init_clean(self):
         if self.bound_model:
+            if is_model_class(self.bound_model):
+                self.bound_model = BoundModel(model=self.bound_model)
+
             if not (isinstance(self.bound_model, BoundModel) and is_model_class(self.bound_model.model)):
-                raise EntitySetupTypeError(owner=self, msg=f"Attribute 'bound_model' needs to be BoundModel with model DC/PYD, got: {self.bound_model}") 
+                raise EntitySetupTypeError(owner=self, msg=f"Attribute 'bound_model' needs to be model DC/PYD OR BoundModel with model DC/PYD, got: {self.bound_model}")
 
             if not self.name:
                 self.name = "__".join([
@@ -889,7 +892,7 @@ class SubEntityBase(ContainerBase, ABC):
     SubEntityItems or top Entity
     """
     # DotExpression based model -> can be dumped
-    bound_model     : Union[BoundModel, BoundModelWithHandlers] = field(repr=False)
+    bound_model     : Union[BoundModel, BoundModelWithHandlers, DotExpression] = field(repr=False)
 
     # cardinality     : ICardinalityValidation
     contains        : List[IComponent] = field(repr=False)
@@ -940,8 +943,14 @@ class SubEntityBase(ContainerBase, ABC):
 
     def __post_init__(self):
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
+        if isinstance(self.bound_model, DotExpression):
+            # Clone it to be seure that is not used - if problem, then clone only if not built
+            bound_model = self.bound_model.Clone()
+            self.bound_model = BoundModel(model=bound_model)
+
         if not (isinstance(self.bound_model, IBoundModel) and isinstance(self.bound_model.model, DotExpression)):
-            raise EntityInternalError(owner=self, msg=f"Attribute bound_model='{self.bound_model}' is not BoundModel instance or '.model' is not a DotExpression") 
+            raise EntityInternalError(owner=self, msg=f"Attribute bound_model needs to be DotExpression OR BoundModel with DotExpression '.model', got::'{self.bound_model}'")
+
         if not self.name:
             self.name = get_name_from_bind(self.bound_model.model)
 

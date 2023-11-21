@@ -400,8 +400,15 @@ class DotExpression(DynamicAttrsBase):
 
 
     def Clone(self) -> Self:
-        # NOTE: currently not used
-        return self.__class__(node=self._node, namespace=self._namespace, Path=self.Path)
+        # currently used only in one place
+        assert self.Path
+        assert self.Path[-1] == self
+        new_path = []
+        for dexp in self.Path:
+            new_dexp = dexp.__class__(node=dexp._node, namespace=dexp._namespace, Path=new_path[:])
+            new_path.append(new_dexp)
+        return new_path[-1]
+        # return self.__class__(node=self._node, namespace=self._namespace, Path=self.Path)
 
     # def GetNamespace(self) -> Namespace:
     #     return self._namespace
