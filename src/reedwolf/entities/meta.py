@@ -36,6 +36,8 @@ from dataclasses import (
     make_dataclass,
 )
 
+MAX_RECURSIONS: int = 30
+
 try:
     from typing import Self
 except ImportError:
@@ -958,6 +960,28 @@ def make_dataclass_with_optional_fields(dc_model: DataclassType) -> DataclassTyp
             #           bases=(dc_model,),
             )
     return temp_dataclass_model
+
+def dataclass_type_to_tuple(dataclass_klass: Type, depth: int=0) -> List[Tuple[AttrName, Type, Optional[Tuple]]]:
+    """
+    recursive
+    used for unit tests
+    """
+    if depth>MAX_RECURSIONS:
+        raise EntityInternalError(msg=f"Reached maximum recrusion level: {depth}")
+
+    if not is_dataclass(dataclass_klass):
+        raise TypeError(f"Expecting dataclass as inner klass, got: {dataclass_klass}")
+    out = []
+    for fld in dc_fields(dataclass_klass):
+        fld_type = fld.type
+        type_info = TypeInfo.get_or_create_by_type(fld_type)
+        if is_dataclass(type_info.type_):
+            # recursion:
+            inner_result = dataclass_type_to_tuple(type_info.type_, depth=depth+1)
+        else:
+            inner_result = None
+        out.append((fld.name, getattr(fld.type, "__name__", str(fld_type)), inner_result))
+    return out
 
 def dataclass_from_dict(dataclass_klass: Type, values_dict: Dict[str, Any]) -> DataclassType:
     """

@@ -24,6 +24,7 @@ from .exceptions import (
 )
 from .expressions import DotExpression
 from .meta import (
+    MAX_RECURSIONS,
     ModelType,
     AttrValue,
     UNDEFINED, is_model_class, get_model_fields, ModelField, is_pydantic, NoneType, AttrName,
@@ -33,7 +34,6 @@ from .base import (
     UseStackFrameCtxManagerBase,
     IStackFrame,
     IComponent,
-    MAX_RECURSIONS,
     IStackOwnerSession,
     IContainer,
 )

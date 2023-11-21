@@ -31,6 +31,7 @@ from .utils import (
     to_repr, UndefinedType,
 )
 from .meta import (
+    MAX_RECURSIONS,
     Self,
     NoneType,
     ModelType,
@@ -46,7 +47,6 @@ from .meta import (
 )
 from .base import (
     IField,
-    MAX_RECURSIONS,
     AttrValue,
     GlobalConfig,
     KeyString,

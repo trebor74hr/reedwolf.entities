@@ -58,6 +58,7 @@ from .namespaces import (
     DynamicAttrsBase,
 )
 from .meta import (
+    MAX_RECURSIONS,
     Self,
     MetaTree,
     ComponentNameType,
@@ -104,7 +105,6 @@ from .values_accessor import IValueAccessor
 
 # ------------------------------------------------------------
 
-MAX_RECURSIONS: int = 30
 DEXP_PREFIX: str = "DEXP::"
 
 DTO_STRUCT_CHILDREN_SUFFIX: str = "_children"
@@ -1028,6 +1028,8 @@ class IComponent(IBaseComponent, ABC):
                     if self.is_unbound():
                         # do it before
                         self._setup_phase_one_set_type_info(setup_session)
+                        if len(self.bind.Path) > 1:
+                            raise EntitySetupError(owner=self, msg=f"Unbound mode currently supports only 1 level deep bind DotExpressions, got: {self.bind}")
 
                     self.bind.Setup(setup_session=setup_session, owner=self)
                 else:

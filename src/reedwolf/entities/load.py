@@ -13,33 +13,33 @@ from copy import deepcopy
 from .containers import COMPONENTS_REGISTRY
 
 from .utils import (
-        to_str,
-        to_repr,
-        get_available_names_example,
-        DumpFormatEnum,
-        load_from_format,
-        )
+    to_str,
+    to_repr,
+    get_available_names_example,
+    DumpFormatEnum,
+    load_from_format,
+    )
 from .exceptions import (
-        EntityLoadError,
-        EntityLoadTypeError,
-        EntityLoadNameError,
-        EntityInternalError,
-        )
+    EntityLoadError,
+    EntityLoadTypeError,
+    EntityLoadNameError,
+    EntityInternalError,
+    )
 from .namespaces import ALL_NS_OBJECTS
 from .meta import (
-        STANDARD_TYPE_W_NONE_LIST,
-        LiteralType,
-        )
+    MAX_RECURSIONS,
+    STANDARD_TYPE_W_NONE_LIST,
+    LiteralType,
+    )
 from .expressions import (
-        DotExpression,
-        AST_NODE_TYPE_TO_FUNCTION,
-        Just,
-        )
+    DotExpression,
+    AST_NODE_TYPE_TO_FUNCTION,
+    Just,
+    )
 from .base import (
     IComponent,
-    MAX_RECURSIONS,
     DEXP_PREFIX,
-        )
+    )
 
 
 ConstantAstTypes = Union[ast.Constant, ast.Num, ast.Str, ast.Bytes]

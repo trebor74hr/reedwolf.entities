@@ -457,6 +457,9 @@ class RegistryBase(IRegistry):
             # --------------------------------------------------------------
             # IN-DEPTH LEVEL 2+, e.g. M.company.<this-node-and-next>
             # ---------------------------------------------------------------
+            if owner.is_unbound() and self.NAMESPACE == ModelsNS:
+                # search base.py :: if len(self.bind.Path) > 1:
+                raise EntitySetupError(owner=self, msg=f"Should not happen, more than 1 level DotExpressions are not supported, got: {owner_dexp_node}")
 
             if isinstance(owner_dexp_node, IFunctionDexpNode):
                 inspect_object = owner_dexp_node.get_type_info()
