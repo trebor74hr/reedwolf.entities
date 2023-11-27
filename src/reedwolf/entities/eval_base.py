@@ -31,7 +31,7 @@ from .utils import to_repr
 
 
 @dataclass
-class EvaluationBase(IEvaluation, ABC):  # TODO: make it abstract
+class EvaluationBase(IEvaluation, ABC):
     """ Auto-compute logic - executes 'value' expression, stores into field of
         current instance/object. The execution should not fail.
     """

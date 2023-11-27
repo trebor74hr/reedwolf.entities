@@ -854,7 +854,7 @@ class EmailField(FieldBase):
 # ------------------------------------------------------------------------
 
 @dataclass
-class FieldGroup(IComponent, IFieldGroup):
+class FieldGroup(IFieldGroup):
     contains:       List[IComponent] = field(repr=False)
     name:           Optional[str] = field(default=None)
     title:          Optional[TransMessageType] = field(repr=False, default=None)

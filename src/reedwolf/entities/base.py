@@ -1,6 +1,6 @@
 # from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod, ABCMeta
 import inspect
 from contextlib import AbstractContextManager
 from enum import Enum
@@ -234,144 +234,6 @@ def msg(message: Union[str, TransMessageType]) -> Union[str, TransMessageType]:
 # IBaseComponent
 # ------------------------------------------------------------
 
-@dataclass
-class IBaseComponent:
-    """ requires (Protocol):
-        name
-        parent_name
-        parent
-        value_accessor
-        entity
-    """
-    parent        : Union[Self, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    parent_name   : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
-    entity        : Union[Self, "IContainer"] = field(init=False, default=UNDEFINED, repr=False)
-    value_accessor: Union[IValueAccessor, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    # TODO: name          : Optional[str] = field(init=False, default=None)
-
-    name_counter_by_parent_name: Dict[str, int] = field(init=False, repr=False, default_factory=dict)
-    # value_accessor_default: IValueAccessor = field(init=False, repr=False)
-
-    # ------------------------------------------------------------
-
-    def set_parent(self, parent: Optional["IComponent"]):
-        if self.parent is not UNDEFINED:
-            if self.parent is not parent:
-                raise EntityInternalError(owner=self, msg=f"Parent already set to different, have: {self.parent}, got: {parent}")
-            return
-
-        assert parent is None or isinstance(parent, IComponent), parent
-        self.parent = parent
-
-        if self.parent_name is not UNDEFINED:
-            raise EntityInternalError(owner=self, msg=f"Parent name already defined, got: {parent}")
-
-        self.parent_name = parent.name if parent else ""
-
-        assert hasattr(self, "name")
-        assert hasattr(self, "get_path_to_first_parent_container")
-
-        if not self.name:
-            self._getset_name()
-        elif hasattr(self, "title") and not self.title and self.name:
-            self.title = varname_to_title(self.name)
-
-        if not self.name:
-            raise EntityInternalError(owner=self, msg=f"Name is not set: {self}")
-
-        if self.parent is None:
-            self.entity = self
-            if not self.value_accessor:
-                self.value_accessor = self.entity.value_accessor_default
-        else:
-            # just copy the same object
-            self.entity = self.parent.entity
-            if not self.value_accessor:
-                self.value_accessor = self.parent.value_accessor
-
-        assert self.value_accessor and self.entity
-
-
-    def _getset_name(self):
-        """
-        recursive
-        """
-        assert hasattr(self, "get_path_to_first_parent_container")
-
-        if not self.name:
-
-            if self.parent is None:
-                # top container
-                parents = []
-                container = self
-            else:
-                # suffix = self.__class__.__name__.lower()
-                # self.name = f"{self.parent_name}__{suffix}"
-                parents = self.get_path_to_first_parent_container(consider_self=False)
-                assert parents
-                container = parents[-1]
-
-            keys = []
-            for parent in reversed(parents):
-                # recursion
-                parent_name = parent._getset_name()
-                keys.append(parent_name)
-
-            if isinstance(self, IField):
-                assert getattr(self, "bind", None)
-                # ModelsNs.person.surname -> surname
-                this_name = get_name_from_bind(self.bind)
-            else:
-                this_name =self.__class__.__name__.lower()
-            keys.append(this_name)
-
-            key = "__".join(keys)
-
-            name_id = container._get_new_id_by_parent_name(key)
-            self.name = f"{key}__{name_id}"
-
-        return self.name 
-
-    def _get_new_id_by_parent_name(self, key: str) -> int:
-        self.name_counter_by_parent_name.setdefault(key, 0)
-        self.name_counter_by_parent_name[key] += 1
-        return self.name_counter_by_parent_name[key]
-
-    # ------------------------------------------------------------
-
-    def get_first_parent_container(self, consider_self: bool) -> "IContainer":  # noqa: F821
-        # TODO: replace this function and maybe calls with:
-        #       return self.parent_container if consider_self else (self.parent.parent_container if self.parent else None)
-        parents = self.get_path_to_first_parent_container(consider_self=consider_self)
-        return parents[-1] if parents else None
-
-    def get_path_to_first_parent_container(self, consider_self: bool) -> List["IContainer"]:  # noqa: F821
-        """
-        traverses up the component tree up (parents) and find first container
-        including self ( -> if self is container then it returns self)
-        TODO: maybe it is reasonable to cache this
-        """
-        if self.parent is UNDEFINED:
-            raise EntitySetupError(owner=self, msg="Parent is not set. Call .setup() method first.")
-
-        if consider_self and isinstance(self, IContainer):
-            return [self]
-
-        parents = []
-        parent_container = self.parent
-        while parent_container is not None:
-            parents.append(parent_container)
-            if isinstance(parent_container, IContainer):
-                break
-            parent_container = parent_container.parent
-
-        if parent_container in (None, UNDEFINED):
-            if consider_self:
-                raise EntitySetupError(owner=self, msg="Did not found container in parents. Every component needs to be in some container object tree (Entity/SubEntityItems).")
-            return []
-
-        return parents
-
 # ------------------------------------------------------------
 # Subcomponent
 # ------------------------------------------------------------
@@ -457,16 +319,82 @@ def make_component_fields_dataclass(class_name: str, child_field_list: List[Chil
 # ------------------------------------------------------------
 # IComponent
 # ------------------------------------------------------------
+class ReedwolfMetaclass(ABCMeta):
+    """
+    This metaclass enables:
+        - storing initial args and kwargs to enable clone() later (see ReedwolfDataclassBase
+        - TODO: storing extra arguments - to enable custom attributes features
+    """
+
+    def __call__(cls, *args, **kwargs):
+        # extra_kwargs = {name: kwargs.pop(name)
+        #                 for name in list(kwargs.keys())
+        #                 if name not in cls.__annotations__}
+        instance = super().__call__(*args, **kwargs)
+        # instance.rwf_extra_kwargs = extra_kwargs
+        instance.rwf_args = args
+        instance.rwf_kwargs = kwargs
+        return instance
+
+
+class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
+
+    @classmethod
+    def _try_call_clone(cls, aval: Any, depth: int, instances_copied: Dict) -> Any:
+        if isinstance(aval, DotExpression): # must be first
+            aval_new = aval.Clone()
+        elif isinstance(aval, (tuple, list)):
+            aval_new = [cls._try_call_clone(aval_item, depth, instances_copied) for aval_item in aval]
+        elif isinstance(aval, (dict,)):
+            aval_new = {aval_name: cls._try_call_clone(aval_item, depth, instances_copied)
+                        for aval_name, aval_item in aval.items()}
+        elif hasattr(aval, "clone") and callable(aval.clone):
+            aval_new = aval.clone(depth=depth + 1, instances_copied=instances_copied)
+        else:
+            aval_new = aval
+        return aval_new
+
+    def clone(self, depth=0, instances_copied=None):
+        if depth==0:
+            instances_copied = {}
+        elif depth>MAX_RECURSIONS:
+            raise EntityInternalError(owner=self, msg=f"Too deep recursion: {depth}")
+
+        self_id = id(self)
+        self_copy = instances_copied.get(self_id, UNDEFINED)
+        if self_copy is UNDEFINED:
+            args = [self._try_call_clone(aval, depth, instances_copied) for aval in self.rwf_args]
+            kwargs = {aname: self._try_call_clone(aval, depth, instances_copied) for aname, aval in self.rwf_kwargs.items()}
+            self_copy = self.__class__(*args, **kwargs)
+            instances_copied[self_id] = self_copy
+
+        return self_copy
+
 
 @dataclass
-class IComponent(IBaseComponent, ABC):
-
+class IComponent(ReedwolfDataclassBase, ABC):
+    """ requires (Protocol):
+        name
+        parent_name
+        parent
+        value_accessor
+        entity
+    """
     # NOTE: I wanted to skip saving parent reference/object within component - to
     #       preserve single and one-direction references.
     # NOTE: Not DRY: Entity, SubentityBase and ComponentBase
 
-    # TODO: name          : Optional[str] = field(init=False, default=None)
     # TODO: cleaners:       Optional[List["ICleaner"]] = field(repr=False, init=False, default=None)
+    parent        : Union[Self, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    parent_name   : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+    entity        : Union[Self, "IContainer"] = field(init=False, default=UNDEFINED, repr=False)
+    value_accessor: Union[IValueAccessor, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    # TODO: name          : Optional[str] = field(init=False, default=None)
+
+    name_counter_by_parent_name: Dict[str, int] = field(init=False, repr=False, default_factory=dict)
+    # value_accessor_default: IValueAccessor = field(init=False, repr=False)
+
+    # ------------------------------------------------------------
 
     # lazy init - done in Setup phase
     child_field_list: Optional[List[ChildField]] = field(init=False, repr=False, default=None)
@@ -478,6 +406,124 @@ class IComponent(IBaseComponent, ABC):
     def __post_init__(self):
         self.init_clean_base()
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
+
+    def set_parent(self, parent: Optional["IComponent"]):
+        if self.parent is not UNDEFINED:
+            if self.parent is not parent:
+                raise EntityInternalError(owner=self, msg=f"Parent already set to different, have: {self.parent}, got: {parent}")
+            return
+
+        assert parent is None or isinstance(parent, IComponent), parent
+        self.parent = parent
+
+        if self.parent_name is not UNDEFINED:
+            raise EntityInternalError(owner=self, msg=f"Parent name already defined, got: {parent}")
+
+        self.parent_name = parent.name if parent else ""
+
+        assert hasattr(self, "name")
+        assert hasattr(self, "get_path_to_first_parent_container")
+
+        if not self.name:
+            self._getset_name()
+        elif hasattr(self, "title") and not self.title and self.name:
+            self.title = varname_to_title(self.name)
+
+        if not self.name:
+            raise EntityInternalError(owner=self, msg=f"Name is not set: {self}")
+
+        if self.parent is None:
+            self.entity = self
+            if not self.value_accessor:
+                self.value_accessor = self.entity.value_accessor_default
+        else:
+            # just copy the same object
+            self.entity = self.parent.entity
+            if not self.value_accessor:
+                self.value_accessor = self.parent.value_accessor
+
+        assert self.value_accessor and self.entity
+
+
+    def _getset_name(self):
+        """
+        recursive
+        """
+        assert hasattr(self, "get_path_to_first_parent_container")
+
+        if not self.name:
+
+            if self.parent is None:
+                # top container
+                parents = []
+                container = self
+            else:
+                # suffix = self.__class__.__name__.lower()
+                # self.name = f"{self.parent_name}__{suffix}"
+                parents = self.get_path_to_first_parent_container(consider_self=False)
+                assert parents
+                container = parents[-1]
+
+            keys = []
+            for parent in reversed(parents):
+                # recursion
+                parent_name = parent._getset_name()
+                keys.append(parent_name)
+
+            if isinstance(self, IField):
+                assert getattr(self, "bind", None)
+                # ModelsNs.person.surname -> surname
+                this_name = get_name_from_bind(self.bind)
+            else:
+                this_name =self.__class__.__name__.lower()
+            keys.append(this_name)
+
+            key = "__".join(keys)
+
+            name_id = container._get_new_id_by_parent_name(key)
+            self.name = f"{key}__{name_id}"
+
+        return self.name
+
+    def _get_new_id_by_parent_name(self, key: str) -> int:
+        self.name_counter_by_parent_name.setdefault(key, 0)
+        self.name_counter_by_parent_name[key] += 1
+        return self.name_counter_by_parent_name[key]
+
+    # ------------------------------------------------------------
+
+    def get_first_parent_container(self, consider_self: bool) -> "IContainer":  # noqa: F821
+        # TODO: replace this function and maybe calls with:
+        #       return self.parent_container if consider_self else (self.parent.parent_container if self.parent else None)
+        parents = self.get_path_to_first_parent_container(consider_self=consider_self)
+        return parents[-1] if parents else None
+
+    def get_path_to_first_parent_container(self, consider_self: bool) -> List["IContainer"]:  # noqa: F821
+        """
+        traverses up the component tree up (parents) and find first container
+        including self ( -> if self is container then it returns self)
+        TODO: maybe it is reasonable to cache this
+        """
+        if self.parent is UNDEFINED:
+            raise EntitySetupError(owner=self, msg="Parent is not set. Call .setup() method first.")
+
+        if consider_self and isinstance(self, IContainer):
+            return [self]
+
+        parents = []
+        parent_container = self.parent
+        while parent_container is not None:
+            parents.append(parent_container)
+            if isinstance(parent_container, IContainer):
+                break
+            parent_container = parent_container.parent
+
+        if parent_container in (None, UNDEFINED):
+            if consider_self:
+                raise EntitySetupError(owner=self, msg="Did not found container in parents. Every component needs to be in some container object tree (Entity/SubEntityItems).")
+            return []
+
+        return parents
 
     def is_unbound(self) -> bool:
         return self.entity.is_unbound()
@@ -995,10 +1041,10 @@ class IComponent(IBaseComponent, ABC):
                             #       to register non-model attributes
                             component._register_nested_models(setup_session)
 
-                elif isinstance(component, IBaseComponent):
-                    component.set_parent(parent=self)
-                    self._add_component(component=component, components=components)
-                    # e.g. BoundModel.model - can be any custom Class(dataclass/pydantic)
+                # elif isinstance(component, IBaseComponent):
+                #     component.set_parent(parent=self)
+                #     self._add_component(component=component, components=components)
+                #     # e.g. BoundModel.model - can be any custom Class(dataclass/pydantic)
                 else:
                     if component.__class__.__name__ not in ("ChoiceOption", "CustomFunctionFactory", "int", "str"):
                         raise EntityInternalError(owner=component, msg=f"Strange type of component, check or add to list of ignored types for _setup_phase_one() ")
@@ -1347,7 +1393,8 @@ class IComponent(IBaseComponent, ABC):
                                       # "value",
                                       # "enum",
                                       )
-               or sub_component_name[0] == "_"):
+              or sub_component_name[0] == "_") \
+              or sub_component_name.startswith("rwf_"):
                 # TODO: this should be main way how to check ...
                 if sub_component_name not in ("parent", "parent_container", "entity") and \
                   (hasattr(sub_component, "setup") or hasattr(sub_component, "setup")):
@@ -1376,6 +1423,7 @@ class IComponent(IBaseComponent, ABC):
                     and "Evaluation" not in str(th_field.type) \
                     and "BoundModel" not in str(th_field.type) \
                     and "[Self]" not in str(th_field.type) \
+                    and not sub_component_name.startswith("rwf_") \
                     :
                 # TODO: Validation should be extended to test isinstance(.., ValidationBase) ... or similar to include Required(), MaxLength etc.
                 raise EntityInternalError(owner=sub_component, msg=f"Should '{sub_component_name}' attribute be excluded from processing." 
@@ -1541,7 +1589,7 @@ class IField(IComponent, ABC):
 
 # ------------------------------------------------------------
 
-class IFieldGroup(ABC):
+class IFieldGroup(IComponent, ABC):
     ...
 
 # ------------------------------------------------------------

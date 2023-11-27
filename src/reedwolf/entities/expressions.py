@@ -402,7 +402,7 @@ class DotExpression(DynamicAttrsBase):
     def Clone(self) -> Self:
         # currently used only in one place
         assert self.Path
-        assert self.Path[-1] == self
+        # assert self.Path[-1] == self
         new_path = []
         for dexp in self.Path:
             new_dexp = dexp.__class__(node=dexp._node, namespace=dexp._namespace, Path=new_path[:])
@@ -417,7 +417,9 @@ class DotExpression(DynamicAttrsBase):
         return (isinstance(other, self.__class__)
                 and other._namespace == self._namespace
                 and other._func_args == self._func_args
-                and other.Path == self.Path)
+                and self.as_str() == other.as_str()
+                # and other.Path == self.Path,
+                )
 
     def IsFinished(self):
         return self._status!=DExpStatusEnum.INITIALIZED
@@ -644,7 +646,12 @@ class DotExpression(DynamicAttrsBase):
         return self
 
     def as_str(self):
-        " NOTE: this is important for dumping and later loading - must match same string as code "
+        """
+        NOTE: this is important for:
+            - dumping and later loading - must match same string as code:
+            - Used in .Equals()
+            - ReedwolfDataclassBase.__eq__
+        """
         if self._is_literal:
             out=f"Just({repr(self._node)})"
         else:
@@ -680,7 +687,13 @@ class DotExpression(DynamicAttrsBase):
 
     # NOTE: Operations are put in internal OperationsNS
 
-    def __eq__(self, other):        self._EnsureNotFinished(); return DotExpression(OperationDexpNode("==", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
+    def __eq__(self, other):
+        # TODO: if self._status == DExpStatusEnum.BUILT:
+        # TODO:     # NOTE: this is an exception. Currently used only for unit testing.
+        # TODO:     return self.Equals(other)
+        self._EnsureNotFinished();
+        return DotExpression(OperationDexpNode("==", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
+
     def __ne__(self, other):        self._EnsureNotFinished(); return DotExpression(OperationDexpNode("!=", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
     def __gt__(self, other):        self._EnsureNotFinished(); return DotExpression(OperationDexpNode(">", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702
     def __ge__(self, other):        self._EnsureNotFinished(); return DotExpression(OperationDexpNode(">=", self, other), namespace=OperationsNS, is_internal_use=True)  # noqa: E702

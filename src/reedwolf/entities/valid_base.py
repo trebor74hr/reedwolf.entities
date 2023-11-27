@@ -38,7 +38,7 @@ from .expressions import (
 
 
 @dataclass
-class ValidationBase(IValidation, ABC): # TODO: make it abstract
+class ValidationBase(IValidation, ABC):
     """ Executes validate() method which checks all ok
     """
 
