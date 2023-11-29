@@ -322,7 +322,7 @@ def make_component_fields_dataclass(class_name: str, child_field_list: List[Chil
 class ReedwolfMetaclass(ABCMeta):
     """
     This metaclass enables:
-        - storing initial args and kwargs to enable clone() later (see ReedwolfDataclassBase
+        - storing initial args and kwargs to enable copy() later (see ReedwolfDataclassBase
         - TODO: storing extra arguments - to enable custom attributes features
     """
 
@@ -339,36 +339,55 @@ class ReedwolfMetaclass(ABCMeta):
 
 class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
 
-    @classmethod
-    def _try_call_clone(cls, aval: Any, depth: int, instances_copied: Dict) -> Any:
-        if isinstance(aval, DotExpression): # must be first
-            aval_new = aval.Clone()
-        elif isinstance(aval, (tuple, list)):
-            aval_new = [cls._try_call_clone(aval_item, depth, instances_copied) for aval_item in aval]
-        elif isinstance(aval, (dict,)):
-            aval_new = {aval_name: cls._try_call_clone(aval_item, depth, instances_copied)
-                        for aval_name, aval_item in aval.items()}
-        elif hasattr(aval, "clone") and callable(aval.clone):
-            aval_new = aval.clone(depth=depth + 1, instances_copied=instances_copied)
-        else:
-            aval_new = aval
-        return aval_new
+    # def __eq__(self, other: Any):
+    #     # TODO: this method for dataclass is overridden by dataclass generatad. Can be:
+    #     #       a) replaced again in metaclass, b) compare=False on dataclass
+    #     return (self is other) \
+    #         or (type(other) == self.__class__ and super().__eq__(other)) \
+    #         or False
 
-    def clone(self, depth=0, instances_copied=None):
+    def copy(self):
+        """
+        TODO: pass additional arrguments to modify new instance - e.g. EntityChange(...)
+        """
+        return self._copy()
+
+    def _copy(self, depth=0, instances_copied=None):
         if depth==0:
             instances_copied = {}
         elif depth>MAX_RECURSIONS:
             raise EntityInternalError(owner=self, msg=f"Too deep recursion: {depth}")
 
         self_id = id(self)
-        self_copy = instances_copied.get(self_id, UNDEFINED)
-        if self_copy is UNDEFINED:
-            args = [self._try_call_clone(aval, depth, instances_copied) for aval in self.rwf_args]
-            kwargs = {aname: self._try_call_clone(aval, depth, instances_copied) for aname, aval in self.rwf_kwargs.items()}
-            self_copy = self.__class__(*args, **kwargs)
-            instances_copied[self_id] = self_copy
+        instance_copy = instances_copied.get(self_id, UNDEFINED)
+        if instance_copy is UNDEFINED:
+            # Recursionn x 2
+            # not yet copied within this session
+            args = [self._try_call_copy(aval, depth, instances_copied) for aval in self.rwf_args]
+            kwargs = {aname: self._try_call_copy(aval, depth, instances_copied) for aname, aval in self.rwf_kwargs.items()}
+            # create instance from the same class with *identical* arguments
+            instance_copy = self.__class__(*args, **kwargs)
+            instances_copied[self_id] = instance_copy
 
-        return self_copy
+        return instance_copy
+
+    @classmethod
+    def _try_call_copy(cls, aval: Any, depth: int, instances_copied: Dict) -> Any:
+        if isinstance(aval, DotExpression): # must be first
+            aval_new = aval.Clone()
+        elif isinstance(aval, (tuple, list)):
+            aval_new = [cls._try_call_copy(aval_item, depth+1, instances_copied)
+                        for aval_item in aval]
+        elif isinstance(aval, (dict,)):
+            aval_new = {aval_name: cls._try_call_copy(aval_item, depth+1, instances_copied)
+                        for aval_name, aval_item in aval.items()}
+        # ALT: elif hasattr(aval, "_copy") and callable(aval._copy):
+        elif isinstance(aval, ReedwolfDataclassBase):
+            aval_new = aval._copy(depth=depth + 1, instances_copied=instances_copied)
+        else:
+            # TODO: if not primitive type - use copy.deepcopy() instead?
+            aval_new = aval
+        return aval_new
 
 
 @dataclass
@@ -385,9 +404,9 @@ class IComponent(ReedwolfDataclassBase, ABC):
     # NOTE: Not DRY: Entity, SubentityBase and ComponentBase
 
     # TODO: cleaners:       Optional[List["ICleaner"]] = field(repr=False, init=False, default=None)
-    parent        : Union[Self, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    parent        : Union[Self, UndefinedType] = field(init=False, compare=False, default=UNDEFINED, repr=False)
     parent_name   : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
-    entity        : Union[Self, "IContainer"] = field(init=False, default=UNDEFINED, repr=False)
+    entity        : Union[Self, "IContainer"] = field(init=False, compare=False, default=UNDEFINED, repr=False)
     value_accessor: Union[IValueAccessor, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     # TODO: name          : Optional[str] = field(init=False, default=None)
 
@@ -2105,7 +2124,7 @@ class ValueNode:
     parent_node:  Optional[Self] = field(repr=False)
 
     # top of the tree - automatically computed
-    top_node:  Self = field(repr=False, init=False)
+    top_node:  Self = field(repr=False, init=False, compare=False)
 
     # when SubentityItems - hodls 2 types of ValueNodes:
     #   has_items=True  - container - has filled .items[], has no children
@@ -2123,7 +2142,7 @@ class ValueNode:
     # F.<field-name>
     # - contains all fields accessible in. autocomputed.
     # TODO: replace with fields_dict: Dict[name, Self] - distribute to all
-    container_node: Self = field(repr=False, init=False, default=None)
+    container_node: Self = field(repr=False, init=False, compare=False, default=None)
 
     # <field>.Value
     _value: Union[AttrValue, UndefinedType] = field(repr=False, init=False, default=UNDEFINED)

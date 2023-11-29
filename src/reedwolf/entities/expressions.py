@@ -688,7 +688,7 @@ class DotExpression(DynamicAttrsBase):
     # NOTE: Operations are put in internal OperationsNS
 
     def __eq__(self, other):
-        # TODO: if self._status == DExpStatusEnum.BUILT:
+        # TODO: if self._status == DExpStatusEnum.BUILT and getattr(other, "_status", None) == DExpStatusEnum.BUILT:
         # TODO:     # NOTE: this is an exception. Currently used only for unit testing.
         # TODO:     return self.Equals(other)
         self._EnsureNotFinished();
