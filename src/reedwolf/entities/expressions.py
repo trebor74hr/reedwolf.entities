@@ -404,14 +404,15 @@ class DotExpression(DynamicAttrsBase):
         assert self.Path
         # assert self.Path[-1] == self
         new_path = []
-        for dexp in self.Path:
-            new_dexp = dexp.__class__(node=dexp._node, namespace=dexp._namespace, Path=new_path[:])
-            new_path.append(new_dexp)
+        for nr, dexp in enumerate(self.Path):
+            new_path.append(
+                dexp.__class__(
+                    node=dexp._node,
+                    namespace=dexp._namespace,
+                    Path=(new_path[:] if nr>0 else None),
+            ))
         return new_path[-1]
-        # return self.__class__(node=self._node, namespace=self._namespace, Path=self.Path)
 
-    # def GetNamespace(self) -> Namespace:
-    #     return self._namespace
 
     def Equals(self, other: Any) -> bool:
         return (isinstance(other, self.__class__)
