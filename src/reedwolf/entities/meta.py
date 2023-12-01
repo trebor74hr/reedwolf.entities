@@ -138,6 +138,8 @@ AttrName = TypeVar("AttrName", bound=str)
 AttrValue = TypeVar("AttrValue", bound=Any)
 AttrIndex = TypeVar("AttrIndex", bound=int)
 
+DEXP_ATTR_TO_CALLABLE_DICT = Dict[AttrName, Callable[[], Any]]
+
 class IFuncArgHint:
     """
     TODO: make CustomGenericAlias, check readme.txt - search

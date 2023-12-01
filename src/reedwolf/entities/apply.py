@@ -354,7 +354,7 @@ class ApplyResult(IApplyResult):
         if value_set_phase == ValueSetPhase.INIT_BY_BIND or \
           (current_value is UNDEFINED and not isinstance(new_value, UndefinedType)):
 
-            if value_node.should_collect_value_history:
+            if value_node.trace_value_history:
                 # Initialization - create internal structs
                 # --- value_history_dict - initialize
                 if value_node.value_history is not UNDEFINED:
@@ -373,14 +373,14 @@ class ApplyResult(IApplyResult):
             assert value_node.init_value is UNDEFINED
             value_node.init_value = new_value
         elif current_value is NA_DEFAULTS_MODE:
-            if value_node.should_collect_value_history and len(value_node.value_history) != 0:
+            if value_node.trace_value_history and len(value_node.value_history) != 0:
                 raise EntityInternalError(owner=component, msg=f"change history for key_str='{key_str}' should be empty in NA_DEFAULTS_MODE")
         else:
             # === Update - do some checks
             if isinstance(current_value, UndefinedType):
                 raise EntityInternalError(owner=self, msg=f"value not initialized properly - current_value[{key_str}] :=  {current_value}")
 
-            if value_node.should_collect_value_history:
+            if value_node.trace_value_history:
                 value_history = value_node.value_history
                 if len(value_history)==0:
                     raise EntityInternalError(owner=component, msg=f"change history for key_str='{key_str}' is empty")
@@ -493,7 +493,7 @@ class ApplyResult(IApplyResult):
                     instance_none_mode=self.instance_none_mode,
                     parent_node=None,
                     instance=self.instance,
-                    should_collect_value_history=self.entity.config.should_collect_value_history,
+                    trace_value_history=self.entity.config.is_trace(),
                 ).setup(apply_result=self)
 
             assert not self.top_value_node
@@ -527,7 +527,7 @@ class ApplyResult(IApplyResult):
                         instance_none_mode=self.instance_none_mode,
                         parent_node = parent_node,
                         instance = self.current_frame.instance,
-                        should_collect_value_history=self.entity.config.should_collect_value_history,
+                        trace_value_history=self.entity.config.is_trace(),
                         has_items=has_items,
                     ).setup(apply_result=self)
                 parent_node.add_child(value_node)
@@ -1058,7 +1058,7 @@ class ApplyResult(IApplyResult):
                         instance_none_mode=self.instance_none_mode,
                         parent_node = value_node,
                         instance = instance,
-                        should_collect_value_history=self.entity.config.should_collect_value_history,
+                        trace_value_history=self.entity.config.is_trace(),
                         # empahsize distinction of item's parent node (also subentity, but collection)
                         has_items=False,
                         # specific when instance is item in items collection (of parent)

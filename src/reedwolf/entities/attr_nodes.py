@@ -349,6 +349,14 @@ class AttrDexpNode(IDotExpressionNode):
                         raise EntityApplyNameError(owner=self,
                                                    msg=f"Attribute '{attr_name}' not found in '{to_repr(value_prev)}' : '{type(value_prev)}'")
                     value_new = getattr(value_prev, attr_name)
+                    if callable(value_new):
+                        try:
+                            # NOTE: must be method(self) or function() - no args expected
+                            value_new2 = value_new()
+                        except Exception as ex:
+                            raise EntityApplyValueError(owner=self,
+                                   msg=f"Attribute '{attr_name}' is a callable '{value_new}' which raised error by calling: : '{ex}'")
+                        value_new = value_new2
         return value_new
 
     # NOTE: this logic is dropped - expected_type_info is sometimes missmatched and sometimes adaptations needs to be done ...

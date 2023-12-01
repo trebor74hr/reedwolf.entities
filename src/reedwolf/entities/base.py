@@ -2116,8 +2116,8 @@ class ValueNode:
     # ------------------------------------------------------------
     # TODO: fields? - only for container - includes all children's children
     #       except Items's children
-
-    should_collect_value_history: bool = field(repr=False)
+    # should collect value history or not? defined by Config.trace
+    trace_value_history: bool = field(repr=False)
 
     # <field>.Parent
     # - empty only on top tree node (Entity component)
@@ -2367,7 +2367,7 @@ class ValueNode:
         # --- value_history - add new value
         # TODO: pass input arg value_parent_name - component.name does not have any purpose
 
-        if self.should_collect_value_history and value is not NA_IN_PROGRESS \
+        if self.trace_value_history and value is not NA_IN_PROGRESS \
           and value is not NOT_APPLIABLE and value is not NA_DEFAULTS_MODE:
             instance_attr_value = InstanceAttrValue(
                 value_parent_name=self.component.name,
@@ -2955,7 +2955,7 @@ class IApplyResult(IStackOwnerSession):
         # instance_shadow_dc: DataclassType = field(init=False, repr=False)
 
     # Registry of history of attribute values for each ValueNode.
-    # Filled only when Config.collect_value_history =True (see .register_instance_attr_change()).
+    # Filled only when Config.trace =True (see .register_instance_attr_change()).
     # Use .get_value_history() to fetch values.
     # Used only for analytical purposes and unit testing.
     # For any serious jobs ValueNode-s are used i.e. value_node_list and top_value_node members.
@@ -3028,8 +3028,8 @@ class IApplyResult(IStackOwnerSession):
 
     @property
     def value_history_dict(self) -> Dict[KeyString, List[InstanceAttrValue]]:
-        if not self.entity.config.should_collect_value_history:
-            raise EntityApplyError(owner=self, msg="Value history is not collected. Pass Config(..., collect_value_history=True) and try again.")
+        if not self.entity.config.is_trace():
+            raise EntityApplyError(owner=self, msg="Value history is not collected. Pass Config(..., trace=True) and try again.")
         # assert self._value_history_dict
         return self._value_history_dict
 

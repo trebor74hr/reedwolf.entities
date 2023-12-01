@@ -25,6 +25,9 @@ from .exceptions import (
 from .expressions import (
         Just,
         )
+from .meta import (
+    DEXP_ATTR_TO_CALLABLE_DICT
+)
 from .bound_models import (
         BoundModel,
         BoundModelWithHandlers,
@@ -136,6 +139,9 @@ __all__ = [
     "EntityApplyError",
     "EntityValidationError",
     "EntityNameNotFoundError",
+
+    # meta
+    DEXP_ATTR_TO_CALLABLE_DICT,
 
     # expressions
     "Just",

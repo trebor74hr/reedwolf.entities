@@ -1,17 +1,12 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import (
-    Callable,
-    Any,
-    Dict, Union,
-)
 from dataclasses import dataclass
 
 from .exceptions import EntitySetupError
 from .meta import (
-        NoneType,
-        TypeInfo,
-        )
+    NoneType,
+    DEXP_ATTR_TO_CALLABLE_DICT,
+)
 
 
 # ------------------------------------------------------------
@@ -23,7 +18,7 @@ class IContext(ABC):
 
     @classmethod
     @abstractmethod
-    def get_dexp_attrs_dict(cls) -> Dict[str, Union[Any, Callable[[], Any]]]:
+    def get_dexp_attr_to_callable_dict(cls) -> DEXP_ATTR_TO_CALLABLE_DICT:
         """
         Should return attribute name -> callable or direct value.
         example:
@@ -67,7 +62,7 @@ class ContextDemo(IContext):
         return datetime.now()
 
     @classmethod
-    def get_dexp_attrs_dict(cls) -> Dict[str, Callable[[], Any]]:
+    def get_dexp_attr_to_callable_dict(cls) -> DEXP_ATTR_TO_CALLABLE_DICT:
         return {
             "User": cls.get_user,
             "Session": cls.get_session,

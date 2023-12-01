@@ -8,7 +8,7 @@ from typing import (
     Optional,
     ClassVar,
     Tuple,
-    Dict,
+    Dict, Callable,
 )
 
 from .utils import (
@@ -48,7 +48,7 @@ from .meta import (
     TypeInfo,
     HookOnFinishedAllCallable,
     get_model_fields, STANDARD_TYPE_LIST,
-    AttrName,
+    AttrName, DEXP_ATTR_TO_CALLABLE_DICT,
 )
 from .base import (
     IComponentFields,
@@ -299,6 +299,43 @@ class RegistryBase(IRegistry):
             # th_field: ModelField in .values()
             attr_node = self._create_attr_node_for_model_attr(model_class, attr_name)
             self.register_attr_node(attr_node)
+
+
+    def _register_from_callables_dict(self, callables_dict: DEXP_ATTR_TO_CALLABLE_DICT):
+        # map User, Session, Now and similar Attribute -> function calls
+        for attr_name, py_function in callables_dict.items():
+            type_info = TypeInfo.extract_function_return_type_info(
+                py_function,
+                allow_nonetype=True)
+            if attr_name in self.store:
+                raise EntitySetupNameError(f"Attribute name '{attr_name}' is reserved. Rename class attribute in '{self.context_class}'")
+            attr_node = AttrDexpNode(
+                name=attr_name,
+                data=type_info,
+                namespace=self.NAMESPACE,
+                type_info=type_info,
+                # TODO: the type or name of th_field is not ok
+                th_field=py_function,
+            )
+            # TODO: check that function receives only single param if method(self), or no param if function()
+            self.register_attr_node(attr_node, attr_name)
+
+    def _apply_to_get_root_value_by_callable_dict(self,
+                      callables_dict: DEXP_ATTR_TO_CALLABLE_DICT,
+                      attr_name: AttrName,
+                      klass_attr_name: AttrName,
+                      klass: type) -> RegistryRootValue:
+        if klass in (UNDEFINED, None):
+            # component = apply_result.current_frame.component
+            raise EntityApplyNameError(owner=self, msg=f"Attribute '{attr_name}' can not be fetched since '{klass_attr_name}' is not set ({type(context)}).")
+
+        if attr_name in callables_dict:
+            attr_callable = callables_dict[attr_name]
+            assert callable(attr_callable), attr_callable
+            attr_name_new = attr_callable.__name__
+        else:
+            attr_name_new = None
+        return RegistryRootValue(klass, attr_name_new)
 
 
     # ------------------------------------------------------------
