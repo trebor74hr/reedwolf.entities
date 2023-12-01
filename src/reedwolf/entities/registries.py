@@ -390,7 +390,6 @@ class ContextRegistry(RegistryBase):
                 owner=owner,
                 )
 
-
     def register_all_nodes(self):
         if IContext not in inspect.getmro(self.context_class):
             raise EntitySetupValueError(owner=self, msg=f"Context should inherit IContext, got: {self.context_class}")
@@ -400,7 +399,7 @@ class ContextRegistry(RegistryBase):
             self.register_attr_node(attr_node)
 
         # map User, Session, Now and similar Attribute -> function calls
-        for attr_name, py_function in self.context_class.get_dexp_attrname_dict().items():
+        for attr_name, py_function in self.context_class.get_dexp_attrs_dict().items():
             type_info = TypeInfo.extract_function_return_type_info(
                             py_function,
                             allow_nonetype=True)
@@ -422,7 +421,7 @@ class ContextRegistry(RegistryBase):
         if context in (UNDEFINED, None):
             component = apply_result.current_frame.component
             raise EntityApplyNameError(owner=self, msg=f"ContextNS attribute '{component.name}' can not be fetched since context is not set ({type(context)}).")
-        # if attr_name in self.context_class.get_dexp_attrname_dict():
+        # if attr_name in self.context_class.get_dexp_attrs_dict():
         return RegistryRootValue(context, None)
 
 

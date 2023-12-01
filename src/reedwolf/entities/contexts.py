@@ -1,12 +1,13 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import (
-        Callable, 
-        Any,
-        Dict,
-        )
+    Callable,
+    Any,
+    Dict, Union,
+)
 from dataclasses import dataclass
 
+from .exceptions import EntitySetupError
 from .meta import (
         NoneType,
         TypeInfo,
@@ -19,6 +20,25 @@ from .meta import (
 
 @dataclass
 class IContext(ABC):
+
+    @classmethod
+    @abstractmethod
+    def get_dexp_attrs_dict(cls) -> Dict[str, Union[Any, Callable[[], Any]]]:
+        """
+        Should return attribute name -> callable or direct value.
+        example:
+        return {
+            "User": cls.user,
+            "Session": cls.session,
+            "Now": cls.get_now,
+            }
+
+        """
+        raise EntitySetupError(owner=cls, msg=f"Function 'get_dexp_attrs_dict' needs to be implemented in {cls}")
+
+
+@dataclass
+class ContextDemo(IContext):
     """
     The IContext instances will be passed to Entity evaluation 
     instances/or subcomponents with concrete data.
@@ -47,11 +67,7 @@ class IContext(ABC):
         return datetime.now()
 
     @classmethod
-    def get_type_info(cls) -> TypeInfo:
-        return TypeInfo.get_or_create_by_type(cls)
-
-    @classmethod
-    def get_dexp_attrname_dict(cls) -> Dict[str, Callable[[], Any]]:
+    def get_dexp_attrs_dict(cls) -> Dict[str, Callable[[], Any]]:
         return {
             "User": cls.get_user,
             "Session": cls.get_session,
