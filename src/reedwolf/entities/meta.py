@@ -5,7 +5,7 @@ extract_* - the most interesting functions
 """
 import inspect
 from collections import OrderedDict
-from inspect import getfullargspec, getmro, isclass,  getmembers, signature, Parameter
+from inspect import getmro, isclass,  getmembers, signature, Parameter, ismethod
 from abc import abstractmethod
 from copy import copy
 from collections.abc import Sequence
@@ -395,16 +395,19 @@ def is_instancemethod_by_name(owner: Any, name:str) -> bool:
     """ NOTE: hm, this depends on  naming convention
               https://stackoverflow.com/questions/8408910/detecting-bound-method-in-classes-not-instances-in-python-3
         TODO: do it better: is_method and not classmethod and not staticmethod
-
-        works for Class and Instance()
+              works for Class and Instance()
     """
-    if not hasattr(owner, name):
+    method = getattr(owner, name, None)
+    if not (method and callable(method)):
         return False
-    method = getattr(owner, name)
-    if not callable(method):
-        return False
-    # TODO: use inspect.signature instead OR inspect.ismethod OR inspect.getmembers instead?
-    args = getfullargspec(method).args
+    # NOTE: although signature() is preferred way to do, does not well with detecting class/static/method
+    # ALT:
+    #   if ismethod(method):
+    #       # will return True for classmethods but not for staticmethod
+    #       return True
+    #   args = signature(method).parameters
+    #   return bool('.' in method.__qualname__ and args and list(args.keys())[0] == 'self')
+    args = inspect.getfullargspec(method).args
     return bool('.' in method.__qualname__ and args and args[0] == 'self')
 
 
@@ -516,9 +519,15 @@ def extract_py_type_hints(inspect_object: Any, caller_name: str = "", strict: bo
         return {"__exception__": ex}
 
 
-def extract_function_py_type_hint_dict(function: Callable[..., Any]) -> Dict[str, PyTypeHint]:
+def extract_function_args_type_hints_dict(function: Callable[..., Any], strict: bool= True) -> Dict[str, PyTypeHint]:
     # TODO: typing
-    """ returns: function return type + if it returns list or not """
+    """
+    returns:
+    function hinted args + return type
+    strict = False :
+        py_type_hint_dict will get only arguments with type hints, and when strict=False
+        for missing arg or return hint will return type hint: Any
+    """
     if not is_function(function):
         raise EntityTypeError(f"Invalid object, expected type, got:  {function} / {type(function)}")
 
@@ -534,14 +543,18 @@ def extract_function_py_type_hint_dict(function: Callable[..., Any]) -> Dict[str
 
     # e.g. Optional[List[SomeCustomClass]] or SomeCustomClass or ...
     py_type_hint_dict = extract_py_type_hints(function, caller_name=f"Function {name}")
-    # all_args = signature(function)
-    # py_type_hint_dict = OrderedDict([(arg_name,  py_type_hint_dict.get(arg_name, Any))
-    #                      for arg_name in all_args.parameters.keys()])
+
+    if not strict:
+        params = signature(function).parameters
+        out2 = OrderedDict([(param_name, py_type_hint_dict.get(param_name, Any))
+                             for param_name in params.keys()])
+        out2["return"] = py_type_hint_dict.get("return", Any)
+        py_type_hint_dict = out2
 
     return py_type_hint_dict
 
 
-def extract_function_arguments_default_dict(py_function) -> Dict[str, Any]:
+def extract_function_args_default_dict(py_function) -> Dict[str, Any]:
     # https://stackoverflow.com/questions/12627118/get-a-function-arguments-default-value
     fun_signature = signature(py_function)
     return {
@@ -889,7 +902,7 @@ class TypeInfo:
             py_function: Callable[..., Any],
             allow_nonetype:bool=False) -> Self:
 
-        py_type_hint_dict = extract_function_py_type_hint_dict(function=py_function)
+        py_type_hint_dict = extract_function_args_type_hints_dict(function=py_function)
         py_type_hint = py_type_hint_dict.get("return", None)
         name = getattr(py_function, "__name__", "?")
 
@@ -908,13 +921,13 @@ class TypeInfo:
     # ------------------------------------------------------------
 
     @staticmethod
-    def extract_function_arguments_type_info_dict(
+    def extract_function_args_type_info_dict(
             py_function: Callable[..., Any]) -> Dict[str, Self]:
         """
         From annotations, but argument defaults could be fetched from
         inspect.getfullargspec(), see: extract_function_arguments_default_dict
         """
-        py_type_hint_dict = extract_function_py_type_hint_dict(function=py_function)
+        py_type_hint_dict = extract_function_args_type_hints_dict(function=py_function)
 
         msg_prefix = f"Function {py_function}::"
 

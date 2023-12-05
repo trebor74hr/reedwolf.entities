@@ -30,7 +30,7 @@ from .exceptions import (
 from .meta import (
     FunctionArgumentsType,
     TypeInfo,
-    extract_function_arguments_default_dict,
+    extract_function_args_default_dict,
     is_function,
     NoneType, IInjectFuncArgHint, IFuncArgHint,
 )
@@ -589,9 +589,9 @@ def create_function_arguments(
         py_function: Callable
         ) -> FunctionArguments:
 
-    type_info_dict = TypeInfo.extract_function_arguments_type_info_dict(py_function)
+    type_info_dict = TypeInfo.extract_function_args_type_info_dict(py_function)
 
-    arguments_default_dict = extract_function_arguments_default_dict(py_function)
+    arguments_default_dict = extract_function_args_default_dict(py_function)
 
     args_default = set(arguments_default_dict.keys())
     args_types   = set(type_info_dict.keys())
