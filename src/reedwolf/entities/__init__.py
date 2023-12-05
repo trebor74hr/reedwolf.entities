@@ -26,7 +26,9 @@ from .expressions import (
         Just,
         )
 from .meta import (
-    DEXP_ATTR_TO_CALLABLE_DICT
+    ExpressionsAttributesDict,
+    FieldName,
+    MethodName,
 )
 from .bound_models import (
         BoundModel,
@@ -141,7 +143,9 @@ __all__ = [
     "EntityNameNotFoundError",
 
     # meta
-    DEXP_ATTR_TO_CALLABLE_DICT,
+    "ExpressionsAttributesDict",
+    "FieldName",
+    "MethodName",
 
     # expressions
     "Just",

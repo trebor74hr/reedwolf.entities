@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
-from .meta import DEXP_ATTR_TO_CALLABLE_DICT
+from .meta import ExpressionsAttributesDict, FieldName
 from .contexts import IContext
 from .values_accessor import IValueAccessor
 
@@ -42,12 +42,13 @@ class Config(IContext):
     def is_trace(self) -> bool:
         return self.debug or self.trace
 
-    def is_debug(self) -> bool:
-        return self.debug
+    # def is_debug(self) -> bool:
+    #     return self.debug
 
     @classmethod
-    def get_dexp_attr_to_callable_dict(cls) -> DEXP_ATTR_TO_CALLABLE_DICT:
+    def get_expressions_attributes(cls) -> ExpressionsAttributesDict:
         return {
-            "Debug": cls.is_debug,
-            # "trace": cls.is_trace,
+            "Debug": FieldName("debug"),
+            # ALT: "Debug": cls.is_debug,
+            # "Trace": cls.is_trace,
         }

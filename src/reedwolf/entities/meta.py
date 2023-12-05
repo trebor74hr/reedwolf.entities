@@ -4,6 +4,8 @@ extract_* - the most interesting functions
 
 """
 import inspect
+from collections import OrderedDict
+from inspect import getfullargspec, getmro, isclass,  getmembers, signature, Parameter
 from abc import abstractmethod
 from copy import copy
 from collections.abc import Sequence
@@ -22,7 +24,7 @@ from typing import (
     Union,
     get_type_hints,
     TypeVar,
-    Sequence as SequenceType, Iterable,
+    Sequence as SequenceType, Iterable
 )
 from enum import Enum
 from decimal import Decimal
@@ -54,7 +56,6 @@ try:
     # not used here directly, used in other modules
     from pydantic.fields import ModelField as PydModelField
     PydModelFieldType = PydModelField
-
 except ImportError:
     PydBaseModel = None
     PydModelField = None
@@ -70,7 +71,7 @@ except ImportError:
 
 from .utils import (
     UNDEFINED,
-    format_arg_name_list,
+    format_arg_name_list, to_repr,
 )
 from .exceptions import (
     EntityTypeError, 
@@ -109,6 +110,8 @@ NoneType                = type(None) # or None.__class__
 #             can be used in declaration and in instance
 #             construction. underlying type is in __supertype__
 #
+#           - subclass base type e.g. class FieldName(str): pass
+#
 #       MyPy will have the last word.
 
 # NOTE: for dataclass there is no base type, so using Any
@@ -138,7 +141,15 @@ AttrName = TypeVar("AttrName", bound=str)
 AttrValue = TypeVar("AttrValue", bound=Any)
 AttrIndex = TypeVar("AttrIndex", bound=int)
 
-DEXP_ATTR_TO_CALLABLE_DICT = Dict[AttrName, Callable[[], Any]]
+# NOTE: reference to dataclass Field's name. Used in isinstance() checks.
+class FieldName(str):
+    ...
+
+class MethodName(str):
+    ...
+
+FunctionNoArgs = Callable[[], Any]
+ExpressionsAttributesDict = Dict[AttrName, Union[FieldName, MethodName, FunctionNoArgs]]
 
 class IFuncArgHint:
     """
@@ -299,7 +310,7 @@ EmptyFunctionArguments  = FunctionArgumentsType([], {})
 def get_underlying_types(type_: type):
     if not hasattr(type_, "__mro__"):
         return ()
-    underlying_types = inspect.getmro(type_)
+    underlying_types = getmro(type_)
     idx = underlying_types.index(object)
     if idx>=0:
         underlying_types = list(underlying_types)
@@ -317,14 +328,14 @@ def is_model_class(klass: Any) -> bool:
     is_dataclass or is_pydantic (for now)
     in future: sqlalchemy model, django orm model, attrs
     """
-    return inspect.isclass(klass) and (is_dataclass(klass) or is_pydantic(klass))
+    return isclass(klass) and (is_dataclass(klass) or is_pydantic(klass))
 
 def is_model_instance(instance: ModelType) -> bool:
     """
     is_dataclass or is_pydantic (for now)
     in future: sqlalchemy model, django orm model, attrs
     """
-    if inspect.isclass(instance):
+    if isclass(instance):
         return False
     return is_model_class(instance.__class__)
 
@@ -343,7 +354,7 @@ def get_enum_members(enum_kls) -> List[Tuple[str, Any]]:
 
 
 # def is_method(obj, name):
-#     return hasattr(obj, name) and inspect.ismethod(getattr(obj, name))
+#     return hasattr(obj, name) and ismethod(getattr(obj, name))
 
 # def is_function(obj, name):
 #     return hasattr(obj, name) and callable(getattr(obj, name))
@@ -369,7 +380,7 @@ def is_function(maybe_function: Any) -> bool:
            and not is_enum(maybe_function) \
            and not is_pydantic(maybe_function) \
            and not is_dataclass(maybe_function) \
-           and not inspect.isclass(maybe_function) \
+           and not isclass(maybe_function) \
            and not hasattr(maybe_function, "__supertype__") \
            and not repr(maybe_function).startswith("typing.")
 
@@ -381,8 +392,7 @@ def is_method_by_name(owner: Any, name:str) -> bool:
     return hasattr(owner, name) and is_function(getattr(owner, name))
 
 def is_instancemethod_by_name(owner: Any, name:str) -> bool:
-    """ !! CURRENTLY NOT USED !!!
-        NOTE: hm, this depends on  naming convention
+    """ NOTE: hm, this depends on  naming convention
               https://stackoverflow.com/questions/8408910/detecting-bound-method-in-classes-not-instances-in-python-3
         TODO: do it better: is_method and not classmethod and not staticmethod
 
@@ -393,14 +403,15 @@ def is_instancemethod_by_name(owner: Any, name:str) -> bool:
     method = getattr(owner, name)
     if not callable(method):
         return False
-    args = inspect.getfullargspec(method).args
+    # TODO: use inspect.signature instead OR inspect.ismethod OR inspect.getmembers instead?
+    args = getfullargspec(method).args
     return bool('.' in method.__qualname__ and args and args[0] == 'self')
 
 
 def is_classmethod_by_name(owner: Any, name: str) -> bool:
     """ !! CURRENTLY NOT USED !!!
         works for Class and Instance() """
-    if not inspect.isclass(owner):
+    if not isclass(owner):
         owner = owner.__class__
     if not hasattr(owner, name):
         return False
@@ -427,7 +438,7 @@ def is_staticmethod_by_name(owner: Any, name: str) -> bool:
 
 def _is_method_by_name_instanceof(owner: Any, name: str, instanceof_cls: type) -> bool:
     """ works for Class and Instance() """
-    if not inspect.isclass(owner):
+    if not isclass(owner):
         owner = owner.__class__
     if not hasattr(owner, name):
         return False
@@ -438,8 +449,8 @@ def _is_method_by_name_instanceof(owner: Any, name: str, instanceof_cls: type) -
 
 def get_methods(owner: Any) -> Dict[str, Callable[..., Any]]:
     """ !! CURRENTLY NOT USED !!!  """ 
-    # inspect.getmembers(DemoClass(), predicate=inspect.ismethod)
-    methods = inspect.getmembers(owner, predicate=is_function)
+    # getmembers(DemoClass(), predicate=inspect.ismethod)
+    methods = getmembers(owner, predicate=is_function)
     return {mname: method for (mname, method) in methods if not mname.startswith("_")}
 
 # ------------------------------------------------------------
@@ -523,19 +534,23 @@ def extract_function_py_type_hint_dict(function: Callable[..., Any]) -> Dict[str
 
     # e.g. Optional[List[SomeCustomClass]] or SomeCustomClass or ...
     py_type_hint_dict = extract_py_type_hints(function, caller_name=f"Function {name}")
+    # all_args = signature(function)
+    # py_type_hint_dict = OrderedDict([(arg_name,  py_type_hint_dict.get(arg_name, Any))
+    #                      for arg_name in all_args.parameters.keys()])
+
     return py_type_hint_dict
 
 
 def extract_function_arguments_default_dict(py_function) -> Dict[str, Any]:
     # https://stackoverflow.com/questions/12627118/get-a-function-arguments-default-value
-    signature = inspect.signature(py_function)
+    fun_signature = signature(py_function)
     return {
             arg_name: (
                 arg_info.default
-                if arg_info.default is not inspect.Parameter.empty
+                if arg_info.default is not Parameter.empty
                 else UNDEFINED
                 )
-            for arg_name, arg_info in signature.parameters.items()
+            for arg_name, arg_info in fun_signature.parameters.items()
         }
 
 def type_as_str(type_: type):
@@ -626,7 +641,7 @@ class TypeInfo:
             py_type_hint = func_arg_hint.get_type()
             origin_type = func_arg_hint.get_inner_type()
             origin_type = get_underlying_type(origin_type)
-        elif inspect.isclass(self.py_type_hint) and issubclass(self.py_type_hint, IFuncArgHint):
+        elif isclass(self.py_type_hint) and issubclass(self.py_type_hint, IFuncArgHint):
             raise EntityTypeError(owner=self, msg=f"Type hint should be instances of IFuncArgHint class, not class itself (type). Got: {self.py_type_hint}")
         else:
             func_arg_hint = None
@@ -847,29 +862,31 @@ class TypeInfo:
             NOTE: Do not use 'entities.meta. get_model_fields() .type' or '__annotations__'
                   since python type hints may not be resolved.
         """
-        # msg_prefix = f"{to_repr(caller)}:: " if caller else ""
-
+        msg_prefix = f"{to_repr(caller)}:: " if caller else ""
         if isinstance(py_type_hint, str):
             raise EntityTypeError(owner=cls, msg=
-                        "{msg_prefix}Python type hint is a string, probably not resolved properly: {repr(py_type_hint)}."
+                        f"{msg_prefix} Python type hint is a string, probably not resolved properly: {repr(py_type_hint)}."
                         "\nHINTS:"
                         "\n  1) if you have `from __future__ import annotations`, remove it, try to import that module, stabilize it and then try this again." 
                         "\n  2) 'get_model_fields() + .type' used instead 'extract_py_type_hints()' -> get_or_create_by_type() (internal issue, use 'extract_model_field_meta' maybe?)"
-                        "Explanation: When 'from future import annotations + __annotations__' is used then python hints are strings. Use 'typing.get_type_hints()' to resolve hints properly." 
+                        "Explanation: When 'from future import annotations + __annotations__' is used then python hints are strings. Use 'typing.get_type_hints()' to resolve hints properly."
                         )
 
         if py_type_hint not in cls.TYPE_INFO_REGISTRY:
             # py_type_hint can be IFuncArgHint
+            if isinstance(py_type_hint, DcField):
+                py_type_hint = py_type_hint.type
+            elif PydModelField and isinstance(py_type_hint, PydModelField):
+                py_type_hint = py_type_hint.type_
             cls.TYPE_INFO_REGISTRY[py_type_hint] = TypeInfo(py_type_hint=py_type_hint)
 
         return cls.TYPE_INFO_REGISTRY[py_type_hint]
 
     # ------------------------------------------------------------
 
-    @classmethod
+    @staticmethod
     def extract_function_return_type_info(
-            cls,
-            py_function: Callable[..., Any], 
+            py_function: Callable[..., Any],
             allow_nonetype:bool=False) -> Self:
 
         py_type_hint_dict = extract_function_py_type_hint_dict(function=py_function)
@@ -890,9 +907,8 @@ class TypeInfo:
 
     # ------------------------------------------------------------
 
-    @classmethod
+    @staticmethod
     def extract_function_arguments_type_info_dict(
-            cls,
             py_function: Callable[..., Any]) -> Dict[str, Self]:
         """
         From annotations, but argument defaults could be fetched from

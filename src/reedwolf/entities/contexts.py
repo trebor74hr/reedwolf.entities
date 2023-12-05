@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from .exceptions import EntitySetupError
 from .meta import (
     NoneType,
-    DEXP_ATTR_TO_CALLABLE_DICT,
+    ExpressionsAttributesDict, AttrName,
 )
 
 
@@ -18,16 +18,17 @@ class IContext(ABC):
 
     @classmethod
     @abstractmethod
-    def get_dexp_attr_to_callable_dict(cls) -> DEXP_ATTR_TO_CALLABLE_DICT:
+    def get_expressions_attributes(cls) -> ExpressionsAttributesDict:
         """
-        Should return attribute name -> callable or direct value.
-        example:
-        return {
-            "User": cls.user,
-            "Session": cls.session,
+        Should return attribute name -> FieldName (dataclass/...) name OR callable.
+        Example:
+          return {
+            "SessionId": FieldName("session_id"),
+            "Session": cls.get_session,
+            "User": MethodName("get_user"),
             "Now": cls.get_now,
             }
-
+        If method then it must have no arguments without default.
         """
         raise EntitySetupError(owner=cls, msg=f"Function 'get_dexp_attrs_dict' needs to be implemented in {cls}")
 
@@ -44,10 +45,8 @@ class ContextDemo(IContext):
     This is plain class, no setup()/Setup() process.
     This class is abstract and one should inherit and override methods.
     """
-
-    # noinspection PyMethodMayBeStatic
-    def get_user(self) -> NoneType:
-        return None
+    username: str
+    session_id: int
 
     # noinspection PyMethodMayBeStatic
     def get_session(self) -> NoneType:
@@ -62,9 +61,9 @@ class ContextDemo(IContext):
         return datetime.now()
 
     @classmethod
-    def get_dexp_attr_to_callable_dict(cls) -> DEXP_ATTR_TO_CALLABLE_DICT:
+    def get_expressions_attributes(cls) -> ExpressionsAttributesDict:
         return {
-            "User": cls.get_user,
+            "User": AttrName("username"),
             "Session": cls.get_session,
             # "IsDebug" : cls.is_debug_mode,
             "Now": cls.get_now,

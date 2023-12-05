@@ -46,7 +46,7 @@ from .meta import (
     get_model_fields,
     TypeInfo,
     AttrName,
-    Self, DEXP_ATTR_TO_CALLABLE_DICT,
+    Self, ExpressionsAttributesDict,
 )
 from .base import (
     ReservedAttributeNames,
@@ -366,11 +366,11 @@ class ContextRegistry(RegistryBase):
 
     NAMESPACE: ClassVar[Namespace] = ContextNS
 
-    callables_dict: DEXP_ATTR_TO_CALLABLE_DICT = field(init=False, repr=False)
+    attributes_dict: ExpressionsAttributesDict = field(init=False, repr=False)
 
     def __post_init__(self):
         # super().__post_init__()
-        self.callables_dict = self.context_class.get_dexp_attr_to_callable_dict() \
+        self.attributes_dict = self.context_class.get_expressions_attributes() \
             if self.context_class else {}
         if self.context_class:
             self.register_all_nodes()
@@ -394,17 +394,21 @@ class ContextRegistry(RegistryBase):
                 )
 
     def register_all_nodes(self):
+        assert self.context_class is not None
         if IContext not in inspect.getmro(self.context_class):
             raise EntitySetupValueError(owner=self, msg=f"Context should inherit IContext, got: {self.context_class}")
 
         # for attr_name in get_model_fields(self.context_class):
         #     attr_node = self._create_attr_node_for_model_attr(self.context_class, attr_name)
         #     self.register_attr_node(attr_node)
-        self._register_from_callables_dict(callables_dict=self.callables_dict)
+        self._register_from_attributes_dict(
+                model_class=self.context_class,
+                attributes_dict=self.attributes_dict,
+        )
 
     def _apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RegistryRootValue:
-        return self._apply_to_get_root_value_by_callable_dict(
-            callables_dict=self.callables_dict,
+        return self._apply_to_get_root_value_by_attributes_dict(
+            attributes_dict=self.attributes_dict,
             attr_name=attr_name,
             klass_attr_name="context",
             klass=apply_result.context,
@@ -414,8 +418,8 @@ class ContextRegistry(RegistryBase):
         #     # component = apply_result.current_frame.component
         #     raise EntityApplyNameError(owner=self, msg=f"Attribute '{attr_name}' can not be fetched since context is not set ({type(context)}).")
 
-        # if attr_name in self.callables_dict:
-        #     attr_callable = self.callables_dict[attr_name]
+        # if attr_name in self.attributes_dict:
+        #     attr_callable = self.attributes_dict[attr_name]
         #     assert callable(attr_callable), attr_callable
         #     attr_name_new = attr_callable.__name__
         # else:
@@ -434,28 +438,30 @@ class ConfigRegistry(RegistryBase):
 
     NAMESPACE: ClassVar[Namespace] = ConfigNS
 
-    callables_dict: DEXP_ATTR_TO_CALLABLE_DICT = field(init=False, repr=False)
+    callables_dict: ExpressionsAttributesDict = field(init=False, repr=False)
 
     def __post_init__(self):
         # super().__post_init__()
         if not self.config:
             raise EntityInternalError(owner=self, msg="Config is required")
-        self.callables_dict = self.config.get_dexp_attr_to_callable_dict()
+        self.callables_dict = self.config.get_expressions_attributes()
         self.register_all_nodes()
 
     def register_all_nodes(self):
         if not isinstance(self.config, Config):
             raise EntityInternalError(owner=self, msg=f".config is not Config instance, got: {type(self.config)} / {self.config}")
 
-        self._register_from_callables_dict(callables_dict=self.callables_dict)
+        self._register_from_attributes_dict(
+                model_class=self.config.__class__,
+                attributes_dict=self.callables_dict)
         # config_class = self.config.__class__
         # for attr_name in get_model_fields(config_class):
         #     attr_node = self._create_attr_node_for_model_attr(config_class, attr_name)
         #     self.register_attr_node(attr_node)
 
     def _apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RegistryRootValue:
-        return self._apply_to_get_root_value_by_callable_dict(
-            callables_dict=self.callables_dict,
+        return self._apply_to_get_root_value_by_attributes_dict(
+            attributes_dict=self.callables_dict,
             attr_name=attr_name,
             klass_attr_name="config",
             klass=self.config,
