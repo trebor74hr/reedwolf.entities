@@ -1142,10 +1142,11 @@ class ApplyResult(IApplyResult):
         if all ok - Result.instance contains a new instance (clone + update) of the bound model type 
         if not ok - errors contain all details.
         """
-        self._apply(
-                component=self.entity,
-                top_call=True,
-                )
+        with self.entity.config.use_context(self.context):
+            self._apply(
+                    component=self.entity,
+                    top_call=True,
+                    )
 
         return self
 

@@ -634,6 +634,7 @@ class KeyFields(KeysBase):
 @dataclass
 class Entity(IEntity, ContainerBase):
 
+    # NOTE: only this one is obligatory
     contains        : List[IComponent] = field(repr=False)
 
     # --- optional - following can be bound later with .bind_to()
@@ -654,24 +655,24 @@ class Entity(IEntity, ContainerBase):
     cleaners        : Optional[List[Union[ChildrenValidationBase, ChildrenEvaluationBase]]] = field(repr=False, default_factory=list)
 
     # --- Evaluated later
-    setup_session      : Optional[SetupSession]    = field(init=False, repr=False, default=None)
+    setup_session   : Optional[SetupSession]    = field(init=False, repr=False, default=None)
     components      : Optional[Dict[str, IComponent]]  = field(init=False, repr=False, default=None)
     # NOTE: used only internally:
     # models          : Dict[str, Union[type, DotExpression]] = field(repr=False, init=False, default_factory=dict)
 
     # in Entity (top object) this case allways None - since it is top object
     # NOTE: not DRY: Entity, SubentityBase and ComponentBase
-    parent           : Union[NoneType, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    parent_name      : Union[str, UndefinedType]  = field(init=False, default=UNDEFINED)
-    entity           : Union[ContainerBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    value_accessor   : IValueAccessor = field(init=False, repr=False)
+    parent          : Union[NoneType, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    parent_name     : Union[str, UndefinedType]  = field(init=False, default=UNDEFINED)
+    entity          : Union[ContainerBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    value_accessor  : IValueAccessor = field(init=False, repr=False)
 
     # used for automatic component's naming, <parent_name/class_name>__<counter>
     name_counter_by_parent_name: Dict[str, int] = field(init=False, repr=False, default_factory=dict)
     value_accessor_class_registry: Dict[str, Type[IValueAccessor]] = field(init=False, repr=False)
     value_accessor_default: IValueAccessor = field(init=False, repr=False)
 
-    # is_unbound case - must be cached since bound_model could be dynamically changed in setup phase with normal
+    # is_unbound to model case - must be cached since bound_model could be dynamically changed in setup phase with normal
     _is_unbound: bool = field(init=False, repr=False)
 
     def __post_init__(self):

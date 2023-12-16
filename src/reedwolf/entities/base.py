@@ -1751,7 +1751,6 @@ class IStackFrame:
     def clean(self):
         ...
 
-
     @abstractmethod
     def post_clean(self):
         ...

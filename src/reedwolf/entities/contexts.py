@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
 from dataclasses import dataclass
+from typing import Optional
 
 from .exceptions import EntitySetupError
 from .meta import (
@@ -31,6 +32,14 @@ class IContext(ABC):
         If method then it must have no arguments without default.
         """
         raise EntitySetupError(owner=cls, msg=f"Function 'get_dexp_attrs_dict' needs to be implemented in {cls}")
+
+class ConfigOverrideMixin:
+
+    def is_debug(self) -> Optional[bool]:
+        return None
+
+    def is_trace(self) -> Optional[bool]:
+        return None
 
 
 @dataclass
