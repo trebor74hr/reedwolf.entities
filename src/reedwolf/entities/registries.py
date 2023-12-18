@@ -362,7 +362,7 @@ class FieldsRegistry(RegistryBase):
 @dataclass
 class ContextRegistry(RegistryBase):
 
-    context_class: Optional[IContext] = field(repr=False)
+    apply_settings_class: Optional[IContext] = field(repr=False)
 
     NAMESPACE: ClassVar[Namespace] = ContextNS
 
@@ -370,9 +370,9 @@ class ContextRegistry(RegistryBase):
 
     def __post_init__(self):
         # super().__post_init__()
-        self.attributes_dict = self.context_class.get_contextns_attributes() \
-            if self.context_class else {}
-        if self.context_class:
+        self.attributes_dict = self.apply_settings_class.get_contextns_attributes() \
+            if self.apply_settings_class else {}
+        if self.apply_settings_class:
             self.register_all_nodes()
 
     def create_node(self,
@@ -384,8 +384,8 @@ class ContextRegistry(RegistryBase):
         if not isinstance(owner, IComponent):
             raise EntityInternalError(owner=self, msg=f"Owner needs to be Component, got: {type(owner)} / {owner}")  
 
-        if not owner.get_first_parent_container(consider_self=True).context_class:
-            raise EntitySetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}' (referenced by '{self.NAMESPACE}.{dexp_node_name}') should not be used since 'Entity.context_class' is not set. Define 'context_class' to 'Entity()' constructor and try again.")
+        if not owner.get_first_parent_container(consider_self=True).apply_settings_class:
+            raise EntitySetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}' (referenced by '{self.NAMESPACE}.{dexp_node_name}') should not be used since 'Entity.apply_settings_class' is not set. Define 'apply_settings_class' to 'Entity()' constructor and try again.")
 
         return super().create_node(
                 dexp_node_name=dexp_node_name,
@@ -394,15 +394,15 @@ class ContextRegistry(RegistryBase):
                 )
 
     def register_all_nodes(self):
-        assert self.context_class is not None
-        if IContext not in inspect.getmro(self.context_class):
-            raise EntitySetupValueError(owner=self, msg=f"Context should inherit IContext, got: {self.context_class}")
+        assert self.apply_settings_class is not None
+        if IContext not in inspect.getmro(self.apply_settings_class):
+            raise EntitySetupValueError(owner=self, msg=f"Context should inherit IContext, got: {self.apply_settings_class}")
 
-        # for attr_name in get_model_fields(self.context_class):
-        #     attr_node = self._create_attr_node_for_model_attr(self.context_class, attr_name)
+        # for attr_name in get_model_fields(self.apply_settings_class):
+        #     attr_node = self._create_attr_node_for_model_attr(self.apply_settings_class, attr_name)
         #     self.register_attr_node(attr_node)
         self._register_from_attributes_dict(
-                model_class=self.context_class,
+                model_class=self.apply_settings_class,
                 attributes_dict=self.attributes_dict,
         )
 

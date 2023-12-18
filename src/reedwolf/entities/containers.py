@@ -199,12 +199,12 @@ class ContainerBase(IContainer, ABC):
         """
         #
         # functions: Optional[List[CustomFunctionFactory]]
-        # context_class: Optional[IContext]
+        # apply_settings_class: Optional[IContext]
         assert self.setup_session is None
 
         functions = self.functions
         settings = settings if settings else self.settings
-        context_class = self.context_class
+        apply_settings_class = self.apply_settings_class
 
         setup_session = SetupSession(
             container=self,
@@ -219,7 +219,7 @@ class ContainerBase(IContainer, ABC):
         setup_session.add_registry(FieldsRegistry())
         setup_session.add_registry(FunctionsRegistry())
         setup_session.add_registry(OperationsRegistry())
-        setup_session.add_registry(ContextRegistry(context_class=context_class))
+        setup_session.add_registry(ContextRegistry(apply_settings_class=apply_settings_class))
         setup_session.add_registry(ConfigRegistry(settings=settings))
 
         self.setup_session = setup_session
@@ -645,7 +645,7 @@ class Entity(IEntity, ContainerBase):
     bound_model     : Optional[Union[BoundModel, ModelType]] = field(repr=False, default=None, metadata={"skip_dump": True})
     # will be filled automatically with Settings() if not supplied
     settings        : Optional[Settings] = field(repr=False, default=None, metadata={"skip_dump": True})
-    context_class   : Optional[Type[IContext]] = field(repr=False, default=None, metadata={"skip_dump": True})
+    apply_settings_class   : Optional[Type[IContext]] = field(repr=False, default=None, metadata={"skip_dump": True})
     functions       : Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
 
     # --- only list of model names allowed
@@ -714,10 +714,10 @@ class Entity(IEntity, ContainerBase):
                                       else DEFAULT_VALUE_ACCESSOR_CLASS()
         assert isinstance(self.value_accessor_default, IValueAccessor)
 
-        if self.context_class and not (
-                inspect.isclass(self.context_class)
-                and IContext in inspect.getmro(self.context_class)):
-            raise EntitySetupValueError(owner=self, msg=f"context_class needs to be class that inherits IContext, got: {self.context_class}")
+        if self.apply_settings_class and not (
+                inspect.isclass(self.apply_settings_class)
+                and IContext in inspect.getmro(self.apply_settings_class)):
+            raise EntitySetupValueError(owner=self, msg=f"apply_settings_class needs to be class that inherits IContext, got: {self.apply_settings_class}")
 
         # if self.functions:
         #     for function in self.functions:
@@ -736,7 +736,7 @@ class Entity(IEntity, ContainerBase):
     def bind_to(self,
                 bound_model:Union[UndefinedType, BoundModel]=UNDEFINED,
                 settings: Optional[Settings]=None,
-                context_class: Optional[IContext]=None,
+                apply_settings_class: Optional[IContext]=None,
                 functions: Optional[List[CustomFunctionFactory]]=None,
                 do_setup:bool = True,
                 ):
@@ -763,10 +763,10 @@ class Entity(IEntity, ContainerBase):
                 raise EntitySetupError(owner=self, msg="functions already set, late binding not allowed.")
             self.functions = functions
 
-        if context_class:
-            if self.context_class:
+        if apply_settings_class:
+            if self.apply_settings_class:
                 raise EntitySetupError(owner=self, msg="context already set, late binding not allowed.")
-            self.context_class = context_class
+            self.apply_settings_class = apply_settings_class
 
         if settings:
             # overwrite
@@ -931,7 +931,7 @@ class SubEntityBase(ContainerBase, ABC):
     # parent_setup_session: Optional[SetupSession] = field(init=False, repr=False, default=None)
 
     # copy from first non-self container parent
-    context_class   : Optional[Type[IContext]] = field(repr=False, init=False, default=None)
+    apply_settings_class   : Optional[Type[IContext]] = field(repr=False, init=False, default=None)
     settings        : Optional[Settings] = field(repr=False, init=False, default=None)
 
     # used for automatic component's naming, <class_name>__<counter>
@@ -965,7 +965,7 @@ class SubEntityBase(ContainerBase, ABC):
 
         # take from real first container parent
         non_self_parent_container = self.get_first_parent_container(consider_self=False)
-        self.context_class = non_self_parent_container.context_class
+        self.apply_settings_class = non_self_parent_container.apply_settings_class
         self.settings = non_self_parent_container.settings
         if not self.settings:
             raise EntityInternalError(owner=self, msg=f"Config not set from parent: {self.parent_container}") 

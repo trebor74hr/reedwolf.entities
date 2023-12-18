@@ -365,7 +365,7 @@ class RegistryBase(IRegistry):
             )
             # TODO: check that function receives only single param if method(self), or no param if function()
             if attr_name in self.store:
-                raise EntitySetupNameError(f"Attribute name '{attr_name}' is reserved. Rename class attribute in '{self.context_class}'")
+                raise EntitySetupNameError(f"Attribute name '{attr_name}' is reserved. Rename class attribute in '{self.apply_settings_class}'")
 
             self.register_attr_node(attr_node, attr_name)
 

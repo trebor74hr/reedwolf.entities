@@ -127,14 +127,14 @@ class ApplyResult(IApplyResult):
         if not self.bound_model:
             raise EntityApplyError(owner=self, msg=f"Component object '{self.entity}' has no bound model")
 
-        if self.entity.context_class:
+        if self.entity.apply_settings_class:
             if not self.context:
-                raise EntityApplyError(owner=self.entity, msg=f"Pass context object to .apply*(). Context should be instance of '{self.entity.context_class}'.")
-            if not isinstance(self.context, self.entity.context_class):
-                raise EntityApplyError(owner=self, msg=f"Context object '{self.context}' is not instance of context class '{self.entity.context_class}'.")
+                raise EntityApplyError(owner=self.entity, msg=f"Pass context object to .apply*(). Context should be instance of '{self.entity.apply_settings_class}'.")
+            if not isinstance(self.context, self.entity.apply_settings_class):
+                raise EntityApplyError(owner=self, msg=f"Context object '{self.context}' is not instance of context class '{self.entity.apply_settings_class}'.")
         else:
             if self.context:
-                raise EntityApplyError(owner=self, msg=f"Given context object '{self.context}', but context class in component is not setup. Provide 'context_class' to Entity object and try again.")
+                raise EntityApplyError(owner=self, msg=f"Given context object '{self.context}', but context class in component is not setup. Provide 'apply_settings_class' to Entity object and try again.")
 
         # self.model = self.bound_model.model
         # if not self.model:

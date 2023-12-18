@@ -1401,7 +1401,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
                                       "models", "py_type_hint", "type_info",
                                       "bound_attr_node",
                                       "read_handler",
-                                      "function", "context_class", "settings",
+                                      "function", "apply_settings_class", "settings",
                                       "min", "max", "allow_none", "ignore_none",
                                       "keys",
                                       "entity",
@@ -1670,7 +1670,7 @@ class IContainer(IComponent, ABC):
 
 class IEntity(IContainer, ABC):
     settings: Settings = field(repr=False, )
-    context_class: Optional[TypingType[IContext]] = field(repr=False, default=None)
+    apply_settings_class: Optional[TypingType[IContext]] = field(repr=False, default=None)
 
 # ------------------------------------------------------------
 # IBoundModel
