@@ -14,11 +14,11 @@ from .values_accessor import IValueAccessor
 
 
 @dataclass
-class Config(IContext):
+class Settings(IContext):
     """
-    The Config instances contain general predefined Entity configuration parameters (settings).
-    One can add custom config params.
-    Config will be available in ConfigNS namespace (Cfg.).
+    The Settings instances contain general predefined Entity configuration parameters (settings).
+    One can add custom settings params.
+    Settings will be available in ConfigNS namespace (Cfg.).
     For values only literal / plain callables (python functions) are accepted,
     no DotExpression or Function() instances allowed.
     and belonging.
@@ -60,7 +60,7 @@ class Config(IContext):
         return self.debug
 
     @classmethod
-    def get_expressions_attributes(cls) -> ExpressionsAttributesDict:
+    def get_contextns_attributes(cls) -> ExpressionsAttributesDict:
         return {
             # "Debug": FieldName("debug"),
             "Debug": cls.is_debug,
@@ -68,7 +68,7 @@ class Config(IContext):
         }
 
     def use_context(self, context: Optional[IContext]) -> "ConfigSetContextCtxManager":
-        return ConfigSetContextCtxManager(config=self, context=context)
+        return ConfigSetContextCtxManager(settings=self, context=context)
 
     def set_context(self, context: Union[IContext, None, UndefinedType]):
         if context is not UNDEFINED:
@@ -82,13 +82,13 @@ class Config(IContext):
 
 @dataclass()
 class ConfigSetContextCtxManager(AbstractContextManager):
-    config: Config
+    settings: Settings
     context: Optional[IContext]
 
     def __enter__(self):
-        self.config.set_context(self.context)
+        self.settings.set_context(self.context)
 
     def __exit__(self, exc_type, exc_value, exc_tb):
-        self.config.set_context(UNDEFINED)
+        self.settings.set_context(UNDEFINED)
 
 

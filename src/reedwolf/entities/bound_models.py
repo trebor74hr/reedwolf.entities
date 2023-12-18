@@ -239,7 +239,7 @@ class NestedBoundModelBase(IBoundModel):
 
                 child_instances = rh_dexp_result.value
 
-                # apply_result.config.logger.warn(f"set bound model read_handler to instance: {to_repr(instance)}.{model_with_handler.name} = {to_repr(rh_dexp_result.value)}")
+                # apply_result.settings.logger.warn(f"set bound model read_handler to instance: {to_repr(instance)}.{model_with_handler.name} = {to_repr(rh_dexp_result.value)}")
                 setattr(instance, model_with_handler.name, child_instances)
 
                 if child_instances:

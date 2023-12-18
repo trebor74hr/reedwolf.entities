@@ -84,7 +84,7 @@ ThisNS = Namespace("This")  # , manual_setup=True
 # Context - see contexts.py
 ContextNS = Namespace("Ctx")
 
-# Config - see config.py
+# Settings - see settings.py
 ConfigNS = Namespace("Cfg")
 
 # aliases

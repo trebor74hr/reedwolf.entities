@@ -98,8 +98,8 @@ from .expressions import (
 from .contexts import (
     IContext,
 )
-from .config import (
-    Config,
+from .settings import (
+    Settings,
 )
 from .values_accessor import IValueAccessor
 
@@ -1401,7 +1401,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
                                       "models", "py_type_hint", "type_info",
                                       "bound_attr_node",
                                       "read_handler",
-                                      "function", "context_class", "config",
+                                      "function", "context_class", "settings",
                                       "min", "max", "allow_none", "ignore_none",
                                       "keys",
                                       "entity",
@@ -1669,7 +1669,7 @@ class IContainer(IComponent, ABC):
     #     ...
 
 class IEntity(IContainer, ABC):
-    config: Config = field(repr=False, )
+    settings: Settings = field(repr=False, )
     context_class: Optional[TypingType[IContext]] = field(repr=False, default=None)
 
 # ------------------------------------------------------------
@@ -1780,7 +1780,7 @@ class IStackFrame:
                     raise EntityInternalError(owner=self,
                                               msg=f"Attribute '{attr_name}' value in previous frame is non-empty and current frame has empty value:\n  {previous_frame}\n    = {prev_frame_attr_value}\n<>\n  {self}\n    = {this_frame_attr_value} ")
                     # Copy from previous frame
-                # apply_result.config.loggeer.debugf"setattr '{attr_name}' current_frame <= previous_frame := {prev_frame_attr_value} (frame={self})")
+                # apply_result.settings.loggeer.debugf"setattr '{attr_name}' current_frame <= previous_frame := {prev_frame_attr_value} (frame={self})")
                 setattr(self, attr_name, prev_frame_attr_value)
         else:
             # in some cases id() / is should be used?
@@ -1851,7 +1851,7 @@ class UseStackFrameCtxManagerBase(AbstractContextManager):
     #                 raise EntityInternalError(owner=self,
     #                     msg=f"Attribute '{attr_name}' value in previous frame is non-empty and current frame has empty value:\n  {previous_frame}\n    = {prev_frame_attr_value}\n<>\n  {self.frame}\n    = {this_frame_attr_value} ")
     #             # Copy from previous frame
-    #             # apply_result.config.loggeer.debugf"setattr '{attr_name}' current_frame <= previous_frame := {prev_frame_attr_value} (frame={self.frame})")
+    #             # apply_result.settings.loggeer.debugf"setattr '{attr_name}' current_frame <= previous_frame := {prev_frame_attr_value} (frame={self.frame})")
     #             setattr(self.frame, attr_name, prev_frame_attr_value)
     #     else:
     #         # in some cases id() / is should be used?
@@ -1986,7 +1986,7 @@ class SetupStackFrame(IStackFrame):
 
 # ------------------------------------------------------------
 
-# TODO: put in Config and use only in IApplyResult.config ...
+# TODO: put in Settings and use only in IApplyResult.settings ...
 class GlobalConfig:
     ID_NAME_SEPARATOR: ClassVar[str] = "::"
 
@@ -2115,7 +2115,7 @@ class ValueNode:
     # ------------------------------------------------------------
     # TODO: fields? - only for container - includes all children's children
     #       except Items's children
-    # should collect value history or not? defined by Config.trace
+    # should collect value history or not? defined by Settings.trace
     trace_value_history: bool = field(repr=False)
 
     # <field>.Parent
@@ -2356,7 +2356,7 @@ class ValueNode:
         elif self.initialized and not value_set_phase.startswith("EVAL_"):
             raise EntityInternalError(owner=self, msg=f"Setting value in eval phase '{value_set_phase}' can be done after marking 'initialized'. Last_value: {self._value}")
 
-        # TODO: if config.trace - then update values_history
+        # TODO: if settings.trace - then update values_history
 
         self._value = value
         # if self._value is NA_DEFAULTS_MODE:
@@ -2954,7 +2954,7 @@ class IApplyResult(IStackOwnerSession):
         # instance_shadow_dc: DataclassType = field(init=False, repr=False)
 
     # Registry of history of attribute values for each ValueNode.
-    # Filled only when Config.trace =True (see .register_instance_attr_change()).
+    # Filled only when Settings.trace =True (see .register_instance_attr_change()).
     # Use .get_value_history() to fetch values.
     # Used only for analytical purposes and unit testing.
     # For any serious jobs ValueNode-s are used i.e. value_node_list and top_value_node members.
@@ -2963,7 +2963,7 @@ class IApplyResult(IStackOwnerSession):
     # last values of each instance field/attribute.
     # If initial/first is different from final/last, then this value is changed.
     #
-    # See .get_changes() for simplier struct - it does not require special Config param set.
+    # See .get_changes() for simplier struct - it does not require special Settings param set.
     _value_history_dict: Dict[KeyString, List[InstanceAttrValue]] = \
                             field(repr=False, init=False, default_factory=dict)
 
@@ -2971,7 +2971,7 @@ class IApplyResult(IStackOwnerSession):
     # Do not use directly, use get_changes() - list is lazy initialized and cached.
     # For any serious job use value_node_list or top_value_node
     #
-    # See _value_history_dict for more complex struct - it requires special Config param previously set.
+    # See _value_history_dict for more complex struct - it requires special Settings param previously set.
     _instance_change_list: Union[List[InstanceChange], UndefinedType] = field(repr=False, init=False, default=UNDEFINED)
 
     # When first argument is <type> and second is <type> then call function Callable
@@ -3027,8 +3027,8 @@ class IApplyResult(IStackOwnerSession):
 
     @property
     def value_history_dict(self) -> Dict[KeyString, List[InstanceAttrValue]]:
-        if not self.entity.config.is_trace():
-            raise EntityApplyError(owner=self, msg="Value history is not collected. Pass Config(..., trace=True) and try again.")
+        if not self.entity.settings.is_trace():
+            raise EntityApplyError(owner=self, msg="Value history is not collected. Pass Settings(..., trace=True) and try again.")
         # assert self._value_history_dict
         return self._value_history_dict
 

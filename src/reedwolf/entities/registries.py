@@ -70,8 +70,8 @@ from .eval_base import (
 from .contexts import (
     IContext,
 )
-from .config import (
-    Config,
+from .settings import (
+    Settings,
 )
 from .setup import (
     RegistryBase,
@@ -370,7 +370,7 @@ class ContextRegistry(RegistryBase):
 
     def __post_init__(self):
         # super().__post_init__()
-        self.attributes_dict = self.context_class.get_expressions_attributes() \
+        self.attributes_dict = self.context_class.get_contextns_attributes() \
             if self.context_class else {}
         if self.context_class:
             self.register_all_nodes()
@@ -434,7 +434,7 @@ class ContextRegistry(RegistryBase):
 @dataclass
 class ConfigRegistry(RegistryBase):
 
-    config: Config = field(repr=False)
+    settings: Settings = field(repr=False)
 
     NAMESPACE: ClassVar[Namespace] = ConfigNS
 
@@ -442,19 +442,19 @@ class ConfigRegistry(RegistryBase):
 
     def __post_init__(self):
         # super().__post_init__()
-        if not self.config:
-            raise EntityInternalError(owner=self, msg="Config is required")
-        self.callables_dict = self.config.get_expressions_attributes()
+        if not self.settings:
+            raise EntityInternalError(owner=self, msg="Settings is required")
+        self.callables_dict = self.settings.get_contextns_attributes()
         self.register_all_nodes()
 
     def register_all_nodes(self):
-        if not isinstance(self.config, Config):
-            raise EntityInternalError(owner=self, msg=f".config is not Config instance, got: {type(self.config)} / {self.config}")
+        if not isinstance(self.settings, Settings):
+            raise EntityInternalError(owner=self, msg=f".settings is not Settings instance, got: {type(self.settings)} / {self.settings}")
 
         self._register_from_attributes_dict(
-                model_class=self.config.__class__,
+                model_class=self.settings.__class__,
                 attributes_dict=self.callables_dict)
-        # config_class = self.config.__class__
+        # config_class = self.settings.__class__
         # for attr_name in get_model_fields(config_class):
         #     attr_node = self._create_attr_node_for_model_attr(config_class, attr_name)
         #     self.register_attr_node(attr_node)
@@ -463,16 +463,16 @@ class ConfigRegistry(RegistryBase):
         return self._apply_to_get_root_value_by_attributes_dict(
             attributes_dict=self.callables_dict,
             attr_name=attr_name,
-            klass_attr_name="config",
-            klass=self.config,
+            klass_attr_name="settings",
+            klass=self.settings,
         )
-        # # ALT: config = apply_result.entity.config
-        # config = self.config
-        # if config in (UNDEFINED, None):
+        # # ALT: settings = apply_result.entity.settings
+        # settings = self.settings
+        # if settings in (UNDEFINED, None):
         #     component = apply_result.current_frame.component
         #     raise EntityInternalError(owner=self,
-        #         msg=f"ConfigNS attribute '{component.name}' can not be fetched since config is not set ({type(config)}).")
-        # return RegistryRootValue(config, None)
+        #         msg=f"ConfigNS attribute '{component.name}' can not be fetched since settings is not set ({type(settings)}).")
+        # return RegistryRootValue(settings, None)
 
 
 # ------------------------------------------------------------

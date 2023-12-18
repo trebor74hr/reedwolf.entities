@@ -111,8 +111,8 @@ from .fields import (
 from .contexts import (
     IContext,
 )
-from .config import (
-    Config,
+from .settings import (
+    Settings,
 )
 from .struct_converters import (
     StructConverterRunner,
@@ -193,9 +193,9 @@ class ContainerBase(IContainer, ABC):
 
     # ------------------------------------------------------------
 
-    def create_setup_session(self, config: Optional[Config] = None) -> SetupSession:
+    def create_setup_session(self, settings: Optional[Settings] = None) -> SetupSession:
         """
-        config param - only for unit testing
+        settings param - only for unit testing
         """
         #
         # functions: Optional[List[CustomFunctionFactory]]
@@ -203,7 +203,7 @@ class ContainerBase(IContainer, ABC):
         assert self.setup_session is None
 
         functions = self.functions
-        config = config if config else self.config
+        settings = settings if settings else self.settings
         context_class = self.context_class
 
         setup_session = SetupSession(
@@ -220,7 +220,7 @@ class ContainerBase(IContainer, ABC):
         setup_session.add_registry(FunctionsRegistry())
         setup_session.add_registry(OperationsRegistry())
         setup_session.add_registry(ContextRegistry(context_class=context_class))
-        setup_session.add_registry(ConfigRegistry(config=config))
+        setup_session.add_registry(ConfigRegistry(settings=settings))
 
         self.setup_session = setup_session
 
@@ -643,8 +643,8 @@ class Entity(IEntity, ContainerBase):
 
     # binding interface - not dumped/exported
     bound_model     : Optional[Union[BoundModel, ModelType]] = field(repr=False, default=None, metadata={"skip_dump": True})
-    # will be filled automatically with Config() if not supplied
-    config          : Optional[Config] = field(repr=False, default=None, metadata={"skip_dump": True})
+    # will be filled automatically with Settings() if not supplied
+    settings        : Optional[Settings] = field(repr=False, default=None, metadata={"skip_dump": True})
     context_class   : Optional[Type[IContext]] = field(repr=False, default=None, metadata={"skip_dump": True})
     functions       : Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
 
@@ -677,9 +677,9 @@ class Entity(IEntity, ContainerBase):
 
     def __post_init__(self):
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
-        if not self.config:
+        if not self.settings:
             # default setup
-            self.config = Config()
+            self.settings = Settings()
 
         self.init_clean()
         super().__post_init__()
@@ -705,12 +705,12 @@ class Entity(IEntity, ContainerBase):
 
         self._check_cleaners([ChildrenValidationBase, ChildrenEvaluationBase])
 
-        if not isinstance(self.config, Config):
-            raise EntitySetupValueError(owner=self, msg=f"config needs Config instance, got: {type(self.config)} / {self.config}")
+        if not isinstance(self.settings, Settings):
+            raise EntitySetupValueError(owner=self, msg=f"settings needs Config instance, got: {type(self.settings)} / {self.settings}")
 
-        # TODO: it is copied to enable user to extend with new ones (should be added in Config/Resource/Repository)
+        # TODO: it is copied to enable user to extend with new ones (should be added in Settings/Resource/Repository)
         self.value_accessor_class_registry = STANDARD_VALUE_ACCESSOR_CLASS_REGISTRY.copy()
-        self.value_accessor_default = self.config.value_accessor if self.config.value_accessor \
+        self.value_accessor_default = self.settings.value_accessor if self.settings.value_accessor \
                                       else DEFAULT_VALUE_ACCESSOR_CLASS()
         assert isinstance(self.value_accessor_default, IValueAccessor)
 
@@ -733,9 +733,9 @@ class Entity(IEntity, ContainerBase):
     def is_entity() -> bool:
         return True
 
-    def bind_to(self, 
+    def bind_to(self,
                 bound_model:Union[UndefinedType, BoundModel]=UNDEFINED,
-                config: Optional[Config]=None,
+                settings: Optional[Settings]=None,
                 context_class: Optional[IContext]=None,
                 functions: Optional[List[CustomFunctionFactory]]=None,
                 do_setup:bool = True,
@@ -768,9 +768,9 @@ class Entity(IEntity, ContainerBase):
                 raise EntitySetupError(owner=self, msg="context already set, late binding not allowed.")
             self.context_class = context_class
 
-        if config:
+        if settings:
             # overwrite
-            self.config = config
+            self.settings = settings
 
         self.init_clean()
 
@@ -813,7 +813,7 @@ class Entity(IEntity, ContainerBase):
               context: Optional[IContext] = None, 
               raise_if_failed:bool = True) -> IApplyResult:
         """
-        create and config ApplyResult() and call apply_result.apply()
+        create and settings ApplyResult() and call apply_result.apply()
         """
         from .apply import ApplyResult
 
@@ -932,7 +932,7 @@ class SubEntityBase(ContainerBase, ABC):
 
     # copy from first non-self container parent
     context_class   : Optional[Type[IContext]] = field(repr=False, init=False, default=None)
-    config          : Optional[Type[Config]] = field(repr=False, init=False, default=None)
+    settings        : Optional[Settings] = field(repr=False, init=False, default=None)
 
     # used for automatic component's naming, <class_name>__<counter>
     name_counter_by_parent_name: Dict[str, int] = field(init=False, repr=False, default_factory=dict)
@@ -966,8 +966,8 @@ class SubEntityBase(ContainerBase, ABC):
         # take from real first container parent
         non_self_parent_container = self.get_first_parent_container(consider_self=False)
         self.context_class = non_self_parent_container.context_class
-        self.config = non_self_parent_container.config
-        if not self.config:
+        self.settings = non_self_parent_container.settings
+        if not self.settings:
             raise EntityInternalError(owner=self, msg=f"Config not set from parent: {self.parent_container}") 
 
     def setup(self, setup_session:SetupSession):

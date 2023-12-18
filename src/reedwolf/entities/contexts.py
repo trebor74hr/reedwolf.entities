@@ -19,7 +19,7 @@ class IContext(ABC):
 
     @classmethod
     @abstractmethod
-    def get_expressions_attributes(cls) -> ExpressionsAttributesDict:
+    def get_contextns_attributes(cls) -> ExpressionsAttributesDict:
         """
         Should return attribute name -> FieldName (dataclass/...) name OR callable.
         Example:
@@ -61,7 +61,7 @@ class ContextDemo(IContext):
     def get_session(self) -> NoneType:
         return None
 
-    # # TODO: should be combined with config.debug_mode
+    # # TODO: should be combined with settings.debug_mode
     # def is_debug(self) -> bool:
     #     return False
 
@@ -70,7 +70,7 @@ class ContextDemo(IContext):
         return datetime.now()
 
     @classmethod
-    def get_expressions_attributes(cls) -> ExpressionsAttributesDict:
+    def get_contextns_attributes(cls) -> ExpressionsAttributesDict:
         return {
             "User": AttrName("username"),
             "Session": cls.get_session,

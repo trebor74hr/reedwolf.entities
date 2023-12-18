@@ -225,7 +225,7 @@ class ApplyResult(IApplyResult):
                 #               cleaner = cleaner, 
                 #               )):
 
-                # TODO: self.config.logger.warning(f"{'  ' * self.current_frame.depth} clean : {component.name} -> {cleaner.name}")
+                # TODO: self.settings.logger.warning(f"{'  ' * self.current_frame.depth} clean : {component.name} -> {cleaner.name}")
                 if isinstance(cleaner, validation_class):
                     # --- 3.a. run validations
                     # returns validation_failure
@@ -459,14 +459,14 @@ class ApplyResult(IApplyResult):
               tree depth.
 
         """
-        # TODO: self.config.loger.debug(...)
+        # TODO: self.settings.loger.debug(...)
         assert not (mode_subentity_items and mode_dexp_dependency)
 
         comp_container = component.get_first_parent_container(consider_self=True)
         # comp_container_model = comp_container.bound_model.get_type_info().type_
 
         if mode_dexp_dependency:
-            # TODO: self.config.logger.info(f"apply - mode_dexp_dependency - {self.current_frame.component.name} depends on {component.name} - calling apply() ...")
+            # TODO: self.settings.logger.info(f"apply - mode_dexp_dependency - {self.current_frame.component.name} depends on {component.name} - calling apply() ...")
 
             # instance i.e. containers must match
             assert self.stack_frames
@@ -493,7 +493,7 @@ class ApplyResult(IApplyResult):
                     instance_none_mode=self.instance_none_mode,
                     parent_node=None,
                     instance=self.instance,
-                    trace_value_history=self.entity.config.is_trace(),
+                    trace_value_history=self.entity.settings.is_trace(),
                 ).setup(apply_result=self)
 
             assert not self.top_value_node
@@ -527,7 +527,7 @@ class ApplyResult(IApplyResult):
                         instance_none_mode=self.instance_none_mode,
                         parent_node = parent_node,
                         instance = self.current_frame.instance,
-                        trace_value_history=self.entity.config.is_trace(),
+                        trace_value_history=self.entity.settings.is_trace(),
                         has_items=has_items,
                     ).setup(apply_result=self)
                 parent_node.add_child(value_node)
@@ -648,7 +648,7 @@ class ApplyResult(IApplyResult):
                 # ------------------------------------------------------------
                 children = component.get_children()
                 for child in children:
-                    # TODO: self.config.logger.warning(f"{'  ' * self.current_frame.depth} _apply: {component.name} -> {child.name}")
+                    # TODO: self.settings.logger.warning(f"{'  ' * self.current_frame.depth} _apply: {component.name} -> {child.name}")
                     # --------------------
                     # RECURSION
                     # --------------------
@@ -681,7 +681,7 @@ class ApplyResult(IApplyResult):
 
             # TODO: logger(f"dump of value tree:\n{self.top_value_node.dump_to_str()}")
 
-        # TODO: logger: apply_result.config.logger.debug(f"depth={depth}, comp={component.name}, bind={bind} => {dexp_result}")
+        # TODO: logger: apply_result.settings.logger.debug(f"depth={depth}, comp={component.name}, bind={bind} => {dexp_result}")
 
         if self.instance_none_mode and component.is_top_parent():
             # create new instance of bound_model.model class
@@ -1058,7 +1058,7 @@ class ApplyResult(IApplyResult):
                         instance_none_mode=self.instance_none_mode,
                         parent_node = value_node,
                         instance = instance,
-                        trace_value_history=self.entity.config.is_trace(),
+                        trace_value_history=self.entity.settings.is_trace(),
                         # empahsize distinction of item's parent node (also subentity, but collection)
                         has_items=False,
                         # specific when instance is item in items collection (of parent)
@@ -1130,7 +1130,7 @@ class ApplyResult(IApplyResult):
             if isinstance(attr_value, DotExpression):
                 # dexp_result: ExecResult = 
                 attr_value._evaluator.execute_dexp(apply_result=self)
-                # TODO: apply_result.config.logger.debug(f"{parent.name if parent else ''}.{component.name}.{attr_name} = DExp[{attr_value}] -> {dexp_result}")
+                # TODO: apply_result.settings.logger.debug(f"{parent.name if parent else ''}.{component.name}.{attr_name} = DExp[{attr_value}] -> {dexp_result}")
 
     # ------------------------------------------------------------
 
@@ -1142,7 +1142,7 @@ class ApplyResult(IApplyResult):
         if all ok - Result.instance contains a new instance (clone + update) of the bound model type 
         if not ok - errors contain all details.
         """
-        with self.entity.config.use_context(self.context):
+        with self.entity.settings.use_context(self.context):
             self._apply(
                     component=self.entity,
                     top_call=True,
@@ -1296,7 +1296,7 @@ class ApplyResult(IApplyResult):
             # bind_dexp_result, _ =
             self._try_update_by_instance(component=component,
                                          init_bind_dexp_result=init_bind_dexp_result)
-            # TODO: self.config.logger.warning(f"{'  ' * self.current_frame.depth} update: {component.name}")
+            # TODO: self.settings.logger.warning(f"{'  ' * self.current_frame.depth} update: {component.name}")
         # else:
         #     bind_dexp_result = None  # noqa: F841
 
@@ -1558,7 +1558,7 @@ class ApplyResult(IApplyResult):
         # else:
         #     from_cache = "cache"
 
-        # TODO: self.config.logger.debug("cont:", component.name, key_string, f"[{from_cache}]")
+        # TODO: self.settings.logger.debug("cont:", component.name, key_string, f"[{from_cache}]")
 
         return KeyString(key_string)
 

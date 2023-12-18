@@ -93,8 +93,8 @@ from .eval_children import (
 from .contexts import (
         IContext,
         )
-from .config import (
-        Config,
+from .settings import (
+    Settings,
         )
 from .containers import (  # noqa: F401
         KeyFields,
@@ -220,8 +220,8 @@ __all__ = [
     # contexts
     "IContext",
 
-    # config
-    "Config",
+    # settings
+    "Settings",
 
     # apply
     "IApplyResult", # from base.py
