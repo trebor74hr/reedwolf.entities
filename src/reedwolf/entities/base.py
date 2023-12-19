@@ -95,9 +95,6 @@ from .expressions import (
     IThisRegistry,
     DexpValidator,
 )
-from .contexts import (
-    IContext,
-)
 from .settings import (
     Settings,
 )
@@ -2904,7 +2901,7 @@ class IApplyResult(IStackOwnerSession):
     # TODO: consider: instance_new: Union[ModelType, UndefinedType] = UNDEFINED,
     instance_new: Optional[ModelType] = field(repr=False)
 
-    settings: Optional[Union[Settings, IContext]] = field(repr=False)
+    settings: Optional[Settings] = field(repr=False)
     # used in apply_partial
     component_name_only: Optional[str] = field(repr=False, default=None)
 
@@ -3137,8 +3134,7 @@ def extract_type_info(
     if isinstance(inspect_object, IBoundModel):
         inspect_object = inspect_object.model
 
-    # function - callable and not class and not pydantic?
-    # parent_type_info = None
+    # Function - callable and not class and not pydantic?
     if isinstance(inspect_object, IDotExpressionNode):
         parent_type_info = inspect_object.get_type_info()
         parent_object = parent_type_info.type_
@@ -3150,40 +3146,26 @@ def extract_type_info(
 
     if isinstance(parent_object, TypeInfo):
         # go one level deeper
-        # parent_type_info = parent_object
         if not isinstance(parent_object.type_, type):
             raise EntitySetupValueError(item=inspect_object, msg=f"Inspected object's type hint is not a class object/type: {parent_object.type_} : {parent_object.type_}, got: {type(parent_object.type_)} ('.{attr_node_name}' process)")
         # Can be method call, so not pydantic / dataclass are allowed too
-        # if not is_model_class(parent_object.type_):
-        #     raise EntitySetupValueError(item=inspect_object, msg=f"Inspected object's type hint type is not 'dataclass'/'Pydantic.BaseModel' type: {parent_object.type_}, got: {parent_object.type_} ('.{attr_node_name}' process)")
         parent_object = parent_object.type_
-
 
     fields = []
 
     type_info = None
     th_field = None
-    # func_node = None
 
-    # ORIG: is_parent_dot_expr = isinstance(parent_object, DotExpression)
-    # ORIG: if is_parent_dot_expr:
     if isinstance(parent_object, DotExpression):
-        # raise EntitySetupNameNotFoundError(item=inspect_object, msg=f"Attribute '{attr_node_name}' is not member of expression '{parent_object}'.")
         raise EntityInternalError(item=inspect_object, msg=f"Parent object is DotExpression: '{parent_object}' / '{attr_node_name}'.")
 
-    # when parent virtual expression is not assigned to data-type/data-attr_node,
-    # then it is sent directly what will later raise error "attribute not found" 
-    # ORIG: if not is_parent_dot_expr:
-
     if is_method_by_name(parent_object, attr_node_name):
-        # parent_object, attr_node_name
         raise EntitySetupNameError(item=inspect_object,
                     msg=f"Inspected object's is a method: {parent_object}.{attr_node_name}. "
                     "Calling methods on instances are not allowed.")
 
     if is_model_class(parent_object):
         # raise EntityInternalError(item=inspect_object, msg=f"'Parent is not DC/PYD class -> {parent_object} : {type(parent_object)}'.")
-
         if not hasattr(parent_object, "__annotations__"):
             # TODO: what about pydantic?
             raise EntityInternalError(item=inspect_object, msg=f"'DC/PYD class {parent_object}' has no metadata (__annotations__ / type hints), can't read '{attr_node_name}'. Add type-hints or check names.")

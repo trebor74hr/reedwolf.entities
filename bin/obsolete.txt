@@ -336,7 +336,6 @@ context.py
     # OBSOLETE
     # ------------------------------------------------------------
 
-    # ContextKlass = TypeVar("ContextKlass", bound=type)
     # # standardized values
     # user_attr: Optional[str] = None
     # session_attr: Optional[str] = None

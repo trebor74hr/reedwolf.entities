@@ -129,9 +129,9 @@ class ApplyResult(IApplyResult):
 
         if self.entity.apply_settings_class:
             if not self.settings:
-                raise EntityApplyError(owner=self.entity, msg=f"Pass settings object to .apply*(). Context should be instance of '{self.entity.apply_settings_class}'.")
+                raise EntityApplyError(owner=self.entity, msg=f"Pass settings object to .apply*(). Settings should be instance of '{self.entity.apply_settings_class}'.")
             if not isinstance(self.settings, self.entity.apply_settings_class):
-                raise EntityApplyError(owner=self, msg=f"Context object '{self.settings}' is not instance of settings class '{self.entity.apply_settings_class}'.")
+                raise EntityApplyError(owner=self, msg=f"Settings object '{self.settings}' is not instance of settings class '{self.entity.apply_settings_class}'.")
         else:
             if self.settings:
                 raise EntityApplyError(owner=self, msg=f"Given settings object '{self.settings}', but settings class in component is not setup. Provide 'apply_settings_class' to Entity object and try again.")

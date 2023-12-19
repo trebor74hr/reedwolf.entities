@@ -108,9 +108,6 @@ from .eval_base import (
 from .fields import (
     FieldGroup, DEXP_VALIDATOR_FOR_BIND,
 )
-from .contexts import (
-    IContext,
-)
 from .settings import (
     Settings,
 )
@@ -197,9 +194,6 @@ class ContainerBase(IContainer, ABC):
         """
         settings param - only for unit testing
         """
-        #
-        # functions: Optional[List[CustomFunctionFactory]]
-        # apply_settings_class: Optional[IContext]
         assert self.setup_session is None
 
         functions = self.functions
@@ -716,8 +710,8 @@ class Entity(IEntity, ContainerBase):
 
         if self.apply_settings_class and not (
                 inspect.isclass(self.apply_settings_class)
-                and IContext in inspect.getmro(self.apply_settings_class)):
-            raise EntitySetupValueError(owner=self, msg=f"apply_settings_class needs to be class that inherits IContext, got: {self.apply_settings_class}")
+                and Settings in inspect.getmro(self.apply_settings_class)):
+            raise EntitySetupValueError(owner=self, msg=f"apply_settings_class needs to be class that inherits Settings, got: {self.apply_settings_class}")
 
         # if self.functions:
         #     for function in self.functions:
@@ -784,7 +778,7 @@ class Entity(IEntity, ContainerBase):
     def apply(self,
               instance: DataclassType,
               instance_new: Optional[ModelType] = None,
-              settings: Optional[Union[Settings, IContext]] = None,
+              settings: Optional[Settings] = None,
               raise_if_failed:bool = True) -> IApplyResult:
         return self._apply(
                   instance=instance,
@@ -796,7 +790,7 @@ class Entity(IEntity, ContainerBase):
                       component_name_only:str,
                       instance: DataclassType,
                       instance_new: Optional[ModelType] = None,
-                      settings: Optional[Union[Settings, IContext]] = None,
+                      settings: Optional[Settings] = None,
                       raise_if_failed:bool = True) -> IApplyResult:
         return self._apply(
                   instance=instance,
@@ -810,7 +804,7 @@ class Entity(IEntity, ContainerBase):
                instance: DataclassType,
                instance_new: Optional[ModelType] = None,
                component_name_only:Optional[str] = None,
-               settings: Optional[Union[Settings, IContext]] = None,
+               settings: Optional[Settings] = None,
                raise_if_failed:bool = True) -> IApplyResult:
         """
         create and settings ApplyResult() and call apply_result.apply()
@@ -838,7 +832,7 @@ class Entity(IEntity, ContainerBase):
     # ------------------------------------------------------------
 
     def dump_defaults(self,
-                      settings: Optional[Union[Settings, IContext]] = None,
+                      settings: Optional[Settings] = None,
                       ) -> IApplyResult:
         """
         In defaults mode:

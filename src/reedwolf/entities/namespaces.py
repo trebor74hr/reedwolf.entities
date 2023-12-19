@@ -81,7 +81,7 @@ FieldsNS = Namespace("Fields", alias="F")
 # This - values from a current settings, e.g. iteration of loop, option in select
 ThisNS = Namespace("This")  # , manual_setup=True
 
-# Context - see contexts.py
+# MySettings - see contexts.py
 ContextNS = Namespace("Ctx")
 
 # Settings - see settings.py
@@ -109,6 +109,6 @@ ALL_NS_OBJECTS.update({
         })
 
 
-# # Context - Direct access to managed models underneath and global Entity objects like Validation/FieldGroup etc.
-# ContextNS = Namespace("Context")
+# # MySettings - Direct access to managed models underneath and global Entity objects like Validation/FieldGroup etc.
+# ContextNS = Namespace("MySettings")
 # Ctx  = ContextNS

@@ -90,9 +90,6 @@ from .eval_items import (
 from .eval_children import (
     ChildrenEvaluation,
     )
-from .contexts import (
-    IContext,
-)
 from .settings import (
     Settings,
 )
@@ -216,9 +213,6 @@ __all__ = [
 
     # func_builtin
     "EnumMembers",
-
-    # # contexts
-    "IContext",
 
     # settings
     "Settings",

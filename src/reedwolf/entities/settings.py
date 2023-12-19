@@ -4,7 +4,6 @@ from typing import Optional, Union, ClassVar
 
 from .exceptions import EntityInternalError
 from .meta import ExpressionsAttributesMap, FieldName, Self
-from .contexts import IContext
 from .utils import UndefinedType, UNDEFINED
 from .values_accessor import IValueAccessor
 
@@ -14,7 +13,7 @@ from .values_accessor import IValueAccessor
 
 
 @dataclass
-class Settings(IContext):
+class Settings:
     """
     The Settings instances contain general predefined Entity configuration parameters (settings).
     One can add custom settings params.
@@ -42,7 +41,7 @@ class Settings(IContext):
     contextns_attributes : ClassVar[Union[ExpressionsAttributesMap, UndefinedType]] = UNDEFINED
 
     # # set and reset back in apply phase
-    # _current_context: Union[IContext, None, UndefinedType] = field(init=False, repr=False, compare=False, default=UNDEFINED)
+    # _current_context: Union[Settings, None, UndefinedType] = field(init=False, repr=False, compare=False, default=UNDEFINED)
 
     # _trace: Union[bool, UndefinedType] = field(init=False, repr=False, compare=False, default=UNDEFINED)
     # _debug: Union[bool, UndefinedType] = field(init=False, repr=False, compare=False, default=UNDEFINED)
@@ -108,8 +107,8 @@ class Settings(IContext):
 
 # @dataclass()
 # class ConfigSetContextCtxManager(AbstractContextManager):
-#     settings: Settings
-#     settings: Optional[IContext]
+#     setup_settings: Settings
+#     apply_settings: Optional[Settings]
 #
 #     def __enter__(self):
 #         self.settings.set_context(self.settings)

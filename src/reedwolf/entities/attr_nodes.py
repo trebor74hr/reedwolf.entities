@@ -143,7 +143,7 @@ class AttrDexpNode(IDotExpressionNode):
             self.data_supplier_name = f"FN[{type_name}]"
 
         elif isinstance(self.data, MethodName):
-            # For Context - th_field is a method() for AttrNode, solve this more clever
+            # For MySettings - th_field is a method() for AttrNode, solve this more clever
             if not is_function(self.th_field):
                 raise EntityInternalError(owner=self, msg=f"MethodName case - expected filled th_field to function, got: {self.th_field},")
             self.attr_node_type = AttrDexpNodeTypeEnum.TH_FUNCTION

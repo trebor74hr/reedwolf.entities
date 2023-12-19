@@ -13,7 +13,6 @@ from typing import (
     Type as TypingType,
 )
 
-from .contexts import IContext
 from .utils import (
     UNDEFINED,
     UndefinedType,
@@ -395,8 +394,8 @@ class ContextRegistry(RegistryBase):
 
     def register_all_nodes(self):
         assert self.apply_settings_class is not None
-        if IContext not in inspect.getmro(self.apply_settings_class):
-            raise EntitySetupValueError(owner=self, msg=f"apply_settings_class should inherit Settings or IContext, got: {self.apply_settings_class}")
+        if Settings not in inspect.getmro(self.apply_settings_class):
+            raise EntitySetupValueError(owner=self, msg=f"apply_settings_class should inherit Settings, got: {self.apply_settings_class}")
 
         # for attr_name in get_model_fields(self.apply_settings_class):
         #     attr_node = self._create_attr_node_for_model_attr(self.apply_settings_class, attr_name)

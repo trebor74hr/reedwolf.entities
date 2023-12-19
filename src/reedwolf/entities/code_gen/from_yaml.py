@@ -52,7 +52,7 @@ def is_value_expression(aval):
         "F." in aval
         or "D." in aval
         or "M." in aval
-        or "Context." in aval
+        or "MySettings." in aval
         or "Functions." in aval
         or "This." in aval
     )
@@ -656,7 +656,7 @@ def main(filename):
         outputs["py"].append(
             "from reedwolf.entities.base import _, Entity, FieldGroup, Field, SelectOptions, DynamicOutput, "
             + "Validation, Evaluation, FieldsGenerator, FieldGroupForm, msg, "
-            + "StaticData, option, This, F, D, M, Context, Utils"
+            + "StaticData, option, This, F, D, M, MySettings, Utils"
         )
         outputs["py"].append("")
         name = "TODO:"  # noqa: F841

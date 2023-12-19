@@ -14,24 +14,24 @@ from .meta import (
 # IContext
 # ------------------------------------------------------------
 
-@dataclass
-class IContext(ABC):
-
-    @classmethod
-    @abstractmethod
-    def get_contextns_attributes(cls) -> ExpressionsAttributesMap:
-        """
-        Should return attribute name -> FieldName (dataclass/...) name OR callable.
-        Example:
-          return {
-            "SessionId": FieldName("session_id"),
-            "Session": cls.get_session,
-            "User": MethodName("get_user"),
-            "Now": cls.get_now,
-            }
-        If method then it must have no arguments without default.
-        """
-        raise EntitySetupError(owner=cls, msg=f"Function 'get_dexp_attrs_dict' needs to be implemented in {cls}")
+# @dataclass
+# class IContext(ABC):
+#
+#     @classmethod
+#     @abstractmethod
+#     def get_contextns_attributes(cls) -> ExpressionsAttributesMap:
+#         """
+#         Should return attribute name -> FieldName (dataclass/...) name OR callable.
+#         Example:
+#           return {
+#             "SessionId": FieldName("session_id"),
+#             "Session": cls.get_session,
+#             "User": MethodName("get_user"),
+#             "Now": cls.get_now,
+#             }
+#         If method then it must have no arguments without default.
+#         """
+#         raise EntitySetupError(owner=cls, msg=f"Function 'get_dexp_attrs_dict' needs to be implemented in {cls}")
 
 # class ConfigOverrideMixin:
 #
@@ -47,9 +47,9 @@ class IContext(ABC):
 #     """
 #     The IContext instances will be passed to Entity evaluation
 #     instances/or subcomponents with concrete data.
-#     Context will be available as ContextNS namespace (Ctx.) and belonging
+#     MySettings will be available as ContextNS namespace (Ctx.) and belonging
 #     Value expressions.
-#     Context-s are not obligatory in definition and evaluation.
+#     MySettings-s are not obligatory in definition and evaluation.
 #
 #     This is plain class, no setup()/Setup() process.
 #     This class is abstract and one should inherit and override methods.
