@@ -82,7 +82,7 @@ from .containers import (
 
 
 class UseApplyStackFrameCtxManager(UseStackFrameCtxManagerBase):
-    " with() ... custom context manager. "
+    " with() ... custom settings manager. "
     owner_session: "ApplyResult"
     frame: ApplyStackFrame
 
@@ -128,13 +128,13 @@ class ApplyResult(IApplyResult):
             raise EntityApplyError(owner=self, msg=f"Component object '{self.entity}' has no bound model")
 
         if self.entity.apply_settings_class:
-            if not self.context:
-                raise EntityApplyError(owner=self.entity, msg=f"Pass context object to .apply*(). Context should be instance of '{self.entity.apply_settings_class}'.")
-            if not isinstance(self.context, self.entity.apply_settings_class):
-                raise EntityApplyError(owner=self, msg=f"Context object '{self.context}' is not instance of context class '{self.entity.apply_settings_class}'.")
+            if not self.settings:
+                raise EntityApplyError(owner=self.entity, msg=f"Pass settings object to .apply*(). Context should be instance of '{self.entity.apply_settings_class}'.")
+            if not isinstance(self.settings, self.entity.apply_settings_class):
+                raise EntityApplyError(owner=self, msg=f"Context object '{self.settings}' is not instance of settings class '{self.entity.apply_settings_class}'.")
         else:
-            if self.context:
-                raise EntityApplyError(owner=self, msg=f"Given context object '{self.context}', but context class in component is not setup. Provide 'apply_settings_class' to Entity object and try again.")
+            if self.settings:
+                raise EntityApplyError(owner=self, msg=f"Given settings object '{self.settings}', but settings class in component is not setup. Provide 'apply_settings_class' to Entity object and try again.")
 
         # self.model = self.bound_model.model
         # if not self.model:
@@ -493,7 +493,7 @@ class ApplyResult(IApplyResult):
                     instance_none_mode=self.instance_none_mode,
                     parent_node=None,
                     instance=self.instance,
-                    trace_value_history=self.entity.settings.is_trace(),
+                    trace_value_history=self.entity.settings.trace,
                 ).setup(apply_result=self)
 
             assert not self.top_value_node
@@ -527,7 +527,7 @@ class ApplyResult(IApplyResult):
                         instance_none_mode=self.instance_none_mode,
                         parent_node = parent_node,
                         instance = self.current_frame.instance,
-                        trace_value_history=self.entity.settings.is_trace(),
+                        trace_value_history=self.entity.settings.trace,
                         has_items=has_items,
                     ).setup(apply_result=self)
                 parent_node.add_child(value_node)
@@ -1058,7 +1058,7 @@ class ApplyResult(IApplyResult):
                         instance_none_mode=self.instance_none_mode,
                         parent_node = value_node,
                         instance = instance,
-                        trace_value_history=self.entity.settings.is_trace(),
+                        trace_value_history=self.entity.settings.trace,
                         # empahsize distinction of item's parent node (also subentity, but collection)
                         has_items=False,
                         # specific when instance is item in items collection (of parent)
@@ -1142,11 +1142,11 @@ class ApplyResult(IApplyResult):
         if all ok - Result.instance contains a new instance (clone + update) of the bound model type 
         if not ok - errors contain all details.
         """
-        with self.entity.settings.use_context(self.context):
-            self._apply(
-                    component=self.entity,
-                    top_call=True,
-                    )
+        # with self.entity.settings.use_context(self.settings):
+        self._apply(
+                component=self.entity,
+                top_call=True,
+                )
 
         return self
 

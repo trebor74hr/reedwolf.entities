@@ -78,7 +78,7 @@ ModelsNS = Namespace("Models", alias="M")
 # TODO: rename to ComponentsNS / C.
 FieldsNS = Namespace("Fields", alias="F")
 
-# This - values from a current context, e.g. iteration of loop, option in select
+# This - values from a current settings, e.g. iteration of loop, option in select
 ThisNS = Namespace("This")  # , manual_setup=True
 
 # Context - see contexts.py

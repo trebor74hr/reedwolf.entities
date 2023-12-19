@@ -34,7 +34,7 @@ from .meta import (
     TypeInfo,
     is_model_class,
     is_function,
-    ModelField, AttrName, AttrValue,
+    ModelField, AttrName, AttrValue, MethodName, FieldName,
 )
 # TODO: remove this dependency
 from .base import (
@@ -126,25 +126,36 @@ class AttrDexpNode(IDotExpressionNode):
         # CASE: Class Attribute or Function return type
         # ---------------------------------------------
         elif isinstance(self.data, TypeInfo):
-            # TODO: For Context - th_field is a method() for AttrNode, solve this more clever
             if self.th_field is UNDEFINED:
                 raise EntityInternalError(owner=self, msg="TypeInfo case - expected th_field (ModelField or py_function).")
-
             self.attr_node_type = AttrDexpNodeTypeEnum.TH_FIELD
-
             # .type_ could be a class/type or NewType instance
             type_name = getattr(self.data.type_, "__name__", 
                                 getattr(self.data.type_, "_name", 
                                         repr(self.data.type_)))
             self.data_supplier_name = f"TH[{type_name}]"
+        elif isinstance(self.data, FieldName):
+            if self.th_field is UNDEFINED:
+                # TODO: check isinstance(..., DcField)
+                raise EntityInternalError(owner=self, msg="FieldName case - expected filled th_field,")
+            self.attr_node_type = AttrDexpNodeTypeEnum.TH_FIELD
+            type_name = str(self.data)  # name of field
+            self.data_supplier_name = f"FN[{type_name}]"
+
+        elif isinstance(self.data, MethodName):
+            # For Context - th_field is a method() for AttrNode, solve this more clever
+            if not is_function(self.th_field):
+                raise EntityInternalError(owner=self, msg=f"MethodName case - expected filled th_field to function, got: {self.th_field},")
+            self.attr_node_type = AttrDexpNodeTypeEnum.TH_FUNCTION
+            type_name = str(self.data)  # name of function
+            self.data_supplier_name = f"MN[{type_name}]"
+
         else:
             if is_function(self.data):
                 raise EntitySetupValueError(owner=self, msg=f"Node '.{self.name}' is a function. Maybe you forgot to wrap it with 'reedwolf.entities.Function()'?")
             raise EntitySetupValueError(owner=self, msg=f"AttrDexpNode {self.name} should be based on PYD/DC class, got: {self.data}")
 
         # NOTE: .type_info could be calculated later in finish() method
-
-
 
     def finish(self):
         """ fill type_info, must be available for all nodes - with exceptions those with .denied don't have it """

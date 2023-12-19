@@ -10,8 +10,10 @@ from typing import (
     Optional,
     ClassVar,
     Dict,
+    Type as TypingType,
 )
 
+from .contexts import IContext
 from .utils import (
     UNDEFINED,
     UndefinedType,
@@ -22,7 +24,7 @@ from .exceptions import (
     EntitySetupNameError,
     EntitySetupValueError,
     EntityInternalError,
-    EntityApplyNameError,
+    # EntityApplyNameError,
     EntitySetupTypeError,
 )
 from .namespaces import (
@@ -46,7 +48,7 @@ from .meta import (
     get_model_fields,
     TypeInfo,
     AttrName,
-    Self, ExpressionsAttributesDict,
+    Self, ExpressionsAttributesMap,
 )
 from .base import (
     ReservedAttributeNames,
@@ -66,9 +68,6 @@ from .valid_base import (
 )
 from .eval_base import (
     EvaluationBase,
-)
-from .contexts import (
-    IContext,
 )
 from .settings import (
     Settings,
@@ -362,16 +361,17 @@ class FieldsRegistry(RegistryBase):
 @dataclass
 class ContextRegistry(RegistryBase):
 
-    apply_settings_class: Optional[IContext] = field(repr=False)
+    apply_settings_class: Optional[TypingType[Settings]] = field(repr=False)
 
     NAMESPACE: ClassVar[Namespace] = ContextNS
 
-    attributes_dict: ExpressionsAttributesDict = field(init=False, repr=False)
+    attributes_dict: ExpressionsAttributesMap = field(init=False, repr=False)
 
     def __post_init__(self):
         # super().__post_init__()
         self.attributes_dict = self.apply_settings_class.get_contextns_attributes() \
             if self.apply_settings_class else {}
+        # TODO: assert
         if self.apply_settings_class:
             self.register_all_nodes()
 
@@ -396,7 +396,7 @@ class ContextRegistry(RegistryBase):
     def register_all_nodes(self):
         assert self.apply_settings_class is not None
         if IContext not in inspect.getmro(self.apply_settings_class):
-            raise EntitySetupValueError(owner=self, msg=f"Context should inherit IContext, got: {self.apply_settings_class}")
+            raise EntitySetupValueError(owner=self, msg=f"apply_settings_class should inherit Settings or IContext, got: {self.apply_settings_class}")
 
         # for attr_name in get_model_fields(self.apply_settings_class):
         #     attr_node = self._create_attr_node_for_model_attr(self.apply_settings_class, attr_name)
@@ -410,13 +410,13 @@ class ContextRegistry(RegistryBase):
         return self._apply_to_get_root_value_by_attributes_dict(
             attributes_dict=self.attributes_dict,
             attr_name=attr_name,
-            klass_attr_name="context",
-            klass=apply_result.context,
+            klass_attr_name="merged_settings",
+            klass=apply_result.settings,
         )
-        # context = apply_result.context
-        # if context in (UNDEFINED, None):
+        # settings = apply_result.settings
+        # if settings in (UNDEFINED, None):
         #     # component = apply_result.current_frame.component
-        #     raise EntityApplyNameError(owner=self, msg=f"Attribute '{attr_name}' can not be fetched since context is not set ({type(context)}).")
+        #     raise EntityApplyNameError(owner=self, msg=f"Attribute '{attr_name}' can not be fetched since settings is not set ({type(settings)}).")
 
         # if attr_name in self.attributes_dict:
         #     attr_callable = self.attributes_dict[attr_name]
@@ -425,7 +425,7 @@ class ContextRegistry(RegistryBase):
         # else:
         #     attr_name_new = None
 
-        # return RegistryRootValue(context, attr_name_new)
+        # return RegistryRootValue(settings, attr_name_new)
 
 
 # ------------------------------------------------------------
@@ -438,7 +438,7 @@ class ConfigRegistry(RegistryBase):
 
     NAMESPACE: ClassVar[Namespace] = ConfigNS
 
-    callables_dict: ExpressionsAttributesDict = field(init=False, repr=False)
+    callables_dict: ExpressionsAttributesMap = field(init=False, repr=False)
 
     def __post_init__(self):
         # super().__post_init__()
@@ -708,7 +708,7 @@ class SetupSession(SetupSessionBase):
 
     # def create_local_setup_session(self, this_registry: IThisRegistry) -> Self:
     #     """ Currently creates only local ThisNS registry, which is used for
-    #     some local context, e.g. Component This. dexps
+    #     some local settings, e.g. Component This. dexps
     #     Args:
     #         a) this_ns_instance_model_class -> This.Instance + This.<all-attribute-names> logic
     #         b) this_ns_value_attr_node -> .Value logic, no other attributes for now

@@ -250,7 +250,7 @@ class ISetupSession(ABC):
     @abstractmethod
     def use_stack_frame(self, frame: "IStackFrame") -> "UseStackFrameCtxManagerBase":
         """
-        context manager
+        settings manager
         will add new stack frame to the stack and meke it current_frame which will be used
         """
         ...
@@ -258,7 +258,7 @@ class ISetupSession(ABC):
     @abstractmethod
     def use_changed_current_stack_frame(self, **change_attrs: Dict[str, Any]) -> "UseStackFrameCtxManagerBase":
         """
-        context manager
+        settings manager
         will modify current_frame with change_attrs, use the same frame (will remain as current_frame)
         and after usage will restore original attribute to original values
         """
@@ -471,7 +471,7 @@ class DotExpression(DynamicAttrsBase):
         if self._namespace == ThisNS:
             # TODO: DRY this - identical logic in expressions.py :: Setup()
             if not setup_session.current_frame.this_registry:
-                raise EntitySetupNameError(owner=self, msg=f"Namespace 'This.' is not available in this context, got: {self._name}")
+                raise EntitySetupNameError(owner=self, msg=f"Namespace 'This.' is not available in this settings, got: {self._name}")
             registry = setup_session.current_frame.this_registry
         else:
             # if local repo not available or ns not found in it, find in container repo

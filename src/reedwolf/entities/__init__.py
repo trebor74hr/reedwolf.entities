@@ -1,115 +1,115 @@
 from .utils import (
-        UNDEFINED,
-        )
+    UNDEFINED,
+    )
 from .namespaces import (  # noqa: F401
-        FieldsNS,
-        F,
-        ModelsNS,
-        M,
-        FunctionsNS,
-        Fn,
-        ThisNS,
-        This,
-        ContextNS,
-        Ctx,
-        ConfigNS,
-        Cfg,
-        )
+    FieldsNS,
+    F,
+    ModelsNS,
+    M,
+    FunctionsNS,
+    Fn,
+    ThisNS,
+    This,
+    ContextNS,
+    Ctx,
+    ConfigNS,
+    Cfg,
+    )
 from .exceptions import (
-        EntityError,
-        EntitySetupError,
-        EntityApplyError,
-        EntityValidationError,
-        EntityNameNotFoundError,
-        )
+    EntityError,
+    EntitySetupError,
+    EntityApplyError,
+    EntityValidationError,
+    EntityNameNotFoundError,
+    )
 from .expressions import (
-        Just,
-        )
+    Just,
+    )
 from .meta import (
-    ExpressionsAttributesDict,
+    ExpressionsAttributesMap,
     FieldName,
     MethodName,
 )
 from .bound_models import (
-        BoundModel,
-        BoundModelWithHandlers,
-        )
+    BoundModel,
+    BoundModelWithHandlers,
+    )
 from .base import (  # noqa: F401
-        # Not for __all__ case (from <> import *), just for direct import:
-        #   from <> import _, msg
-        _,
-        msg,
-        IApplyResult,
-        )
+    # Not for __all__ case (from <> import *), just for direct import:
+    #   from <> import _, msg
+    _,
+    msg,
+    IApplyResult,
+    )
 from .fields import (
-        AutocomputedEnum,
-        StringField,
-        SizedStringField,
-        BooleanField,
-        IntegerField,
-        PositiveIntegerField,
-        IdField,
-        FloatField,
-        DecimalField,
-        ChoiceField,
-        EnumField,
-        DateField,
-        DateTimeField,
-        TimeField,
-        DurationField,
-        EmailField,
-        ChoiceOption,
-        FieldGroup,
-        )
+    AutocomputedEnum,
+    StringField,
+    SizedStringField,
+    BooleanField,
+    IntegerField,
+    PositiveIntegerField,
+    IdField,
+    FloatField,
+    DecimalField,
+    ChoiceField,
+    EnumField,
+    DateField,
+    DateTimeField,
+    TimeField,
+    DurationField,
+    EmailField,
+    ChoiceOption,
+    FieldGroup,
+    )
 from .valid_field import (
-        FieldValidation,
-        Required,
-        Readonly,
-        MaxLength,
-        ExactLength,
-        MinLength,
-        HourFieldValidation,
-        RangeLength,
-        )
+    FieldValidation,
+    Required,
+    Readonly,
+    MaxLength,
+    ExactLength,
+    MinLength,
+    HourFieldValidation,
+    RangeLength,
+    )
 from .valid_items import (
-        ItemsValidation,
-        Cardinality,
-        Unique,
-        SingleValidation,
-        )
+    ItemsValidation,
+    Cardinality,
+    Unique,
+    SingleValidation,
+    )
 from .valid_children import (
-        ChildrenValidation,
-        )
+    ChildrenValidation,
+    )
 from .eval_field import (
-        FieldEvaluation,
-        Default,
-        )
+    FieldEvaluation,
+    Default,
+    )
 from .eval_items import (
-        ItemsEvaluation,
-        )
+    ItemsEvaluation,
+    )
 from .eval_children import (
-        ChildrenEvaluation,
-        )
+    ChildrenEvaluation,
+    )
 from .contexts import (
-        IContext,
-        )
+    IContext,
+)
 from .settings import (
     Settings,
-        )
+)
 from .containers import (  # noqa: F401
-        KeyFields,
-        SubEntityItems,
-        SubEntitySingle,
-        Entity,
-        )
+    KeyFields,
+    SubEntityItems,
+    SubEntitySingle,
+    Entity,
+    )
 from .functions import (
-        Function
-        )
+    Function
+    )
 from . import functions
 
 from .func_builtin import (
-        EnumMembers,
-        )
+    EnumMembers,
+    )
 
 from .apply import ApplyResult
 from .load import load
@@ -143,7 +143,7 @@ __all__ = [
     "EntityNameNotFoundError",
 
     # meta
-    "ExpressionsAttributesDict",
+    "ExpressionsAttributesMap",
     "FieldName",
     "MethodName",
 
@@ -217,7 +217,7 @@ __all__ = [
     # func_builtin
     "EnumMembers",
 
-    # contexts
+    # # contexts
     "IContext",
 
     # settings

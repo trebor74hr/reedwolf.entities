@@ -149,7 +149,8 @@ class MethodName(str):
     ...
 
 FunctionNoArgs = Callable[[], Any]
-ExpressionsAttributesDict = Dict[AttrName, Union[FieldName, MethodName, FunctionNoArgs]]
+# it is not dict since it must be immutable - default value for the class variable
+ExpressionsAttributesMap = Dict[AttrName, Union[FieldName, MethodName]]
 
 class IFuncArgHint:
     """

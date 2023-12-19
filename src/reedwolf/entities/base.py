@@ -168,7 +168,7 @@ class AttrDexpNodeTypeEnum(str, Enum):
     # VALIDATOR = "VALIDATOR"
     # EVALUATOR = "EVALUATOR"
     MODEL_CLASS = "MODEL_CLASS"
-    TH_FUNC   = "TH_FUNC"
+    TH_FUNCTION = "TH_FUNCTION"
     TH_FIELD  = "TH_FIELD"
 
 # ------------------------------------------------------------
@@ -1670,7 +1670,7 @@ class IContainer(IComponent, ABC):
 
 class IEntity(IContainer, ABC):
     settings: Settings = field(repr=False, )
-    apply_settings_class: Optional[TypingType[IContext]] = field(repr=False, default=None)
+    apply_settings_class: Optional[TypingType[Settings]] = field(repr=False, default=None)
 
 # ------------------------------------------------------------
 # IBoundModel
@@ -1809,7 +1809,7 @@ class UseStackFrameCtxManagerBase(AbstractContextManager):
             self.frame.post_clean()
 
     def __enter__(self):
-        # context manager (with xxx as : ...
+        # settings manager (with xxx as : ...
         if self.add_to_stack:
             self.owner_session.push_frame_to_stack(self.frame)
         return self.frame
@@ -2904,8 +2904,7 @@ class IApplyResult(IStackOwnerSession):
     # TODO: consider: instance_new: Union[ModelType, UndefinedType] = UNDEFINED,
     instance_new: Optional[ModelType] = field(repr=False)
 
-
-    context: Optional[IContext] = field(repr=False)
+    settings: Optional[Union[Settings, IContext]] = field(repr=False)
     # used in apply_partial
     component_name_only: Optional[str] = field(repr=False, default=None)
 
@@ -3027,7 +3026,7 @@ class IApplyResult(IStackOwnerSession):
 
     @property
     def value_history_dict(self) -> Dict[KeyString, List[InstanceAttrValue]]:
-        if not self.entity.settings.is_trace():
+        if not self.entity.settings.trace:
             raise EntityApplyError(owner=self, msg="Value history is not collected. Pass Settings(..., trace=True) and try again.")
         # assert self._value_history_dict
         return self._value_history_dict
@@ -3139,7 +3138,7 @@ def extract_type_info(
         inspect_object = inspect_object.model
 
     # function - callable and not class and not pydantic?
-    parent_type_info = None
+    # parent_type_info = None
     if isinstance(inspect_object, IDotExpressionNode):
         parent_type_info = inspect_object.get_type_info()
         parent_object = parent_type_info.type_
@@ -3151,7 +3150,7 @@ def extract_type_info(
 
     if isinstance(parent_object, TypeInfo):
         # go one level deeper
-        parent_type_info = parent_object
+        # parent_type_info = parent_object
         if not isinstance(parent_object.type_, type):
             raise EntitySetupValueError(item=inspect_object, msg=f"Inspected object's type hint is not a class object/type: {parent_object.type_} : {parent_object.type_}, got: {type(parent_object.type_)} ('.{attr_node_name}' process)")
         # Can be method call, so not pydantic / dataclass are allowed too
@@ -3166,40 +3165,43 @@ def extract_type_info(
     th_field = None
     # func_node = None
 
-    is_parent_dot_expr = isinstance(parent_object, DotExpression)
-    if is_parent_dot_expr:
-        raise EntitySetupNameNotFoundError(item=inspect_object, msg=f"Attribute '{attr_node_name}' is not member of expression '{parent_object}'.")
+    # ORIG: is_parent_dot_expr = isinstance(parent_object, DotExpression)
+    # ORIG: if is_parent_dot_expr:
+    if isinstance(parent_object, DotExpression):
+        # raise EntitySetupNameNotFoundError(item=inspect_object, msg=f"Attribute '{attr_node_name}' is not member of expression '{parent_object}'.")
+        raise EntityInternalError(item=inspect_object, msg=f"Parent object is DotExpression: '{parent_object}' / '{attr_node_name}'.")
 
     # when parent virtual expression is not assigned to data-type/data-attr_node,
     # then it is sent directly what will later raise error "attribute not found" 
-    if not is_parent_dot_expr:
-        if is_method_by_name(parent_object, attr_node_name):
-            # parent_object, attr_node_name
-            raise EntitySetupNameError(item=inspect_object,
-                        msg=f"Inspected object's is a method: {parent_object}.{attr_node_name}. "
-                        "Calling methods on instances are not allowed.")
+    # ORIG: if not is_parent_dot_expr:
 
-        if is_model_class(parent_object):
-            # raise EntityInternalError(item=inspect_object, msg=f"'Parent is not DC/PYD class -> {parent_object} : {type(parent_object)}'.")
+    if is_method_by_name(parent_object, attr_node_name):
+        # parent_object, attr_node_name
+        raise EntitySetupNameError(item=inspect_object,
+                    msg=f"Inspected object's is a method: {parent_object}.{attr_node_name}. "
+                    "Calling methods on instances are not allowed.")
 
-            if not hasattr(parent_object, "__annotations__"):
-                # TODO: what about pydantic?
-                raise EntityInternalError(item=inspect_object, msg=f"'DC/PYD class {parent_object}' has no metadata (__annotations__ / type hints), can't read '{attr_node_name}'. Add type-hints or check names.")
+    if is_model_class(parent_object):
+        # raise EntityInternalError(item=inspect_object, msg=f"'Parent is not DC/PYD class -> {parent_object} : {type(parent_object)}'.")
 
-            model_class: ModelType = parent_object
+        if not hasattr(parent_object, "__annotations__"):
+            # TODO: what about pydantic?
+            raise EntityInternalError(item=inspect_object, msg=f"'DC/PYD class {parent_object}' has no metadata (__annotations__ / type hints), can't read '{attr_node_name}'. Add type-hints or check names.")
 
-            # === parent type hint
-            parent_py_type_hints = extract_py_type_hints(model_class, f"setup_session->{attr_node_name}:DC/PYD")
+        model_class: ModelType = parent_object
 
-            py_type_hint = parent_py_type_hints.get(attr_node_name, None)
-            if py_type_hint:
-                type_info = TypeInfo.get_or_create_by_type(
-                                py_type_hint=py_type_hint,
-                                caller=parent_object,
-                                )
+        # === parent type hint
+        parent_py_type_hints = extract_py_type_hints(model_class, f"setup_session->{attr_node_name}:DC/PYD")
 
-            # === Dataclass / pydantic field metadata - only for information
-            th_field, fields = extract_model_field_meta(inspect_object=model_class, attr_node_name=attr_node_name)
+        py_type_hint = parent_py_type_hints.get(attr_node_name, None)
+        if py_type_hint:
+            type_info = TypeInfo.get_or_create_by_type(
+                            py_type_hint=py_type_hint,
+                            caller=parent_object,
+                            )
+
+        # === Dataclass / pydantic field metadata - only for information
+        th_field, fields = extract_model_field_meta(inspect_object=model_class, attr_node_name=attr_node_name)
 
     if not type_info:
         if not fields:

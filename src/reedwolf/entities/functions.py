@@ -1031,7 +1031,7 @@ class DotexprExecuteOnItemFactoryFuncArgHint(IInjectFuncArgHint):
     def get_apply_inject_value(self, apply_result: "IApplyResult", prep_arg: "PrepArg"
                                ) -> Callable[[DotExpression, ModelType], AttrValue]:
         """
-        create this registry function that retriieves context processor
+        create this registry function that retriieves settings processor
         which will crearte this factory for providded item
         """
         # TODO: 2nd) resolve again ThisRegistry dependency

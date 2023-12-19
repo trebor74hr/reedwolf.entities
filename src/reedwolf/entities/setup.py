@@ -49,7 +49,7 @@ from .meta import (
     HookOnFinishedAllCallable,
     get_model_fields, STANDARD_TYPE_LIST,
     AttrName,
-    ExpressionsAttributesDict,
+    ExpressionsAttributesMap,
     FunctionNoArgs,
     FieldName,
     MethodName,
@@ -309,26 +309,26 @@ class RegistryBase(IRegistry):
 
     def _register_from_attributes_dict(self,
                                        model_class: ModelType,
-                                       attributes_dict: ExpressionsAttributesDict):
+                                       attributes_dict: ExpressionsAttributesMap):
         # map User, Session, Now and similar Attribute -> function calls
         fields = get_model_fields(model_class)
 
         for attr_name, attr_getter in attributes_dict.items():
-            if isinstance(attr_getter, MethodName) or is_function(attr_getter):
-                if isinstance(attr_getter, MethodName):
-                    attr_getter: MethodName = attr_getter
-                    py_function = getattr(model_class, attr_getter, UNDEFINED)
-                    if py_function is UNDEFINED:
-                        # could get all methods with no args
-                        raise EntitySetupNameError(owner=self, msg=f"Attribute {attr_name} must be name of method with no arguments from class '{model_class}', got: {attr_getter}")
-                else:
-                    py_function: FunctionNoArgs = attr_getter
+            if isinstance(attr_getter, MethodName):
+                # or is_function(attr_getter):
+                attr_getter: MethodName = attr_getter
+                py_function: FunctionNoArgs = getattr(model_class, attr_getter, UNDEFINED)
+                if py_function is UNDEFINED:
+                    # could get all methods with no args
+                    raise EntitySetupNameError(owner=self, msg=f"Attribute {attr_name} must be name of method with no arguments from class '{model_class}', got: {attr_getter}")
+                # else: py_function: FunctionNoArgs = attr_getter
 
                 function_name = py_function.__name__
                 if not is_instancemethod_by_name(model_class,  function_name):
                     raise EntitySetupNameError(owner=self,
                                                msg=f"Attribute {attr_name} must be name of method with no arguments of class '{model_class}', function {attr_getter} is not instance method of this class.")
 
+                # Check that function receives only single param if method(self), or no param if function()
                 py_fun_signature = inspect.signature(py_function)
                 # TODO: resolve properly first arg name as 'self' convention
                 non_empty_params = [param.name for param in py_fun_signature.parameters.values() if param.empty and param.name != 'self']
@@ -340,37 +340,40 @@ class RegistryBase(IRegistry):
                     py_function,
                     allow_nonetype=True)
 
+                data = attr_getter
                 # TODO: the type or name of th_field is not ok
-                th_field=py_function
+                th_field = py_function
+
             elif isinstance(attr_getter, FieldName):
                 attr_getter: FieldName = attr_getter
                 attr_field = fields.get(attr_getter, None)
                 if not attr_field:
                     aval_names = get_available_names_example(attr_field, fields.keys())
                     raise EntitySetupNameError(owner=self, msg=f"Attribute {attr_name} must be field name of class '{model_class}', got: {attr_getter}, available: {aval_names}")
-                th_field = attr_field
                 type_info = TypeInfo.get_or_create_by_type(
                     py_type_hint=attr_field,
                     caller=model_class,
                 )
+                data = attr_getter
+                th_field = attr_field
             else:
-                raise EntitySetupValueError(owner=self, msg=f"Attribute {attr_name} expected no-arg method or FieldName or MethodName instance, got: {attr_getter} / {type(attr_getter)}")
+                raise EntitySetupValueError(owner=self, msg=f"Attribute {attr_name} expected FieldName or MethodName instance, got: {attr_getter} / {type(attr_getter)}")
 
             attr_node = AttrDexpNode(
                 name=attr_name,
-                data=type_info,
+                data=data,
                 namespace=self.NAMESPACE,
                 type_info=type_info,
                 th_field=th_field,
             )
-            # TODO: check that function receives only single param if method(self), or no param if function()
             if attr_name in self.store:
                 raise EntitySetupNameError(f"Attribute name '{attr_name}' is reserved. Rename class attribute in '{self.apply_settings_class}'")
 
             self.register_attr_node(attr_node, attr_name)
 
+
     def _apply_to_get_root_value_by_attributes_dict(self,
-                                                    attributes_dict: ExpressionsAttributesDict,
+                                                    attributes_dict: ExpressionsAttributesMap,
                                                     attr_name: AttrName,
                                                     klass_attr_name: AttrName,
                                                     klass: type) -> RegistryRootValue:
@@ -378,17 +381,28 @@ class RegistryBase(IRegistry):
             # component = apply_result.current_frame.component
             raise EntityApplyNameError(owner=self, msg=f"Attribute '{attr_name}' can not be fetched since '{klass_attr_name}' is not set ({type(context)}).")
 
-        if attr_name not in attributes_dict:
-            avail_names = get_available_names_example(attr_name, attributes_dict.keys())
+        if attr_name not in self.store:
+            avail_names = get_available_names_example(attr_name, list(self.store.keys()))
             raise EntityApplyNameError(owner=self, msg=f"Invalid attribute name '{attr_name}', available: {avail_names}.")
 
-        attr_getter = attributes_dict[attr_name]
-        if callable(attr_getter):
+        attr_dexp_node = self.store[attr_name]
+        attr_getter = attr_dexp_node.data
+
+        # if attr_name not in attributes_dict:
+        #     avail_names = get_available_names_example(attr_name, attributes_dict.keys())
+        #     raise EntityApplyNameError(owner=self, msg=f"Invalid attribute name '{attr_name}', available: {avail_names}.")
+        # attr_getter = attributes_dict[attr_name]
+
+        if isinstance(attr_getter, MethodName):
             # NOTE: convert unbound method to its name to be able to fetch bound method later.
-            attr_name_new = attr_getter.__name__
-        else:
-            assert isinstance(attr_getter, FieldName)
+            method = attr_dexp_node.th_field
+            assert callable(method), method
+            attr_name_new = method.__name__
+        elif isinstance(attr_getter, FieldName):
+            # must preserve FieldName type
             attr_name_new = attr_getter
+        else:
+            raise EntityInternalError(owner=self, msg=f"Expected FieldName or MethodName instance, got: {attr_getter}")
 
         # else: attr_name_new = None
         return RegistryRootValue(klass, attr_name_new)
@@ -517,7 +531,7 @@ class RegistryBase(IRegistry):
 
         # TODO: za Sum(This.name) this is not good. Should be unique, since 
         #       This is ambigous - can evaluate to different contexts. 
-        #       should have some context @ID (owner)
+        #       should have some settings @ID (owner)
         full_dexp_node_name = get_dexp_node_name(
                                     owner_name=owner_dexp_node.name if owner_dexp_node else None, 
                                     dexp_node_name=dexp_node_name,
@@ -561,9 +575,12 @@ class RegistryBase(IRegistry):
 
                 if isinstance(owner_dexp_node.data, IBoundModel):
                     inspect_object = owner_dexp_node.data.model
-                else:
-                    # can be TypeInfo, @dataclass, Pydantic etc.
+                elif is_model_class(owner_dexp_node.data):
+                    # @dataclass, Pydantic etc.
                     inspect_object = owner_dexp_node.data
+                else:
+                    # take TypeInfo
+                    inspect_object = owner_dexp_node.type_info
 
             try:
                 # , func_node
@@ -644,7 +661,7 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
 
 
 class UseSetupStackFrameCtxManager(UseStackFrameCtxManagerBase):
-    " with() ... custom context manager. "
+    " with() ... custom settings manager. "
     owner_session: "SetupSessionBase"
     frame: SetupStackFrame
 

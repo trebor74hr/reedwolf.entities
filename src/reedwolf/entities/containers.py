@@ -9,7 +9,7 @@ from typing import (
     List,
     Optional,
     Union,
-    Type,
+    Type as TypingType,
 )
 from dataclasses import (
     dataclass,
@@ -645,7 +645,7 @@ class Entity(IEntity, ContainerBase):
     bound_model     : Optional[Union[BoundModel, ModelType]] = field(repr=False, default=None, metadata={"skip_dump": True})
     # will be filled automatically with Settings() if not supplied
     settings        : Optional[Settings] = field(repr=False, default=None, metadata={"skip_dump": True})
-    apply_settings_class   : Optional[Type[IContext]] = field(repr=False, default=None, metadata={"skip_dump": True})
+    apply_settings_class   : Optional[TypingType[Settings]] = field(repr=False, default=None, metadata={"skip_dump": True})
     functions       : Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
 
     # --- only list of model names allowed
@@ -669,7 +669,7 @@ class Entity(IEntity, ContainerBase):
 
     # used for automatic component's naming, <parent_name/class_name>__<counter>
     name_counter_by_parent_name: Dict[str, int] = field(init=False, repr=False, default_factory=dict)
-    value_accessor_class_registry: Dict[str, Type[IValueAccessor]] = field(init=False, repr=False)
+    value_accessor_class_registry: Dict[str, TypingType[IValueAccessor]] = field(init=False, repr=False)
     value_accessor_default: IValueAccessor = field(init=False, repr=False)
 
     # is_unbound to model case - must be cached since bound_model could be dynamically changed in setup phase with normal
@@ -736,7 +736,7 @@ class Entity(IEntity, ContainerBase):
     def bind_to(self,
                 bound_model:Union[UndefinedType, BoundModel]=UNDEFINED,
                 settings: Optional[Settings]=None,
-                apply_settings_class: Optional[IContext]=None,
+                apply_settings_class: Optional[TypingType[Settings]]=None,
                 functions: Optional[List[CustomFunctionFactory]]=None,
                 do_setup:bool = True,
                 ):
@@ -765,7 +765,7 @@ class Entity(IEntity, ContainerBase):
 
         if apply_settings_class:
             if self.apply_settings_class:
-                raise EntitySetupError(owner=self, msg="context already set, late binding not allowed.")
+                raise EntitySetupError(owner=self, msg="settings already set, late binding not allowed.")
             self.apply_settings_class = apply_settings_class
 
         if settings:
@@ -781,37 +781,37 @@ class Entity(IEntity, ContainerBase):
     # apply - API entries
     # ------------------------------------------------------------
 
-    def apply(self, 
-              instance: DataclassType, 
+    def apply(self,
+              instance: DataclassType,
               instance_new: Optional[ModelType] = None,
-              context: Optional[IContext] = None, 
+              settings: Optional[Union[Settings, IContext]] = None,
               raise_if_failed:bool = True) -> IApplyResult:
         return self._apply(
                   instance=instance,
                   instance_new=instance_new,
-                  context=context,
+                  settings=settings,
                   raise_if_failed=raise_if_failed)
 
-    def apply_partial(self, 
-              component_name_only:str,
-              instance: DataclassType, 
-              instance_new: Optional[ModelType] = None,
-              context: Optional[IContext] = None, 
-              raise_if_failed:bool = True) -> IApplyResult:
+    def apply_partial(self,
+                      component_name_only:str,
+                      instance: DataclassType,
+                      instance_new: Optional[ModelType] = None,
+                      settings: Optional[Union[Settings, IContext]] = None,
+                      raise_if_failed:bool = True) -> IApplyResult:
         return self._apply(
                   instance=instance,
                   instance_new=instance_new,
                   component_name_only=component_name_only,
-                  context=context,
+                  settings=settings,
                   raise_if_failed=raise_if_failed)
 
 
-    def _apply(self, 
-              instance: DataclassType, 
-              instance_new: Optional[ModelType] = None,
-              component_name_only:Optional[str] = None,
-              context: Optional[IContext] = None, 
-              raise_if_failed:bool = True) -> IApplyResult:
+    def _apply(self,
+               instance: DataclassType,
+               instance_new: Optional[ModelType] = None,
+               component_name_only:Optional[str] = None,
+               settings: Optional[Union[Settings, IContext]] = None,
+               raise_if_failed:bool = True) -> IApplyResult:
         """
         create and settings ApplyResult() and call apply_result.apply()
         """
@@ -821,7 +821,7 @@ class Entity(IEntity, ContainerBase):
                 ApplyResult(
                       entity=self,
                       component_name_only=component_name_only,
-                      context=context, 
+                      settings=settings,
                       instance=instance,
                       instance_new=instance_new,
                       )\
@@ -837,12 +837,12 @@ class Entity(IEntity, ContainerBase):
 
     # ------------------------------------------------------------
 
-    def dump_defaults(self, 
-              context: Optional[IContext] = None, 
-              ) -> IApplyResult:
+    def dump_defaults(self,
+                      settings: Optional[Union[Settings, IContext]] = None,
+                      ) -> IApplyResult:
         """
         In defaults mode:
-            - context should be applied if Entity have (same as in apply())
+            - settings should be applied if Entity have (same as in apply())
             - validations are not called
         """
         from .apply import ApplyResult
@@ -853,7 +853,7 @@ class Entity(IEntity, ContainerBase):
                     defaults_mode=True,
                     entity=self,
                     component_name_only=None,
-                    context=context,
+                    settings=settings,
                     instance=NA_DEFAULTS_MODE,
                     instance_new=None,
                     )\
@@ -870,7 +870,7 @@ class Entity(IEntity, ContainerBase):
 
         return output
 
-    def create_dto_instance_from_model_instance(self, instance: ModelType, dto_class: Type[ModelType]) -> ModelType:
+    def create_dto_instance_from_model_instance(self, instance: ModelType, dto_class: TypingType[ModelType]) -> ModelType:
         if not isinstance(instance, self.bound_model.model):
             raise EntityTypeError(owner=self, msg=f"Expected  {self.bound_model.model} instance, got: {instance} : {type(instance)}")
 
@@ -931,8 +931,8 @@ class SubEntityBase(ContainerBase, ABC):
     # parent_setup_session: Optional[SetupSession] = field(init=False, repr=False, default=None)
 
     # copy from first non-self container parent
-    apply_settings_class   : Optional[Type[IContext]] = field(repr=False, init=False, default=None)
-    settings        : Optional[Settings] = field(repr=False, init=False, default=None)
+    apply_settings_class: Optional[TypingType[Settings]] = field(repr=False, init=False, default=None)
+    settings:             Optional[Settings] = field(repr=False, init=False, default=None)
 
     # used for automatic component's naming, <class_name>__<counter>
     name_counter_by_parent_name: Dict[str, int] = field(init=False, repr=False, default_factory=dict)
