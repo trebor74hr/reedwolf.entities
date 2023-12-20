@@ -3023,8 +3023,9 @@ class IApplyResult(IStackOwnerSession):
 
     @property
     def value_history_dict(self) -> Dict[KeyString, List[InstanceAttrValue]]:
-        if not self.entity.settings.trace:
-            raise EntityApplyError(owner=self, msg="Value history is not collected. Pass Settings(..., trace=True) and try again.")
+        # NOTE: trace can be set in apply_settings. if similar check will be required, then use some other method.
+        #   if not self.entity.settings.is_trace():
+        #       raise EntityApplyError(owner=self, msg="Value history is not collected. Pass Settings(..., trace=True) and try again.")
         # assert self._value_history_dict
         return self._value_history_dict
 

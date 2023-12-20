@@ -81,10 +81,10 @@ FieldsNS = Namespace("Fields", alias="F")
 # This - values from a current settings, e.g. iteration of loop, option in select
 ThisNS = Namespace("This")  # , manual_setup=True
 
-# MySettings - see contexts.py
+# MySettings - see settings.py
 ContextNS = Namespace("Ctx")
 
-# Settings - see settings.py
+# TODO: delete this - use Ctx only - see settings.py
 ConfigNS = Namespace("Cfg")
 
 # aliases

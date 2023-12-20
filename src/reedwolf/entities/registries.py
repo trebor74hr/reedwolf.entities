@@ -407,7 +407,7 @@ class ContextRegistry(RegistryBase):
 
     def _apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RegistryRootValue:
         return self._apply_to_get_root_value_by_attributes_dict(
-            attributes_dict=self.attributes_dict,
+            # attributes_dict=self.attributes_dict,
             attr_name=attr_name,
             klass_attr_name="merged_settings",
             klass=apply_result.settings,
@@ -460,7 +460,7 @@ class ConfigRegistry(RegistryBase):
 
     def _apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RegistryRootValue:
         return self._apply_to_get_root_value_by_attributes_dict(
-            attributes_dict=self.callables_dict,
+            # attributes_dict=self.callables_dict,
             attr_name=attr_name,
             klass_attr_name="settings",
             klass=self.settings,

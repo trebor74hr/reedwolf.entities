@@ -3,7 +3,7 @@ from dataclasses import dataclass, field, fields as dc_fields
 from typing import Optional, Union, ClassVar
 
 from .exceptions import EntityInternalError
-from .meta import ExpressionsAttributesMap, FieldName, Self
+from .meta import ExpressionsAttributesMap, FieldName, Self, MethodName
 from .utils import UndefinedType, UNDEFINED
 from .values_accessor import IValueAccessor
 
@@ -37,34 +37,11 @@ class Settings:
     # None indicates that argument/param is not passed in constructor
     trace: Union[bool, UndefinedType] = UNDEFINED
 
-    # collect
-    contextns_attributes : ClassVar[Union[ExpressionsAttributesMap, UndefinedType]] = UNDEFINED
+    # # collect
+    # contextns_attributes : ClassVar[Union[ExpressionsAttributesMap, UndefinedType]] = UNDEFINED
 
-    # # set and reset back in apply phase
-    # _current_context: Union[Settings, None, UndefinedType] = field(init=False, repr=False, compare=False, default=UNDEFINED)
-
-    # _trace: Union[bool, UndefinedType] = field(init=False, repr=False, compare=False, default=UNDEFINED)
-    # _debug: Union[bool, UndefinedType] = field(init=False, repr=False, compare=False, default=UNDEFINED)
-
-    @classmethod
-    def create_merged_settings(cls, setup_settings: Self, apply_settings: Self) -> Self:
-        """
-        fetches all dataclass init=True arguments from both settings
-        and chooses first non-undefined, apply settings is preferred.
-        if both are undefined, arg is skipped.
-        Creates new settings instance based on collected arguments.
-        """
-        kwargs = {}
-        for dc_field in dc_fields(cls):
-            if not dc_field.init:
-                continue
-            setup_attr_value = getattr(setup_settings, dc_field.name, UNDEFINED)
-            apply_attr_value = getattr(apply_settings, dc_field.name, UNDEFINED)
-            attr_value = apply_attr_value if apply_attr_value is not UNDEFINED else setup_attr_value
-            if attr_value is not UNDEFINED:
-                kwargs[dc_field.name] = attr_value
-
-        return cls(**kwargs)
+    # set and reset back in apply phase
+    _apply_settings: Union[Self, None, UndefinedType] = field(init=False, repr=False, compare=False, default=UNDEFINED)
 
     # TODO: ...
     # def set_value_accessor(self, value_accessor: IValueAccessor) -> None:
@@ -72,48 +49,59 @@ class Settings:
     #     assert self.value_accessor is None
     #     self.value_accessor = value_accessor
 
-    # def is_trace(self) -> bool:
-    #     if isinstance(self._current_context, ConfigOverrideMixin) \
-    #       and (ctx_trace := self._current_context.is_trace()) is not None:
-    #         return ctx_trace
-    #     return self.debug or self.trace
+    def is_trace(self) -> bool:
+        if self._apply_settings is UNDEFINED:
+            raise EntityInternalError(owner=self, msg="Method must be callwed in 'with .use_apply_settingsm()' block")
+        return (self._apply_settings.debug or self._apply_settings.trace) if self._apply_settings is not None \
+                else (self.debug or self.trace)
 
-    # def is_debug(self) -> bool:
-    #     if isinstance(self._current_context, ConfigOverrideMixin) \
-    #             and (ctx_debug := self._current_context.is_debug()) is not None:
-    #         return ctx_debug
-    #     return self.debug
+    def is_debug(self) -> bool:
+        if not self._apply_settings is UNDEFINED:
+            raise EntityInternalError(owner=self, msg="Method must be callwed in 'with .use_apply_settingsm()' block")
+        return self._apply_settings.debug if self._apply_settings is not None else self.debug
+
+    @classmethod
+    def custom_contextns_attributes(cls) -> ExpressionsAttributesMap:
+        """
+        can be overridden
+        """
+        return {}
 
     @classmethod
     def get_contextns_attributes(cls) -> ExpressionsAttributesMap:
-        return {
-            "Debug": FieldName("debug"),
-            # "Debug": MethodName("is_debug"),
+        """
+        should not be overridden
+        """
+        out= {
             # "Trace": MethodName("is_trace"),
+            "Debug": MethodName("is_debug"),
         }
+        custom_dict = cls.custom_contextns_attributes()
+        out.update(custom_dict)
+        return out
 
-    # def use_context(self, settings: Optional[IContext]) -> "ConfigSetContextCtxManager":
-    #     return ConfigSetContextCtxManager(settings=self, settings=settings)
+    def use_apply_settings(self, apply_settings: Optional[Self]) -> "ConfigSetContextCtxManager":
+        return ConfigSetContextCtxManager(setup_settings=self, apply_settings=apply_settings)
 
-    # def set_context(self, settings: Union[IContext, None, UndefinedType]):
-    #     if settings is not UNDEFINED:
-    #         if self._current_context is not UNDEFINED:
-    #             raise EntityInternalError(owner=self, msg=f"Can not set new settings to {settings}, already set to: {self._current_context}")
-    #     else:
-    #         if self._current_context is UNDEFINED:
-    #             raise EntityInternalError(owner=self, msg=f"Can not set new settings back to {settings}, it is already reset to: {self._current_context}")
-    #     self._current_context = settings
+    def set_apply_settings(self, apply_settings: Union[Self, None, UndefinedType]):
+        if apply_settings is not UNDEFINED:
+            if self._apply_settings is not UNDEFINED:
+                raise EntityInternalError(owner=self, msg=f"Can not set new settings to {apply_settings}, already set to: {self._apply_settings}")
+        else:
+            if self._apply_settings is UNDEFINED:
+                raise EntityInternalError(owner=self, msg=f"Can not set new settings back to {apply_settings}, it is already reset to: {self._apply_settings}")
+        self._apply_settings = apply_settings
 
 
-# @dataclass()
-# class ConfigSetContextCtxManager(AbstractContextManager):
-#     setup_settings: Settings
-#     apply_settings: Optional[Settings]
-#
-#     def __enter__(self):
-#         self.settings.set_context(self.settings)
-#
-#     def __exit__(self, exc_type, exc_value, exc_tb):
-#         self.settings.set_context(UNDEFINED)
+@dataclass()
+class ConfigSetContextCtxManager(AbstractContextManager):
+    setup_settings: Settings
+    apply_settings: Optional[Settings]
+
+    def __enter__(self):
+        self.setup_settings.set_apply_settings(self.apply_settings)
+
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        self.setup_settings.set_apply_settings(apply_settings=UNDEFINED)
 
 

@@ -493,7 +493,7 @@ class ApplyResult(IApplyResult):
                     instance_none_mode=self.instance_none_mode,
                     parent_node=None,
                     instance=self.instance,
-                    trace_value_history=self.entity.settings.trace,
+                    trace_value_history=self.entity.settings.is_trace(),
                 ).setup(apply_result=self)
 
             assert not self.top_value_node
@@ -527,7 +527,7 @@ class ApplyResult(IApplyResult):
                         instance_none_mode=self.instance_none_mode,
                         parent_node = parent_node,
                         instance = self.current_frame.instance,
-                        trace_value_history=self.entity.settings.trace,
+                        trace_value_history=self.entity.settings.is_trace(),
                         has_items=has_items,
                     ).setup(apply_result=self)
                 parent_node.add_child(value_node)
@@ -1058,7 +1058,7 @@ class ApplyResult(IApplyResult):
                         instance_none_mode=self.instance_none_mode,
                         parent_node = value_node,
                         instance = instance,
-                        trace_value_history=self.entity.settings.trace,
+                        trace_value_history=self.entity.settings.is_trace(),
                         # empahsize distinction of item's parent node (also subentity, but collection)
                         has_items=False,
                         # specific when instance is item in items collection (of parent)
@@ -1142,11 +1142,11 @@ class ApplyResult(IApplyResult):
         if all ok - Result.instance contains a new instance (clone + update) of the bound model type 
         if not ok - errors contain all details.
         """
-        # with self.entity.settings.use_context(self.settings):
-        self._apply(
-                component=self.entity,
-                top_call=True,
-                )
+        with self.entity.settings.use_apply_settings(self.settings):
+            self._apply(
+                    component=self.entity,
+                    top_call=True,
+                    )
 
         return self
 

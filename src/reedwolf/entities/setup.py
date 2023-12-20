@@ -373,13 +373,13 @@ class RegistryBase(IRegistry):
 
 
     def _apply_to_get_root_value_by_attributes_dict(self,
-                                                    attributes_dict: ExpressionsAttributesMap,
+                                                    # attributes_dict: ExpressionsAttributesMap,
                                                     attr_name: AttrName,
                                                     klass_attr_name: AttrName,
                                                     klass: type) -> RegistryRootValue:
         if klass in (UNDEFINED, None):
             # component = apply_result.current_frame.component
-            raise EntityApplyNameError(owner=self, msg=f"Attribute '{attr_name}' can not be fetched since '{klass_attr_name}' is not set ({type(context)}).")
+            raise EntityApplyNameError(owner=self, msg=f"Attribute '{attr_name}' can not be fetched since '{klass_attr_name}' is not set ({klass}).")
 
         if attr_name not in self.store:
             avail_names = get_available_names_example(attr_name, list(self.store.keys()))
