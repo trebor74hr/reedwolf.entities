@@ -22,6 +22,12 @@ class Settings:
     no DotExpression or Function() instances allowed.
     and belonging.
     This is plain class, no setup()/Setup() process.
+
+    For a same Ctx.AttributeName - this is order of preferences - which will win:
+        1. custom attributes in apply settings
+        2. custom attributes in setup settings
+        3. common attributes in apply settings (usually not overridden)
+        4. common attributes in setup settings (usually not overridden)
     """
     # if not set will use default ValueExpress
     value_accessor: Union[IValueAccessor, UndefinedType] = field(default=UNDEFINED, metadata={"dexp_exposed": False})
@@ -48,36 +54,50 @@ class Settings:
     #     assert isinstance(value_accessor, IValueAccessor)
     #     assert self.value_accessor is None
     #     self.value_accessor = value_accessor
+    def _ensure_in_with_block(self, method_name: str):
+        if self._apply_settings is UNDEFINED:
+            raise EntityInternalError(owner=self, msg=f"Method '{method_name}' must be callwed in 'with .use_apply_settingsm()' block")
 
     def is_trace(self) -> bool:
-        if self._apply_settings is UNDEFINED:
-            raise EntityInternalError(owner=self, msg="Method must be callwed in 'with .use_apply_settingsm()' block")
-        return (self._apply_settings.debug or self._apply_settings.trace) if self._apply_settings is not None \
-                else (self.debug or self.trace)
+        self._ensure_in_with_block(method_name="is_tracee")
+        out = (self._apply_settings.debug or self._apply_settings.trace) if self._apply_settings is not None \
+               else (self.debug or self.trace)
+        return out if out is not UNDEFINED else False
 
     def is_debug(self) -> bool:
-        if not self._apply_settings is UNDEFINED:
-            raise EntityInternalError(owner=self, msg="Method must be callwed in 'with .use_apply_settingsm()' block")
-        return self._apply_settings.debug if self._apply_settings is not None else self.debug
+        self._ensure_in_with_block(method_name="is_tracee")
+        out = self._apply_settings.debug if self._apply_settings is not None else self.debug
+        return out if out is not UNDEFINED else False
 
     @classmethod
     def custom_contextns_attributes(cls) -> ExpressionsAttributesMap:
         """
-        can be overridden
+        Values are fetched from this instance only. Usually overridden.
+        Example:
+            {
+            "Now": MethodName("get_now"),
+            "UserId": FieldName("user_id"),
+            }
         """
         return {}
 
     @classmethod
-    def common_contextns_attributes(cls) -> ExpressionsAttributesMap:
+    def _common_contextns_attributes(cls) -> ExpressionsAttributesMap:
+        """
+        Values are fetched from apply_settings and setup_settings - fetched from first available. Usually not overridden.
+        recommendation on override is to merge dict with super(), e.g.:
+            out super().common_contextns_attributes()
+            out.update({...})
+            return out
+        """
         return {
-            # "Trace": MethodName("is_trace"),
             "Debug": MethodName("is_debug"),
         }
 
-    def use_apply_settings(self, apply_settings: Optional[Self]) -> "UseApplySettingsCtxManager":
+    def _use_apply_settings(self, apply_settings: Optional[Self]) -> "UseApplySettingsCtxManager":
         return UseApplySettingsCtxManager(setup_settings=self, apply_settings=apply_settings)
 
-    def set_apply_settings(self, apply_settings: Union[Self, None, UndefinedType]):
+    def _set_apply_settings(self, apply_settings: Union[Self, None, UndefinedType]):
         if apply_settings is not UNDEFINED:
             if self._apply_settings is not UNDEFINED:
                 raise EntityInternalError(owner=self, msg=f"Can not set new settings to {apply_settings}, already set to: {self._apply_settings}")
@@ -93,9 +113,9 @@ class UseApplySettingsCtxManager(AbstractContextManager):
     apply_settings: Optional[Settings]
 
     def __enter__(self):
-        self.setup_settings.set_apply_settings(self.apply_settings)
+        self.setup_settings._set_apply_settings(self.apply_settings)
 
     def __exit__(self, exc_type, exc_value, exc_tb):
-        self.setup_settings.set_apply_settings(apply_settings=UNDEFINED)
+        self.setup_settings._set_apply_settings(apply_settings=UNDEFINED)
 
 

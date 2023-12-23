@@ -332,7 +332,9 @@ class RegistryBase(IRegistry):
 
     # ------------------------------------------------------------
 
-    def register_dexp_node(self, dexp_node:IDotExpressionNode, alt_dexp_node_name=None):
+    def register_dexp_node(self, dexp_node:IDotExpressionNode,
+                           alt_dexp_node_name=None,
+                           replace_when_duplicate:bool = False):
         """
         Data can register IFunctionDexpNode-s instances since the
         output will be used directly as data and not as a function call.
@@ -351,17 +353,22 @@ class RegistryBase(IRegistry):
         if not dexp_node_name.count(".") == 0:
             raise EntityInternalError(owner=self, msg=f"Node {dexp_node_name} should not contain . - only first level vars allowed")
 
-        if dexp_node_name in self.store:
+        if not replace_when_duplicate and dexp_node_name in self.store:
             raise EntitySetupNameError(owner=self, msg=f"AttrDexpNode '{dexp_node}' does not have unique name '{dexp_node_name}' within this registry, found: {self.store[dexp_node_name]}")
+
         self.store[dexp_node_name] = dexp_node
 
 
-    def register_attr_node(self, attr_node:AttrDexpNode, alt_attr_node_name=None):
+    def register_attr_node(self, attr_node:AttrDexpNode,
+                           alt_attr_node_name=None,
+                           replace_when_duplicate:bool = False):
         if not isinstance(attr_node, AttrDexpNode):
             raise EntityInternalError(f"{type(attr_node)}->{attr_node}")
         if not self.NAMESPACE == attr_node.namespace:
             raise EntityInternalError(owner=self, msg=f"Method register({attr_node}) - namespace mismatch: {self.NAMESPACE} != {attr_node.namespace}")
-        return self.register_dexp_node(dexp_node=attr_node, alt_dexp_node_name=alt_attr_node_name)
+        return self.register_dexp_node(dexp_node=attr_node,
+                                       alt_dexp_node_name=alt_attr_node_name,
+                                       replace_when_duplicate=replace_when_duplicate)
 
     def pprint(self):
         print(f"  Namespace {self.NAMESPACE._name}:")

@@ -404,8 +404,15 @@ class ContextRegistry(RegistryBase):
         self.register_all_nodes()
 
     def register_all_nodes(self):
+        """
+        For the same attribute name - this is order of preferences - which will win:
+            1. custom attributes in apply settings
+            2. custom attributes in setup settings
+            3. common attributes in apply settings (usually not overridden)
+            4. common attributes in setup settings (usually not overridden)
+        """
         setup_settings_source = SettingsSource(SettingsType.SETUP_SETTINGS, self.setup_settings.__class__)
-        common_dict = self.setup_settings.common_contextns_attributes()
+        common_dict = self.setup_settings._common_contextns_attributes()
         setup_custom_dict = self.setup_settings.custom_contextns_attributes()
 
         if self.apply_settings_class:
@@ -486,6 +493,10 @@ class ContextRegistry(RegistryBase):
                 else:
                     raise EntitySetupValueError(owner=self, msg=f"Attribute {attr_name} expected FieldName or MethodName instance, got: {attr_getter} / {type(attr_getter)}")
 
+                # NOTE: No problem with override any more!
+                #           if attr_name in self.store:
+                #               raise EntitySetupNameError(f"Attribute name '{attr_name}' is reserved. Rename class attribute in '{self.apply_settings_class}'")
+
                 attr_node = AttrDexpNode(
                     name=attr_name,
                     namespace=self.NAMESPACE,
@@ -493,10 +504,8 @@ class ContextRegistry(RegistryBase):
                     data=data,
                     type_object=type_object,
                 )
-                if attr_name in self.store:
-                    raise EntitySetupNameError(f"Attribute name '{attr_name}' is reserved. Rename class attribute in '{self.apply_settings_class}'")
 
-                self.register_attr_node(attr_node, attr_name)
+                self.register_attr_node(attr_node, attr_name, replace_when_duplicate=True)
 
         return
 
