@@ -84,9 +84,6 @@ ThisNS = Namespace("This")  # , manual_setup=True
 # MySettings - see settings.py
 ContextNS = Namespace("Ctx")
 
-# TODO: delete this - use Ctx only - see settings.py
-ConfigNS = Namespace("Cfg")
-
 # aliases
 Fn = FunctionsNS
 M = ModelsNS
@@ -94,7 +91,6 @@ M = ModelsNS
 F = FieldsNS
 This = ThisNS
 Ctx = ContextNS
-Cfg = ConfigNS
 
 # Collect all namespaces
 ALL_NS_OBJECTS = {

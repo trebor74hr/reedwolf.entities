@@ -9,7 +9,7 @@ from typing import (
     List,
     Optional,
     Union,
-    Type as TypingType,
+    Type,
 )
 from dataclasses import (
     dataclass,
@@ -84,7 +84,7 @@ from .registries import (
     FunctionsRegistry,
     OperationsRegistry,
     ContextRegistry,
-    ConfigRegistry, UnboundModelsRegistry,
+    UnboundModelsRegistry,
 )
 from .valid_children import (
     ChildrenValidationBase,
@@ -213,8 +213,8 @@ class ContainerBase(IContainer, ABC):
         setup_session.add_registry(FieldsRegistry())
         setup_session.add_registry(FunctionsRegistry())
         setup_session.add_registry(OperationsRegistry())
-        setup_session.add_registry(ContextRegistry(apply_settings_class=apply_settings_class))
-        setup_session.add_registry(ConfigRegistry(settings=settings))
+        setup_session.add_registry(ContextRegistry(setup_settings=settings,
+                                                   apply_settings_class=apply_settings_class))
 
         self.setup_session = setup_session
 
@@ -639,7 +639,7 @@ class Entity(IEntity, ContainerBase):
     bound_model     : Optional[Union[BoundModel, ModelType]] = field(repr=False, default=None, metadata={"skip_dump": True})
     # will be filled automatically with Settings() if not supplied
     settings        : Optional[Settings] = field(repr=False, default=None, metadata={"skip_dump": True})
-    apply_settings_class   : Optional[TypingType[Settings]] = field(repr=False, default=None, metadata={"skip_dump": True})
+    apply_settings_class   : Optional[Type[Settings]] = field(repr=False, default=None, metadata={"skip_dump": True})
     functions       : Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
 
     # --- only list of model names allowed
@@ -663,7 +663,7 @@ class Entity(IEntity, ContainerBase):
 
     # used for automatic component's naming, <parent_name/class_name>__<counter>
     name_counter_by_parent_name: Dict[str, int] = field(init=False, repr=False, default_factory=dict)
-    value_accessor_class_registry: Dict[str, TypingType[IValueAccessor]] = field(init=False, repr=False)
+    value_accessor_class_registry: Dict[str, Type[IValueAccessor]] = field(init=False, repr=False)
     value_accessor_default: IValueAccessor = field(init=False, repr=False)
 
     # is_unbound to model case - must be cached since bound_model could be dynamically changed in setup phase with normal
@@ -700,7 +700,7 @@ class Entity(IEntity, ContainerBase):
         self._check_cleaners([ChildrenValidationBase, ChildrenEvaluationBase])
 
         if not isinstance(self.settings, Settings):
-            raise EntitySetupValueError(owner=self, msg=f"settings needs Config instance, got: {type(self.settings)} / {self.settings}")
+            raise EntitySetupValueError(owner=self, msg=f"settings needs to be Settings instance, got: {type(self.settings)} / {self.settings}")
 
         # TODO: it is copied to enable user to extend with new ones (should be added in Settings/Resource/Repository)
         self.value_accessor_class_registry = STANDARD_VALUE_ACCESSOR_CLASS_REGISTRY.copy()
@@ -730,7 +730,7 @@ class Entity(IEntity, ContainerBase):
     def bind_to(self,
                 bound_model:Union[UndefinedType, BoundModel]=UNDEFINED,
                 settings: Optional[Settings]=None,
-                apply_settings_class: Optional[TypingType[Settings]]=None,
+                apply_settings_class: Optional[Type[Settings]]=None,
                 functions: Optional[List[CustomFunctionFactory]]=None,
                 do_setup:bool = True,
                 ):
@@ -864,7 +864,7 @@ class Entity(IEntity, ContainerBase):
 
         return output
 
-    def create_dto_instance_from_model_instance(self, instance: ModelType, dto_class: TypingType[ModelType]) -> ModelType:
+    def create_dto_instance_from_model_instance(self, instance: ModelType, dto_class: Type[ModelType]) -> ModelType:
         if not isinstance(instance, self.bound_model.model):
             raise EntityTypeError(owner=self, msg=f"Expected  {self.bound_model.model} instance, got: {instance} : {type(instance)}")
 
@@ -925,7 +925,7 @@ class SubEntityBase(ContainerBase, ABC):
     # parent_setup_session: Optional[SetupSession] = field(init=False, repr=False, default=None)
 
     # copy from first non-self container parent
-    apply_settings_class: Optional[TypingType[Settings]] = field(repr=False, init=False, default=None)
+    apply_settings_class: Optional[Type[Settings]] = field(repr=False, init=False, default=None)
     settings:             Optional[Settings] = field(repr=False, init=False, default=None)
 
     # used for automatic component's naming, <class_name>__<counter>
@@ -962,7 +962,7 @@ class SubEntityBase(ContainerBase, ABC):
         self.apply_settings_class = non_self_parent_container.apply_settings_class
         self.settings = non_self_parent_container.settings
         if not self.settings:
-            raise EntityInternalError(owner=self, msg=f"Config not set from parent: {self.parent_container}") 
+            raise EntityInternalError(owner=self, msg=f"settings not set from parent: {self.parent_container}")
 
     def setup(self, setup_session:SetupSession):
         # NOTE: setup_session is not used, can be reached with parent.setup_session(). left param

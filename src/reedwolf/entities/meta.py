@@ -148,6 +148,13 @@ class FieldName(str):
 class MethodName(str):
     ...
 
+@dataclass
+class KlassMember:
+    klass: Type
+    name: Union[FieldName, MethodName]
+
+# ------------------------------------------------------------
+
 FunctionNoArgs = Callable[[], Any]
 # it is not dict since it must be immutable - default value for the class variable
 ExpressionsAttributesMap = Dict[AttrName, Union[FieldName, MethodName]]
@@ -466,7 +473,7 @@ def get_dataclass_fields(inspect_object: Any) -> Tuple[DcField]:
 
 # ------------------------------------------------------------
 
-def get_model_fields(inspect_object: ModelType, strict: bool = True) -> Dict[str, ModelField]:
+def get_model_fields(inspect_object: ModelType, strict: bool = True) -> Dict[AttrName, ModelField]:
     if is_dataclass(inspect_object):
         # ALT: 
         #   from dataclasses import fields
@@ -476,7 +483,7 @@ def get_model_fields(inspect_object: ModelType, strict: bool = True) -> Dict[str
         field_dict = inspect_object.__fields__
     else:
         if strict:
-            raise EntityTypeError(item=inspect_object, msg=f"Class should be Dataclass or Pydantic ({inspect_object})")
+            raise EntityTypeError(item=inspect_object, msg=f"Class should be Dataclass or Pydantic, got: {inspect_object}")
         # TODO: field_dist = inspect_model.__annotations__
         field_dict = {}
     return field_dict
@@ -625,8 +632,6 @@ class TypeInfo:
     TYPE_INFO_REGISTRY: ClassVar[Dict[Union[type, IFuncArgHint], Self]] = {}
 
     def __post_init__(self):
-        # if self.th_field and self.th_field.name=='company_type': ...
-
         if isinstance(self.py_type_hint, str):
             raise EntityTypeError(owner=self, msg=f"py_type_hint={self.py_type_hint} is still string, it should have been resolved before")
 

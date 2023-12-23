@@ -1,6 +1,6 @@
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field, fields as dc_fields
-from typing import Optional, Union, ClassVar
+from typing import Optional, Union, ClassVar, Type
 
 from .exceptions import EntityInternalError
 from .meta import ExpressionsAttributesMap, FieldName, Self, MethodName
@@ -8,16 +8,16 @@ from .utils import UndefinedType, UNDEFINED
 from .values_accessor import IValueAccessor
 
 # ------------------------------------------------------------
-# IConfig
+# Settings
 # ------------------------------------------------------------
-
 
 @dataclass
 class Settings:
     """
     The Settings instances contain general predefined Entity configuration parameters (settings).
     One can add custom settings params.
-    Settings will be available in ConfigNS namespace (Cfg.).
+    Settings will be available in ContextNS namespace (Ctx..).
+    - but only attributes from get_contextns_attributes() method.
     For values only literal / plain callables (python functions) are accepted,
     no DotExpression or Function() instances allowed.
     and belonging.
@@ -68,20 +68,14 @@ class Settings:
         return {}
 
     @classmethod
-    def get_contextns_attributes(cls) -> ExpressionsAttributesMap:
-        """
-        should not be overridden
-        """
-        out= {
+    def common_contextns_attributes(cls) -> ExpressionsAttributesMap:
+        return {
             # "Trace": MethodName("is_trace"),
             "Debug": MethodName("is_debug"),
         }
-        custom_dict = cls.custom_contextns_attributes()
-        out.update(custom_dict)
-        return out
 
-    def use_apply_settings(self, apply_settings: Optional[Self]) -> "ConfigSetContextCtxManager":
-        return ConfigSetContextCtxManager(setup_settings=self, apply_settings=apply_settings)
+    def use_apply_settings(self, apply_settings: Optional[Self]) -> "UseApplySettingsCtxManager":
+        return UseApplySettingsCtxManager(setup_settings=self, apply_settings=apply_settings)
 
     def set_apply_settings(self, apply_settings: Union[Self, None, UndefinedType]):
         if apply_settings is not UNDEFINED:
@@ -94,7 +88,7 @@ class Settings:
 
 
 @dataclass()
-class ConfigSetContextCtxManager(AbstractContextManager):
+class UseApplySettingsCtxManager(AbstractContextManager):
     setup_settings: Settings
     apply_settings: Optional[Settings]
 

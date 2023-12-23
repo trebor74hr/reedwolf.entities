@@ -16,6 +16,7 @@ from typing import (
     Callable,
     # TODO: rename must be done - some test is failing
     Type as TypingType,
+    Type,
 )
 from dataclasses import (
     dataclass,
@@ -295,7 +296,7 @@ class IComponentFields:
     ...
 
 
-def make_component_fields_dataclass(class_name: str, child_field_list: List[ChildField]) -> TypingType[IComponentFields]:
+def make_component_fields_dataclass(class_name: str, child_field_list: List[ChildField]) -> Type[IComponentFields]:
     """ 
     Dynamically create Dataclass from List[ChildField] based on origin model.
     It is basedd for SubentitySingle and FieldGroup to create TypeInfo instance
@@ -305,7 +306,7 @@ def make_component_fields_dataclass(class_name: str, child_field_list: List[Chil
     # ('z', int, field(default=5))],
     children_fields = [(child_field.Name, child_field._type_info.py_type_hint)
                         for child_field in child_field_list]
-    new_dataclass: TypingType = make_dataclass(
+    new_dataclass: Type = make_dataclass(
                 cls_name=class_name, 
                 fields=children_fields, 
                 bases=(IComponentFields,))
@@ -414,7 +415,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
 
     # lazy init - done in Setup phase
     child_field_list: Optional[List[ChildField]] = field(init=False, repr=False, default=None)
-    _component_fields_dataclass: Optional[TypingType[IComponentFields]] = field(init=False, repr=False, default=None)
+    _component_fields_dataclass: Optional[Type[IComponentFields]] = field(init=False, repr=False, default=None)
     _this_registry: Union[IThisRegistry, NoneType, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
     _setup_phase_one_called: bool = field(init=False, repr=False, default=False)
 
@@ -551,7 +552,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
                 raise EntitySetupValueError(owner=self, msg="Attribute name needs to be valid python identifier name")
 
 
-    def _check_cleaners(self, allowed_cleaner_base_list: List[TypingType]):
+    def _check_cleaners(self, allowed_cleaner_base_list: List[Type]):
         allowed_cleaner_base_list = tuple(allowed_cleaner_base_list)
         if self.cleaners is not None:
             cl_names = ", ".join([cl.__name__ for cl in allowed_cleaner_base_list])
@@ -1152,7 +1153,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
     # ------------------------------------------------------------
 
     def get_component_fields_dataclass(self, setup_session: Optional[ISetupSession]) \
-            -> Tuple[TypingType[IComponentFields], List[ChildField]]:
+            -> Tuple[Type[IComponentFields], List[ChildField]]:
         # TODO: not happy with this
         """
         CACHED
@@ -1667,7 +1668,7 @@ class IContainer(IComponent, ABC):
 
 class IEntity(IContainer, ABC):
     settings: Settings = field(repr=False, )
-    apply_settings_class: Optional[TypingType[Settings]] = field(repr=False, default=None)
+    apply_settings_class: Optional[Type[Settings]] = field(repr=False, default=None)
 
 # ------------------------------------------------------------
 # IBoundModel

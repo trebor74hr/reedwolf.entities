@@ -97,8 +97,8 @@ class DotExpressionEvaluator:
             node = self.attr_node_list[-1]
             dexp_result = node.execute_node(
                                 apply_result, 
-                                dexp_result, 
-                                is_last=True, 
+                                dexp_result,
+                                is_last=True,
                                 prev_node_type_info=None)
         else:
             idx_last = len(self.attr_node_list)
@@ -106,7 +106,7 @@ class DotExpressionEvaluator:
             for idx, node in enumerate(self.attr_node_list, 1):
                 dexp_result = node.execute_node(
                                     apply_result, 
-                                    dexp_result, 
+                                    dexp_result,
                                     is_last=(idx_last == idx),
                                     prev_node_type_info=prev_node_type_info,
                                     )

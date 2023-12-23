@@ -18,7 +18,9 @@ from typing import (
     Union,
     Any,
     Callable,
-    Tuple, Type, Generic, Dict, ClassVar,
+    Type,
+    Dict,
+    ClassVar,
 )
 
 from .utils import (
@@ -30,7 +32,8 @@ from .exceptions import (
     EntitySetupError,
     EntitySetupNameError,
     EntityInternalError,
-    EntityApplyError, EntitySetupTypeError,
+    EntityApplyError,
+    EntitySetupTypeError,
 )
 from .namespaces import (
     DynamicAttrsBase,
@@ -48,7 +51,10 @@ from .meta import (
     AttrName,
     Self,
     IFuncArgHint,
-    AttrValue, IExecuteFuncArgHint, ModelType, IInjectFuncArgHint, NoneType,
+    AttrValue,
+    IExecuteFuncArgHint,
+    NoneType,
+    KlassMember,
 )
 # ------------------------------------------------------------
 # interfaces / base classes / internal structs
@@ -168,14 +174,12 @@ class DexpValidator:
             if err_msg:
                 raise EntitySetupTypeError(owner=dexp_node, msg=f"Expected type {self.expected_type_info} is not compatible with {got_type_info}: {err_msg}")
 
-    # ------------------------------------------------------------
-
 # ------------------------------------------------------------
 
 @dataclass
 class RegistryRootValue:
     value_root: AttrValue
-    attr_name_new : Optional[AttrName]
+    attr_name_new : Union[AttrName, KlassMember, NoneType]
     do_fetch_by_name: Union[bool, UndefinedType] = UNDEFINED
     # later set
     attr_dexp_node: Optional["AttrDexpNode"] =  field(init=False, repr=False, default=None)
@@ -196,10 +200,6 @@ class IRegistry:
 
     @abstractmethod
     def setup(self, setup_session: "ISetupSession") -> None:
-        ...
-
-    @abstractmethod
-    def register_all_nodes(self, root_attr_node: Optional["AttrDexpNode"], bound_model: "IBoundModel", model: ModelType, unbound_mode: bool = False):
         ...
 
     @abstractmethod

@@ -47,14 +47,10 @@ from .meta import (
     ModelType,
     TypeInfo,
     HookOnFinishedAllCallable,
-    get_model_fields, STANDARD_TYPE_LIST,
+    get_model_fields,
     AttrName,
-    ExpressionsAttributesMap,
-    FunctionNoArgs,
     FieldName,
     MethodName,
-    is_function,
-    is_instancemethod_by_name,
 )
 from .base import (
     IComponentFields,
@@ -195,7 +191,7 @@ class RegistryBase(IRegistry):
     #                     data=type_info,
     #                     namespace=self.NAMESPACE,
     #                     type_info=type_info,
-    #                     th_field=None,
+    #                     type_object=None,
     #                     )
     #     self.register_attr_node(attr_node)
     #     return attr_node
@@ -222,7 +218,7 @@ class RegistryBase(IRegistry):
                             data=child_field._type_info,
                             namespace=self.NAMESPACE,
                             type_info=child_field._type_info,
-                            th_field=None,
+                            type_object=None,
                             )
             self.register_attr_node(attr_node)
 
@@ -267,7 +263,7 @@ class RegistryBase(IRegistry):
                         data=type_info,
                         namespace=self.NAMESPACE,
                         type_info=type_info, 
-                        th_field=th_field,
+                        type_object=th_field,
                         )
 
         self.register_attr_node(attr_node)
@@ -290,7 +286,7 @@ class RegistryBase(IRegistry):
     #                     data=type_info,
     #                     namespace=self.NAMESPACE,
     #                     type_info=type_info,
-    #                     th_field=None,
+    #                     type_object=None,
     #                     )
     #     self.register_attr_node(attr_node)
     #     return attr_node
@@ -302,110 +298,9 @@ class RegistryBase(IRegistry):
             raise EntitySetupValueError(owner=self, msg=f"Expected model class (DC/PYD), got: {type(model_class)} / {to_repr(model_class)} ")
 
         for attr_name in get_model_fields(model_class):
-            # th_field: ModelField in .values()
             attr_node = self._create_attr_node_for_model_attr(model_class, attr_name)
             self.register_attr_node(attr_node)
 
-
-    def _register_from_attributes_dict(self,
-                                       model_class: ModelType,
-                                       attributes_dict: ExpressionsAttributesMap):
-        # map User, Session, Now and similar Attribute -> function calls
-        fields = get_model_fields(model_class)
-
-        for attr_name, attr_getter in attributes_dict.items():
-            if isinstance(attr_getter, MethodName):
-                # or is_function(attr_getter):
-                attr_getter: MethodName = attr_getter
-                py_function: FunctionNoArgs = getattr(model_class, attr_getter, UNDEFINED)
-                if py_function is UNDEFINED:
-                    # could get all methods with no args
-                    raise EntitySetupNameError(owner=self, msg=f"Attribute {attr_name} must be name of method with no arguments from class '{model_class}', got: {attr_getter}")
-                # else: py_function: FunctionNoArgs = attr_getter
-
-                function_name = py_function.__name__
-                if not is_instancemethod_by_name(model_class,  function_name):
-                    raise EntitySetupNameError(owner=self,
-                                               msg=f"Attribute {attr_name} must be name of method with no arguments of class '{model_class}', function {attr_getter} is not instance method of this class.")
-
-                # Check that function receives only single param if method(self), or no param if function()
-                py_fun_signature = inspect.signature(py_function)
-                # TODO: resolve properly first arg name as 'self' convention
-                non_empty_params = [param.name for param in py_fun_signature.parameters.values() if param.empty and param.name != 'self']
-                if len(non_empty_params)!=0:
-                    raise EntitySetupNameError(owner=self,
-                           msg=f"{attr_name}: Method '{model_class.__name__}.{attr_getter}()' must not have arguments without defaults. Found: {', '.join(non_empty_params)} ")
-
-                type_info = TypeInfo.extract_function_return_type_info(
-                    py_function,
-                    allow_nonetype=True)
-
-                data = attr_getter
-                # TODO: the type or name of th_field is not ok
-                th_field = py_function
-
-            elif isinstance(attr_getter, FieldName):
-                attr_getter: FieldName = attr_getter
-                attr_field = fields.get(attr_getter, None)
-                if not attr_field:
-                    aval_names = get_available_names_example(attr_field, fields.keys())
-                    raise EntitySetupNameError(owner=self, msg=f"Attribute {attr_name} must be field name of class '{model_class}', got: {attr_getter}, available: {aval_names}")
-                type_info = TypeInfo.get_or_create_by_type(
-                    py_type_hint=attr_field,
-                    caller=model_class,
-                )
-                data = attr_getter
-                th_field = attr_field
-            else:
-                raise EntitySetupValueError(owner=self, msg=f"Attribute {attr_name} expected FieldName or MethodName instance, got: {attr_getter} / {type(attr_getter)}")
-
-            attr_node = AttrDexpNode(
-                name=attr_name,
-                data=data,
-                namespace=self.NAMESPACE,
-                type_info=type_info,
-                th_field=th_field,
-            )
-            if attr_name in self.store:
-                raise EntitySetupNameError(f"Attribute name '{attr_name}' is reserved. Rename class attribute in '{self.apply_settings_class}'")
-
-            self.register_attr_node(attr_node, attr_name)
-
-
-    def _apply_to_get_root_value_by_attributes_dict(self,
-                                                    # attributes_dict: ExpressionsAttributesMap,
-                                                    attr_name: AttrName,
-                                                    klass_attr_name: AttrName,
-                                                    klass: type) -> RegistryRootValue:
-        if klass in (UNDEFINED, None):
-            # component = apply_result.current_frame.component
-            raise EntityApplyNameError(owner=self, msg=f"Attribute '{attr_name}' can not be fetched since '{klass_attr_name}' is not set ({klass}).")
-
-        if attr_name not in self.store:
-            avail_names = get_available_names_example(attr_name, list(self.store.keys()))
-            raise EntityApplyNameError(owner=self, msg=f"Invalid attribute name '{attr_name}', available: {avail_names}.")
-
-        attr_dexp_node = self.store[attr_name]
-        attr_getter = attr_dexp_node.data
-
-        # if attr_name not in attributes_dict:
-        #     avail_names = get_available_names_example(attr_name, attributes_dict.keys())
-        #     raise EntityApplyNameError(owner=self, msg=f"Invalid attribute name '{attr_name}', available: {avail_names}.")
-        # attr_getter = attributes_dict[attr_name]
-
-        if isinstance(attr_getter, MethodName):
-            # NOTE: convert unbound method to its name to be able to fetch bound method later.
-            method = attr_dexp_node.th_field
-            assert callable(method), method
-            attr_name_new = method.__name__
-        elif isinstance(attr_getter, FieldName):
-            # must preserve FieldName type
-            attr_name_new = attr_getter
-        else:
-            raise EntityInternalError(owner=self, msg=f"Expected FieldName or MethodName instance, got: {attr_getter}")
-
-        # else: attr_name_new = None
-        return RegistryRootValue(klass, attr_name_new)
 
 
     # ------------------------------------------------------------
@@ -431,7 +326,7 @@ class RegistryBase(IRegistry):
                         data=type_info,
                         namespace=cls.NAMESPACE,
                         type_info=type_info, 
-                        th_field=th_field,
+                        type_object=th_field,
                         )
         return attr_node
 
@@ -606,7 +501,7 @@ class RegistryBase(IRegistry):
                             data=type_info,
                             namespace=self.NAMESPACE,
                             type_info=type_info, 
-                            th_field=th_field, 
+                            type_object=th_field,
                             ) # function=function
 
         if not isinstance(dexp_node, IDotExpressionNode):

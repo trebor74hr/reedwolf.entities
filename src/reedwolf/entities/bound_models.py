@@ -143,7 +143,7 @@ class NestedBoundModelBase(IBoundModel):
                                             data=read_handler_type_info,
                                             namespace=models_registry.NAMESPACE,
                                             type_info=read_handler_type_info, 
-                                            th_field=None,
+                                            type_object=None,
                                             )
 
                 models_registry.register_attr_node(attr_node=model_attr_dexp_node)

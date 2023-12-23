@@ -28,13 +28,18 @@ from .namespaces import (
 from .expressions import (
     DotExpression,
     IDotExpressionNode,
-    IAttributeAccessorBase, RegistryRootValue,
+    IAttributeAccessorBase,
 )
 from .meta import (
     TypeInfo,
     is_model_class,
     is_function,
-    ModelField, AttrName, AttrValue, MethodName, FieldName,
+    ModelField,
+    AttrName,
+    AttrValue,
+    MethodName,
+    FieldName,
+    NoneType, KlassMember,
 )
 # TODO: remove this dependency
 from .base import (
@@ -58,6 +63,7 @@ class AttrDexpNode(IDotExpressionNode):
         M.name
           company and name are AttrDexpNodes
     """
+    # TODO: too many if-s - make subclassing instead?
     name: str
     # TODO: data can be also - check each:
     #   - some dataproviding function
@@ -66,7 +72,8 @@ class AttrDexpNode(IDotExpressionNode):
     data: Any 
     namespace: Namespace
 
-    th_field: Optional[ModelField] = field(repr=False, default=UNDEFINED)
+    # based on attr_node_type - can contain Field() or class - used later to extract details
+    type_object: Union[ModelField, KlassMember, NoneType] = field(repr=False, default=UNDEFINED)
     type_info: Optional[TypeInfo] = field(default=None)
     # TODO: rename to: func_node or function_node
     # function: Optional[Union[IFunctionDexpNode]] = field(repr=False, default=None)
@@ -126,28 +133,25 @@ class AttrDexpNode(IDotExpressionNode):
         # CASE: Class Attribute or Function return type
         # ---------------------------------------------
         elif isinstance(self.data, TypeInfo):
-            if self.th_field is UNDEFINED:
-                raise EntityInternalError(owner=self, msg="TypeInfo case - expected th_field (ModelField or py_function).")
+            if self.type_object is UNDEFINED:
+                raise EntityInternalError(owner=self, msg=f"TypeInfo case - type_object should be set (ModelField), got: {self.type_object}")
             self.attr_node_type = AttrDexpNodeTypeEnum.TH_FIELD
             # .type_ could be a class/type or NewType instance
             type_name = getattr(self.data.type_, "__name__", 
-                                getattr(self.data.type_, "_name", 
-                                        repr(self.data.type_)))
+                                getattr(self.data.type_, "_name", repr(self.data.type_)))
             self.data_supplier_name = f"TH[{type_name}]"
         elif isinstance(self.data, FieldName):
-            if self.th_field is UNDEFINED:
-                # TODO: check isinstance(..., DcField)
-                raise EntityInternalError(owner=self, msg="FieldName case - expected filled th_field,")
+            if not isinstance(self.type_object, KlassMember) and self.type_object.name == self.data:
+                raise EntityInternalError(owner=self, msg=f"MethodName case - type_object must be instance of KlassMember, got: {self.type_object},")
             self.attr_node_type = AttrDexpNodeTypeEnum.TH_FIELD
-            type_name = str(self.data)  # name of field
+            type_name = str(self.data)  # field name
             self.data_supplier_name = f"FN[{type_name}]"
 
         elif isinstance(self.data, MethodName):
-            # For MySettings - th_field is a method() for AttrNode, solve this more clever
-            if not is_function(self.th_field):
-                raise EntityInternalError(owner=self, msg=f"MethodName case - expected filled th_field to function, got: {self.th_field},")
+            if not isinstance(self.type_object, KlassMember) and self.type_object.name == self.data:
+                raise EntityInternalError(owner=self, msg=f"MethodName case - type_object must be instance of KlassMember, got: {self.type_object},")
             self.attr_node_type = AttrDexpNodeTypeEnum.TH_FUNCTION
-            type_name = str(self.data)  # name of function
+            type_name = str(self.data)  # method name
             self.data_supplier_name = f"MN[{type_name}]"
 
         else:
@@ -200,8 +204,8 @@ class AttrDexpNode(IDotExpressionNode):
                      apply_result: IApplyResult,
                      # previous - can be undefined too
                      dexp_result: Union[ExecResult, UndefinedType],
-                     prev_node_type_info: Optional[TypeInfo],
                      is_last: bool,
+                     prev_node_type_info: Optional[TypeInfo],
                      ) -> ExecResult:
 
         if is_last and not self.is_finished:
@@ -354,6 +358,8 @@ class AttrDexpNode(IDotExpressionNode):
                     #     raise EntityApplyNameError(owner=self,
                     #            msg=f"Attribute '{attr_name}' not found in '{to_repr(value_prev)}' : '{type(value_prev)}'")
 
+                    if not isinstance(attr_name, str):
+                        raise EntityInternalError(owner=self, msg=f"Attribute name must be a string, got. {attr_name}")
                     if not hasattr(value_prev, attr_name):
                         # TODO: list which fields are available
                         # if all types match - could be internal problem?

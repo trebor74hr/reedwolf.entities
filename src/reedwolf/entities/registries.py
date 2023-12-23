@@ -4,27 +4,28 @@ from dataclasses import (
     dataclass,
     field,
 )
+from enum import Enum
 from typing import (
     List,
     Union,
     Optional,
     ClassVar,
     Dict,
-    Type as TypingType,
+    Type,
 )
 
 from .utils import (
     UNDEFINED,
     UndefinedType,
-    to_repr,
+    to_repr, get_available_names_example,
 )
 from .exceptions import (
     EntitySetupError,
     EntitySetupNameError,
     EntitySetupValueError,
     EntityInternalError,
-    # EntityApplyNameError,
     EntitySetupTypeError,
+    EntityApplyNameError,
 )
 from .namespaces import (
     Namespace,
@@ -33,7 +34,6 @@ from .namespaces import (
     ThisNS,
     FunctionsNS,
     ContextNS,
-    ConfigNS,
     OperationsNS,
 )
 from .expressions import (
@@ -47,7 +47,14 @@ from .meta import (
     get_model_fields,
     TypeInfo,
     AttrName,
-    Self, ExpressionsAttributesMap,
+    Self,
+    ExpressionsAttributesMap,
+    MethodName,
+    FunctionNoArgs,
+    is_instancemethod_by_name,
+    FieldName,
+    ModelField,
+    KlassMember,
 )
 from .base import (
     ReservedAttributeNames,
@@ -115,7 +122,7 @@ class UnboundModelsRegistry(IThisRegistry, RegistryBase):
             data=type_info, # must be like this
             namespace=self.NAMESPACE,
             type_info=type_info,
-            th_field=type_info.type_,
+            type_object=type_info.type_,
         )
         self.register_attr_node(attr_node, alt_attr_node_name=None)
         return attr_node
@@ -354,25 +361,144 @@ class FieldsRegistry(RegistryBase):
         return RegistryRootValue(top_attr_accessor, None)
 
 
-# ------------------------------------------------------------
+# -------------------------------------------------------------
 
+class SettingsType(str, Enum):
+    SETUP_SETTINGS = "SETUP_SETTINGS"
+    APPLY_SETTINGS = "APPLY_SETTINGS"
+
+
+@dataclass
+class SettingsKlassMember(KlassMember):
+    settings_type: SettingsType
+
+
+@dataclass
+class SettingsSource:
+    settings_type: SettingsType
+    klass: ModelType
+    fields: Dict[AttrName, ModelField] = field(init=False, repr=False)
+
+    def __post_init__(self):
+        self.fields = get_model_fields(self.klass)
+
+# ------------------------------------------------------------
 
 @dataclass
 class ContextRegistry(RegistryBase):
 
-    apply_settings_class: Optional[TypingType[Settings]] = field(repr=False)
+    setup_settings: Settings = field(repr=False)
+    apply_settings_class: Optional[Type[Settings]] = field(repr=False)
 
     NAMESPACE: ClassVar[Namespace] = ContextNS
 
     attributes_dict: ExpressionsAttributesMap = field(init=False, repr=False)
 
     def __post_init__(self):
-        # super().__post_init__()
-        self.attributes_dict = self.apply_settings_class.get_contextns_attributes() \
-            if self.apply_settings_class else {}
-        # TODO: assert
+        if not isinstance(self.setup_settings, Settings):
+            raise EntitySetupValueError(owner=self, msg=f"setup_settings must be instance of Settings, got: {self.apply_settings_class}")
+
+        if self.apply_settings_class is not None:
+            if Settings not in inspect.getmro(self.apply_settings_class):
+                raise EntitySetupValueError(owner=self, msg=f"apply_settings_class should inherit Settings, got: {self.apply_settings_class}")
+        self.register_all_nodes()
+
+    def register_all_nodes(self):
+        setup_settings_source = SettingsSource(SettingsType.SETUP_SETTINGS, self.setup_settings.__class__)
+        common_dict = self.setup_settings.common_contextns_attributes()
+        setup_custom_dict = self.setup_settings.custom_contextns_attributes()
+
         if self.apply_settings_class:
-            self.register_all_nodes()
+            apply_settings_source = SettingsSource(SettingsType.APPLY_SETTINGS, self.apply_settings_class)
+            apply_custom_dict = self.apply_settings_class.custom_contextns_attributes()
+            settings_source_list_pairs = [
+                (common_dict, [setup_settings_source, apply_settings_source]),
+                (setup_custom_dict, [setup_settings_source]),
+                (apply_custom_dict, [apply_settings_source]),
+            ]
+        else:
+            settings_source_list_pairs = [
+                (common_dict, [setup_settings_source]),
+                (setup_custom_dict, [setup_settings_source]),
+            ]
+
+        for attributes_dict, settings_source_list in settings_source_list_pairs:
+
+            for attr_name, attr_getter in attributes_dict.items():
+
+                if isinstance(attr_getter, MethodName):
+                    attr_getter: MethodName = attr_getter
+                    py_function = settings_source = UNDEFINED
+                    for settings_source in settings_source_list:
+                        py_function: FunctionNoArgs = getattr(settings_source.klass, attr_getter, UNDEFINED)
+                        if py_function is not UNDEFINED:
+                            break
+
+                    if py_function is UNDEFINED:
+                        # TODO: could I get all methods with no args?
+                        models = [settings_source.klass for settings_source in settings_source_list]
+                        raise EntitySetupNameError(owner=self,
+                                                   msg=f"Attribute {attr_name} must be name of method with no arguments from class(es) '{models}', got: {attr_getter}")
+
+                    function_name = py_function.__name__
+                    if not is_instancemethod_by_name(settings_source.klass,  function_name):
+                        raise EntitySetupNameError(owner=self,
+                                                   msg=f"Attribute {attr_name} must be name of method with no arguments of class '{settings_source.klass}', function {attr_getter} is not instance method of this class.")
+
+                    # Check that function receives only single param if method(self), or no param if function()
+                    py_fun_signature = inspect.signature(py_function)
+                    # TODO: resolve properly first arg name as 'self' convention
+                    non_empty_params = [param.name for param in py_fun_signature.parameters.values() if param.empty and param.name != 'self']
+                    if len(non_empty_params)!=0:
+                        raise EntitySetupNameError(owner=self,
+                                                   msg=f"{attr_name}: Method '{settings_source.klass.__name__}.{attr_getter}()' must not have arguments without defaults. Found: {', '.join(non_empty_params)} ")
+
+                    # NOTE: py_function is not used later
+                    type_info = TypeInfo.extract_function_return_type_info(py_function, allow_nonetype=True)
+                    data = attr_getter
+                    type_object = SettingsKlassMember(settings_type=settings_source.settings_type,
+                                                      klass=settings_source.klass,
+                                                      name=attr_getter)
+
+                elif isinstance(attr_getter, FieldName):
+                    attr_getter: FieldName = attr_getter
+                    attr_field = settings_source = UNDEFINED
+                    for settings_source in settings_source_list:
+                        attr_field = settings_source.fields.get(attr_getter, UNDEFINED)
+                        if attr_field is not UNDEFINED:
+                            break
+
+                    if attr_field is UNDEFINED:
+                        all_keys = set()
+                        for settings_source in settings_source_list:
+                            all_keys.union(set(settings_source.fields.keys()))
+                        models = [settings_source.klass for settings_source in settings_source_list]
+                        aval_names = get_available_names_example(attr_field, list(all_keys))
+                        raise EntitySetupNameError(owner=self, msg=f"Attribute {attr_name} must be field name of class(es) '{models}', got: {attr_getter}, available: {aval_names}")
+
+                    # NOTE: attr_field is not used later
+                    type_info = TypeInfo.get_or_create_by_type(py_type_hint=attr_field,
+                                                               caller=settings_source.klass)
+                    data = attr_getter
+                    type_object = SettingsKlassMember(settings_type=settings_source.settings_type,
+                                                      klass=settings_source.klass,
+                                                      name=attr_getter)
+                else:
+                    raise EntitySetupValueError(owner=self, msg=f"Attribute {attr_name} expected FieldName or MethodName instance, got: {attr_getter} / {type(attr_getter)}")
+
+                attr_node = AttrDexpNode(
+                    name=attr_name,
+                    namespace=self.NAMESPACE,
+                    type_info=type_info,
+                    data=data,
+                    type_object=type_object,
+                )
+                if attr_name in self.store:
+                    raise EntitySetupNameError(f"Attribute name '{attr_name}' is reserved. Rename class attribute in '{self.apply_settings_class}'")
+
+                self.register_attr_node(attr_node, attr_name)
+
+        return
 
     def create_node(self,
                     dexp_node_name: str,
@@ -381,100 +507,39 @@ class ContextRegistry(RegistryBase):
                     ) -> IDotExpressionNode:
 
         if not isinstance(owner, IComponent):
-            raise EntityInternalError(owner=self, msg=f"Owner needs to be Component, got: {type(owner)} / {owner}")  
-
-        if not owner.get_first_parent_container(consider_self=True).apply_settings_class:
-            raise EntitySetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}' (referenced by '{self.NAMESPACE}.{dexp_node_name}') should not be used since 'Entity.apply_settings_class' is not set. Define 'apply_settings_class' to 'Entity()' constructor and try again.")
+            raise EntityInternalError(owner=self, msg=f"Owner needs to be Component, got: {type(owner)} / {owner}")
 
         return super().create_node(
-                dexp_node_name=dexp_node_name,
-                owner_dexp_node=owner_dexp_node,
-                owner=owner,
-                )
-
-    def register_all_nodes(self):
-        assert self.apply_settings_class is not None
-        if Settings not in inspect.getmro(self.apply_settings_class):
-            raise EntitySetupValueError(owner=self, msg=f"apply_settings_class should inherit Settings, got: {self.apply_settings_class}")
-
-        # for attr_name in get_model_fields(self.apply_settings_class):
-        #     attr_node = self._create_attr_node_for_model_attr(self.apply_settings_class, attr_name)
-        #     self.register_attr_node(attr_node)
-        self._register_from_attributes_dict(
-                model_class=self.apply_settings_class,
-                attributes_dict=self.attributes_dict,
+            dexp_node_name=dexp_node_name,
+            owner_dexp_node=owner_dexp_node,
+            owner=owner,
         )
+
 
     def _apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RegistryRootValue:
-        return self._apply_to_get_root_value_by_attributes_dict(
-            # attributes_dict=self.attributes_dict,
-            attr_name=attr_name,
-            klass_attr_name="merged_settings",
-            klass=apply_result.settings,
-        )
-        # settings = apply_result.settings
-        # if settings in (UNDEFINED, None):
-        #     # component = apply_result.current_frame.component
-        #     raise EntityApplyNameError(owner=self, msg=f"Attribute '{attr_name}' can not be fetched since settings is not set ({type(settings)}).")
+        if attr_name not in self.store:
+            avail_names = get_available_names_example(attr_name, list(self.store.keys()))
+            raise EntityApplyNameError(owner=self, msg=f"Invalid attribute name '{attr_name}', available: {avail_names}.")
 
-        # if attr_name in self.attributes_dict:
-        #     attr_callable = self.attributes_dict[attr_name]
-        #     assert callable(attr_callable), attr_callable
-        #     attr_name_new = attr_callable.__name__
-        # else:
-        #     attr_name_new = None
+        attr_dexp_node = self.store[attr_name]
+        klass_member = attr_dexp_node.type_object
 
-        # return RegistryRootValue(settings, attr_name_new)
+        if not isinstance(klass_member, SettingsKlassMember):
+            raise EntityInternalError(owner=self, msg=f"Expected SettingsClassMember instance, got: {klass_member}")
 
+        # can be method name or field name
+        attr_name_new = klass_member.name
+        if klass_member.settings_type == SettingsType.APPLY_SETTINGS:
+            value_root = apply_result.settings
+        elif klass_member.settings_type == SettingsType.SETUP_SETTINGS:
+            value_root = apply_result.entity.settings
+        else:
+            raise EntityInternalError(owner=self, msg=f"Invalid settingss type: got: {klass_member.settings_type}")
+
+        return RegistryRootValue(value_root, attr_name_new)
 
 # ------------------------------------------------------------
 
-
-@dataclass
-class ConfigRegistry(RegistryBase):
-
-    settings: Settings = field(repr=False)
-
-    NAMESPACE: ClassVar[Namespace] = ConfigNS
-
-    callables_dict: ExpressionsAttributesMap = field(init=False, repr=False)
-
-    def __post_init__(self):
-        # super().__post_init__()
-        if not self.settings:
-            raise EntityInternalError(owner=self, msg="Settings is required")
-        self.callables_dict = self.settings.get_contextns_attributes()
-        self.register_all_nodes()
-
-    def register_all_nodes(self):
-        if not isinstance(self.settings, Settings):
-            raise EntityInternalError(owner=self, msg=f".settings is not Settings instance, got: {type(self.settings)} / {self.settings}")
-
-        self._register_from_attributes_dict(
-                model_class=self.settings.__class__,
-                attributes_dict=self.callables_dict)
-        # config_class = self.settings.__class__
-        # for attr_name in get_model_fields(config_class):
-        #     attr_node = self._create_attr_node_for_model_attr(config_class, attr_name)
-        #     self.register_attr_node(attr_node)
-
-    def _apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RegistryRootValue:
-        return self._apply_to_get_root_value_by_attributes_dict(
-            # attributes_dict=self.callables_dict,
-            attr_name=attr_name,
-            klass_attr_name="settings",
-            klass=self.settings,
-        )
-        # # ALT: settings = apply_result.entity.settings
-        # settings = self.settings
-        # if settings in (UNDEFINED, None):
-        #     component = apply_result.current_frame.component
-        #     raise EntityInternalError(owner=self,
-        #         msg=f"ConfigNS attribute '{component.name}' can not be fetched since settings is not set ({type(settings)}).")
-        # return RegistryRootValue(settings, None)
-
-
-# ------------------------------------------------------------
 @dataclass
 class ThisRegistry(IThisRegistry, RegistryBase):
     """

@@ -12,8 +12,6 @@ from .namespaces import (  # noqa: F401
     This,
     ContextNS,
     Ctx,
-    ConfigNS,
-    Cfg,
     )
 from .exceptions import (
     EntityError,
@@ -122,7 +120,6 @@ __all__ = [
     "FieldsNS",
     "ThisNS",
     "ContextNS",
-    "ConfigNS",
 
     # NOTE: namespace aliases not in "import *" case
     #   "F",
@@ -130,7 +127,6 @@ __all__ = [
     #   "M",
     #   "This",
     #   "Ctx",
-    #   "Cfg",
 
     # exceptions
     "EntityError",
