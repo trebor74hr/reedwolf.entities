@@ -26,43 +26,43 @@ new custom validations could be done like this::
 """
 from abc import ABC
 from typing import (
-        Union, 
-        Optional,
-        )
+    Union,
+    Optional,
+)
 from dataclasses import (
-        dataclass, 
-        field,
-        )
+    dataclass,
+    field,
+)
 
 from .namespaces import (
-        Fn, 
-        This,
-        )
+    Fn,
+    This,
+)
 from .utils import (
-        to_int,
-        message_truncate,
-        is_none_value,
-        )
+    to_int,
+    message_truncate,
+    is_none_value,
+)
 from .meta import (
-        StandardType,
-        STANDARD_TYPE_LIST,
-        TransMessageType,
-        NoneType,
-        )
+    StandardType,
+    STANDARD_TYPE_LIST,
+    TransMessageType,
+    NoneType,
+)
 from .exceptions import (
-        EntitySetupError,
-        )
+    EntitySetupError,
+)
 from .expressions import (
-        DotExpression,
-        )
+    DotExpression,
+)
 from .base import (
     IApplyResult,
     ValidationFailure,
     _,
-        )
+)
 from .valid_base import (
-        ValidationBase,
-        )
+    ValidationBase,
+)
 
 
 class FieldValidationBase(ValidationBase, ABC):
@@ -182,7 +182,7 @@ class MinValue(FieldValidationBase):
     def __post_init__(self):
         # TODO: allow DotExpression 
         if type(self.value) not in STANDARD_TYPE_LIST:
-            raise EntitySetupError(owner=self, msg="Argument 'value' must be some standard type (TODO: DotExpression), got: {type(self.value)} : {self.value}")
+            raise EntitySetupError(owner=self, msg="Argument 'value' must be some standard type (TODO: DotExpression), got: {type(self.value)}: {self.value}")
         if not self.error:
             self.error = "The value it too big"
         super().__post_init__()

@@ -76,7 +76,7 @@ class ExecResult:
     # Every DotExpression member (e.g. Fn.name.Fun().member) will get one DexpValueNode.
     # TODO: consider adding set compoenent (owner) that triggerred value change
     #       value evaluation - can have attr_node.name
-    dexp_value_node_list : List[DexpValueNode] = field(repr=False, init=False, default_factory=list)
+    dexp_value_node_list: List[DexpValueNode] = field(repr=False, init=False, default_factory=list)
 
     @classmethod
     def create(cls, value: Any, attr_name: str="", changer_name: str=""):
@@ -178,11 +178,11 @@ class DexpValidator:
 
 @dataclass
 class RegistryRootValue:
-    value_root: AttrValue
-    attr_name_new : Union[AttrName, KlassMember, NoneType]
-    do_fetch_by_name: Union[bool, UndefinedType] = UNDEFINED
+    value_root:         AttrValue
+    attr_name_new:      Union[AttrName, KlassMember, NoneType]
+    do_fetch_by_name:   Union[bool, UndefinedType] = UNDEFINED
     # later set
-    attr_dexp_node: Optional["AttrDexpNode"] =  field(init=False, repr=False, default=None)
+    attr_dexp_node:     Optional["AttrDexpNode"] =  field(init=False, repr=False, default=None)
 
     def set_attr_dexp_node(self, attr_dexp_node: "AttrDexpNode") -> Self:
         if self.attr_dexp_node is not None:
@@ -353,7 +353,7 @@ class DotExpression(DynamicAttrsBase):
     ):
         " NOTE: when adding new params, add to Clone() too "
         # SAFE OPERATIONS
-        self._status : DExpStatusEnum = DExpStatusEnum.INITIALIZED
+        self._status: DExpStatusEnum = DExpStatusEnum.INITIALIZED
         self._namespace = namespace
         self._node = node
         self._is_top = Path is None
@@ -547,7 +547,6 @@ class DotExpression(DynamicAttrsBase):
                     owner_arg_type_info = None
 
                 # TODO: self._dexp_validator is not passed, so not used
-                # : IFunctionDexpNode
                 current_dexp_node = registry.create_func_node(
                         setup_session=setup_session,
                         caller=last_dexp_node,
@@ -807,7 +806,7 @@ class IFunctionDexpNode(IDotExpressionNode):
 @dataclass
 class LiteralDexpNode(IDotExpressionNode):
 
-    value : Any
+    value: Any
     dexp_result: ExecResult = field(repr=False, init=False)
     type_info: TypeInfo = field(repr=False, init=False)
 
@@ -862,9 +861,9 @@ class OutputTypeInfoTypeEnum(str, Enum):
 class Operation:
     code: str
     dexp_code: str
-    ast_node_type : ast.AST
+    ast_node_type: ast.AST
     apply_function: Callable
-    load_function : Callable
+    load_function: Callable
     output_type_info_type: OutputTypeInfoTypeEnum \
         = OutputTypeInfoTypeEnum.FROM_FIRST_DEXP
 
@@ -876,35 +875,35 @@ OPCODE_TO_FUNCTION = {
     # NOTE: no need to check unary/binary vs have 1 or 2 params
     #       python parser/interpretor will ensure this
     # binary operatorsy - buultin
-      "=="  : Operation(code="==" , dexp_code="==" , ast_node_type= ast.Eq      , apply_function= operator.eq      , load_function= operator.eq,  # noqa: E131
-                        output_type_info_type=OutputTypeInfoTypeEnum.BOOL_TYPE)
-    , "!="  : Operation(code="!=" , dexp_code="!=" , ast_node_type= ast.NotEq   , apply_function= operator.ne      , load_function= operator.ne,  # noqa: E131
-                        output_type_info_type=OutputTypeInfoTypeEnum.BOOL_TYPE)
-    , ">"   : Operation(code=">"  , dexp_code=">"  , ast_node_type= ast.Gt      , apply_function= operator.gt      , load_function= operator.gt,
-                        output_type_info_type=OutputTypeInfoTypeEnum.BOOL_TYPE)
-    , ">="  : Operation(code=">=" , dexp_code=">=" , ast_node_type= ast.GtE     , apply_function= operator.ge      , load_function= operator.ge,
-                        output_type_info_type=OutputTypeInfoTypeEnum.BOOL_TYPE)
-    , "<"   : Operation(code="<"  , dexp_code="<"  , ast_node_type= ast.Lt      , apply_function= operator.lt      , load_function= operator.lt,
-                        output_type_info_type=OutputTypeInfoTypeEnum.BOOL_TYPE)
-    , "<="  : Operation(code="<=" , dexp_code="<=" , ast_node_type= ast.LtE     , apply_function= operator.le      , load_function= operator.le,
-                        output_type_info_type=OutputTypeInfoTypeEnum.BOOL_TYPE)
+      "==": Operation(code="==" , dexp_code="==" , ast_node_type= ast.Eq      , apply_function= operator.eq      , load_function= operator.eq,  # noqa: E131
+                      output_type_info_type=OutputTypeInfoTypeEnum.BOOL_TYPE)
+    , "!=": Operation(code="!=" , dexp_code="!=" , ast_node_type= ast.NotEq   , apply_function= operator.ne      , load_function= operator.ne,  # noqa: E131
+                      output_type_info_type=OutputTypeInfoTypeEnum.BOOL_TYPE)
+    , ">":  Operation(code=">"  , dexp_code=">"  , ast_node_type= ast.Gt      , apply_function= operator.gt      , load_function= operator.gt,
+                      output_type_info_type=OutputTypeInfoTypeEnum.BOOL_TYPE)
+    , ">=": Operation(code=">=" , dexp_code=">=" , ast_node_type= ast.GtE     , apply_function= operator.ge      , load_function= operator.ge,
+                      output_type_info_type=OutputTypeInfoTypeEnum.BOOL_TYPE)
+    , "<":  Operation(code="<"  , dexp_code="<"  , ast_node_type= ast.Lt      , apply_function= operator.lt      , load_function= operator.lt,
+                      output_type_info_type=OutputTypeInfoTypeEnum.BOOL_TYPE)
+    , "<=": Operation(code="<=" , dexp_code="<=" , ast_node_type= ast.LtE     , apply_function= operator.le      , load_function= operator.le,
+                      output_type_info_type=OutputTypeInfoTypeEnum.BOOL_TYPE)
 
-    , "+"   : Operation(code="+"  , dexp_code="+"  , ast_node_type= ast.Add     , apply_function= operator.add     , load_function= operator.add)
-    , "-"   : Operation(code="-"  , dexp_code="-"  , ast_node_type= ast.Sub     , apply_function= operator.sub     , load_function= operator.sub)
-    , "*"   : Operation(code="*"  , dexp_code="*"  , ast_node_type= ast.Mult    , apply_function= operator.mul     , load_function= operator.mul)
-    , "/"   : Operation(code="/"  , dexp_code="/"  , ast_node_type= ast.Div     , apply_function= operator.truediv , load_function= operator.truediv)
-    , "//"  : Operation(code="//" , dexp_code="//" , ast_node_type= ast.FloorDiv, apply_function= operator.floordiv, load_function= operator.floordiv)
+    , "+":  Operation(code="+"  , dexp_code="+"  , ast_node_type= ast.Add     , apply_function= operator.add     , load_function= operator.add)
+    , "-":  Operation(code="-"  , dexp_code="-"  , ast_node_type= ast.Sub     , apply_function= operator.sub     , load_function= operator.sub)
+    , "*":  Operation(code="*"  , dexp_code="*"  , ast_node_type= ast.Mult    , apply_function= operator.mul     , load_function= operator.mul)
+    , "/":  Operation(code="/"  , dexp_code="/"  , ast_node_type= ast.Div     , apply_function= operator.truediv , load_function= operator.truediv)
+    , "//": Operation(code="//" , dexp_code="//" , ast_node_type= ast.FloorDiv, apply_function= operator.floordiv, load_function= operator.floordiv)
 
-    , "in"  : Operation(code="in" , dexp_code="in" , ast_node_type= ast.In      , apply_function= operator.contains, load_function= operator.contains,
-                        output_type_info_type = OutputTypeInfoTypeEnum.BOOL_TYPE)
+    , "in": Operation(code="in" , dexp_code="in" , ast_node_type= ast.In      , apply_function= operator.contains, load_function= operator.contains,
+                      output_type_info_type = OutputTypeInfoTypeEnum.BOOL_TYPE)
 
     # TODO: logicaal operators - work as python OR -> returns non-bool or not?
-    , "and" : Operation(code="and", dexp_code="&"  , ast_node_type= ast.BitAnd  , apply_function= _op_apply_and    , load_function= operator.iand)
-    , "or"  : Operation(code="or" , dexp_code="|"  , ast_node_type= ast.BitOr   , apply_function= _op_apply_or     , load_function= operator.ior)
+    , "and": Operation(code="and", dexp_code="&"  , ast_node_type= ast.BitAnd  , apply_function= _op_apply_and    , load_function= operator.iand)
+    , "or":  Operation(code="or" , dexp_code="|"  , ast_node_type= ast.BitOr   , apply_function= _op_apply_or     , load_function= operator.ior)
 
     # unary operators                              
-    , "not" : Operation(code="not", dexp_code="~"  , ast_node_type= ast.Invert  , apply_function= operator.not_    , load_function= operator.invert,
-                        output_type_info_type = OutputTypeInfoTypeEnum.BOOL_TYPE)
+    , "not": Operation(code="not", dexp_code="~"  , ast_node_type= ast.Invert  , apply_function= operator.not_    , load_function= operator.invert,
+                       output_type_info_type = OutputTypeInfoTypeEnum.BOOL_TYPE)
 }
 
 
@@ -955,18 +954,18 @@ class OperationDexpNode(IDotExpressionNode):
         op_function(first[, second]) -> value
 
     """
-    op: str  # OPCODE_TO_FUNCTION.keys()
-    first: Any
-    second: Union[Any, UndefinedType] = UNDEFINED
+    op:         str  # OPCODE_TO_FUNCTION.keys()
+    first:      Any
+    second:     Union[Any, UndefinedType] = UNDEFINED
 
     # later evaluated
     op_function: Callable = field(repr=False, init=False)
-    operation: Operation = field(repr=False, init=False)
-    _status : DExpStatusEnum = field(repr=False, init=False, default=DExpStatusEnum.INITIALIZED)
-    _all_ok : Optional[bool] = field(repr=False, init=False, default=None)
+    operation:  Operation = field(repr=False, init=False)
+    _status:    DExpStatusEnum = field(repr=False, init=False, default=DExpStatusEnum.INITIALIZED)
+    _all_ok:    Optional[bool] = field(repr=False, init=False, default=None)
 
-    _first_dexp_node : Optional[IDotExpressionNode] = field(repr=False, init=False, default=None)
-    _second_dexp_node : Optional[IDotExpressionNode] = field(repr=False, init=False, default=None)
+    _first_dexp_node:  Optional[IDotExpressionNode] = field(repr=False, init=False, default=None)
+    _second_dexp_node: Optional[IDotExpressionNode] = field(repr=False, init=False, default=None)
 
     is_finished: bool = field(init=False, repr=False, default=False)
 
@@ -974,8 +973,8 @@ class OperationDexpNode(IDotExpressionNode):
         self.operation = self._get_operation(self.op)
         self.op_function = self.operation.apply_function
 
-        self._status : DExpStatusEnum = DExpStatusEnum.INITIALIZED
-        self._all_ok : Optional[bool] = None
+        self._status: DExpStatusEnum = DExpStatusEnum.INITIALIZED
+        self._all_ok: Optional[bool] = None
         self._output_type_info: Union[TypeInfo, UNDEFINED] = UNDEFINED 
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
 

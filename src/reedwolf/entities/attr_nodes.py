@@ -229,7 +229,7 @@ class AttrDexpNode(IDotExpressionNode):
                     raise EntityInternalError(owner=self, msg=f"Initial evaluation step for non-subentity_items failed, expected single name member (e.g. M), got: {self.name}\n  == Compoonent: {frame.container}")
 
             if self.namespace == ThisNS:
-                # TODO: DRY this - identical logic in expressions.py :: Setup()
+                # TODO: DRY this - identical logic in expressions.py:: Setup()
                 if not apply_result.current_frame.this_registry:
                     raise EntityApplyNameError(owner=self, msg=f"Namespace 'This.' is not available in this context, got: {self.name}\n  == Compoonent: {frame.container}")
                 registry = apply_result.current_frame.this_registry
@@ -265,10 +265,10 @@ class AttrDexpNode(IDotExpressionNode):
 
         if do_fetch_by_name:
             if isinstance(value_previous, (list, tuple)):
-                raise EntityInternalError(owner=self, msg=f"Expected standard object, got list: {type(value_previous)} : {to_repr(value_previous)}")
+                raise EntityInternalError(owner=self, msg=f"Expected standard object, got list: {type(value_previous)}: {to_repr(value_previous)}")
 
             if prev_node_type_info and prev_node_type_info.is_list:
-                  raise EntityApplyNameError(owner=self, msg=f"Fetching attribute '{attr_name}' expected list and got: '{to_repr(value_previous)}' : '{type(value_previous)}'")
+                  raise EntityApplyNameError(owner=self, msg=f"Fetching attribute '{attr_name}' expected list and got: '{to_repr(value_previous)}': '{type(value_previous)}'")
 
             value_new = self._get_value_new(apply_result=apply_result,
                                             value_prev=value_previous,
@@ -282,12 +282,12 @@ class AttrDexpNode(IDotExpressionNode):
             # if not result_is_list:
             #   # TODO: handle None, UNDEFINED?
             #   if prev_node_type_info and prev_node_type_info.is_list:
-            #         raise EntityApplyNameError(owner=self, msg=f"Fetching attribute '{attr_name}' expected list and got: '{to_repr(value_previous)}' : '{type(value_previous)}'")
+            #         raise EntityApplyNameError(owner=self, msg=f"Fetching attribute '{attr_name}' expected list and got: '{to_repr(value_previous)}': '{type(value_previous)}'")
             #   value_prev_as_list = [value_previous]
             # else:
             #   value_prev_as_list = value_previous
             #   if prev_node_type_info and not prev_node_type_info.is_list:
-            #     raise EntityApplyNameError(owner=self, msg=f"Fetching attribute '{attr_name}' got list what is not expected, got: '{to_repr(value_previous)}' : '{type(value_previous)}'")
+            #     raise EntityApplyNameError(owner=self, msg=f"Fetching attribute '{attr_name}' got list what is not expected, got: '{to_repr(value_previous)}': '{type(value_previous)}'")
             # value_new_as_list = []
             # for idx, value_prev in enumerate(value_prev_as_list, 0):
             #   value_new = self._get_value_new(apply_result=apply_result,
@@ -311,7 +311,7 @@ class AttrDexpNode(IDotExpressionNode):
             ...
         elif isinstance(value_new, (list, tuple)):
             if not self.islist():
-                raise EntityApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should not be a list, got: '{to_repr(value_new)}' : '{type(value_new)}'")
+                raise EntityApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should not be a list, got: '{to_repr(value_new)}': '{type(value_new)}'")
         elif value_new is None:
             pass
             # NOTE: value not checked - can be evaluated to something not-None later
@@ -319,7 +319,7 @@ class AttrDexpNode(IDotExpressionNode):
             #     raise EntityApplyValueError(owner=self, msg=f"Attribute '{attr_name}' has 'None' value and type is not 'Optional'.")
         elif self.islist():
             # apply_result.entity.get_component(apply_result.component_name_only)
-            raise EntityApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should be a list, got: '{to_repr(value_new)}' : '{type(value_new)}'")
+            raise EntityApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should be a list, got: '{to_repr(value_new)}': '{type(value_new)}'")
 
         # TODO: hm, changer_name is equal to attr_name, any problem / check / fix ... 
         dexp_result.set_value(attr_name=attr_name, changer_name=attr_name, value=value_new)
@@ -356,7 +356,7 @@ class AttrDexpNode(IDotExpressionNode):
                     #         instance=value_prev, attr_name=attr_name, attr_index=None)
                     # if value_new is UNDEFINED:
                     #     raise EntityApplyNameError(owner=self,
-                    #            msg=f"Attribute '{attr_name}' not found in '{to_repr(value_prev)}' : '{type(value_prev)}'")
+                    #            msg=f"Attribute '{attr_name}' not found in '{to_repr(value_prev)}': '{type(value_prev)}'")
 
                     if not isinstance(attr_name, str):
                         raise EntityInternalError(owner=self, msg=f"Attribute name must be a string, got. {attr_name}")
@@ -364,7 +364,7 @@ class AttrDexpNode(IDotExpressionNode):
                         # TODO: list which fields are available
                         # if all types match - could be internal problem?
                         raise EntityApplyNameError(owner=self,
-                                                   msg=f"Attribute '{attr_name}' not found in '{to_repr(value_prev)}' : '{type(value_prev)}'")
+                                                   msg=f"Attribute '{attr_name}' not found in '{to_repr(value_prev)}': '{type(value_prev)}'")
                     value_new = getattr(value_prev, attr_name)
                     if callable(value_new):
                         try:
@@ -372,7 +372,7 @@ class AttrDexpNode(IDotExpressionNode):
                             value_new2 = value_new()
                         except Exception as ex:
                             raise EntityApplyValueError(owner=self,
-                                   msg=f"Attribute '{attr_name}' is a callable '{value_new}' which raised error by calling: : '{ex}'")
+                                   msg=f"Attribute '{attr_name}' is a callable '{value_new}' which raised error by calling:: '{ex}'")
                         value_new = value_new2
         return value_new
 

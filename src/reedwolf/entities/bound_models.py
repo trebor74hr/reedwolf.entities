@@ -112,7 +112,7 @@ class NestedBoundModelBase(IBoundModel):
         for child_bound_model in self.contains:
 
             if not isinstance(child_bound_model, BoundModelWithHandlers):
-                raise EntitySetupValueError(owner=self, msg=f"Child bound model should be BoundModelWithHandlers, got: {child_bound_model.name} : {type(child_bound_model)}")
+                raise EntitySetupValueError(owner=self, msg=f"Child bound model should be BoundModelWithHandlers, got: {child_bound_model.name}: {type(child_bound_model)}")
 
             model_name = child_bound_model.name
             if model_name in self.models_with_handlers_dict:
@@ -266,12 +266,12 @@ class UnboundModel(IUnboundModel):
     """
     This is a dummy class, just to mark unbound mode
     """
-    name            : Optional[str] = field(default=None, init=False)
+    name: Optional[str] = field(default=None, init=False)
 
-    # model           : Union[ModelType, UndefinedType] = field(repr=False, init=False, default=UNDEFINED)
-    # parent          : Union[IBoundModel, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    # parent_name     : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
-    # type_info : Optional[TypeInfo] = field(init=False, default=None, repr=False)
+    # model: Union[ModelType, UndefinedType] = field(repr=False, init=False, default=UNDEFINED)
+    # parent: Union[IBoundModel, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    # parent_name: Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+    # type_info: Optional[TypeInfo] = field(init=False, default=None, repr=False)
 
     def get_type_info(self):
         raise EntityInternalError(owner=self, msg="Method should not be called")
@@ -289,21 +289,21 @@ class UnboundModel(IUnboundModel):
 @dataclass
 class BoundModelWithHandlers(NestedBoundModelBase):
     # return type of this function is used as model
-    read_handler : CustomFunctionFactory
+    read_handler:   CustomFunctionFactory
 
-    name         : Optional[str] = field(default=None)
-    title        : Optional[str] = field(default=None, repr=False)
-    in_model     : bool = field(default=True)
-    contains     : Optional[List[Self]] = field(repr=False, default_factory=list)
+    name:           Optional[str] = field(default=None)
+    title:          Optional[str] = field(default=None, repr=False)
+    in_model:       bool = field(default=True)
+    contains:       Optional[List[Self]] = field(repr=False, default_factory=list)
 
     # --- evaluated later
     # Filled from from .read_hanlder -> (.type_info: TypeInfo).type_
-    model         : ModelType = field(init=False, metadata={"skip_traverse": True})
-    parent        : Union[IBoundModel, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    parent_name   : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+    model:          ModelType = field(init=False, metadata={"skip_traverse": True})
+    parent:         Union[IBoundModel, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    parent_name:    Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
-    type_info     : Union[TypeInfo, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    models_with_handlers_dict : Dict[str, ModelWithHandlers] = field(init=False, repr=False, default_factory=dict)
+    type_info:      Union[TypeInfo, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    models_with_handlers_dict: Dict[str, ModelWithHandlers] = field(init=False, repr=False, default_factory=dict)
 
     def __post_init__(self):
 
@@ -366,22 +366,22 @@ class BoundModel(NestedBoundModelBase):
 
     # setup must be called first for this component, and later for others
     # bigger comes first, 0 is DotExpression default, 1 is for other copmonents default
-    SETUP_PRIORITY  : ClassVar[int] = 9
+    SETUP_PRIORITY:     ClassVar[int] = 9
 
-    model           : Union[ModelType, DotExpression] = field(repr=False)
+    model:              Union[ModelType, DotExpression] = field(repr=False)
 
-    name            : Optional[str] = field(default=None)
-    contains        : Optional[List[Union[BoundModelWithHandlers, "BoundModel"]]] = field(repr=False, default_factory=list)
+    name:               Optional[str] = field(default=None)
+    contains:           Optional[List[Union[BoundModelWithHandlers, "BoundModel"]]] = field(repr=False, default_factory=list)
 
-    # title           : TransMessageType
+    # title:            TransMessageType
 
     # evaluated later
-    parent          : Union[IBoundModel, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    parent_name     : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+    parent:             Union[IBoundModel, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    parent_name:        Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
     # Filled from from model
-    type_info : Optional[TypeInfo] = field(init=False, default=None, repr=False)
-    models_with_handlers_dict : Dict[str, ModelWithHandlers] = field(init=False, repr=False, default_factory=dict)
+    type_info:          Optional[TypeInfo] = field(init=False, default=None, repr=False)
+    models_with_handlers_dict: Dict[str, ModelWithHandlers] = field(init=False, repr=False, default_factory=dict)
 
     def __post_init__(self):
         if isinstance(self.model, DotExpression):

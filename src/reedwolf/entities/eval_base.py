@@ -1,7 +1,7 @@
 from abc import (
-        ABC, 
-        abstractmethod,
-        )
+    ABC,
+    abstractmethod,
+)
 from typing import (
     Optional,
     ClassVar, Union,

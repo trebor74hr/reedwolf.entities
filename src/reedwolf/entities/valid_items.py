@@ -22,24 +22,24 @@ from .exceptions import (
     EntitySetupTypeError, EntityInternalError,
 )
 from .utils import (
-        to_int,
-        UNDEFINED,
-        UndefinedType,
-        )
+    to_int,
+    UNDEFINED,
+    UndefinedType,
+)
 from .meta import (
-        TransMessageType,
-        NoneType,
-        )
+    TransMessageType,
+    NoneType,
+)
 from .expressions   import (
-        DotExpression,
-        )
+    DotExpression,
+)
 from .valid_base import (
-        ValidationBase,
-        )
+    ValidationBase,
+)
 from .base import (
     ValidationFailure,
     IApplyResult,
-        )
+)
 
 
 def _validate_setup_common(validation, allow_none:Optional[bool]=None) -> 'AttrDexpNode':  # noqa: F821

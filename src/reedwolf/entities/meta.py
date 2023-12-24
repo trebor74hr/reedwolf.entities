@@ -256,26 +256,26 @@ ComponentNameType = NewType("ComponentNameType", str)
 # Currently find no way on describing complex Dict-s
 TreeNode = NewType("TreeNode", Any)
 
-# TreeNode ::
+# TreeNode::
 #   name: str self.name
 #   component: IComponent
 #   children: List[Self]
 ComponentTreeType = NewType("ComponentTreeType", Dict[ComponentNameType, TreeNode])
 
-# TreeNode ::
+# TreeNode::
 #   name: str self.name
 #   component: IComponent
 #   children: List[Self]
 #   attr_current_value_instance: ??
 ComponentTreeWValuesType = NewType("ComponentTreeWValuesType", Dict[ComponentNameType, TreeNode])
 
-# TreeNode ::
+# TreeNode::
 #   name: str self.name
 #   Optional[value: LiteralValue]
 #   Optional[contains: List[TreeNode]]
 ValuesTree = NewType("ValuesTree", Dict[ComponentNameType, TreeNode])
 
-# TreeNode ::
+# TreeNode::
 #   name: str self.name
 #   Optional[contains: List[TreeNode]]
 MetaTree = NewType("MetaTree", Dict[ComponentNameType, TreeNode])
@@ -286,7 +286,7 @@ MetaTree = NewType("MetaTree", Dict[ComponentNameType, TreeNode])
 @dataclass
 class FunctionArgumentsType:
     # ex. FunctionArgumentsType = Tuple[List[Any], Dict[str, Any]]
-    args : List[Any]
+    args: List[Any]
     kwargs: Dict[str, Any]
 
     def __post_init__(self):
@@ -532,7 +532,7 @@ def extract_function_args_type_hints_dict(function: Callable[..., Any], strict: 
     """
     returns:
     function hinted args + return type
-    strict = False :
+    strict = False:
         py_type_hint_dict will get only arguments with type hints, and when strict=False
         for missing arg or return hint will return type hint: Any
     """
@@ -1103,7 +1103,7 @@ def get_underlying_type(py_type_hint: Type) -> Type:
 # FuncArgDotExprType = TypeVar(f"{FUNC_ARG_DOT_EXPR_TYPE_PREFIX}Type", bound=DynamicAttrsBase)
 # FuncArgDotExprBoolType = TypeVar(f"{FUNC_ARG_DOT_EXPR_TYPE_PREFIX}BoolType", bound=DynamicAttrsBase)
 #
-# FUNC_ARG_DOT_EXPR_TYPE_MAP : Dict[Type, Type] = {
+# FUNC_ARG_DOT_EXPR_TYPE_MAP: Dict[Type, Type] = {
 #     FuncArgDotExprType: Any,
 #     FuncArgDotExprBoolType: bool,
 # }

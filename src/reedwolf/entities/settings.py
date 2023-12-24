@@ -44,7 +44,7 @@ class Settings:
     trace: Union[bool, UndefinedType] = UNDEFINED
 
     # # collect
-    # contextns_attributes : ClassVar[Union[ExpressionsAttributesMap, UndefinedType]] = UNDEFINED
+    # contextns_attributes: ClassVar[Union[ExpressionsAttributesMap, UndefinedType]] = UNDEFINED
 
     # set and reset back in apply phase
     _apply_settings: Union[Self, None, UndefinedType] = field(init=False, repr=False, compare=False, default=UNDEFINED)

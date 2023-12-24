@@ -196,7 +196,8 @@ class ContainerBase(IContainer, ABC):
         """
         assert self.setup_session is None
 
-        functions = self.functions
+        # TODO: remove exception case: entity can be UNDEFINED in unit test cases only
+        functions = self.entity.functions if self.entity else ()
         settings = settings if settings else self.settings
         apply_settings_class = self.apply_settings_class
 
@@ -477,9 +478,9 @@ class ContainerBase(IContainer, ABC):
     def pprint(self):
         if not hasattr(self, "components"):
             raise EntitySetupError(owner=self, msg="Call .setup() first")
-        print(f"{self.name}: {self.__class__.__name__} ::")
+        print(f"{self.name}: {self.__class__.__name__}::")
         for nr, (name, component) in enumerate(self.components.items(),1):
-            print(f"  {nr:02}. {name}: {component.__class__.__name__} ::")
+            print(f"  {nr:02}. {name}: {component.__class__.__name__}::")
             print(f"      {repr(component)[:100]}") # noqa: T001
             # TODO: if pp() exists -> recursion with depth+1 (indent)
 
@@ -580,7 +581,7 @@ class MissingKey:
 class KeyFields(KeysBase):
 
     # list of field names
-    field_names : List[str]
+    field_names: List[str]
 
     def __post_init__(self):
         if not self.field_names:
@@ -629,37 +630,37 @@ class KeyFields(KeysBase):
 class Entity(IEntity, ContainerBase):
 
     # NOTE: only this one is obligatory
-    contains        : List[IComponent] = field(repr=False)
+    contains:           List[IComponent] = field(repr=False)
 
     # --- optional - following can be bound later with .bind_to()
-    name            : Optional[str] = field(default=None)
-    title           : Optional[TransMessageType] = field(repr=False, default=None)
+    name:               Optional[str] = field(default=None)
+    title:              Optional[TransMessageType] = field(repr=False, default=None)
 
     # binding interface - not dumped/exported
-    bound_model     : Optional[Union[BoundModel, ModelType]] = field(repr=False, default=None, metadata={"skip_dump": True})
+    bound_model:        Optional[Union[BoundModel, ModelType]] = field(repr=False, default=None, metadata={"skip_dump": True})
+    # list of names from model / contains element names
+    keys:               Optional[KeysBase] = field(repr=False, default=None)
     # will be filled automatically with Settings() if not supplied
-    settings        : Optional[Settings] = field(repr=False, default=None, metadata={"skip_dump": True})
-    apply_settings_class   : Optional[Type[Settings]] = field(repr=False, default=None, metadata={"skip_dump": True})
-    functions       : Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
+    settings:           Optional[Settings] = field(repr=False, default=None, metadata={"skip_dump": True})
+    apply_settings_class: Optional[Type[Settings]] = field(repr=False, default=None, metadata={"skip_dump": True})
+    functions:          Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
 
-    # --- only list of model names allowed
-    keys            : Optional[KeysBase] = field(repr=False, default=None)
 
     # --- validators and evaluators
-    cleaners        : Optional[List[Union[ChildrenValidationBase, ChildrenEvaluationBase]]] = field(repr=False, default_factory=list)
+    cleaners:           Optional[List[Union[ChildrenValidationBase, ChildrenEvaluationBase]]] = field(repr=False, default_factory=list)
 
     # --- Evaluated later
-    setup_session   : Optional[SetupSession]    = field(init=False, repr=False, default=None)
-    components      : Optional[Dict[str, IComponent]]  = field(init=False, repr=False, default=None)
+    setup_session:      Optional[SetupSession]    = field(init=False, repr=False, default=None)
+    components:         Optional[Dict[str, IComponent]]  = field(init=False, repr=False, default=None)
     # NOTE: used only internally:
-    # models          : Dict[str, Union[type, DotExpression]] = field(repr=False, init=False, default_factory=dict)
+    # models:           Dict[str, Union[type, DotExpression]] = field(repr=False, init=False, default_factory=dict)
 
     # in Entity (top object) this case allways None - since it is top object
     # NOTE: not DRY: Entity, SubentityBase and ComponentBase
-    parent          : Union[NoneType, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    parent_name     : Union[str, UndefinedType]  = field(init=False, default=UNDEFINED)
-    entity          : Union[ContainerBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    value_accessor  : IValueAccessor = field(init=False, repr=False)
+    parent:             Union[NoneType, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    parent_name:        Union[str, UndefinedType]  = field(init=False, default=UNDEFINED)
+    entity:             Union[ContainerBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    value_accessor:     IValueAccessor = field(init=False, repr=False)
 
     # used for automatic component's naming, <parent_name/class_name>__<counter>
     name_counter_by_parent_name: Dict[str, int] = field(init=False, repr=False, default_factory=dict)
@@ -866,7 +867,7 @@ class Entity(IEntity, ContainerBase):
 
     def create_dto_instance_from_model_instance(self, instance: ModelType, dto_class: Type[ModelType]) -> ModelType:
         if not isinstance(instance, self.bound_model.model):
-            raise EntityTypeError(owner=self, msg=f"Expected  {self.bound_model.model} instance, got: {instance} : {type(instance)}")
+            raise EntityTypeError(owner=self, msg=f"Expected  {self.bound_model.model} instance, got: {instance}: {type(instance)}")
 
         struct_converter_runner = StructConverterRunner()
         dto_instance = struct_converter_runner.create_dto_instance_from_model_instance(
@@ -887,38 +888,38 @@ class SubEntityBase(ContainerBase, ABC):
     SubEntityItems or top Entity
     """
     # DotExpression based model -> can be dumped
-    bound_model     : Union[BoundModel, BoundModelWithHandlers, DotExpression] = field(repr=False)
+    bound_model:    Union[BoundModel, BoundModelWithHandlers, DotExpression] = field(repr=False)
 
-    # cardinality     : ICardinalityValidation
-    contains        : List[IComponent] = field(repr=False)
+    # cardinality:  ICardinalityValidation
+    contains:       List[IComponent] = field(repr=False)
 
     # required since if it inherit name from BoundModel then the name will not
     # be unique in self.components (SubEntityItems and BoundModel will share the same name)
-    name            : Optional[str] = field(default=None)
-    title           : Optional[TransMessageType] = field(repr=False, default=None)
-    functions       : Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
+    name:           Optional[str] = field(default=None)
+    title:          Optional[TransMessageType] = field(repr=False, default=None)
+    # functions:    Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
     # --- can be index based or standard key-fields names
-    keys            : Optional[KeysBase] = field(repr=False, default=None)
+    keys:           Optional[KeysBase] = field(repr=False, default=None)
     # --- validators and evaluators
-    cleaners        : Optional[List[Union[ValidationBase, EvaluationBase]]] = field(repr=False, default_factory=list)
+    cleaners:       Optional[List[Union[ValidationBase, EvaluationBase]]] = field(repr=False, default_factory=list)
 
     # --- Evaluated later
-    setup_session    : Optional[SetupSession] = field(init=False, repr=False, default=None)
-    components       : Optional[Dict[str, IComponent]]  = field(init=False, repr=False, default=None)
+    setup_session:  Optional[SetupSession] = field(init=False, repr=False, default=None)
+    components:     Optional[Dict[str, IComponent]]  = field(init=False, repr=False, default=None)
     # NOTE: used only internally:
-    # models           : Dict[str, Union[type, DotExpression]] = field(init=False, repr=False, default_factory=dict)
+    # models:       Dict[str, Union[type, DotExpression]] = field(init=False, repr=False, default_factory=dict)
 
     # --- IComponent common attrs
     # NOTE: not DRY: Entity, SubentityBase and ComponentBase
-    parent           : Union[IComponent, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    parent_name      : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
-    entity           : Union[ContainerBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    value_accessor   : IValueAccessor = field(init=False, repr=False)
+    parent:         Union[IComponent, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    parent_name:    Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+    entity:         Union[ContainerBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    value_accessor: IValueAccessor = field(init=False, repr=False)
 
     # subentity_items specific - is this top parent or what? what is the difference to self.parent
 
     # in parents' chain (including self) -> first container
-    parent_container : Union[ContainerBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    parent_container: Union[ContainerBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
 
     # NOTE: this is dropped and replaced with parent.setup_session
     #   in parents' chain (not including self) -> first container's setup_session
@@ -926,15 +927,15 @@ class SubEntityBase(ContainerBase, ABC):
 
     # copy from first non-self container parent
     apply_settings_class: Optional[Type[Settings]] = field(repr=False, init=False, default=None)
-    settings:             Optional[Settings] = field(repr=False, init=False, default=None)
+    settings:       Optional[Settings] = field(repr=False, init=False, default=None)
 
     # used for automatic component's naming, <class_name>__<counter>
     name_counter_by_parent_name: Dict[str, int] = field(init=False, repr=False, default_factory=dict)
 
-    # bound_attr_node  : Union[AttrDexpNode, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
+    # bound_attr_node: Union[AttrDexpNode, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
 
     # Class attributes
-    # namespace_only  : ClassVar[Namespace] = ThisNS
+    # namespace_only: ClassVar[Namespace] = ThisNS
 
     def __post_init__(self):
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
@@ -997,7 +998,7 @@ class SubEntityItems(SubEntityBase):
 class SubEntitySingle(SubEntityBase):
     """ one to one relations - e.g. Person -> PersonAccess """
 
-    cleaners        : Optional[List[Union[SingleValidation, ChildrenValidationBase, ChildrenEvaluationBase]]] = field(repr=False, default_factory=list)
+    cleaners: Optional[List[Union[SingleValidation, ChildrenValidationBase, ChildrenEvaluationBase]]] = field(repr=False, default_factory=list)
 
     def __post_init__(self):
         self._check_cleaners([SingleValidation, ChildrenValidationBase, ChildrenEvaluationBase])
@@ -1034,8 +1035,7 @@ def collect_classes(componnents_registry: Dict, module: Any, klass_match: type) 
           and issubclass(comp_klass, klass_match)\
           and not inspect.isabstract(comp_klass) \
           and not name.endswith("Base") \
-          and name not in ("Component",) \
-          :
+          and name not in ("Component",):
             # and not hasattr(comp_klass, "__abstractmethods__"):
             componnents_registry[name] = comp_klass
     return componnents_registry

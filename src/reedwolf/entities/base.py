@@ -238,11 +238,11 @@ def msg(message: Union[str, TransMessageType]) -> Union[str, TransMessageType]:
 @dataclass
 class Subcomponent:
     # TODO: strange class - check if really required or explain if yes
-    name        : str # orig: dexp_node_name
-    path        : str # orig: var_path
+    name:       str # orig: dexp_node_name
+    path:       str # orig: var_path
     # TODO: can be some other types too
-    component: Union["IComponent", DotExpression]
-    th_field    : Optional[ModelField]
+    component:  Union["IComponent", DotExpression]
+    th_field:   Optional[ModelField]
 
 
     def __post_init__(self):
@@ -402,11 +402,11 @@ class IComponent(ReedwolfDataclassBase, ABC):
     # NOTE: Not DRY: Entity, SubentityBase and ComponentBase
 
     # TODO: cleaners:       Optional[List["ICleaner"]] = field(repr=False, init=False, default=None)
-    parent        : Union[Self, UndefinedType] = field(init=False, compare=False, default=UNDEFINED, repr=False)
-    parent_name   : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
-    entity        : Union[Self, "IContainer"] = field(init=False, compare=False, default=UNDEFINED, repr=False)
+    parent:         Union[Self, UndefinedType] = field(init=False, compare=False, default=UNDEFINED, repr=False)
+    parent_name:    Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+    entity:         Union[Self, "IContainer"] = field(init=False, compare=False, default=UNDEFINED, repr=False)
     value_accessor: Union[IValueAccessor, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    # TODO: name          : Optional[str] = field(init=False, default=None)
+    # TODO: name:   Optional[str] = field(init=False, default=None)
 
     name_counter_by_parent_name: Dict[str, int] = field(init=False, repr=False, default_factory=dict)
     # value_accessor_default: IValueAccessor = field(init=False, repr=False)
@@ -772,7 +772,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
         only direct children in flat dict
         """
         if not hasattr(self, "_children_dict"):
-            self._children_dict = {comp.name : comp for comp in self.get_children()}
+            self._children_dict = {comp.name: comp for comp in self.get_children()}
         return self._children_dict
 
     # ------------------------------------------------------------
@@ -968,7 +968,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
         ---------------------
         except for subentities sub-components
             it is flattened dict of subcomponents (recursive)
-        i.e. it returns components : Dictionary [component_name: Component]
+        i.e. it returns components: Dictionary [component_name: Component]
             will fill following:
                 all mine sub-components
                 if not subentity
@@ -1440,8 +1440,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
                     and "Evaluation" not in str(th_field.type) \
                     and "BoundModel" not in str(th_field.type) \
                     and "[Self]" not in str(th_field.type) \
-                    and not sub_component_name.startswith("rwf_") \
-                    :
+                    and not sub_component_name.startswith("rwf_"):
                 # TODO: Validation should be extended to test isinstance(.., ValidationBase) ... or similar to include Required(), MaxLength etc.
                 raise EntityInternalError(owner=sub_component, msg=f"Should '{sub_component_name}' attribute be excluded from processing." 
                         + f"\n  == {th_field})"
@@ -1615,12 +1614,12 @@ class IFieldGroup(IComponent, ABC):
 
 class IContainer(IComponent, ABC):
 
-    bound_model     : "IBoundModel" = field(repr=False)
-    contains        : List[IComponent] = field(repr=False, init=False)
+    bound_model:    "IBoundModel" = field(repr=False)
+    contains:       List[IComponent] = field(repr=False, init=False)
     # NOTE: used only internally in fill_models, so I removed the references
-    # models          : Dict[str, Union[type, DotExpression]] = field(init=False, repr=False, default_factory=dict)
-    components      : Optional[Dict[str, IComponent]]  = field(init=False, repr=False, default=None)
-    setup_session   : Optional[ISetupSession]    = field(init=False, repr=False, default=None)
+    # models:       Dict[str, Union[type, DotExpression]] = field(init=False, repr=False, default_factory=dict)
+    components:     Optional[Dict[str, IComponent]]  = field(init=False, repr=False, default=None)
+    setup_session:  Optional[ISetupSession]    = field(init=False, repr=False, default=None)
 
     @abstractmethod
     def _register_model_attr_nodes(self):
@@ -1712,7 +1711,7 @@ class IBoundModel(IComponent, ABC):
         return self._name
 
 
-    def fill_models(self, models: Dict[str, Self] = None, parent : Self = None):
+    def fill_models(self, models: Dict[str, Self] = None, parent: Self = None):
         """
         Recursion
         """
@@ -1736,7 +1735,7 @@ class IBoundModel(IComponent, ABC):
 
 class IUnboundModel(IBoundModel, ABC):
     """
-    see bound_models.py :: class UnboundModel
+    see bound_models.py:: class UnboundModel
     """
     pass
 
@@ -1807,7 +1806,7 @@ class UseStackFrameCtxManagerBase(AbstractContextManager):
             self.frame.post_clean()
 
     def __enter__(self):
-        # settings manager (with xxx as : ...
+        # settings manager (with xxx as yy: )...
         if self.add_to_stack:
             self.owner_session.push_frame_to_stack(self.frame)
         return self.frame
@@ -1927,16 +1926,16 @@ class SetupStackFrame(IStackFrame):
 
     # # used for ThisNS in some cases
     # local_setup_session: Optional[ISetupSession] = field(repr=False, default=None)
-    this_registry: Optional[IThisRegistry] = field(repr=False, default=None)
+    this_registry:  Optional[IThisRegistry] = field(repr=False, default=None)
 
     # Computed from container/component
     # used for BoundModelWithHandlers cases (read_handlers()), 
-    bound_model: Optional[IBoundModel] = field(init=False, repr=False, default=None)
+    bound_model:    Optional[IBoundModel] = field(init=False, repr=False, default=None)
 
-    dexp_validator             : Optional[DexpValidator] = field(repr=False, default=None)
+    dexp_validator: Optional[DexpValidator] = field(repr=False, default=None)
 
     # -- autocomputed
-    # bound_model_root : Optional[IBoundModel] = field(repr=False, init=False, default=None)
+    # bound_model_root: Optional[IBoundModel] = field(repr=False, init=False, default=None)
     # current container data instance which will be procesed: changed/validated/evaluated
     # type_info: TypeInfo
 
@@ -2054,8 +2053,8 @@ class InstanceAttrValue:
 
     def as_dict(self) -> Dict[str, Any]:
         return {
-                "value" : self.value,
-                "dexp_result" : self.dexp_result,
+                "value": self.value,
+                "dexp_result": self.dexp_result,
                 "value_from_parent": self.value_parent_name,
                 "is_from_bind": self.is_from_bind,
                 }
@@ -2375,7 +2374,7 @@ class ValueNode:
             )
             self.value_history.append(instance_attr_value)
         # else: instance_attr_value = None
-        return  #  instance_attr_value  : Optional[InstanceAttrValue]
+        return  #  instance_attr_value: Optional[InstanceAttrValue]
 
     def get_value(self, strict:bool) -> AttrValue:
         if strict and not self.finished:
@@ -2559,7 +2558,7 @@ class ValueNode:
         # TODO: assert value_node is not self
         # TODO: assert value_node.parent_node is not self
         if value_node.name in self.children:
-            raise EntityInternalError(owner=self, msg=f"failed to add {value_node}, already child added under same name, got : {self.children[value_node.name]}")
+            raise EntityInternalError(owner=self, msg=f"failed to add {value_node}, already child added under same name, got: {self.children[value_node.name]}")
         self.children[value_node.name] = value_node
 
     def clean(self):
@@ -2596,7 +2595,7 @@ class ValueNode:
                 # assert init_value!=value
                 value_type = value.__class__.__name__
                 init_type = init_value.__class__.__name__
-                if value_type!=init_type and not isinstance(value, (NoneType, UndefinedType)) :
+                if value_type!=init_type and not isinstance(value, (NoneType, UndefinedType)):
                     line += f":{value_type}"
                 line += f"  (orig: {init_value}"
                 if value_type!=init_type and not isinstance(init_value, (NoneType, UndefinedType)):
@@ -2689,7 +2688,7 @@ class ApplyStackFrame(IStackFrame):
     key_string: Optional[str] = field(init=False, repr=False, default=None)
 
     # used to check root value in models registry 
-    bound_model_root : Optional[IBoundModel] = field(repr=False, init=False, default=None)
+    bound_model_root: Optional[IBoundModel] = field(repr=False, init=False, default=None)
 
 
     def __post_init__(self):
@@ -2918,7 +2917,7 @@ class IApplyResult(IStackOwnerSession):
     value_node_list: List[ValueNode] = field(repr=False, init=False, default_factory=list)
 
     # extracted from component
-    bound_model : IBoundModel = field(repr=False, init=False)
+    bound_model: IBoundModel = field(repr=False, init=False)
 
     # final status
     finished: bool = field(repr=False, init=False, default=False)
@@ -2932,11 +2931,11 @@ class IApplyResult(IStackOwnerSession):
 
     # I do not prefer attaching key_string to instance i.e. setattr(instance, key_string)
     # but having instance not expanded, but to store in a special structure
-    key_string_container_cache : Dict[InstanceId, KeyString] = \
+    key_string_container_cache: Dict[InstanceId, KeyString] = \
                             field(repr=False, init=False, default_factory=dict)
 
     # used when when collecting list of instances/attributes which are updated
-    instance_by_key_string_cache : Dict[KeyString, ModelType] = \
+    instance_by_key_string_cache: Dict[KeyString, ModelType] = \
                             field(repr=False, init=False, default_factory=dict)
 
     # TODO: consider this:
@@ -2973,7 +2972,7 @@ class IApplyResult(IStackOwnerSession):
 
     # When first argument is <type> and second is <type> then call function Callable
     # which will adapt second type to first one. Example: <string> + <int> -> <string> + str(<int>)
-    binary_operations_type_adapters : Dict[Tuple[type, type], Callable[[Any], Any]] = field(repr=False, init=False, default_factory=dict)
+    binary_operations_type_adapters: Dict[Tuple[type, type], Callable[[Any], Any]] = field(repr=False, init=False, default_factory=dict)
 
     # on validation errors this will be filled
     errors: Dict[KeyString, ValidationFailure] = field(repr=False, init=False, default_factory=dict)
@@ -3149,7 +3148,7 @@ def extract_type_info(
     if isinstance(parent_object, TypeInfo):
         # go one level deeper
         if not isinstance(parent_object.type_, type):
-            raise EntitySetupValueError(item=inspect_object, msg=f"Inspected object's type hint is not a class object/type: {parent_object.type_} : {parent_object.type_}, got: {type(parent_object.type_)} ('.{attr_node_name}' process)")
+            raise EntitySetupValueError(item=inspect_object, msg=f"Inspected object's type hint is not a class object/type: {parent_object.type_}: {parent_object.type_}, got: {type(parent_object.type_)} ('.{attr_node_name}' process)")
         # Can be method call, so not pydantic / dataclass are allowed too
         parent_object = parent_object.type_
 
@@ -3167,7 +3166,7 @@ def extract_type_info(
                     "Calling methods on instances are not allowed.")
 
     if is_model_class(parent_object):
-        # raise EntityInternalError(item=inspect_object, msg=f"'Parent is not DC/PYD class -> {parent_object} : {type(parent_object)}'.")
+        # raise EntityInternalError(item=inspect_object, msg=f"'Parent is not DC/PYD class -> {parent_object}: {type(parent_object)}'.")
         if not hasattr(parent_object, "__annotations__"):
             # TODO: what about pydantic?
             raise EntityInternalError(item=inspect_object, msg=f"'DC/PYD class {parent_object}' has no metadata (__annotations__ / type hints), can't read '{attr_node_name}'. Add type-hints or check names.")

@@ -4,14 +4,14 @@ import json
 from pathlib import Path
 from enum import Enum
 from typing import (
-        Callable, 
-        ClassVar,
-        Dict,
-        Any, 
-        List,
-        Optional,
-        Union,
-        )
+    Callable,
+    ClassVar,
+    Dict,
+    Any,
+    List,
+    Optional,
+    Union,
+)
 from functools import reduce
 from importlib import import_module
 
@@ -143,9 +143,9 @@ def composite_functions(*func:Callable[..., Any]) -> Callable[..., Any]:
         argument and then compose them
         returning single function that can be applied with """
     def compose(f, g):
-        return lambda x : f(g(x))
+        return lambda x: f(g(x))
 
-    return reduce(compose, func, lambda x : x)
+    return reduce(compose, func, lambda x: x)
 
 
 

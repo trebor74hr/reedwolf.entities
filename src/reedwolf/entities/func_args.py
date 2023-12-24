@@ -19,7 +19,6 @@ from .utils import (
 )
 from .namespaces import ( 
     ThisNS,
-    FieldsNS,
     Namespace,
 )
 from .exceptions import (
@@ -32,15 +31,13 @@ from .meta import (
     TypeInfo,
     extract_function_args_default_dict,
     is_function,
-    NoneType, IInjectFuncArgHint, IFuncArgHint,
+    NoneType,
+    IFuncArgHint,
 )
 from .expressions import (
     DotExpression,
     IDotExpressionNode,
     ISetupSession,
-)
-from .attr_nodes import (
-    AttrDexpNode,
 )
 
 TypeInfoCallable = Callable[[], TypeInfo]
@@ -142,7 +139,7 @@ class PreparedArguments:
 
 @dataclass
 class FuncArg:
-    name : str
+    name: str
     type_info: TypeInfo = field(repr=False)
     default: Any = field(repr=False, default=UNDEFINED)
 
@@ -197,7 +194,7 @@ class FunctionArguments:
         args, kwargs = (), {}
         if func_args_raw:
             if not isinstance(func_args_raw, FunctionArgumentsType):
-                raise EntityInternalError(owner=self, msg=f"Bad type {type(func_args_raw)} : {func_args_raw}")
+                raise EntityInternalError(owner=self, msg=f"Bad type {type(func_args_raw)}: {func_args_raw}")
             args, kwargs = func_args_raw.get_args_kwargs()
         return args, kwargs
 
@@ -347,11 +344,11 @@ class FunctionArguments:
     # ------------------------------------------------------------
 
     def _fill_value_arg(self, 
-            setup_session : ISetupSession,
+            setup_session: ISetupSession,
             caller: IDotExpressionNode, 
             parent_name: str,
             value_arg_name: str,
-            value_arg_type_info : Optional[TypeInfo],
+            value_arg_type_info: Optional[TypeInfo],
             expected_args: Dict[str, Optional[PrepArg]],
             ) -> bool:
 
@@ -428,7 +425,7 @@ class FunctionArguments:
             # TODO: validates dexp_node.get_type_info() matches value_arg_type_info
 
             args, kwargs = self._process_func_args_raw((FunctionArgumentsType(value_args, value_kwargs)))
-            # dexp_node : IDotExpressionNode = caller
+            # dexp_node: IDotExpressionNode = caller
             self._try_fill_given_args(
                     setup_session=setup_session,
                     caller=caller,
@@ -446,13 +443,13 @@ class FunctionArguments:
     # ------------------------------------------------------------
 
     def parse_func_args(self, 
-                 caller              : Union[Namespace, IDotExpressionNode],
-                 parent_name          : str,
-                 func_args           : FunctionArgumentsType,
-                 setup_session       : ISetupSession,
-                 fixed_args          : Optional[FunctionArgumentsType] = None,
-                 value_arg_type_info : Optional[TypeInfo]= None,
-                 value_arg_name      : Optional[str] = None,
+                 caller:        Union[Namespace, IDotExpressionNode],
+                 parent_name:   str,
+                 func_args:     FunctionArgumentsType,
+                 setup_session: ISetupSession,
+                 fixed_args:    Optional[FunctionArgumentsType] = None,
+                 value_arg_type_info: Optional[TypeInfo]= None,
+                 value_arg_name: Optional[str] = None,
                  ) -> PreparedArguments:
         """
         Although default argument values are processed, they are not filled.
@@ -466,7 +463,7 @@ class FunctionArguments:
         if not setup_session:
             raise EntityInternalError(owner=self, msg=f"{parent_name}: setup_session is empty") 
 
-        # ==== 1/3 : FIX_ARGS - by registration e.g. Function(my_py_function, args=(1,), kwargs={"b":2})
+        # ==== 1/3: FIX_ARGS - by registration e.g. Function(my_py_function, args=(1,), kwargs={"b":2})
 
         args, kwargs = self._process_func_args_raw(fixed_args)
         self._try_fill_given_args(
@@ -552,7 +549,7 @@ def check_prepared_arguments(
     # assert not prepared_args.any_prep_arg_lack_type_info()
     err_messages = []
     for prep_arg in prepared_args:
-        exp_arg : FuncArg = func_arg_dict[prep_arg.name]
+        exp_arg: FuncArg = func_arg_dict[prep_arg.name]
         if prep_arg.type_info is None:
             raise EntityInternalError(f"{prepared_args.parent_name} -> Argument '{prep_arg}' type_info is not set")
 

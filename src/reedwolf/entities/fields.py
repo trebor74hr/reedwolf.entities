@@ -198,8 +198,8 @@ class FieldBase(IField, ABC):
 
     # TODO: found no way to achive this: copied from IComponent just to have
     #       these field in repr()/str() listed at the end
-    #   parent       : Union[Self, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    #   parent_name  : Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
+    #   parent:         Union[Self, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    #   parent_name:    Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
     def __post_init__(self):
         self._allowed_cleaner_base_list = [FieldValidationBase, FieldEvaluationBase]
@@ -563,7 +563,7 @@ class ChoiceField(FieldBase):
             if not dexp_node:
                 dexp_node = choices.Setup(setup_session=setup_session, owner=self)
         elif isinstance(choices, CustomFunctionFactory):
-            custom_function_factory : CustomFunctionFactory = choices
+            custom_function_factory: CustomFunctionFactory = choices
             dexp_node = custom_function_factory.create_function(
                             # NOTE: was None before
                             setup_session=setup_session,
@@ -590,7 +590,7 @@ class ChoiceField(FieldBase):
                 is_list = attr_node.data.is_list
 
                 if is_list and attr_node.namespace==ModelsNS and is_model_class(choices):
-                    # FK case - e.g. Company -> company_types : List[CompanyType]
+                    # FK case - e.g. Company -> company_types: List[CompanyType]
 
                     # TODO: I don't like 'choices_checked' this attr_node and the logic it uses
                     choices_checked = True

@@ -15,7 +15,6 @@ from .exceptions import (
     EntityApplyValueError,
     EntitySetupValueError,
 )
-from .namespaces import DynamicAttrsBase
 from .meta import (
     ItemType,
     NumberType,
@@ -32,7 +31,8 @@ from .functions import (
     BuiltinFunctionFactory,
     CustomFunctionFactory,
     FunctionArgumentsType,
-    InjectComponentTreeValuesFuncArgHint, DotexprExecuteOnItemFactoryFuncArgHint,
+    InjectComponentTreeValuesFuncArgHint,
+    DotexprExecuteOnItemFactoryFuncArgHint,
 )
 
 
@@ -172,7 +172,7 @@ Sum = create_builtin_items_function_factory(
         )
 
 
-# def map_(item_list: Sequence[ItemType], callable_or_fieldname : Union[Callable[[Any], Any], str]) -> Sequence[ItemType]:
+# def map_(item_list: Sequence[ItemType], callable_or_fieldname: Union[Callable[[Any], Any], str]) -> Sequence[ItemType]:
 def map_(item_list: Sequence[ItemType], dot_expr: DotexprFuncArgHint(inner_type=Any)) -> Sequence[ItemType]:
     for item in item_list:
         yield dot_expr._evaluator.evaluate(item.value)
@@ -219,7 +219,7 @@ Filter = create_builtin_items_function_factory(
 
 # ------------------------------------------------------------
 
-# def max_(item_list: Sequence[ItemType], callable_or_fieldname : Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
+# def max_(item_list: Sequence[ItemType], callable_or_fieldname: Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
 def max_(item_list: Sequence[ItemType], dot_expr: DotexprFuncArgHint(inner_type=Any)) -> Optional[Any]:
     for item in item_list:
         yield dot_expr._evaluator.evaluate(item.value)
@@ -241,7 +241,7 @@ Max = create_builtin_items_function_factory(
 
 # ------------------------------------------------------------
 
-# def min_(item_list: Sequence[ItemType], callable_or_fieldname : Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
+# def min_(item_list: Sequence[ItemType], callable_or_fieldname: Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
 def min_(item_list: Sequence[ItemType], dot_expr: DotexprFuncArgHint(inner_type=Any)) -> Optional[Any]:
     raise NotImplementedError()
     # if not callable_or_fieldname:
@@ -258,7 +258,7 @@ Min = create_builtin_items_function_factory(
             # arg_validators=[ensure_is_list],
         )
 
-# def _process_item(item: ItemType, callable_or_fieldname : Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
+# def _process_item(item: ItemType, callable_or_fieldname: Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
 #     if not callable_or_fieldname:
 #         return item
 #     elif isinstance(callable_or_fieldname, str):
@@ -267,7 +267,7 @@ Min = create_builtin_items_function_factory(
 #         return callable_or_fieldname(item)
 #     raise TypeError(f"Argument expected to be callable or string (fieldname), got: {callable_or_fieldname} -> {type(callable_or_fieldname)}")
 
-# def first(item_list: Sequence[ItemType], callable_or_fieldname : Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
+# def first(item_list: Sequence[ItemType], callable_or_fieldname: Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
 def first(item_list: Sequence[ItemType], dot_expr: DotexprFuncArgHint(inner_type=Any)) -> Optional[Any]:
     raise NotImplementedError()
     # if not item_list:
@@ -280,7 +280,7 @@ First = create_builtin_items_function_factory(
             # arg_validators=[ensure_is_list],
         )
 
-# def last(item_list: Sequence[ItemType], callable_or_fieldname : Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
+# def last(item_list: Sequence[ItemType], callable_or_fieldname: Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
 def last(item_list: Sequence[ItemType], dot_expr: DotexprFuncArgHint(inner_type=Any)) -> Optional[Any]:
     raise NotImplementedError()
     # if not item_list:
@@ -303,15 +303,15 @@ Last = create_builtin_items_function_factory(
 #       * return string error message, or
 #       * raise EntitySetupError based error
 
-# def ensure_is_number(arg_name: str, value_arg_type_info : TypeInfo) -> Optional[str]:
+# def ensure_is_number(arg_name: str, value_arg_type_info: TypeInfo) -> Optional[str]:
 #     if not value_arg_type_info.type_ in (int, float, Decimal):
 #         raise EntitySetupTypeError(f"Expected origin type to be int/float/Decimal type, got: {value_arg_type_info.py_type_hint}")
 # 
-# def ensure_is_list(arg_name: str, value_arg_type_info : TypeInfo) -> Optional[str]:
+# def ensure_is_list(arg_name: str, value_arg_type_info: TypeInfo) -> Optional[str]:
 #     if not value_arg_type_info.is_list:
 #         raise EntitySetupTypeError(f"Expected list/tuple/sequence type, got: {value_arg_type_info.py_type_hint}")
 # 
-# def ensure_has_len(arg_name: str, value_arg_type_info : TypeInfo) -> Optional[str]:
+# def ensure_has_len(arg_name: str, value_arg_type_info: TypeInfo) -> Optional[str]:
 #     if not hasattr(value_arg_type_info.type_, "__len__"):
 #         raise EntitySetupTypeError(f"Expected type with __len__ method implemented, got: {value_arg_type_info.py_type_hint}")
 

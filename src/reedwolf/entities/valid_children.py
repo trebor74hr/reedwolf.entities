@@ -4,25 +4,25 @@ In SubEntityItems case, this will be running against every SubEntity in list.
 """
 from abc import ABC
 from typing import (
-        Optional, 
-        Union,
-        )
+    Optional,
+    Union,
+)
 from dataclasses import dataclass, field
 
 from .meta import (
-        TransMessageType,
-        NoneType,
-        )
+    TransMessageType,
+    NoneType,
+)
 from .expressions import (
-        DotExpression,
-        )
+    DotExpression,
+)
 from .valid_base import (
-        ValidationBase,
-        )
+    ValidationBase,
+)
 from .base import (
     ValidationFailure,
     IApplyResult,
-        )
+)
 
 
 class ChildrenValidationBase(ValidationBase, ABC):

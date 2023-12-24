@@ -1,8 +1,8 @@
 # TODO: this module probably should be merged into expressions - since there is circular dependency - see __getattr__
 from abc import ABC, abstractmethod
 from typing import (
-        Optional,
-        )
+    Optional,
+)
 
 # ------------------------------------------------------------
 # Namespaces - classes and singletons

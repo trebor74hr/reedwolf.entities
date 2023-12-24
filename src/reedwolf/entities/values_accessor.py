@@ -7,7 +7,8 @@ from abc import abstractmethod
 from inspect import isclass
 from typing import (
     Dict,
-    Any, Optional,
+    Any,
+    Optional,
 )
 
 from .exceptions import (
@@ -101,13 +102,13 @@ class DictValueAccessor(IValueAccessor):
     @staticmethod
     def get_value(instance: Dict, attr_name: AttrName, attr_index: Optional[AttrIndex]) -> AttrValue:
         if not isinstance(instance, dict):
-            raise EntityTypeError(msg=f"Expecting a dict, got: {attr_name} : {type(instance)} == {to_repr(instance)}")
+            raise EntityTypeError(msg=f"Expecting a dict, got: {attr_name}: {type(instance)} == {to_repr(instance)}")
         return instance.get(attr_name, UNDEFINED)
 
     @staticmethod
     def set_value(instance: Dict, attr_name: AttrName, attr_index: Optional[AttrIndex], new_value: AttrValue) -> None:
         if not isinstance(instance, dict):
-            raise EntityTypeError(msg=f"Expecting a dict, got: {attr_name} : {type(instance)} == {to_repr(instance)}")
+            raise EntityTypeError(msg=f"Expecting a dict, got: {attr_name}: {type(instance)} == {to_repr(instance)}")
         instance[attr_name] = new_value
 
 
@@ -132,14 +133,14 @@ class DictValueAccessor(IValueAccessor):
 #     def get_value(instance: List, attr_name: AttrName, attr_index: AttrIndex) -> AttrValue:
 #         if not isinstance(instance, list) or attr_index is None:
 #             raise EntityTypeError(msg=f"Expecting a list and attr_index is not None, got: "
-#                       f"{attr_name} : {type(instance)} == {to_repr(instance)} / attr_index == {attr_index}")
+#                       f"{attr_name}: {type(instance)} == {to_repr(instance)} / attr_index == {attr_index}")
 #         return instance[attr_index] if attr_index > len(instance) else UNDEFINED
 #
 #     @staticmethod
 #     def set_value(instance: List, attr_name: AttrName, attr_index: AttrIndex, new_value: AttrValue) -> None:
 #         if not isinstance(instance, list) or attr_index is None:
 #             raise EntityTypeError(msg=f"Expecting a list and attr_index is not None, got: "
-#                                       f"{attr_name} : {type(instance)} == {to_repr(instance)} / attr_index == {attr_index}")
+#                                       f"{attr_name}: {type(instance)} == {to_repr(instance)} / attr_index == {attr_index}")
 #         diff = len(instance) - (attr_index + 1)
 #         if diff >= 1:
 #             # extern
@@ -167,7 +168,7 @@ class AutodetectValueAccessor(IValueAccessor):
             return instance.get(attr_name, UNDEFINED)
         # elif isinstance(instance, list):
         #     if attr_index is None:
-        #         raise NotImplementedError(f"Not implemented case - attr_index is None: {attr_name} : {type(instance)} == {to_repr(instance)}")
+        #         raise NotImplementedError(f"Not implemented case - attr_index is None: {attr_name}: {type(instance)} == {to_repr(instance)}")
         #     return instance[attr_index] if attr_index > len(instance) else UNDEFINED
         else:
             # not dry to make it more performant
@@ -187,7 +188,7 @@ class AutodetectValueAccessor(IValueAccessor):
 # ------------------------------------------------------------
 # REGISTRY
 # ------------------------------------------------------------
-STANDARD_VALUE_ACCESSOR_CLASS_REGISTRY : Dict[str, IValueAccessor] = {
+STANDARD_VALUE_ACCESSOR_CLASS_REGISTRY: Dict[str, IValueAccessor] = {
     obj.get_code(): obj
     for _, obj in globals().items()
     if isclass(obj) and issubclass(obj, IValueAccessor) and obj!=IValueAccessor

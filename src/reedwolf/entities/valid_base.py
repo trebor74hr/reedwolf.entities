@@ -27,7 +27,11 @@ from .expressions import (
     DotExpression,
     ExecResult,
     NotAvailableExecResult,
-    execute_available_dexp, ISetupSession, IThisRegistry, clean_available, clean_dexp_bool_term,
+    execute_available_dexp,
+    ISetupSession,
+    IThisRegistry,
+    clean_available,
+    clean_dexp_bool_term,
 )
 
 

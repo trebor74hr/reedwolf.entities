@@ -147,10 +147,10 @@ class ModelsRegistry(RegistryBase):
     # # get_root_value()
     # ROOT_VALUE_NEEDS_FETCH_BY_NAME: ClassVar[bool] = False
 
-    root_attr_nodes : Optional[Dict[str, AttrDexpNode]] = field(repr=False, init=False, default_factory=dict)
+    root_attr_nodes: Optional[Dict[str, AttrDexpNode]] = field(repr=False, init=False, default_factory=dict)
 
     # Just to check not duplicate. Can have several, first is main model, other are submodels
-    models_dict : Dict[str, ModelType] = field(repr=True, init=False, default_factory=OrderedDict)
+    models_dict: Dict[str, ModelType] = field(repr=True, init=False, default_factory=OrderedDict)
 
     NAMESPACE: ClassVar[Namespace] = ModelsNS
 
@@ -207,7 +207,7 @@ class ModelsRegistry(RegistryBase):
         type_info = bound_model.get_type_info()
         type_info_from_model = TypeInfo.get_or_create_by_type(model)
         if not type_info_from_model.type_ == type_info.type_:
-            raise EntityInternalError(owner=self, msg=f"Model type info inner type <> bound_model's : {type_info} <> {type_info_from_model}")
+            raise EntityInternalError(owner=self, msg=f"Model type info inner type <> bound_model's: {type_info} <> {type_info_from_model}")
 
         self._register_special_attr_node(
                         type_info = type_info,
@@ -660,7 +660,7 @@ class ThisRegistry(IThisRegistry, RegistryBase):
 
         if self.component:
             if not self.is_items_for_each_mode and self.is_items_mode:
-                # This.Items : List[component_fields_dataclass]
+                # This.Items: List[component_fields_dataclass]
                 component_fields_dataclass, _ = self.component.get_component_fields_dataclass(
                                                     setup_session=setup_session)
                 py_type_hint = List[component_fields_dataclass]

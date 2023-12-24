@@ -3,10 +3,10 @@ import ast
 from ast import iter_fields
 from dataclasses import dataclass, field
 from typing import (
-        List,
-        Any,
-        Union,
-        )
+    List,
+    Any,
+    Union,
+)
 from contextlib import contextmanager
 from copy import deepcopy
 
@@ -18,28 +18,28 @@ from .utils import (
     get_available_names_example,
     DumpFormatEnum,
     load_from_format,
-    )
+)
 from .exceptions import (
     EntityLoadError,
     EntityLoadTypeError,
     EntityLoadNameError,
     EntityInternalError,
-    )
+)
 from .namespaces import ALL_NS_OBJECTS
 from .meta import (
     MAX_RECURSIONS,
     STANDARD_TYPE_W_NONE_LIST,
     LiteralType,
-    )
+)
 from .expressions import (
     DotExpression,
     AST_NODE_TYPE_TO_FUNCTION,
     Just,
-    )
+)
 from .base import (
     IComponent,
     DEXP_PREFIX,
-    )
+)
 
 
 ConstantAstTypes = Union[ast.Constant, ast.Num, ast.Str, ast.Bytes]

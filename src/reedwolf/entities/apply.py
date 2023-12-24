@@ -1,9 +1,9 @@
 from dataclasses import (
-        dataclass,
-        field,
-        asdict,
-        replace as dataclass_clone,
-        )
+    dataclass,
+    field,
+    asdict,
+    replace as dataclass_clone,
+)
 from typing import (
     Dict,
     Optional,
@@ -13,22 +13,23 @@ from typing import (
 from collections import OrderedDict
 
 from .exceptions import (
-        EntityApplyError,
-        EntityValidationError,
-        EntityInternalError,
-        EntityApplyValueError,
-        )
+    EntityApplyError,
+    EntityValidationError,
+    EntityInternalError,
+    EntityApplyValueError,
+)
 from .expressions import (
-        ExecResult,
-        NotAvailableExecResult,
-        DotExpression,
-        )
+    ExecResult,
+    NotAvailableExecResult,
+    DotExpression,
+)
 from .utils import (
     UNDEFINED,
     NA_DEFAULTS_MODE,
     NA_IN_PROGRESS,
     NOT_APPLIABLE,
-    to_repr, UndefinedType,
+    to_repr,
+    UndefinedType,
 )
 from .meta import (
     MAX_RECURSIONS,
@@ -225,7 +226,7 @@ class ApplyResult(IApplyResult):
                 #               cleaner = cleaner, 
                 #               )):
 
-                # TODO: self.settings.logger.warning(f"{'  ' * self.current_frame.depth} clean : {component.name} -> {cleaner.name}")
+                # TODO: self.settings.logger.warning(f"{'  ' * self.current_frame.depth} clean: {component.name} -> {cleaner.name}")
                 if isinstance(cleaner, validation_class):
                     # --- 3.a. run validations
                     # returns validation_failure
@@ -626,7 +627,7 @@ class ApplyResult(IApplyResult):
                     if not self.defaults_mode:
                         if not isinstance(value, (bool, NoneType)):
                             raise EntityApplyValueError(owner=component, 
-                                    msg=f"Component.enables can be applied only for Boolean or None values, got: {value} : {type(value)}")
+                                    msg=f"Component.enables can be applied only for Boolean or None values, got: {value}: {type(value)}")
                         if not value: 
                             process_further = False
 
@@ -826,10 +827,10 @@ class ApplyResult(IApplyResult):
                 # TODO: check that type_info.is_optional ...
                 ...
             elif isinstance(instance, (list, tuple)):
-                raise EntityApplyValueError(owner=component, msg=f"Did not expected list/tuple, got: {instance} : {type(instance)}")
+                raise EntityApplyValueError(owner=component, msg=f"Did not expected list/tuple, got: {instance}: {type(instance)}")
 
             elif not is_model_instance(instance):
-                raise EntityApplyValueError(owner=component, msg=f"Expected single model instance, got: {instance} : {type(instance)}")
+                raise EntityApplyValueError(owner=component, msg=f"Expected single model instance, got: {instance}: {type(instance)}")
 
             new_frame = ApplyStackFrame(
                 container = component,

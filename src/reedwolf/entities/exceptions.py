@@ -2,13 +2,13 @@ from abc import ABC
 from typing import (
     Optional,
     Dict,
-    )
+)
 from .utils import (
     message_truncate,
-    )
+)
 from .namespaces import (
     DynamicAttrsBase,
-    )
+)
 
 
 # TODO: check https://snarky.ca/unravelling-from/ - how to convert/transform exception
@@ -173,7 +173,7 @@ class EntityValidationError(EntityError):
         super().__init__(msg=msg, owner=owner)
 
 # class EntityValidationFieldError(EntityError):
-#     def __init__(self, msg:str, owner:'Field', item : Optional['Item'] = None):  # noqa: F821
+#     def __init__(self, msg:str, owner:'Field', item: Optional['Item'] = None):  # noqa: F821
 #         " owner must be field and is required "
 #         super().__init__(msg=msg, owner=owner, item=item)
 # 

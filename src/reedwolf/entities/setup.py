@@ -119,12 +119,12 @@ class RegistryBase(IRegistry):
     convenient to have some advanced logic within. Thus Registry logic 
     is put in specialized classes - SetupSession.
     """
-    store : Dict[str, AttrDexpNode] = field(repr=False, init=False, default_factory=dict)
+    store: Dict[str, AttrDexpNode] = field(repr=False, init=False, default_factory=dict)
     setup_session: Union[ISetupSession, UndefinedType] = field(repr=False, init=False, default=UNDEFINED)
     finished: bool                  = field(init=False, repr=False, default=False)
 
     # TODO: with 3.11 - Protocol
-    NAMESPACE : ClassVar[Namespace] = None
+    NAMESPACE: ClassVar[Namespace] = None
     ROOT_VALUE_NEEDS_FETCH_BY_NAME: ClassVar[bool] = True
 
     @staticmethod
@@ -391,7 +391,7 @@ class RegistryBase(IRegistry):
             value_arg_type_info:TypeInfo,
             ) -> IFunctionDexpNode:
 
-        func_node : IFunctionDexpNode = \
+        func_node: IFunctionDexpNode = \
                 try_create_function(
                     setup_session=setup_session,
                     caller=caller,
@@ -429,7 +429,7 @@ class RegistryBase(IRegistry):
         if owner_dexp_node:
             assert owner_dexp_node.name!=dexp_node_name
             if not isinstance(owner_dexp_node, IDotExpressionNode):
-                raise EntitySetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': '{dexp_node_name}' -> owner_dexp_node={owner_dexp_node} :{type(owner_dexp_node)} is not IDotExpressionNode")
+                raise EntitySetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': '{dexp_node_name}' -> owner_dexp_node={owner_dexp_node}: {type(owner_dexp_node)} is not IDotExpressionNode")
 
         # TODO: za Sum(This.name) this is not good. Should be unique, since 
         #       This is ambigous - can evaluate to different contexts. 
@@ -467,7 +467,7 @@ class RegistryBase(IRegistry):
             # IN-DEPTH LEVEL 2+, e.g. M.company.<this-node-and-next>
             # ---------------------------------------------------------------
             if owner.is_unbound() and self.NAMESPACE == ModelsNS:
-                # search base.py :: if len(self.bind.Path) > 1:
+                # search base.py:: if len(self.bind.Path) > 1:
                 raise EntitySetupError(owner=self, msg=f"Should not happen, more than 1 level DotExpressions are not supported, got: {owner_dexp_node}")
 
             if isinstance(owner_dexp_node, IFunctionDexpNode):
@@ -573,31 +573,31 @@ class UseSetupStackFrameCtxManager(UseStackFrameCtxManagerBase):
 @dataclass
 class SetupSessionBase(IStackOwnerSession, ISetupSession):
 
-    container                    : Optional[IContainer]
-    parent_setup_session         : Optional[ISetupSession]
+    container:                  Optional[IContainer]
+    parent_setup_session:       Optional[ISetupSession]
 
     # custom_function_factories store 
-    functions                   : Optional[List[CustomFunctionFactory]] = field(repr=False, default=None)
-    functions_factory_registry  : Optional[FunctionsFactoryRegistry] = field(repr=False, default=None)
-    include_builtin_functions   : bool = field(repr=False, default=True)
+    functions:                  Optional[List[CustomFunctionFactory]] = field(repr=False, default=None)
+    functions_factory_registry: Optional[FunctionsFactoryRegistry] = field(repr=False, default=None)
+    include_builtin_functions:  bool = field(repr=False, default=True)
 
     # autocomputed and internals
-    is_top_setup_session        : bool = field(init=False, repr=False)
-    top_parent_setup_session     : ISetupSession = field(init=False, repr=False)
+    is_top_setup_session:       bool = field(init=False, repr=False)
+    top_parent_setup_session:   ISetupSession = field(init=False, repr=False)
 
-    _registry_dict              : Dict[str, IRegistry] = field(init=False, repr=False, default_factory=dict)
-    name                        : str = field(init=False, repr=False)
-    dexp_node_dict              : Dict[str, IDotExpressionNode] = field(init=False, repr=False, default_factory=dict)
-    finished                    : bool = field(init=False, repr=False, default=False)
-    hook_on_finished_all_list   : Optional[List[HookOnFinishedAllCallable]] = field(init=False, repr=False)
+    _registry_dict:             Dict[str, IRegistry] = field(init=False, repr=False, default_factory=dict)
+    name:                       str = field(init=False, repr=False)
+    dexp_node_dict:             Dict[str, IDotExpressionNode] = field(init=False, repr=False, default_factory=dict)
+    finished:                   bool = field(init=False, repr=False, default=False)
+    hook_on_finished_all_list:  Optional[List[HookOnFinishedAllCallable]] = field(init=False, repr=False)
 
     # stack of frames - first frame is current. On the end of the process the stack must be empty
-    stack_frames: List[SetupStackFrame] = field(repr=False, init=False, default_factory=list)
+    stack_frames:               List[SetupStackFrame] = field(repr=False, init=False, default_factory=list)
 
     # autocomputed
-    current_frame: Optional[SetupStackFrame] = field(repr=False, init=False, default=None)
+    current_frame:              Optional[SetupStackFrame] = field(repr=False, init=False, default=None)
 
-    STACK_FRAME_CLASS: ClassVar[type] = SetupStackFrame
+    STACK_FRAME_CLASS:          ClassVar[type] = SetupStackFrame
     STACK_FRAME_CTX_MANAGER_CLASS: ClassVar[type] = UseSetupStackFrameCtxManager
 
     def __post_init__(self):
@@ -616,7 +616,7 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
         assert self.top_parent_setup_session
 
         # compputed
-        # self._registry_dict : Dict[str, IRegistry] = {}
+        # self._registry_dict: Dict[str, IRegistry] = {}
         # self.dexp_node_dict: Dict[str, IDotExpressionNode] = {}
         # self.finished: bool = False
 

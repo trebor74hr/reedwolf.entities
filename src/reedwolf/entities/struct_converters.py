@@ -9,25 +9,33 @@
 from dataclasses import (
     field,
     dataclass,
-    replace as dc_replace,
 )
 from typing import (
     Type,
     Dict,
     Optional,
-    ClassVar, List, Union,
+    ClassVar,
+    List,
+    Union,
 )
 
 from .exceptions import (
     EntityInternalError,
-    EntityValueError, EntityTypeError,
+    EntityValueError,
+    EntityTypeError,
 )
 from .expressions import DotExpression
 from .meta import (
     MAX_RECURSIONS,
     ModelType,
     AttrValue,
-    UNDEFINED, is_model_class, get_model_fields, ModelField, is_pydantic, NoneType, AttrName,
+    UNDEFINED,
+    is_model_class,
+    get_model_fields,
+    ModelField,
+    is_pydantic,
+    NoneType,
+    AttrName,
 )
 from .base import (
     DTO_STRUCT_CHILDREN_SUFFIX,

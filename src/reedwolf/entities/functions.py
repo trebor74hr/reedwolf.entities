@@ -77,13 +77,17 @@ from .expressions import (
 from .func_args import (
     FunctionArguments,
     create_function_arguments,
-    PreparedArguments, FuncArg, PrepArg,
+    PreparedArguments,
+    FuncArg,
+    PrepArg,
 )
 from .base import (
     AttrDexpNodeTypeEnum,
     IField,
     IApplyResult,
-    IComponent, SetupStackFrame, ApplyStackFrame,
+    IComponent,
+    SetupStackFrame,
+    ApplyStackFrame,
 )
 
 
@@ -127,37 +131,37 @@ class IFunction(IFunctionDexpNode):
     INPUT_CARDINALITY: ClassVar[DatatypeCardinalityEnum] = DatatypeCardinalityEnum.SINGLE
 
     # 1. python pure function that will be called
-    py_function : Callable[..., Any] 
+    py_function: Callable[..., Any]
 
     # 2. arguments in value expression usage. This is the only required (can be empty ([], {}))
     #   e.g. in chain .my_custom_function(a=1, b=2) # in this case: {"a": 1, "b": 2}
-    func_args           : FunctionArgumentsType
+    func_args: FunctionArgumentsType
 
     # 3. SetupSession are required for validation and type *data* of function
     #     arguments, e.g. creating ThisNS, getting vars from ContextNS, etc.
-    setup_session         : ISetupSession = field(repr=False)  # noqa: F821
+    setup_session: ISetupSession = field(repr=False)  # noqa: F821
 
     # 4. in usage when in chain (value)
     #   e.g. some_struct_str_attr.lower() #  in this case: some_struct_str_attr
-    value_arg_type_info : Optional[TypeInfo] = field(default=None)
+    value_arg_type_info: Optional[TypeInfo] = field(default=None)
 
     # 5. if value_arg_type_info is not supplied then it will be passed to first argument 
     #   e.g. in chain: some-func-returns 100 -> Fn.my_custom_function(d=3) () # in this case: value_arg_name = "d", value = 3
-    value_arg_name      : Optional[str] = field(default=None)
+    value_arg_name: Optional[str] = field(default=None)
 
     # 6. fixed arguments - when declared.
     #  e.g. Function(my_py_custom_function, c=3)
     #  e.g. Function(my_py_custom_function, fixed_args = ([1, 2], {"a": 3, "b": 4}))
-    fixed_args          : FunctionArgumentsType = EmptyFunctionArguments
+    fixed_args: FunctionArgumentsType = EmptyFunctionArguments
 
     # 7. if not provided, then autocomputed
-    name                : Optional[str] = field(default=None)
+    name: Optional[str] = field(default=None)
 
     # 8. if not provided, then autocomputed from py_function type_hints
-    function_arguments  : Optional[FunctionArguments] = field(repr=False, default=None)
+    function_arguments: Optional[FunctionArguments] = field(repr=False, default=None)
 
     # 9. caller - value expression node which calls function, can be None
-    caller              : Optional[IDotExpressionNode] = field(default=None)
+    caller: Optional[IDotExpressionNode] = field(default=None)
 
     # 10. extra validations of input arguments, list of python functions, 
     #    e.g. Length() can operate on objects that have __len__ function (btw.
@@ -168,23 +172,23 @@ class IFunction(IFunctionDexpNode):
     #    For validation error cases should:
     #       * return string error message, or
     #       * raise EntitySetupError based error
-    arg_validators      : Optional[ValueArgValidatorPyFuncDictType] = field(repr=False, default=None)
+    arg_validators: Optional[ValueArgValidatorPyFuncDictType] = field(repr=False, default=None)
 
     # 11. SetupSession are required for validation and type *data* of function
     #     arguments, e.g. creating ThisNS, getting vars from ContextNS etc.
-    # setup_session         : Optional[ISetupSession] = field(repr=False, default=None)  # noqa: F821
+    # setup_session: Optional[ISetupSession] = field(repr=False, default=None)  # noqa: F821
 
     # misc data, used in EnumMembers
     data: Optional[Any] = field(default=None, repr=False)
 
     # --- Autocomputed
     # required for IDotExpressionNode
-    _output_type_info    : TypeInfo = field(init=False, repr=False)
+    _output_type_info: TypeInfo = field(init=False, repr=False)
     # required for IDotExpressionNode
-    func_name           : str = field(init=False, repr=False)
+    func_name: str = field(init=False, repr=False)
 
     # computed from function_arguments(fixed_args, func_args)
-    prepared_args       : PreparedArguments = field(init=False, repr=False)
+    prepared_args: PreparedArguments = field(init=False, repr=False)
 
     is_finished: bool = field(init=False, repr=False, default=False)
 
@@ -369,7 +373,7 @@ class IFunction(IFunctionDexpNode):
         if not isinstance(self.arg_validators, dict):
             raise EntitySetupValueError(f"Parementer 'arg_validators' should be dictionary, got: {type(self.arg_validators)} / {self.arg_validators}")
 
-        exception_list : List[EntitySetupTypeError] = []
+        exception_list: List[EntitySetupTypeError] = []
 
         for arg_name, validators in self.arg_validators.items():
             if arg_name not in self.function_arguments:
@@ -569,7 +573,7 @@ class IFunction(IFunctionDexpNode):
         if not isinstance(exp_arg.type_info.py_type_hint, IInjectFuncArgHint):
             raise EntityApplyTypeError(owner=self, msg=f"Expecting IInjectFuncArgHint for {exp_arg} argument type, got: {exp_arg.type_info}")
 
-        func_arg_hint : IInjectFuncArgHint = exp_arg.type_info.py_type_hint
+        func_arg_hint: IInjectFuncArgHint = exp_arg.type_info.py_type_hint
 
         output = func_arg_hint.get_apply_inject_value(apply_result=apply_result, prep_arg=prep_arg)
 
@@ -594,14 +598,14 @@ class InjectComponentTreeValuesFuncArgHint(IInjectFuncArgHint):
     def get_apply_inject_value(self, apply_result: IApplyResult, prep_arg: PrepArg) -> AttrValue:
         # maybe belongs to implementation
         if not isinstance(prep_arg.caller, IDotExpressionNode):
-            raise EntityInternalError(owner=self, msg=f"Expected IDotExpressionNode, got: {type(inject_prep_arg.caller)} / {inject_prep_arg.caller}")
+            raise EntityInternalError(owner=self, msg=f"Expected IDotExpressionNode, got: {type(prep_arg.caller)} / {prep_arg.caller}")
 
         dexp_node: IDotExpressionNode = prep_arg.caller
 
         if not (dexp_node.attr_node_type == AttrDexpNodeTypeEnum.FIELD
                 and dexp_node.namespace == FieldsNS
                 and isinstance(dexp_node.data, IField)):
-            raise EntityInternalError(owner=self, msg=f"Inject function argument value :: PrepArg '{inject_prep_arg.name}' expected DExp(F.<field>) -> Field(),  got: '{dexp_node}' -> '{dexp_node.data}' ")
+            raise EntityInternalError(owner=self, msg=f"Inject function argument value:: PrepArg '{prep_arg.name}' expected DExp(F.<field>) -> Field(),  got: '{dexp_node}' -> '{dexp_node.data}' ")
 
         component: IComponent = dexp_node.data
         assert component == apply_result.current_frame.component
@@ -648,23 +652,23 @@ class IFunctionFactory(ABC):
     inject_args should be used as functools.partial()
     later reference will fill func_args
     """
-    FUNCTION_CLASS : ClassVar[Union[UndefinedType, Type[IFunction]]] = UNDEFINED
+    FUNCTION_CLASS: ClassVar[Union[UndefinedType, Type[IFunction]]] = UNDEFINED
 
     # regular python function - should be pure (do not change input args,
     # rather copy and return modified copy
-    py_function : Callable[..., Any]
+    py_function: Callable[..., Any]
 
     # fixed arguments - when declared - see IFunctionDexpNode.fixed_args
-    fixed_args     : FunctionArgumentsType = field(default=EmptyFunctionArguments)
+    fixed_args: FunctionArgumentsType = field(default=EmptyFunctionArguments)
 
     # can be evaluated later
-    name           : Optional[str] = field(default=None) 
+    name: Optional[str] = field(default=None)
 
     # for dot-chained - when kwarg to use, target parameter
-    value_arg_name : Optional[str] = field(default=None) 
+    value_arg_name: Optional[str] = field(default=None)
 
     # validator function - see details in IFunction.arg_validators
-    arg_validators : Optional[ValueArgValidatorPyFuncDictType] = field(default=None, repr=False)
+    arg_validators: Optional[ValueArgValidatorPyFuncDictType] = field(default=None, repr=False)
 
     # misc data, used in EnumMembers
     data: Optional[Any] = field(default=None, repr=False)
@@ -698,10 +702,10 @@ class IFunctionFactory(ABC):
 
     def create_function(self, 
                 func_args:FunctionArgumentsType, 
-                setup_session         : ISetupSession, # noqa: F821
+                setup_session: ISetupSession, # noqa: F821
                 value_arg_type_info: Optional[TypeInfo] = None,
-                name               : Optional[str] = None,
-                caller             : Optional[IDotExpressionNode] = None,
+                name: Optional[str] = None,
+                caller: Optional[IDotExpressionNode] = None,
                 ) -> IFunction:
         custom_function = self.FUNCTION_CLASS(
                 py_function         = self.py_function,     # noqa: E251
@@ -725,30 +729,30 @@ class IFunctionFactory(ABC):
 
 @dataclass
 class CustomFunctionFactory(IFunctionFactory):
-    FUNCTION_CLASS : ClassVar[Type[IFunction]] = CustomFunction
+    FUNCTION_CLASS: ClassVar[Type[IFunction]] = CustomFunction
 
 @dataclass
 class CustomItemsFunctionFactory(CustomFunctionFactory):
-    FUNCTION_CLASS : ClassVar[Type[IFunction]] = CustomItemsFunction
+    FUNCTION_CLASS: ClassVar[Type[IFunction]] = CustomItemsFunction
 
 # ------------------------------------------------------------
 
 @dataclass
 class BuiltinFunctionFactory(IFunctionFactory):
-    FUNCTION_CLASS : ClassVar[Type[IFunction]] = BuiltinFunction
+    FUNCTION_CLASS: ClassVar[Type[IFunction]] = BuiltinFunction
 
 @dataclass
 class BuiltinItemsFunctionFactory(BuiltinFunctionFactory):
-    FUNCTION_CLASS : ClassVar[Type[IFunction]] = BuiltinItemsFunction
+    FUNCTION_CLASS: ClassVar[Type[IFunction]] = BuiltinItemsFunction
 
 
-def Function(py_function : Callable[..., Any], 
+def Function(py_function: Callable[..., Any],
              name: Optional[str] = None,
              value_arg_name:Optional[str]=None,
              # TODO: not only Dexp, can be literal too, e.g. 1, 2.3, "a"
-             args   : Optional[List[DotExpression]] = UNDEFINED,
-             kwargs : Optional[Dict[str, DotExpression]] = UNDEFINED,
-             arg_validators : Optional[ValueArgValidatorPyFuncDictType] = None,
+             args: Optional[List[DotExpression]] = UNDEFINED,
+             kwargs: Optional[Dict[str, DotExpression]] = UNDEFINED,
+             arg_validators: Optional[ValueArgValidatorPyFuncDictType] = None,
              ) -> CustomFunctionFactory:
     """
     goes to Global namespace (Fn.)
@@ -779,13 +783,13 @@ def Function(py_function : Callable[..., Any],
                     ),
                 arg_validators=arg_validators,
                 )
-def ItemsFunction(py_function : Callable[..., Any],
+def ItemsFunction(py_function: Callable[..., Any],
              # NOTE: this parameter is required
              items_value_arg_name: str,
              name: Optional[str] = None,
-             args   : Optional[List[DotExpression]] = UNDEFINED,
-             kwargs : Optional[Dict[str, DotExpression]] = UNDEFINED,
-             arg_validators : Optional[ValueArgValidatorPyFuncDictType] = None,
+             args: Optional[List[DotExpression]] = UNDEFINED,
+             kwargs: Optional[Dict[str, DotExpression]] = UNDEFINED,
+             arg_validators: Optional[ValueArgValidatorPyFuncDictType] = None,
              ) -> CustomItemsFunctionFactory:
     return CustomItemsFunctionFactory(
         py_function=py_function,
@@ -800,12 +804,12 @@ def ItemsFunction(py_function : Callable[..., Any],
 
 
 def create_builtin_function_factory(
-            py_function : Callable[..., Any], 
+            py_function: Callable[..., Any],
             name: Optional[str] = None,
             value_arg_name:Optional[str]=None,
-            args   : Optional[List[DotExpression]] = None,
+            args: Optional[List[DotExpression]] = None,
             kwargs: Optional[Dict[str, DotExpression]] = None,
-            arg_validators : Optional[ValueArgValidatorPyFuncDictType] = None,
+            arg_validators: Optional[ValueArgValidatorPyFuncDictType] = None,
             ) -> BuiltinFunctionFactory:
     """
     wrapper around BuiltinFunctionFactory - to have better api look
@@ -822,13 +826,13 @@ def create_builtin_function_factory(
                 )
 
 def create_builtin_items_function_factory(
-        py_function : Callable[..., Any],
+        py_function: Callable[..., Any],
         # NOTE: this parameter is required
         items_value_arg_name:str,
         name: Optional[str] = None,
-        args   : Optional[List[DotExpression]] = None,
+        args: Optional[List[DotExpression]] = None,
         kwargs: Optional[Dict[str, DotExpression]] = None,
-        arg_validators : Optional[ValueArgValidatorPyFuncDictType] = None,
+        arg_validators: Optional[ValueArgValidatorPyFuncDictType] = None,
 ) -> BuiltinItemsFunctionFactory:
     """
     wrapper around BuiltinFunctionFactory - better api look
