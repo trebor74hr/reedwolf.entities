@@ -165,7 +165,8 @@ class ContainerBase(IContainer, ABC):
         return type_info
 
     def _get_function(self, name: str, strict:bool=True) -> Optional[IFunction]:
-        if not self.functions:
+        # TODO: explain or make this guard better - using setup_session instead?
+        if not self.settings.functions:
             raise KeyError(f"{self.name}: Function '{name}' not found, no functions available.")
         return self.setup_session.functions_factory_registry.get(name, strict=strict)
 
@@ -197,7 +198,7 @@ class ContainerBase(IContainer, ABC):
         assert self.setup_session is None
 
         # TODO: remove exception case: entity can be UNDEFINED in unit test cases only
-        functions = self.entity.functions if self.entity else ()
+        functions = self.entity.settings.functions if self.entity else ()
         settings = settings if settings else self.settings
         apply_settings_class = self.apply_settings_class
 
@@ -643,7 +644,8 @@ class Entity(IEntity, ContainerBase):
     # will be filled automatically with Settings() if not supplied
     settings:           Optional[Settings] = field(repr=False, default=None, metadata={"skip_dump": True})
     apply_settings_class: Optional[Type[Settings]] = field(repr=False, default=None, metadata={"skip_dump": True})
-    functions:          Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
+    # moved to settings=Settings(functions=...)
+    # functions:          Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
 
 
     # --- validators and evaluators
@@ -716,7 +718,7 @@ class Entity(IEntity, ContainerBase):
 
         # if self.functions:
         #     for function in self.functions:
-        #         assert isinstance(function, IFunctionFactory), function
+        #         assert isinstance(function, FunctionFactoryBase), function
 
 
     # def setup(self):
@@ -753,10 +755,10 @@ class Entity(IEntity, ContainerBase):
         #         raise EntitySetupError(owner=self, msg="data already set, late binding not allowed.")
         #     self.data = data
 
-        if functions:
-            if self.functions:
-                raise EntitySetupError(owner=self, msg="functions already set, late binding not allowed.")
-            self.functions = functions
+        # if functions:
+        #     if self.functions:
+        #         raise EntitySetupError(owner=self, msg="functions already set, late binding not allowed.")
+        #     self.functions = functions
 
         if apply_settings_class:
             if self.apply_settings_class:

@@ -802,6 +802,25 @@ class IFunctionDexpNode(IDotExpressionNode):
     """
     pass
 
+# ------------------------------------------------------------
+
+class IFunctionFactory(ABC):
+
+    @abstractmethod
+    def create_function(self,
+                        func_args:FunctionArgumentsType,
+                        setup_session: ISetupSession, # noqa: F821
+                        value_arg_type_info: Optional[TypeInfo] = None,
+                        name: Optional[str] = None,
+                        caller: Optional[IDotExpressionNode] = None,
+                        ) -> IFunctionDexpNode:  # IFunction
+        ...
+
+    @abstractmethod
+    def get_type_info(self) -> TypeInfo:
+        ...
+
+
 
 @dataclass
 class LiteralDexpNode(IDotExpressionNode):

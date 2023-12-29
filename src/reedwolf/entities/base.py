@@ -1615,6 +1615,7 @@ class IFieldGroup(IComponent, ABC):
 class IContainer(IComponent, ABC):
 
     bound_model:    "IBoundModel" = field(repr=False)
+    settings:       Optional[Settings] = field(repr=False, default=None)
     contains:       List[IComponent] = field(repr=False, init=False)
     # NOTE: used only internally in fill_models, so I removed the references
     # models:       Dict[str, Union[type, DotExpression]] = field(init=False, repr=False, default_factory=dict)

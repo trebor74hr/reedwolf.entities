@@ -72,7 +72,7 @@ from .expressions import (
     ISetupSession,
     IThisRegistry,
     JustDotexprFuncArgHint,
-    DotexprFuncArgHint,
+    DotexprFuncArgHint, IFunctionFactory,
 )
 from .func_args import (
     FunctionArguments,
@@ -121,7 +121,7 @@ DEFAULT_ENGINE = PythonFunctionEngine()
 # ------------------------------------------------------------
 
 @dataclass
-class IFunction(IFunctionDexpNode):
+class IFunction(IFunctionDexpNode, ABC):
     """
     single left parameter (value from parent - previous dot chain, parent ) ,
     i.e. function wrapped should not have 2+ required params left
@@ -214,7 +214,7 @@ class IFunction(IFunctionDexpNode):
         # chain_arg_type_info
         # self.value_arg_type_info = self.get_value_arg_type_info()
 
-        # TODO: dry this - same cade in IFunctionFactory
+        # TODO: dry this - same cade in FunctionFactoryBase
         self._output_type_info = TypeInfo.extract_function_return_type_info(self.py_function)
 
         if not self.function_arguments:
@@ -643,7 +643,7 @@ class BuiltinItemsFunction(IFunction):
 # ------------------------------------------------------------
 
 @dataclass
-class IFunctionFactory(ABC):
+class FunctionFactoryBase(IFunctionFactory):
     """
     Function wrapper for arbitrary regular python function.
     that will reside in Global namespace and can not be 
@@ -728,7 +728,7 @@ class IFunctionFactory(ABC):
 # ------------------------------------------------------------
 
 @dataclass
-class CustomFunctionFactory(IFunctionFactory):
+class CustomFunctionFactory(FunctionFactoryBase):
     FUNCTION_CLASS: ClassVar[Type[IFunction]] = CustomFunction
 
 @dataclass
@@ -738,7 +738,7 @@ class CustomItemsFunctionFactory(CustomFunctionFactory):
 # ------------------------------------------------------------
 
 @dataclass
-class BuiltinFunctionFactory(IFunctionFactory):
+class BuiltinFunctionFactory(FunctionFactoryBase):
     FUNCTION_CLASS: ClassVar[Type[IFunction]] = BuiltinFunction
 
 @dataclass
@@ -885,7 +885,7 @@ class FunctionsFactoryRegistry:
 
     # @staticmethod
     # def is_function_factory(function_factory: Any, exclude_custom: bool = False):
-    #     out = isinstance(function_factory, IFunctionFactory)
+    #     out = isinstance(function_factory, FunctionFactoryBase)
     #     # out = (inspect.isclass(function_factory) 
     #     #         and IFunction in inspect.getmro(function_factory) 
     #     #         and not inspect.isabstract(function_factory)
@@ -896,9 +896,9 @@ class FunctionsFactoryRegistry:
     #     return out
 
 
-    def add(self, function_factory: IFunctionFactory, func_name: Optional[str]=None):
+    def add(self, function_factory: FunctionFactoryBase, func_name: Optional[str]=None):
         # IFunction
-        if not isinstance(function_factory, IFunctionFactory):
+        if not isinstance(function_factory, FunctionFactoryBase):
             raise EntityInternalError(f"Exepected function factory, got: {type(function_factory)} -> {function_factory}")
 
         if not func_name:
@@ -953,7 +953,7 @@ class FunctionsFactoryRegistry:
 def try_create_function(
         setup_session: ISetupSession,  # noqa: F821
         caller: IDotExpressionNode,
-        # functions_factory_registry: IFunctionFactory, 
+        # functions_factory_registry: FunctionFactoryBase,
         attr_node_name:str, 
         func_args: FunctionArgumentsType,
         value_arg_type_info: TypeInfo,
@@ -964,7 +964,7 @@ def try_create_function(
             and not is_function(value_arg_type_info):
         raise EntityInternalError(f"{value_arg_type_info} should be TypeInfo or function, got '{type(value_arg_type_info)}'")
 
-    functions_factory_registry: IFunctionFactory = setup_session.functions_factory_registry
+    functions_factory_registry: FunctionFactoryBase = setup_session.functions_factory_registry
     if not functions_factory_registry:
         raise EntitySetupNameNotFoundError(item=setup_session, msg=f"Functions not available, '{attr_node_name}' function could not be found.")
 

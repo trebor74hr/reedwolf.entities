@@ -1,9 +1,10 @@
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field, fields as dc_fields
-from typing import Optional, Union, ClassVar, Type
+from typing import Optional, Union, ClassVar, Type, List
 
 from .exceptions import EntityInternalError
-from .meta import ExpressionsAttributesMap, FieldName, Self, MethodName
+from .expressions import IFunctionFactory
+from .meta import ExpressionsAttributesMap, Self, MethodName
 from .utils import UndefinedType, UNDEFINED
 from .values_accessor import IValueAccessor
 
@@ -29,6 +30,9 @@ class Settings:
         3. common attributes in apply settings (usually not overridden)
         4. common attributes in setup settings (usually not overridden)
     """
+    # TODO: CustomFunctionFactory
+    functions: Optional[List[IFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
+
     # if not set will use default ValueExpress
     value_accessor: Union[IValueAccessor, UndefinedType] = field(default=UNDEFINED, metadata={"dexp_exposed": False})
 

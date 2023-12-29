@@ -105,7 +105,7 @@ class ApplyResult(IApplyResult):
     ApplyResult is IApplyResult (variable apply_result) - but is renamed to
     result since it is name exposed to external API.
 
-    Similar is Function -> IFunctionFactory.
+    Similar is Function -> FunctionFactoryBase.
     """
 
     instance_none_mode:bool = field(repr=False, init=False, default=False)
