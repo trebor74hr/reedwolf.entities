@@ -1,10 +1,12 @@
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
-from typing import Optional, Union, List, Type
+from enum import Enum
+from typing import Optional, Union, List, Type, Dict
 
 from .exceptions import EntityInternalError
 from .expressions import IFunctionFactory
-from .meta import ExpressionsAttributesMap, Self, MethodName
+from .meta import ExpressionsAttributesMap, Self, MethodName, KlassMember, ModelType, AttrName, ModelField, \
+    get_model_fields
 from .utils import UndefinedType, UNDEFINED
 from .values_accessor import IValueAccessor
 
@@ -31,9 +33,6 @@ class SettingsBase:
 
     See ContextRegistry.
     """
-    # TODO: CustomFunctionFactory
-    custom_functions: Optional[List[IFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
-
     # if not set will use default ValueExpress
     value_accessor: Union[IValueAccessor, UndefinedType] = field(default=UNDEFINED, metadata={"dexp_exposed": False})
 
@@ -63,11 +62,38 @@ class SettingsBase:
 
 @dataclass
 class ApplySettings(SettingsBase):
-    ...
+
+    @classmethod
+    # TODO: CustomFunctionFactory
+    def get_custom_functions(cls) -> List[IFunctionFactory]:
+        """
+        for override.
+        TODO: put example
+        """
+        return []
+
+# ------------------------------------------------------------
+
+class SettingsType(str, Enum):
+    SETUP_SETTINGS = "SETUP_SETTINGS"
+    APPLY_SETTINGS = "APPLY_SETTINGS"
+
+
+@dataclass
+class SettingsSource:
+    settings_type: SettingsType
+    klass: ModelType
+    fields: Dict[AttrName, ModelField] = field(init=False, repr=False)
+
+    def __post_init__(self):
+        self.fields = get_model_fields(self.klass)
+
 
 
 @dataclass
 class Settings(SettingsBase):
+    # TODO: CustomFunctionFactory
+    custom_functions: Optional[List[IFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
 
     apply_settings_class: Optional[Type[ApplySettings]] = field(repr=False, default=None)
 
@@ -94,6 +120,45 @@ class Settings(SettingsBase):
         self._ensure_in_with_block(method_name="is_tracee")
         out = self._apply_settings.debug if self._apply_settings is not None else self.debug
         return out if out is not UNDEFINED else False
+
+    def _get_all_custom_functions(self, apply_settings_class: Optional[Type[ApplySettings]]) -> List[IFunctionFactory]:
+        apply_custom_functions = apply_settings_class.get_custom_functions() if apply_settings_class is not None else []
+        apply_custom_functions_names = {f.name for f in apply_custom_functions}
+        # remove duplicates
+        out = [function for function in self.custom_functions if function.name not in apply_custom_functions_names]
+        out += apply_custom_functions
+        return out
+
+    def _get_attribute_settings_source_list_pairs(self, apply_settings_class: Optional[Type[ApplySettings]]):
+        """
+        TODO: very ugly function name
+        First param apply_settings_class is used instead of self.apply_settings_class
+        since Entity can have its own apply_settings_class attribute which wins.
+
+        For the same attribute name - this is order of preferences - which will win:
+            1. custom attributes in apply settings
+            2. custom attributes in setup settings
+            3. common attributes in apply settings (usually not overridden)
+            4. common attributes in setup settings (usually not overridden)
+        """
+        setup_settings_source = SettingsSource(SettingsType.SETUP_SETTINGS, self.__class__)
+        common_dict = self._get_common_contextns_attributes()
+        setup_custom_dict = self.get_custom_contextns_attributes()
+
+        if apply_settings_class:
+            apply_settings_source = SettingsSource(SettingsType.APPLY_SETTINGS, apply_settings_class)
+            apply_custom_dict = apply_settings_class.get_custom_contextns_attributes()
+            settings_source_list_pairs = [
+                (common_dict, [setup_settings_source, apply_settings_source]),
+                (setup_custom_dict, [setup_settings_source]),
+                (apply_custom_dict, [apply_settings_source]),
+            ]
+        else:
+            settings_source_list_pairs = [
+                (common_dict, [setup_settings_source]),
+                (setup_custom_dict, [setup_settings_source]),
+            ]
+        return settings_source_list_pairs
 
     @classmethod
     def _get_common_contextns_attributes(cls) -> ExpressionsAttributesMap:

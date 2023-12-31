@@ -76,7 +76,7 @@ from .eval_base import (
     EvaluationBase,
 )
 from .settings import (
-    Settings, ApplySettings,
+    Settings, ApplySettings, SettingsType,
 )
 from .setup import (
     RegistryBase,
@@ -363,26 +363,10 @@ class FieldsRegistry(RegistryBase):
 
 # -------------------------------------------------------------
 
-class SettingsType(str, Enum):
-    SETUP_SETTINGS = "SETUP_SETTINGS"
-    APPLY_SETTINGS = "APPLY_SETTINGS"
-
-
 @dataclass
 class SettingsKlassMember(KlassMember):
     settings_type: SettingsType
 
-
-@dataclass
-class SettingsSource:
-    settings_type: SettingsType
-    klass: ModelType
-    fields: Dict[AttrName, ModelField] = field(init=False, repr=False)
-
-    def __post_init__(self):
-        self.fields = get_model_fields(self.klass)
-
-# ------------------------------------------------------------
 
 @dataclass
 class ContextRegistry(RegistryBase):
@@ -405,29 +389,11 @@ class ContextRegistry(RegistryBase):
 
     def register_all_nodes(self):
         """
-        For the same attribute name - this is order of preferences - which will win:
-            1. custom attributes in apply settings
-            2. custom attributes in setup settings
-            3. common attributes in apply settings (usually not overridden)
-            4. common attributes in setup settings (usually not overridden)
+        when there are several sources of attribute names,
+        check in self.setup_settings._get_attribute_settings_source_list_pairs()
+        by which order / priority which attribute source wins.
         """
-        setup_settings_source = SettingsSource(SettingsType.SETUP_SETTINGS, self.setup_settings.__class__)
-        common_dict = self.setup_settings._get_common_contextns_attributes()
-        setup_custom_dict = self.setup_settings.get_custom_contextns_attributes()
-
-        if self.apply_settings_class:
-            apply_settings_source = SettingsSource(SettingsType.APPLY_SETTINGS, self.apply_settings_class)
-            apply_custom_dict = self.apply_settings_class.get_custom_contextns_attributes()
-            settings_source_list_pairs = [
-                (common_dict, [setup_settings_source, apply_settings_source]),
-                (setup_custom_dict, [setup_settings_source]),
-                (apply_custom_dict, [apply_settings_source]),
-            ]
-        else:
-            settings_source_list_pairs = [
-                (common_dict, [setup_settings_source]),
-                (setup_custom_dict, [setup_settings_source]),
-            ]
+        settings_source_list_pairs = self.setup_settings._get_attribute_settings_source_list_pairs(self.apply_settings_class)
 
         for attributes_dict, settings_source_list in settings_source_list_pairs:
 

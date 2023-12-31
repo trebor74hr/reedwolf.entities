@@ -114,7 +114,7 @@ from .settings import (
 from .struct_converters import (
     StructConverterRunner,
 )
-# import modules that hold any kind of component - will be used for COMPONENTS_REGISTRY
+# import MODULES that hold any kind of component - will be used for COMPONENTS_REGISTRY
 from . import (
     fields,
     valid_field,
@@ -165,7 +165,7 @@ class ContainerBase(IContainer, ABC):
         return type_info
 
     def _get_function(self, name: str, strict:bool=True) -> Optional[IFunction]:
-        # TODO: explain or make this guard better - using setup_session instead?
+        # TODO: used only in unit tests, remove it and make better test maybe?
         if not self.settings.custom_functions:
             raise KeyError(f"{self.name}: Function '{name}' not found, no functions available.")
         return self.setup_session.functions_factory_registry.get(name, strict=strict)
@@ -198,9 +198,9 @@ class ContainerBase(IContainer, ABC):
         assert self.setup_session is None
 
         # TODO: remove exception case: entity can be UNDEFINED in unit test cases only
-        functions = self.entity.settings.custom_functions if self.entity else ()
+        apply_settings_class = self.entity.apply_settings_class if self.entity else None
+        functions = self.entity.settings._get_all_custom_functions(apply_settings_class) if self.entity else []
         settings = settings if settings else self.settings
-        apply_settings_class = self.apply_settings_class
 
         setup_session = SetupSession(
             container=self,
@@ -934,7 +934,8 @@ class SubEntityBase(ContainerBase, ABC):
     # parent_setup_session: Optional[SetupSession] = field(init=False, repr=False, default=None)
 
     # copy from first non-self container parent
-    apply_settings_class: Optional[Type[ApplySettings]] = field(repr=False, init=False, default=None)
+    #   NTOE: for this use self.entity.apply_settings_class instad
+    #       apply_settings_class: Optional[Type[ApplySettings]] = field(repr=False, init=False, default=None)
     settings: Optional[Settings] = field(repr=False, init=False, default=None)
 
     # used for automatic component's naming, <class_name>__<counter>
@@ -968,7 +969,7 @@ class SubEntityBase(ContainerBase, ABC):
 
         # take from real first container parent
         non_self_parent_container = self.get_first_parent_container(consider_self=False)
-        self.apply_settings_class = non_self_parent_container.apply_settings_class
+        # self.apply_settings_class = non_self_parent_container.apply_settings_class
         self.settings = non_self_parent_container.settings
         if not self.settings:
             raise EntityInternalError(owner=self, msg=f"settings not set from parent: {self.parent_container}")

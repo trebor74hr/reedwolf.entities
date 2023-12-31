@@ -864,7 +864,8 @@ class FunctionsFactoryRegistry:
         """
         # TODO: typing is not good
         #       Union[type(IFunction), CustomFunctionFactory]
-        self.store: Dict[str, Type[IFunction]]= {}
+        #       ex. Type[IFunction]
+        self.store: Dict[str, FunctionFactoryBase]= {}
         self.include_builtin:bool = include_builtin
 
         if self.include_builtin:
