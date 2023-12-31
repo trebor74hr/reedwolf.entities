@@ -90,6 +90,7 @@ from .eval_children import (
     )
 from .settings import (
     Settings,
+    ApplySettings,
 )
 from .containers import (  # noqa: F401
     KeyFields,
@@ -212,9 +213,10 @@ __all__ = [
 
     # settings
     "Settings",
+    "ApplySettings",
 
     # apply
-    "IApplyResult", # from base.py
+    "IApplyResult",  # from base.py
     "ApplyResult",
 
     # load

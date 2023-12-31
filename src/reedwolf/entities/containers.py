@@ -109,7 +109,7 @@ from .fields import (
     FieldGroup, DEXP_VALIDATOR_FOR_BIND,
 )
 from .settings import (
-    Settings,
+    Settings, ApplySettings,
 )
 from .struct_converters import (
     StructConverterRunner,
@@ -166,7 +166,7 @@ class ContainerBase(IContainer, ABC):
 
     def _get_function(self, name: str, strict:bool=True) -> Optional[IFunction]:
         # TODO: explain or make this guard better - using setup_session instead?
-        if not self.settings.functions:
+        if not self.settings.custom_functions:
             raise KeyError(f"{self.name}: Function '{name}' not found, no functions available.")
         return self.setup_session.functions_factory_registry.get(name, strict=strict)
 
@@ -198,7 +198,7 @@ class ContainerBase(IContainer, ABC):
         assert self.setup_session is None
 
         # TODO: remove exception case: entity can be UNDEFINED in unit test cases only
-        functions = self.entity.settings.functions if self.entity else ()
+        functions = self.entity.settings.custom_functions if self.entity else ()
         settings = settings if settings else self.settings
         apply_settings_class = self.apply_settings_class
 
@@ -643,7 +643,7 @@ class Entity(IEntity, ContainerBase):
     keys:               Optional[KeysBase] = field(repr=False, default=None)
     # will be filled automatically with Settings() if not supplied
     settings:           Optional[Settings] = field(repr=False, default=None, metadata={"skip_dump": True})
-    apply_settings_class: Optional[Type[Settings]] = field(repr=False, default=None, metadata={"skip_dump": True})
+    apply_settings_class: Optional[Type[ApplySettings]] = field(repr=False, default=None, metadata={"skip_dump": True})
     # moved to settings=Settings(functions=...)
     # functions:          Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
 
@@ -733,7 +733,7 @@ class Entity(IEntity, ContainerBase):
     def bind_to(self,
                 bound_model:Union[UndefinedType, BoundModel]=UNDEFINED,
                 settings: Optional[Settings]=None,
-                apply_settings_class: Optional[Type[Settings]]=None,
+                apply_settings_class: Optional[Type[ApplySettings]]=None,
                 functions: Optional[List[CustomFunctionFactory]]=None,
                 do_setup:bool = True,
                 ):
@@ -928,8 +928,8 @@ class SubEntityBase(ContainerBase, ABC):
     # parent_setup_session: Optional[SetupSession] = field(init=False, repr=False, default=None)
 
     # copy from first non-self container parent
-    apply_settings_class: Optional[Type[Settings]] = field(repr=False, init=False, default=None)
-    settings:       Optional[Settings] = field(repr=False, init=False, default=None)
+    apply_settings_class: Optional[Type[ApplySettings]] = field(repr=False, init=False, default=None)
+    settings: Optional[Settings] = field(repr=False, init=False, default=None)
 
     # used for automatic component's naming, <class_name>__<counter>
     name_counter_by_parent_name: Dict[str, int] = field(init=False, repr=False, default_factory=dict)

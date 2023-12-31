@@ -97,7 +97,7 @@ from .expressions import (
     DexpValidator,
 )
 from .settings import (
-    Settings,
+    Settings, ApplySettings,
 )
 from .values_accessor import IValueAccessor
 
@@ -1431,7 +1431,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
             # TODO: this is not nice - do it better
             # TODO: models should not be dict()
             # TODO: added Self for BoundModelWithHandlers
-            if sub_component_name not in ("models", "data", "functions", "enum") \
+            if sub_component_name not in ("models", "data", "enum") \
                     and th_field \
                     and "Component" not in str(th_field.type) \
                     and "Container" not in str(th_field.type) \
@@ -1668,7 +1668,7 @@ class IContainer(IComponent, ABC):
 
 class IEntity(IContainer, ABC):
     settings: Settings = field(repr=False, )
-    apply_settings_class: Optional[Type[Settings]] = field(repr=False, default=None)
+    apply_settings_class: Optional[Type[ApplySettings]] = field(repr=False, default=None)
 
 # ------------------------------------------------------------
 # IBoundModel

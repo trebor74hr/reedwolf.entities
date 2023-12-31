@@ -76,7 +76,7 @@ from .eval_base import (
     EvaluationBase,
 )
 from .settings import (
-    Settings,
+    Settings, ApplySettings,
 )
 from .setup import (
     RegistryBase,
@@ -388,7 +388,7 @@ class SettingsSource:
 class ContextRegistry(RegistryBase):
 
     setup_settings: Settings = field(repr=False)
-    apply_settings_class: Optional[Type[Settings]] = field(repr=False)
+    apply_settings_class: Optional[Type[ApplySettings]] = field(repr=False)
 
     NAMESPACE: ClassVar[Namespace] = ContextNS
 
@@ -412,12 +412,12 @@ class ContextRegistry(RegistryBase):
             4. common attributes in setup settings (usually not overridden)
         """
         setup_settings_source = SettingsSource(SettingsType.SETUP_SETTINGS, self.setup_settings.__class__)
-        common_dict = self.setup_settings._common_contextns_attributes()
-        setup_custom_dict = self.setup_settings.custom_contextns_attributes()
+        common_dict = self.setup_settings._get_common_contextns_attributes()
+        setup_custom_dict = self.setup_settings.get_custom_contextns_attributes()
 
         if self.apply_settings_class:
             apply_settings_source = SettingsSource(SettingsType.APPLY_SETTINGS, self.apply_settings_class)
-            apply_custom_dict = self.apply_settings_class.custom_contextns_attributes()
+            apply_custom_dict = self.apply_settings_class.get_custom_contextns_attributes()
             settings_source_list_pairs = [
                 (common_dict, [setup_settings_source, apply_settings_source]),
                 (setup_custom_dict, [setup_settings_source]),
