@@ -399,8 +399,8 @@ class ContextRegistry(RegistryBase):
             raise EntitySetupValueError(owner=self, msg=f"setup_settings must be instance of Settings, got: {self.apply_settings_class}")
 
         if self.apply_settings_class is not None:
-            if Settings not in inspect.getmro(self.apply_settings_class):
-                raise EntitySetupValueError(owner=self, msg=f"apply_settings_class should inherit Settings, got: {self.apply_settings_class}")
+            if ApplySettings not in inspect.getmro(self.apply_settings_class):
+                raise EntitySetupValueError(owner=self, msg=f"apply_settings_class should inherit ApplySettings, got: {self.apply_settings_class}")
         self.register_all_nodes()
 
     def register_all_nodes(self):

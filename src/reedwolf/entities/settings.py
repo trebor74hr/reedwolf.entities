@@ -1,6 +1,6 @@
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
-from typing import Optional, Union, List
+from typing import Optional, Union, List, Type
 
 from .exceptions import EntityInternalError
 from .expressions import IFunctionFactory
@@ -62,7 +62,14 @@ class SettingsBase:
 
 
 @dataclass
+class ApplySettings(SettingsBase):
+    ...
+
+
+@dataclass
 class Settings(SettingsBase):
+
+    apply_settings_class: Optional[Type[ApplySettings]] = field(repr=False, default=None)
 
     # set and reset back in apply phase
     _apply_settings: Union[Self, None, UndefinedType] = field(init=False, repr=False, compare=False, default=UNDEFINED)
@@ -113,10 +120,6 @@ class Settings(SettingsBase):
                 raise EntityInternalError(owner=self, msg=f"Can not set new settings back to {apply_settings}, it is already reset to: {self._apply_settings}")
         self._apply_settings = apply_settings
 
-
-@dataclass
-class ApplySettings(SettingsBase):
-    ...
 
 
 

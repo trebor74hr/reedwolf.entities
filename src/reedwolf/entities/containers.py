@@ -32,7 +32,7 @@ from .exceptions import (
     EntityNameNotFoundError,
     EntitySetupNameNotFoundError,
     EntityApplyNameNotFoundError,
-    EntityValidationError, EntityTypeError,
+    EntityValidationError, EntityTypeError, EntityValueError,
 )
 from .namespaces import (
     ModelsNS,
@@ -75,8 +75,8 @@ from .attr_nodes import (
     )
 from .functions import (
     CustomFunctionFactory,
-    IFunction,
-    )
+    IFunction, FunctionFactoryBase,
+)
 from .registries import (
     SetupSession,
     ModelsRegistry,
@@ -677,7 +677,6 @@ class Entity(IEntity, ContainerBase):
         if not self.settings:
             # default setup
             self.settings = Settings()
-
         self.init_clean()
         super().__post_init__()
 
@@ -711,15 +710,22 @@ class Entity(IEntity, ContainerBase):
                                       else DEFAULT_VALUE_ACCESSOR_CLASS()
         assert isinstance(self.value_accessor_default, IValueAccessor)
 
+        if self.settings.apply_settings_class:
+            if self.apply_settings_class:
+                raise EntityValueError(owner=self,
+                                       msg=f"Argument apply_settings_class set in settings too. Skip this argument or remove from settings instance. Got: {self.apply_settings_class}")
+            self.apply_settings_class = self.settings.apply_settings_class
+
         if self.apply_settings_class and not (
                 inspect.isclass(self.apply_settings_class)
-                and Settings in inspect.getmro(self.apply_settings_class)):
-            raise EntitySetupValueError(owner=self, msg=f"apply_settings_class needs to be class that inherits Settings, got: {self.apply_settings_class}")
+                and ApplySettings in inspect.getmro(self.apply_settings_class)):
+            raise EntityTypeError(owner=self, msg=f"apply_settings_class needs to be class that inherits ApplySettings, got: {self.apply_settings_class}")
 
-        # if self.functions:
-        #     for function in self.functions:
-        #         assert isinstance(function, FunctionFactoryBase), function
-
+        if self.settings.custom_functions:
+            for function in self.settings.custom_functions:
+                if not isinstance(function, FunctionFactoryBase):
+                    raise EntityTypeError(owner=self,
+                                          msg=f"Function '{function.name}' needs to be class of FunctionFactoryBase, got: {function}. Have you used function Function()?")
 
     # def setup(self):
     #     ret = super().setup()
@@ -781,7 +787,7 @@ class Entity(IEntity, ContainerBase):
     def apply(self,
               instance: DataclassType,
               instance_new: Optional[ModelType] = None,
-              settings: Optional[Settings] = None,
+              settings: Optional[ApplySettings] = None,
               raise_if_failed:bool = True) -> IApplyResult:
         return self._apply(
                   instance=instance,
