@@ -1,3 +1,4 @@
+from collections import OrderedDict
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from enum import Enum
@@ -5,8 +6,15 @@ from typing import Optional, Union, List, Type, Dict
 
 from .exceptions import EntityInternalError
 from .expressions import IFunctionFactory
-from .meta import ExpressionsAttributesMap, Self, MethodName, KlassMember, ModelType, AttrName, ModelField, \
-    get_model_fields
+from .meta import (
+    ExpressionsAttributesMap,
+    Self,
+    MethodName,
+    ModelType,
+    AttrName,
+    ModelField,
+    get_model_fields,
+)
 from .utils import UndefinedType, UNDEFINED
 from .values_accessor import IValueAccessor
 
@@ -48,9 +56,25 @@ class SettingsBase:
     trace: Union[bool, UndefinedType] = UNDEFINED
 
     @classmethod
-    def get_custom_contextns_attributes(cls) -> ExpressionsAttributesMap:
+    # TODO: CustomFunctionFactory
+    def get_custom_functions(cls) -> List[IFunctionFactory]:
         """
+        For override.
+        Defined on class level.
+        For (setup) Settings, can be overridden by instance attribute custom_functions.
+        TODO: put example
+        """
+        return []
+
+    @classmethod
+    def get_custom_ctx_attributes(cls) -> ExpressionsAttributesMap:
+        """
+        For override.
+        Defined on class level.
         Values are fetched from this instance only. Usually overridden.
+        Defined on class level.
+        For (setup) Settings, can be overridden by instance attribute custom_ctx_attributes.
+
         Example:
             {
             "Now": MethodName("get_now"),
@@ -62,15 +86,8 @@ class SettingsBase:
 
 @dataclass
 class ApplySettings(SettingsBase):
+    ...
 
-    @classmethod
-    # TODO: CustomFunctionFactory
-    def get_custom_functions(cls) -> List[IFunctionFactory]:
-        """
-        for override.
-        TODO: put example
-        """
-        return []
 
 # ------------------------------------------------------------
 
@@ -94,6 +111,7 @@ class SettingsSource:
 class Settings(SettingsBase):
     # TODO: CustomFunctionFactory
     custom_functions: Optional[List[IFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
+    custom_ctx_attributes: ExpressionsAttributesMap = field(repr=False, default_factory=dict, metadata={"skip_dump": True})
 
     apply_settings_class: Optional[Type[ApplySettings]] = field(repr=False, default=None)
 
@@ -122,12 +140,13 @@ class Settings(SettingsBase):
         return out if out is not UNDEFINED else False
 
     def _get_all_custom_functions(self, apply_settings_class: Optional[Type[ApplySettings]]) -> List[IFunctionFactory]:
-        apply_custom_functions = apply_settings_class.get_custom_functions() if apply_settings_class is not None else []
-        apply_custom_functions_names = {f.name for f in apply_custom_functions}
-        # remove duplicates
-        out = [function for function in self.custom_functions if function.name not in apply_custom_functions_names]
-        out += apply_custom_functions
-        return out
+        # make a copy and merge with instance defined functions
+        custom_functions = OrderedDict([(fn.name, fn)  for fn in self.get_custom_functions()])
+        custom_functions.update(OrderedDict([(fn.name, fn)  for fn in  self.custom_functions]))
+        if apply_settings_class:
+            # this one wins
+            custom_functions.update(OrderedDict([(fn.name, fn) for fn in apply_settings_class.get_custom_functions()]))
+        return custom_functions.values()
 
     def _get_attribute_settings_source_list_pairs(self, apply_settings_class: Optional[Type[ApplySettings]]):
         """
@@ -143,11 +162,14 @@ class Settings(SettingsBase):
         """
         setup_settings_source = SettingsSource(SettingsType.SETUP_SETTINGS, self.__class__)
         common_dict = self._get_common_contextns_attributes()
-        setup_custom_dict = self.get_custom_contextns_attributes()
+
+        # make a copy and merge with instance defined attributes
+        setup_custom_dict = self.get_custom_ctx_attributes().copy()
+        setup_custom_dict.update(self.custom_ctx_attributes)
 
         if apply_settings_class:
             apply_settings_source = SettingsSource(SettingsType.APPLY_SETTINGS, apply_settings_class)
-            apply_custom_dict = apply_settings_class.get_custom_contextns_attributes()
+            apply_custom_dict = apply_settings_class.get_custom_ctx_attributes()
             settings_source_list_pairs = [
                 (common_dict, [setup_settings_source, apply_settings_source]),
                 (setup_custom_dict, [setup_settings_source]),
