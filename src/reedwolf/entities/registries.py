@@ -32,7 +32,6 @@ from .namespaces import (
     ModelsNS,
     FieldsNS,
     ThisNS,
-    FunctionsNS,
     ContextNS,
     OperationsNS,
 )
@@ -87,9 +86,9 @@ from .setup import (
 
 # ------------------------------------------------------------
 
-@dataclass
-class FunctionsRegistry(RegistryUseDenied):
-    NAMESPACE: ClassVar[Namespace] = FunctionsNS
+# @dataclass
+# class FunctionsRegistry(RegistryUseDenied):
+#     NAMESPACE: ClassVar[Namespace] = FunctionsNS
 
 @dataclass
 class OperationsRegistry(RegistryUseDenied):

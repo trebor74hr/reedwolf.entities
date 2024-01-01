@@ -98,7 +98,7 @@ class PreparedArguments:
     # TODO: is this field really used/required?
     # How value_arg (dot-chain mode) is filled:
     #   None - no dot-chain mode, call within namespace. E.g.
-    #          Fn.my_custom_function(1,2) 
+    #          Ctx.my_custom_function(1,2)
     #   True - dot-chain mode -> value is set to first empty positional or
     #          kwarg when value_arg_name is predefined. E.g.
     #          M.address_set.Count()
@@ -222,7 +222,7 @@ class FunctionArguments:
                 raise EntityInternalError(owner=self, msg=f"{parent_name}: SetupSession is required for DotExpression() function argument case")
 
             # if not caller:
-            #     # NOTE: Namespace top level like: Fn.Length(This.name)
+            #     # NOTE: Namespace top level like: Ctx.Length(This.name)
             #     #       BoundModelWithHandlers with read_handlers case
             #     model_class = setup_session.current_frame.bound_model.model
             # else:
@@ -479,7 +479,7 @@ class FunctionArguments:
         # ==== 2/3: VALUE ARGUMENTS - are filled at the end
 
         if caller is None:
-            # direct from namespace, e.g. Fn.get_my_country()
+            # direct from namespace, e.g. Ctx.get_my_country()
             value_arg_implicit = None
         else:
             value_arg_implicit = self._fill_value_arg(

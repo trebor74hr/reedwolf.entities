@@ -37,9 +37,11 @@ from .exceptions import (
 )
 from .namespaces import (
     DynamicAttrsBase,
-    FunctionsNS,
     OperationsNS,
-    Namespace, ThisNS, ModelsNS,
+    Namespace,
+    ThisNS,
+    ModelsNS,
+    ContextNS,
 )
 from .meta import (
     TypeInfo,
@@ -73,7 +75,7 @@ class ExecResult:
     # last value, mutable
     value: AttrValue  = field(init=False, default=UNDEFINED)
 
-    # Every DotExpression member (e.g. Fn.name.Fun().member) will get one DexpValueNode.
+    # Every DotExpression member (e.g. Ctx.name.Fun().member) will get one DexpValueNode.
     # TODO: consider adding set compoenent (owner) that triggerred value change
     #       value evaluation - can have attr_node.name
     dexp_value_node_list: List[DexpValueNode] = field(repr=False, init=False, default_factory=list)
@@ -531,9 +533,11 @@ class DotExpression(DynamicAttrsBase):
             # Functions - IFunctionDexpNode
             # ========================================
             elif bit._func_args:
-                if bnr==1:
-                    if self._namespace != FunctionsNS:
-                        raise EntitySetupNameError(owner=self, msg=f"Only FunctionsNS (Fn.) namespace accepts direct function calls. Got '{bit}' on '{bit._namespace}) namespace.")
+                # if bnr==1 and self._namespace not in (FunctionsNS, ContextNS):
+                if bnr == 1 and self._namespace != ContextNS:
+                    # function call from top object allowed only for Ctx, e.g. Ctx.Upper('test')
+                    raise EntitySetupNameError(owner=self,
+                                               msg=f"Only ContextNS (Ctx.) namespace accepts direct function calls. Got '{bit}' on '{bit._namespace}) namespace.")
 
                 func_args = FunctionArgumentsType(*bit._func_args)
 
@@ -640,6 +644,11 @@ class DotExpression(DynamicAttrsBase):
         return DotExpression(node=aname, namespace=self._namespace, Path=self.Path)
 
     def __call__(self, *args, **kwargs):
+        """
+        Although this node will become Function node, namespace is inherited from top node.
+        So FunctionNS is used only when function is called from namespace - top object
+        e.g. Ctx.Upper('test')
+        """
         if self._func_args is not None:
             raise EntityInternalError(owner=self, msg="Node already a function, duplicate call?") 
         self._func_args = [args, kwargs]
@@ -1122,14 +1131,14 @@ class OperationDexpNode(IDotExpressionNode):
             try:
                 new_value = self.op_function(first_value, second_value)
             except Exception as ex:
-                raise EntityApplyError(owner=apply_result, msg=f"{self} := {self.op_function}({first_dexp_result.value}, {second_dexp_result.value}) raised error: {ex}")
+                raise EntityApplyError(owner=apply_result, msg=f"{self} := {self.op_function}({first_dexp_result.value}, {second_dexp_result.value}) raised error: {ex}")
         else:
             # unary operation
             try:
                 new_value = self.op_function(first_dexp_result.value)
             except Exception as ex:
                 # raise
-                raise EntityApplyError(owner=apply_result, msg=f"{self} := {self.op_function}({first_dexp_result.value}) raised error: {ex}")
+                raise EntityApplyError(owner=apply_result, msg=f"{self} := {self.op_function}({first_dexp_result.value}) raised error: {ex}")
 
         op_dexp_result = ExecResult()
 

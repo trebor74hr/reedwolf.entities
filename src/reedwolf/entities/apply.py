@@ -269,7 +269,7 @@ class ApplyResult(IApplyResult):
 
         if not component == self.current_frame.component:
             raise EntityInternalError(owner=self.current_frame.component, 
-                    msg=f"Component in frame {self.current_frame.component} must match component: {component}")
+                    msg=f"Component in frame {self.current_frame.component} must match component: {component}")
 
         # evaluation_dexp = evaluation.value
         # assert isinstance(evaluation_dexp, DotExpression)
@@ -311,7 +311,7 @@ class ApplyResult(IApplyResult):
 
         if not component == self.current_frame.component:
             raise EntityInternalError(owner=self.current_frame.component, 
-                    msg=f"Component in frame {self.current_frame.component} must match component: {component}")
+                    msg=f"Component in frame {self.current_frame.component} must match component: {component}")
 
         # value=value, 
         validation_failure = validation.validate(apply_result=self)

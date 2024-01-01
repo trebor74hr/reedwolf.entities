@@ -312,7 +312,7 @@ class RegistryBase(IRegistry):
         #           type_info: TypeInfo = TypeInfo.get_or_create_by_type(th_field)
 
         if attr_name in (ReservedAttributeNames.INSTANCE_ATTR_NAME,):
-            raise EntitySetupNameError(msg=f"Model attribute name '{attr_name} is reserved. Rename it and try again (model={model_class.__name__}).")
+            raise EntitySetupNameError(msg=f"Model attribute name '{attr_name} is reserved. Rename it and try again (model={model_class.__name__}).")
 
         # This one should not fail
         # , func_node
@@ -414,7 +414,7 @@ class RegistryBase(IRegistry):
         Will create a new attr_node when missing, even in the case when the var
         is just "on the path" to final attr_node needed.
 
-        Namespace usually is: ModelsNS, FunctionsNS
+        Namespace usually is: ModelsNS, ContextNS
 
         """
         # can return DotExpression / class member / object member

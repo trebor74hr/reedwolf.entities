@@ -52,9 +52,10 @@ class Namespace(DynamicAttrsBase):
         return DotExpression(node=attr_name, namespace=self)
 
 
+# NOTE: dropped, ContextNS / Ctx. should be used instead.
 # Instances - should be used as singletons
 # the only namespace declaration in this module
-FunctionsNS = Namespace("Fn")
+# FunctionsNS = Namespace("Fn")
 
 # internally used
 OperationsNS = Namespace("Op", is_for_internal_use_only=True)
@@ -85,7 +86,7 @@ ThisNS = Namespace("This")  # , manual_setup=True
 ContextNS = Namespace("Ctx")
 
 # aliases
-Fn = FunctionsNS
+# Fn = FunctionsNS
 M = ModelsNS
 # D = DataNS
 F = FieldsNS

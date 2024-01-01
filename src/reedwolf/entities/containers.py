@@ -81,7 +81,6 @@ from .registries import (
     SetupSession,
     ModelsRegistry,
     FieldsRegistry,
-    FunctionsRegistry,
     OperationsRegistry,
     ContextRegistry,
     UnboundModelsRegistry,
@@ -213,7 +212,7 @@ class ContainerBase(IContainer, ABC):
         else:
             setup_session.add_registry(ModelsRegistry())
         setup_session.add_registry(FieldsRegistry())
-        setup_session.add_registry(FunctionsRegistry())
+        # setup_session.add_registry(FunctionsRegistry())
         setup_session.add_registry(OperationsRegistry())
         setup_session.add_registry(ContextRegistry(setup_settings=settings,
                                                    apply_settings_class=apply_settings_class))

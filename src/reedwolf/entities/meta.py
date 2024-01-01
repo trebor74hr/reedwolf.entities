@@ -134,7 +134,7 @@ NumberType              = Union[int, float, Decimal]
 # TODO: consider maybe to replace this with AttrValue.
 LiteralType             = TypeVar("LiteralType", bound=Any)
 
-ERR_MSG_SUPPORTED = "Supporting custom and standard python types, and typing: Optional, Union[..., NoneType] and Sequence/List[ py-types | Union[py-types, NoneType]]."
+ERR_MSG_SUPPORTED = "Supporting custom and standard python types, and typing: Optional, Union[..., NoneType] and Sequence/List[ py-types | Union[py-types, NoneType]]."
 
 # -- Following are used just to have type declaration for names
 AttrName = TypeVar("AttrName", bound=str)

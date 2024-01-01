@@ -9,7 +9,7 @@ e.g.:
 
 function is registereed and can be used in
 
-   Fn.CountAll() 
+   Ctx.CountAll()
    M.addressses.CountAll()
 
 extra args could be passed and must be called as function.
@@ -146,7 +146,7 @@ class IFunction(IFunctionDexpNode, ABC):
     value_arg_type_info: Optional[TypeInfo] = field(default=None)
 
     # 5. if value_arg_type_info is not supplied then it will be passed to first argument 
-    #   e.g. in chain: some-func-returns 100 -> Fn.my_custom_function(d=3) () # in this case: value_arg_name = "d", value = 3
+    #   e.g. in chain: some-func-returns 100 -> Ctx.my_custom_function(d=3) () # in this case: value_arg_name = "d", value = 3
     value_arg_name: Optional[str] = field(default=None)
 
     # 6. fixed arguments - when declared.
@@ -278,7 +278,7 @@ class IFunction(IFunctionDexpNode, ABC):
         type_info: Optional[TypeInfo] = None  # not used
 
         if not self.caller:
-            # NOTE: Namespace top level like: Fn.Length(This.name)
+            # NOTE: Namespace top level like: Ctx.Length(This.name)
             #       BoundModelWithHandlers with read_handlers case
 
             # TODO: test case self.items_func_arg: - top level function call, e.g. '<Namespace>.{self.name}(...)'
@@ -490,7 +490,7 @@ class IFunction(IFunctionDexpNode, ABC):
 
         if dexp_result is UNDEFINED:
             # top_level_call = True
-            # namespace toplevel call, e.g. Fn.Length()
+            # namespace toplevel call, e.g. Ctx.Length()
             dexp_result = ExecResult()
         else:
             # top_level_call = False
@@ -755,7 +755,7 @@ def Function(py_function: Callable[..., Any],
              arg_validators: Optional[ValueArgValidatorPyFuncDictType] = None,
              ) -> CustomFunctionFactory:
     """
-    goes to Global namespace (Fn.)
+    goes to Global namespace (Ctx.)
     can accept predefined params (like partial) 
     and in use (later) can be called with rest params.
 
@@ -764,10 +764,10 @@ def Function(py_function: Callable[..., Any],
             return a+b+c
 
         # get function wrapper, 
-        Add = Function(add, kwargs=dict(a=Fn.some_function))
+        Add = Function(add, kwargs=dict(a=Ctx.some_function))
 
         # reference and store in wrapped function
-        add_function = Fn.Add(b=This.value, c=3)
+        add_function = Ctx.Add(b=This.value, c=3)
 
         # call / execute referenced function wrapper
         print (add_function.execute(ctx=this_ctx, setup_session)) 
@@ -783,6 +783,8 @@ def Function(py_function: Callable[..., Any],
                     ),
                 arg_validators=arg_validators,
                 )
+
+
 def ItemsFunction(py_function: Callable[..., Any],
              # NOTE: this parameter is required
              items_value_arg_name: str,
@@ -1014,6 +1016,9 @@ def try_create_function(
 
 @dataclass
 class DotexprExecuteOnItemFactoryFuncArgHint(IInjectFuncArgHint):
+    """
+    TODO: name is too long and unreadable.
+    """
     inner_type: Optional[Type] = field(repr=True, default=Any)
     type: Type = field(init=False, default=DotExpression)
 

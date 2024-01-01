@@ -143,7 +143,7 @@ class DotExpressionLoader(CallTraceMixin):
                     processed = True
 
             if not processed:
-                # Multiple items cases, M.id.test.Call, Fn(test=1).test.test, ...
+                # Multiple items cases, M.id.test.Call, Ctx.Func(test=1).test.test, ...
                 ast_node_list: List[ast.AST] = self._ast_nodes_prepare(ast_node)
                 if not ast_node_list:
                     return None

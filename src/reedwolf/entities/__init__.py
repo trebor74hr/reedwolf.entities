@@ -6,8 +6,6 @@ from .namespaces import (  # noqa: F401
     F,
     ModelsNS,
     M,
-    FunctionsNS,
-    Fn,
     ThisNS,
     This,
     ContextNS,
@@ -116,7 +114,7 @@ __all__ = [
     # utils
     UNDEFINED,
     # namespaces - no aliases
-    "FunctionsNS",
+    # "FunctionsNS",
     "ModelsNS",
     "FieldsNS",
     "ThisNS",

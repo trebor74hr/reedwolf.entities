@@ -192,7 +192,7 @@ def get_available_names_example(name:str, name_list:List[str], max_display:int =
     # elif len_name_list == len_names_all:
     #     names_avail = f"{names_all}"
     # elif len_name_list<=3:
-    #     names_avail = f"{names_all} {names_ellipsis} (check: {name_list} {avail_ellipsis})".strip()
+    #     names_avail = f"{names_all} {names_ellipsis} (check: {name_list} {avail_ellipsis})".strip()
     # else:
     #     names_avail = f"... {name_list} {avail_ellipsis}".strip()
     return names_avail
