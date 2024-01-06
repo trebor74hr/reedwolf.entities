@@ -86,6 +86,12 @@ class SettingsBase:
 
 @dataclass
 class ApplySettings(SettingsBase):
+    """
+    Setup settings can implement Ctx. (ContextNS) attributes and ApplySettings too.
+    If both defined then last wins.
+    Setup settings can implement Ctx. (ContextNS) functions and ApplySettings too.
+    If both defined then last wins.
+    """
     ...
 
 
@@ -115,7 +121,7 @@ class Settings(SettingsBase):
     - in instance attribute custom_ctx_attributes
     If both defined then last wins.
 
-    Setup settings can implement Ctx. (ContextNS) functinos:
+    Setup settings can implement Ctx. (ContextNS) functions:
     - in class method get_custom_functions() and/or
     - in instance attribute custom_functions
     If both defined then last wins.
