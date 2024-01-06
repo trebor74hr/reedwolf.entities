@@ -62,7 +62,7 @@ from .meta import (
     ComponentTreeWValuesType,
     IInjectFuncArgHint,
     AttrValue,
-    IExecuteFuncArgHint,
+    IExecuteFuncArgHint, LiteralType,
 )
 from .expressions import (
     DotExpression,
@@ -749,9 +749,8 @@ class BuiltinItemsFunctionFactory(BuiltinFunctionFactory):
 def Function(py_function: Callable[..., Any],
              name: Optional[str] = None,
              value_arg_name:Optional[str]=None,
-             # TODO: not only Dexp, can be literal too, e.g. 1, 2.3, "a"
-             args: Optional[List[DotExpression]] = UNDEFINED,
-             kwargs: Optional[Dict[str, DotExpression]] = UNDEFINED,
+             args: Optional[List[Union[LiteralType, DotExpression]]] = UNDEFINED,
+             kwargs: Optional[Dict[str, Union[LiteralType, DotExpression]]] = UNDEFINED,
              arg_validators: Optional[ValueArgValidatorPyFuncDictType] = None,
              ) -> CustomFunctionFactory:
     """

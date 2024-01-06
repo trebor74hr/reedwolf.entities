@@ -114,6 +114,11 @@ class Settings(SettingsBase):
     - in class method get_custom_ctx_attributes() and/or
     - in instance attribute custom_ctx_attributes
     If both defined then last wins.
+
+    Setup settings can implement Ctx. (ContextNS) functinos:
+    - in class method get_custom_functions() and/or
+    - in instance attribute custom_functions
+    If both defined then last wins.
     """
     # TODO: CustomFunctionFactory
     custom_functions: Optional[List[IFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
