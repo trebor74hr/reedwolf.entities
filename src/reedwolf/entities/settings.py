@@ -4,16 +4,16 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional, Union, List, Type, Dict
 
-from .exceptions import EntityInternalError
+from .exceptions import EntityInternalError, EntitySetupNameError
 from .expressions import IFunctionFactory
 from .meta import (
-    ExpressionsAttributesMap,
+    CustomCtxAttributeList,
     Self,
     MethodName,
     ModelType,
     AttrName,
     ModelField,
-    get_model_fields,
+    get_model_fields, FieldName,
 )
 from .utils import UndefinedType, UNDEFINED
 from .values_accessor import IValueAccessor
@@ -67,7 +67,7 @@ class SettingsBase:
         return []
 
     @classmethod
-    def get_custom_ctx_attributes(cls) -> ExpressionsAttributesMap:
+    def get_custom_ctx_attributes(cls) -> CustomCtxAttributeList:
         """
         For override.
         Defined on class level.
@@ -127,8 +127,8 @@ class Settings(SettingsBase):
     If both defined then last wins.
     """
     # TODO: CustomFunctionFactory
-    custom_functions: Optional[List[IFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
-    custom_ctx_attributes: ExpressionsAttributesMap = field(repr=False, default_factory=dict, metadata={"skip_dump": True})
+    custom_functions: List[IFunctionFactory] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
+    custom_ctx_attributes: CustomCtxAttributeList = field(repr=False, default_factory=list, metadata={"skip_dump": True})
 
     apply_settings_class: Optional[Type[ApplySettings]] = field(repr=False, default=None)
 
@@ -156,14 +156,32 @@ class Settings(SettingsBase):
         out = self._apply_settings.debug if self._apply_settings is not None else self.debug
         return out if out is not UNDEFINED else False
 
+    def _custom_function_list_to_dict(self, functions: List[IFunctionFactory]) -> Dict[AttrName, IFunctionFactory]:
+        function_dict = OrderedDict()
+        for func in functions:
+            if func.name in function_dict:
+                raise EntitySetupNameError(owner=self,
+                                           msg=f"Found duplicate function name: {func.name}. Pass unique 'name' attribute.")
+            function_dict[func.name] = func
+        return function_dict
+
     def _get_all_custom_functions(self, apply_settings_class: Optional[Type[ApplySettings]]) -> List[IFunctionFactory]:
         # make a copy and merge with instance defined functions
-        custom_functions = OrderedDict([(fn.name, fn)  for fn in self.get_custom_functions()])
-        custom_functions.update(OrderedDict([(fn.name, fn)  for fn in  self.custom_functions]))
+        custom_functions = self._custom_function_list_to_dict(self.get_custom_functions())
+        custom_functions.update(self._custom_function_list_to_dict(self.custom_functions))
         if apply_settings_class:
             # this one wins. Last wins.
-            custom_functions.update(OrderedDict([(fn.name, fn) for fn in apply_settings_class.get_custom_functions()]))
-        return custom_functions.values()
+            custom_functions.update(self._custom_function_list_to_dict(apply_settings_class.get_custom_functions()))
+        return list(custom_functions.values())
+
+    def _custom_ctx_attribute_list_to_dict(self, attributes: List[Union[FieldName, MethodName]]) -> Dict[AttrName, Union[FieldName, MethodName]]:
+        attribute_dict = OrderedDict()
+        for attr in attributes:
+            if attr.attr_name in attribute_dict:
+                raise EntitySetupNameError(owner=self,
+                                           msg=f"Found duplicate attribute name: {attr.attr_name}. Pass unique 'attr_name' attribute.")
+            attribute_dict[attr.attr_name] = attr
+        return attribute_dict
 
     def _get_attribute_settings_source_list_pairs(self, apply_settings_class: Optional[Type[ApplySettings]]):
         """
@@ -178,15 +196,15 @@ class Settings(SettingsBase):
             4. common attributes in setup settings (usually not overridden)
         """
         setup_settings_source = SettingsSource(SettingsType.SETUP_SETTINGS, self.__class__)
-        common_dict = self._get_common_contextns_attributes()
+        common_dict = self._custom_ctx_attribute_list_to_dict(self._get_common_contextns_attributes())
 
         # make a copy and merge with instance defined attributes
-        setup_custom_dict = self.get_custom_ctx_attributes().copy()
-        setup_custom_dict.update(self.custom_ctx_attributes)
+        setup_custom_dict = self._custom_ctx_attribute_list_to_dict(self.get_custom_ctx_attributes())
+        setup_custom_dict.update(self._custom_ctx_attribute_list_to_dict(self.custom_ctx_attributes))
 
         if apply_settings_class:
             apply_settings_source = SettingsSource(SettingsType.APPLY_SETTINGS, apply_settings_class)
-            apply_custom_dict = apply_settings_class.get_custom_ctx_attributes()
+            apply_custom_dict = self._custom_ctx_attribute_list_to_dict(apply_settings_class.get_custom_ctx_attributes())
             # last wins
             settings_source_list_pairs = [
                 (common_dict, [setup_settings_source, apply_settings_source]),
@@ -201,7 +219,7 @@ class Settings(SettingsBase):
         return settings_source_list_pairs
 
     @classmethod
-    def _get_common_contextns_attributes(cls) -> ExpressionsAttributesMap:
+    def _get_common_contextns_attributes(cls) -> CustomCtxAttributeList:
         """
         Values are fetched from apply_settings and setup_settings - fetched from first available. Usually not overridden.
         recommendation on override is to merge dict with super(), e.g.:
@@ -209,9 +227,9 @@ class Settings(SettingsBase):
             out.update({...})
             return out
         """
-        return {
-            "Debug": MethodName("is_debug"),
-        }
+        return [
+            MethodName("is_debug", "Debug"),
+        ]
 
     def _use_apply_settings(self, apply_settings: Optional[Self]) -> "UseApplySettingsCtxManager":
         return UseApplySettingsCtxManager(setup_settings=self, apply_settings=apply_settings)

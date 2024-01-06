@@ -47,7 +47,7 @@ from .meta import (
     TypeInfo,
     AttrName,
     Self,
-    ExpressionsAttributesMap,
+    CustomCtxAttributeList,
     MethodName,
     FunctionNoArgs,
     is_instancemethod_by_name,
@@ -375,7 +375,7 @@ class ContextRegistry(RegistryBase):
 
     NAMESPACE: ClassVar[Namespace] = ContextNS
 
-    attributes_dict: ExpressionsAttributesMap = field(init=False, repr=False)
+    attributes_dict: CustomCtxAttributeList = field(init=False, repr=False)
 
     def __post_init__(self):
         if not isinstance(self.setup_settings, Settings):
@@ -402,7 +402,7 @@ class ContextRegistry(RegistryBase):
                     attr_getter: MethodName = attr_getter
                     py_function = settings_source = UNDEFINED
                     for settings_source in settings_source_list:
-                        py_function: FunctionNoArgs = getattr(settings_source.klass, attr_getter, UNDEFINED)
+                        py_function: FunctionNoArgs = getattr(settings_source.klass, attr_getter.name, UNDEFINED)
                         if py_function is not UNDEFINED:
                             break
 
@@ -423,20 +423,20 @@ class ContextRegistry(RegistryBase):
                     non_empty_params = [param.name for param in py_fun_signature.parameters.values() if param.empty and param.name != 'self']
                     if len(non_empty_params)!=0:
                         raise EntitySetupNameError(owner=self,
-                                                   msg=f"{attr_name}: Method '{settings_source.klass.__name__}.{attr_getter}()' must not have arguments without defaults. Found: {', '.join(non_empty_params)} ")
+                                                   msg=f"{attr_name}: Method '{settings_source.klass.__name__}.{attr_getter.name}()' must not have arguments without defaults. Found: {', '.join(non_empty_params)} ")
 
                     # NOTE: py_function is not used later
                     type_info = TypeInfo.extract_function_return_type_info(py_function, allow_nonetype=True)
                     data = attr_getter
                     type_object = SettingsKlassMember(settings_type=settings_source.settings_type,
                                                       klass=settings_source.klass,
-                                                      name=attr_getter)
+                                                      member_name=attr_getter)
 
                 elif isinstance(attr_getter, FieldName):
                     attr_getter: FieldName = attr_getter
                     attr_field = settings_source = UNDEFINED
                     for settings_source in settings_source_list:
-                        attr_field = settings_source.fields.get(attr_getter, UNDEFINED)
+                        attr_field = settings_source.fields.get(attr_getter.name, UNDEFINED)
                         if attr_field is not UNDEFINED:
                             break
 
@@ -454,7 +454,7 @@ class ContextRegistry(RegistryBase):
                     data = attr_getter
                     type_object = SettingsKlassMember(settings_type=settings_source.settings_type,
                                                       klass=settings_source.klass,
-                                                      name=attr_getter)
+                                                      member_name=attr_getter)
                 else:
                     raise EntitySetupValueError(owner=self, msg=f"Attribute {attr_name} expected FieldName or MethodName instance, got: {attr_getter} / {type(attr_getter)}")
 
@@ -502,13 +502,13 @@ class ContextRegistry(RegistryBase):
             raise EntityInternalError(owner=self, msg=f"Expected SettingsClassMember instance, got: {klass_member}")
 
         # can be method name or field name
-        attr_name_new = klass_member.name
+        attr_name_new = klass_member.member_name
         if klass_member.settings_type == SettingsType.APPLY_SETTINGS:
             value_root = apply_result.settings
         elif klass_member.settings_type == SettingsType.SETUP_SETTINGS:
             value_root = apply_result.entity.settings
         else:
-            raise EntityInternalError(owner=self, msg=f"Invalid settingss type: got: {klass_member.settings_type}")
+            raise EntityInternalError(owner=self, msg=f"Invalid settings type: got: {klass_member.settings_type}")
 
         return RegistryRootValue(value_root, attr_name_new)
 

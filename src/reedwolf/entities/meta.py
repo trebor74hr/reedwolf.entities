@@ -142,22 +142,39 @@ AttrValue = TypeVar("AttrValue", bound=Any)
 AttrIndex = TypeVar("AttrIndex", bound=int)
 
 # NOTE: reference to dataclass Field's name. Used in isinstance() checks.
-class FieldName(str):
-    ...
 
-class MethodName(str):
-    ...
+@dataclass
+class FieldName:
+    # name of attribute in instance
+    name: AttrName
+    # name of Ctx.DotExpression name
+    attr_name: Optional[AttrName] = None
+
+    def __post_init__(self):
+        if not self.attr_name:
+            self.attr_name = self.name
+
+@dataclass
+class MethodName:
+    # name of attribute in instance
+    name: AttrName
+    # name of Ctx.DotExpression name
+    attr_name: Optional[AttrName] = None
+
+    def __post_init__(self):
+        if not self.attr_name:
+            self.attr_name = self.name
 
 @dataclass
 class KlassMember:
     klass: Type
-    name: Union[FieldName, MethodName]
+    member_name: Union[FieldName, MethodName]
 
 # ------------------------------------------------------------
 
 FunctionNoArgs = Callable[[], Any]
 # it is not dict since it must be immutable - default value for the class variable
-ExpressionsAttributesMap = Dict[AttrName, Union[FieldName, MethodName]]
+CustomCtxAttributeList = List[Union[FieldName, MethodName]]
 
 class IFuncArgHint:
     """

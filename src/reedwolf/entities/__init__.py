@@ -22,7 +22,7 @@ from .expressions import (
     Just,
     )
 from .meta import (
-    ExpressionsAttributesMap,
+    CustomCtxAttributeList,
     FieldName,
     MethodName,
 )
@@ -135,7 +135,7 @@ __all__ = [
     "EntityNameNotFoundError",
 
     # meta
-    "ExpressionsAttributesMap",
+    "CustomCtxAttributeList",
     "FieldName",
     "MethodName",
 

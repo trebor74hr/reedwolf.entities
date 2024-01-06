@@ -39,7 +39,8 @@ from .meta import (
     AttrValue,
     MethodName,
     FieldName,
-    NoneType, KlassMember,
+    NoneType,
+    KlassMember,
 )
 # TODO: remove this dependency
 from .base import (
@@ -141,6 +142,7 @@ class AttrDexpNode(IDotExpressionNode):
                                 getattr(self.data.type_, "_name", repr(self.data.type_)))
             self.data_supplier_name = f"TH[{type_name}]"
         elif isinstance(self.data, FieldName):
+            # TODO: don't like this - too hackish
             if not isinstance(self.type_object, KlassMember) and self.type_object.name == self.data:
                 raise EntityInternalError(owner=self, msg=f"MethodName case - type_object must be instance of KlassMember, got: {self.type_object},")
             self.attr_node_type = AttrDexpNodeTypeEnum.TH_FIELD
@@ -148,6 +150,7 @@ class AttrDexpNode(IDotExpressionNode):
             self.data_supplier_name = f"FN[{type_name}]"
 
         elif isinstance(self.data, MethodName):
+            # TODO: don't like this - too hackish
             if not isinstance(self.type_object, KlassMember) and self.type_object.name == self.data:
                 raise EntityInternalError(owner=self, msg=f"MethodName case - type_object must be instance of KlassMember, got: {self.type_object},")
             self.attr_node_type = AttrDexpNodeTypeEnum.TH_FUNCTION
@@ -357,7 +360,8 @@ class AttrDexpNode(IDotExpressionNode):
                     # if value_new is UNDEFINED:
                     #     raise EntityApplyNameError(owner=self,
                     #            msg=f"Attribute '{attr_name}' not found in '{to_repr(value_prev)}': '{type(value_prev)}'")
-
+                    if isinstance(attr_name, (FieldName, MethodName)):
+                        attr_name = attr_name.name
                     if not isinstance(attr_name, str):
                         raise EntityInternalError(owner=self, msg=f"Attribute name must be a string, got. {attr_name}")
                     if not hasattr(value_prev, attr_name):
