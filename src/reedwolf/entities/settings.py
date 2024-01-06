@@ -109,6 +109,12 @@ class SettingsSource:
 
 @dataclass
 class Settings(SettingsBase):
+    """
+    Setup settings can implement Ctx. (ContextNS) variables:
+    - in class method get_custom_ctx_attributes() and/or
+    - in instance attribute custom_ctx_attributes
+    If both defined then last wins.
+    """
     # TODO: CustomFunctionFactory
     custom_functions: Optional[List[IFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
     custom_ctx_attributes: ExpressionsAttributesMap = field(repr=False, default_factory=dict, metadata={"skip_dump": True})
@@ -144,7 +150,7 @@ class Settings(SettingsBase):
         custom_functions = OrderedDict([(fn.name, fn)  for fn in self.get_custom_functions()])
         custom_functions.update(OrderedDict([(fn.name, fn)  for fn in  self.custom_functions]))
         if apply_settings_class:
-            # this one wins
+            # this one wins. Last wins.
             custom_functions.update(OrderedDict([(fn.name, fn) for fn in apply_settings_class.get_custom_functions()]))
         return custom_functions.values()
 
@@ -170,6 +176,7 @@ class Settings(SettingsBase):
         if apply_settings_class:
             apply_settings_source = SettingsSource(SettingsType.APPLY_SETTINGS, apply_settings_class)
             apply_custom_dict = apply_settings_class.get_custom_ctx_attributes()
+            # last wins
             settings_source_list_pairs = [
                 (common_dict, [setup_settings_source, apply_settings_source]),
                 (setup_custom_dict, [setup_settings_source]),
