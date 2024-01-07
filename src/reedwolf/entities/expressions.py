@@ -55,9 +55,10 @@ from .meta import (
     IFuncArgHint,
     AttrValue,
     IExecuteFuncArgHint,
-    NoneType,
-    KlassMember,
+    NoneType, KlassMember,
 )
+
+
 # ------------------------------------------------------------
 # interfaces / base classes / internal structs
 # ------------------------------------------------------------

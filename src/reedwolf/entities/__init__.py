@@ -21,11 +21,11 @@ from .exceptions import (
 from .expressions import (
     Just,
     )
-from .meta import (
-    CustomCtxAttributeList,
-    FieldName,
-    MethodName,
+from .custom_attributes import (
+    Attribute,
+    AttributeByMethod,
 )
+from .meta import CustomCtxAttributeList
 from .bound_models import (
     BoundModel,
     BoundModelWithHandlers,
@@ -124,8 +124,8 @@ __all__ = [
     #   "F",
     #   "S",
     #   "M",
-    #   "This",
-    #   "Ctx",
+    "This",
+    "Ctx",
 
     # exceptions
     "EntityError",
@@ -135,12 +135,12 @@ __all__ = [
     "EntityNameNotFoundError",
 
     # meta
-    "CustomCtxAttributeList",
-    "FieldName",
-    "MethodName",
-
     # expressions
     "Just",
+
+    # custom_attributes
+    "Attribute",
+    "AttributeByMethod",
 
     # models
     "BoundModel",

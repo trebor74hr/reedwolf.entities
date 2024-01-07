@@ -37,10 +37,11 @@ from .meta import (
     ModelField,
     AttrName,
     AttrValue,
-    MethodName,
-    FieldName,
-    NoneType,
-    KlassMember,
+    NoneType, KlassMember,
+)
+from .custom_attributes import (
+    Attribute,
+    AttributeByMethod,
 )
 # TODO: remove this dependency
 from .base import (
@@ -141,7 +142,7 @@ class AttrDexpNode(IDotExpressionNode):
             type_name = getattr(self.data.type_, "__name__", 
                                 getattr(self.data.type_, "_name", repr(self.data.type_)))
             self.data_supplier_name = f"TH[{type_name}]"
-        elif isinstance(self.data, FieldName):
+        elif isinstance(self.data, Attribute):
             # TODO: don't like this - too hackish
             if not isinstance(self.type_object, KlassMember) and self.type_object.name == self.data:
                 raise EntityInternalError(owner=self, msg=f"MethodName case - type_object must be instance of KlassMember, got: {self.type_object},")
@@ -149,7 +150,7 @@ class AttrDexpNode(IDotExpressionNode):
             type_name = str(self.data)  # field name
             self.data_supplier_name = f"FN[{type_name}]"
 
-        elif isinstance(self.data, MethodName):
+        elif isinstance(self.data, AttributeByMethod):
             # TODO: don't like this - too hackish
             if not isinstance(self.type_object, KlassMember) and self.type_object.name == self.data:
                 raise EntityInternalError(owner=self, msg=f"MethodName case - type_object must be instance of KlassMember, got: {self.type_object},")
@@ -324,7 +325,7 @@ class AttrDexpNode(IDotExpressionNode):
             # apply_result.entity.get_component(apply_result.component_name_only)
             raise EntityApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should be a list, got: '{to_repr(value_new)}': '{type(value_new)}'")
 
-        # TODO: hm, changer_name is equal to attr_name, any problem / check / fix ... 
+        # TODO: hm, changer_name is equal to attr_name, any problem / check / fix ...
         dexp_result.set_value(attr_name=attr_name, changer_name=attr_name, value=value_new)
 
         return dexp_result
@@ -360,7 +361,7 @@ class AttrDexpNode(IDotExpressionNode):
                     # if value_new is UNDEFINED:
                     #     raise EntityApplyNameError(owner=self,
                     #            msg=f"Attribute '{attr_name}' not found in '{to_repr(value_prev)}': '{type(value_prev)}'")
-                    if isinstance(attr_name, (FieldName, MethodName)):
+                    if isinstance(attr_name, (Attribute, AttributeByMethod)):
                         attr_name = attr_name.name
                     if not isinstance(attr_name, str):
                         raise EntityInternalError(owner=self, msg=f"Attribute name must be a string, got. {attr_name}")

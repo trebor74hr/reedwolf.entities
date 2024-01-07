@@ -1,20 +1,15 @@
 from collections import OrderedDict
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Optional, Union, List, Type, Dict
+from typing import Optional, Union, List, Type, Dict, Tuple
 
 from .exceptions import EntityInternalError, EntitySetupNameError
 from .expressions import IFunctionFactory
 from .meta import (
-    CustomCtxAttributeList,
     Self,
-    MethodName,
-    ModelType,
     AttrName,
-    ModelField,
-    get_model_fields, FieldName,
-)
+    IAttribute, SettingsType, SettingsSource, )
+from . import AttributeByMethod, CustomCtxAttributeList
 from .utils import UndefinedType, UNDEFINED
 from .values_accessor import IValueAccessor
 
@@ -77,8 +72,8 @@ class SettingsBase:
 
         Example:
             {
-            "Now": MethodName("get_now"),
-            "UserId": FieldName("user_id"),
+            "Now": AttributeByMethod("get_now"),
+            "UserId": Attribute("user_id"),
             }
         """
         return {}
@@ -96,22 +91,6 @@ class ApplySettings(SettingsBase):
 
 
 # ------------------------------------------------------------
-
-class SettingsType(str, Enum):
-    SETUP_SETTINGS = "SETUP_SETTINGS"
-    APPLY_SETTINGS = "APPLY_SETTINGS"
-
-
-@dataclass
-class SettingsSource:
-    settings_type: SettingsType
-    klass: ModelType
-    fields: Dict[AttrName, ModelField] = field(init=False, repr=False)
-
-    def __post_init__(self):
-        self.fields = get_model_fields(self.klass)
-
-
 
 @dataclass
 class Settings(SettingsBase):
@@ -165,6 +144,7 @@ class Settings(SettingsBase):
             function_dict[func.name] = func
         return function_dict
 
+
     def _get_all_custom_functions(self, apply_settings_class: Optional[Type[ApplySettings]]) -> List[IFunctionFactory]:
         # make a copy and merge with instance defined functions
         custom_functions = self._custom_function_list_to_dict(self.get_custom_functions())
@@ -174,16 +154,19 @@ class Settings(SettingsBase):
             custom_functions.update(self._custom_function_list_to_dict(apply_settings_class.get_custom_functions()))
         return list(custom_functions.values())
 
-    def _custom_ctx_attribute_list_to_dict(self, attributes: List[Union[FieldName, MethodName]]) -> Dict[AttrName, Union[FieldName, MethodName]]:
+
+    def _custom_ctx_attribute_list_to_dict(self, attributes: CustomCtxAttributeList) -> Dict[AttrName, IAttribute]:
         attribute_dict = OrderedDict()
         for attr in attributes:
-            if attr.attr_name in attribute_dict:
+            if attr.dexp_attr_name in attribute_dict:
                 raise EntitySetupNameError(owner=self,
-                                           msg=f"Found duplicate attribute name: {attr.attr_name}. Pass unique 'attr_name' attribute.")
-            attribute_dict[attr.attr_name] = attr
+                                           msg=f"Found duplicate attribute name: {attr.dexp_attr_name}. Pass unique 'dexp_attr_name' attribute.")
+            attribute_dict[attr.dexp_attr_name] = attr
         return attribute_dict
 
-    def _get_attribute_settings_source_list_pairs(self, apply_settings_class: Optional[Type[ApplySettings]]):
+
+    def _get_attribute_settings_source_list_pairs(self, apply_settings_class: Optional[Type[ApplySettings]]) \
+        -> List[Tuple[Dict[AttrName, IAttribute], List[SettingsSource]]]:
         """
         TODO: very ugly function name
         First param apply_settings_class is used instead of self.apply_settings_class
@@ -218,6 +201,7 @@ class Settings(SettingsBase):
             ]
         return settings_source_list_pairs
 
+
     @classmethod
     def _get_common_contextns_attributes(cls) -> CustomCtxAttributeList:
         """
@@ -228,7 +212,7 @@ class Settings(SettingsBase):
             return out
         """
         return [
-            MethodName("is_debug", "Debug"),
+            AttributeByMethod("is_debug", "Debug"),
         ]
 
     def _use_apply_settings(self, apply_settings: Optional[Self]) -> "UseApplySettingsCtxManager":

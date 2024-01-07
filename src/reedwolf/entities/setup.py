@@ -49,8 +49,6 @@ from .meta import (
     HookOnFinishedAllCallable,
     get_model_fields,
     AttrName,
-    FieldName,
-    MethodName,
 )
 from .base import (
     IComponentFields,
@@ -135,10 +133,10 @@ class RegistryBase(IRegistry):
     def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName, caller: Optional[str] = None) -> RegistryRootValue: # noqa: F821
         # TODO: same method declared in IRegistry
         """ 
-        Apply phase - Namespace.<attr_name> - 
-        function returns the instance (root value) from which attr_name will be read from 
+        Apply phase - Namespace.<attr_name> -
+        function returns the instance (root value) from which attr_name will be read from
 
-        attr_name is not used for fetching the value, but for rare cases when 
+        attr_name is not used for fetching the value, but for rare cases when
         different source / instance is used based on different attr_name. See
         ThisNS.Instance.
         """

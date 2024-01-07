@@ -62,7 +62,7 @@ from .meta import (
     ComponentTreeWValuesType,
     IInjectFuncArgHint,
     AttrValue,
-    IExecuteFuncArgHint, LiteralType,
+    IExecuteFuncArgHint, LiteralType, ValueArgValidatorPyFuncDictType,
 )
 from .expressions import (
     DotExpression,
@@ -89,10 +89,6 @@ from .base import (
     SetupStackFrame,
     ApplyStackFrame,
 )
-
-
-ValueArgValidatorPyFuncType = Callable[..., NoneType]
-ValueArgValidatorPyFuncDictType = Dict[str, Union[ValueArgValidatorPyFuncType, List[ValueArgValidatorPyFuncType]]] 
 
 ValueOrDexp = Union[DotExpression, IDotExpressionNode, Any]
 
@@ -651,6 +647,8 @@ class FunctionFactoryBase(IFunctionFactory):
 
     inject_args should be used as functools.partial()
     later reference will fill func_args
+
+    NOTE: when adding new field(s), add to custom_attributes.py :: AttributeByMethod
     """
     FUNCTION_CLASS: ClassVar[Union[UndefinedType, Type[IFunction]]] = UNDEFINED
 
@@ -686,7 +684,7 @@ class FunctionFactoryBase(IFunctionFactory):
         if not self.name:
             self.name = self.py_function.__name__
         if self.fixed_args is None:
-            self.fixed_args = ()
+            self.fixed_args = FunctionArgumentsType((), {})
         # TODO: dry this - same cade in IFunction
         self._output_type_info = TypeInfo.extract_function_return_type_info(self.py_function)
 
@@ -785,13 +783,13 @@ def Function(py_function: Callable[..., Any],
 
 
 def ItemsFunction(py_function: Callable[..., Any],
-             # NOTE: this parameter is required
-             items_value_arg_name: str,
-             name: Optional[str] = None,
-             args: Optional[List[DotExpression]] = UNDEFINED,
-             kwargs: Optional[Dict[str, DotExpression]] = UNDEFINED,
-             arg_validators: Optional[ValueArgValidatorPyFuncDictType] = None,
-             ) -> CustomItemsFunctionFactory:
+                  # NOTE: this parameter is required
+                  items_value_arg_name: str,
+                  name: Optional[str] = None,
+                  args: Optional[List[DotExpression]] = UNDEFINED,
+                  kwargs: Optional[Dict[str, DotExpression]] = UNDEFINED,
+                  arg_validators: Optional[ValueArgValidatorPyFuncDictType] = None,
+                  ) -> CustomItemsFunctionFactory:
     return CustomItemsFunctionFactory(
         py_function=py_function,
         name=name,

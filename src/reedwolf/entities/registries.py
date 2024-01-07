@@ -47,13 +47,10 @@ from .meta import (
     TypeInfo,
     AttrName,
     Self,
-    CustomCtxAttributeList,
-    MethodName,
-    FunctionNoArgs,
-    is_instancemethod_by_name,
-    FieldName,
-    ModelField,
     KlassMember,
+    SettingsType,
+    IAttribute,
+    CustomCtxAttributeList,
 )
 from .base import (
     ReservedAttributeNames,
@@ -75,8 +72,7 @@ from .eval_base import (
     EvaluationBase,
 )
 from .settings import (
-    Settings, ApplySettings, SettingsType,
-)
+    Settings, ApplySettings, )
 from .setup import (
     RegistryBase,
     RegistryUseDenied,
@@ -397,67 +393,14 @@ class ContextRegistry(RegistryBase):
         for attributes_dict, settings_source_list in settings_source_list_pairs:
 
             for attr_name, attr_getter in attributes_dict.items():
-
-                if isinstance(attr_getter, MethodName):
-                    attr_getter: MethodName = attr_getter
-                    py_function = settings_source = UNDEFINED
-                    for settings_source in settings_source_list:
-                        py_function: FunctionNoArgs = getattr(settings_source.klass, attr_getter.name, UNDEFINED)
-                        if py_function is not UNDEFINED:
-                            break
-
-                    if py_function is UNDEFINED:
-                        # TODO: could I get all methods with no args?
-                        models = [settings_source.klass for settings_source in settings_source_list]
-                        raise EntitySetupNameError(owner=self,
-                                                   msg=f"Attribute {attr_name} must be name of method with no arguments from class(es) '{models}', got: {attr_getter}")
-
-                    function_name = py_function.__name__
-                    if not is_instancemethod_by_name(settings_source.klass,  function_name):
-                        raise EntitySetupNameError(owner=self,
-                                                   msg=f"Attribute {attr_name} must be name of method with no arguments of class '{settings_source.klass}', function {attr_getter} is not instance method of this class.")
-
-                    # Check that function receives only single param if method(self), or no param if function()
-                    py_fun_signature = inspect.signature(py_function)
-                    # TODO: resolve properly first arg name as 'self' convention
-                    non_empty_params = [param.name for param in py_fun_signature.parameters.values() if param.empty and param.name != 'self']
-                    if len(non_empty_params)!=0:
-                        raise EntitySetupNameError(owner=self,
-                                                   msg=f"{attr_name}: Method '{settings_source.klass.__name__}.{attr_getter.name}()' must not have arguments without defaults. Found: {', '.join(non_empty_params)} ")
-
-                    # NOTE: py_function is not used later
-                    type_info = TypeInfo.extract_function_return_type_info(py_function, allow_nonetype=True)
-                    data = attr_getter
-                    type_object = SettingsKlassMember(settings_type=settings_source.settings_type,
-                                                      klass=settings_source.klass,
-                                                      member_name=attr_getter)
-
-                elif isinstance(attr_getter, FieldName):
-                    attr_getter: FieldName = attr_getter
-                    attr_field = settings_source = UNDEFINED
-                    for settings_source in settings_source_list:
-                        attr_field = settings_source.fields.get(attr_getter.name, UNDEFINED)
-                        if attr_field is not UNDEFINED:
-                            break
-
-                    if attr_field is UNDEFINED:
-                        all_keys = set()
-                        for settings_source in settings_source_list:
-                            all_keys.union(set(settings_source.fields.keys()))
-                        models = [settings_source.klass for settings_source in settings_source_list]
-                        aval_names = get_available_names_example(attr_field, list(all_keys))
-                        raise EntitySetupNameError(owner=self, msg=f"Attribute {attr_name} must be field name of class(es) '{models}', got: {attr_getter}, available: {aval_names}")
-
-                    # NOTE: attr_field is not used later
-                    type_info = TypeInfo.get_or_create_by_type(py_type_hint=attr_field,
-                                                               caller=settings_source.klass)
-                    data = attr_getter
-                    type_object = SettingsKlassMember(settings_type=settings_source.settings_type,
-                                                      klass=settings_source.klass,
-                                                      member_name=attr_getter)
-                else:
-                    raise EntitySetupValueError(owner=self, msg=f"Attribute {attr_name} expected FieldName or MethodName instance, got: {attr_getter} / {type(attr_getter)}")
-
+                if not isinstance(attr_getter, IAttribute):
+                    raise EntitySetupValueError(owner=self,
+                                                msg=f"Attribute {attr_name} expected FieldName or MethodName instance, got: {attr_getter} / {type(attr_getter)}")
+                type_info, settings_source = attr_getter.setup_dexp_attr_source(settings_source_list)
+                data = attr_getter
+                type_object = SettingsKlassMember(settings_type=settings_source.settings_type,
+                                                  klass=settings_source.klass,
+                                                  member_name=attr_getter)
                 # NOTE: No problem with override any more!
                 #           if attr_name in self.store:
                 #               raise EntitySetupNameError(f"Attribute name '{attr_name}' is reserved. Rename class attribute in '{self.apply_settings_class}'")

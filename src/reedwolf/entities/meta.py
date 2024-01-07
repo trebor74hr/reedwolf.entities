@@ -5,7 +5,7 @@ extract_* - the most interesting functions
 """
 import inspect
 from collections import OrderedDict
-from inspect import getmro, isclass,  getmembers, signature, Parameter, ismethod
+from inspect import getmro, isclass,  getmembers, signature, Parameter
 from abc import abstractmethod
 from copy import copy
 from collections.abc import Sequence
@@ -110,7 +110,7 @@ NoneType                = type(None) # or None.__class__
 #             can be used in declaration and in instance
 #             construction. underlying type is in __supertype__
 #
-#           - subclass base type e.g. class FieldName(str): pass
+#           - subclass base type e.g. class Attribute(str): pass
 #
 #       MyPy will have the last word.
 
@@ -141,40 +141,15 @@ AttrName = TypeVar("AttrName", bound=str)
 AttrValue = TypeVar("AttrValue", bound=Any)
 AttrIndex = TypeVar("AttrIndex", bound=int)
 
-# NOTE: reference to dataclass Field's name. Used in isinstance() checks.
-
-@dataclass
-class FieldName:
-    # name of attribute in instance
-    name: AttrName
-    # name of Ctx.DotExpression name
-    attr_name: Optional[AttrName] = None
-
-    def __post_init__(self):
-        if not self.attr_name:
-            self.attr_name = self.name
-
-@dataclass
-class MethodName:
-    # name of attribute in instance
-    name: AttrName
-    # name of Ctx.DotExpression name
-    attr_name: Optional[AttrName] = None
-
-    def __post_init__(self):
-        if not self.attr_name:
-            self.attr_name = self.name
-
-@dataclass
-class KlassMember:
-    klass: Type
-    member_name: Union[FieldName, MethodName]
+# ------------------------------------------------------------
+# functions.py
+# ------------------------------------------------------------
+ValueArgValidatorPyFuncType = Callable[..., NoneType]
+ValueArgValidatorPyFuncDictType = Dict[str, Union[ValueArgValidatorPyFuncType, List[ValueArgValidatorPyFuncType]]]
 
 # ------------------------------------------------------------
 
-FunctionNoArgs = Callable[[], Any]
 # it is not dict since it must be immutable - default value for the class variable
-CustomCtxAttributeList = List[Union[FieldName, MethodName]]
 
 class IFuncArgHint:
     """
@@ -303,7 +278,7 @@ MetaTree = NewType("MetaTree", Dict[ComponentNameType, TreeNode])
 @dataclass
 class FunctionArgumentsType:
     # ex. FunctionArgumentsType = Tuple[List[Any], Dict[str, Any]]
-    args: List[Any]
+    args: Tuple
     kwargs: Dict[str, Any]
 
     def __post_init__(self):
@@ -1076,6 +1051,54 @@ def get_underlying_type(py_type_hint: Type) -> Type:
         # TypeVar
         py_type_hint = py_type_hint.__bound__
     return py_type_hint
+
+
+# ------------------------------------------------------------
+# custom_attributes.py uses
+# ------------------------------------------------------------
+
+class SettingsType(str, Enum):
+    SETUP_SETTINGS = "SETUP_SETTINGS"
+    APPLY_SETTINGS = "APPLY_SETTINGS"
+
+
+@dataclass
+class SettingsSource:
+    settings_type: SettingsType
+    klass: ModelType
+    fields: Dict[AttrName, ModelField] = field(init=False, repr=False)
+
+    def __post_init__(self):
+        self.fields = get_model_fields(self.klass)
+
+@dataclass
+class IAttribute:
+    # name of attribute in instance
+    name: AttrName
+    # name of Ctx.DotExpression attribute name
+    dexp_attr_name: Optional[AttrName] = None
+
+    # filled later
+    output_type_info: TypeInfo = field(repr=False, init=False, default=None)
+    settings_source: SettingsSource = field(repr=False, init=False, default=None)
+
+    def __post_init__(self):
+        if not self.dexp_attr_name:
+            self.dexp_attr_name = self.name
+
+    @abstractmethod
+    def setup_dexp_attr_source(self, settings_source_list: List[SettingsSource]) -> Tuple[TypeInfo, SettingsSource]:
+        ...
+
+@dataclass
+class KlassMember:
+    klass: Type
+    member_name: IAttribute
+
+
+CustomCtxAttributeList = List[IAttribute]
+FunctionNoArgs = Callable[[], Any]
+
 
 # ------------------------------------------------------------
 # OBSOLETE
