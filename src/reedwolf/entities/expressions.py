@@ -559,6 +559,8 @@ class DotExpression(DynamicAttrsBase):
                         func_args=func_args,
                         value_arg_type_info=owner_arg_type_info
                         )
+            elif isinstance(bit, Just):
+                current_dexp_node = LiteralDexpNode(value=bit._node)
             else:
                 # ========================================
                 # Attributes
@@ -571,7 +573,8 @@ class DotExpression(DynamicAttrsBase):
                 #   same namespace (usually ModelsNS)
                 # setup_session_read_from = copy_to_setup_session.setup_session_bind_from if copy_to_setup_session else setup_session
                 # setup_session_read_from = setup_session
-
+                if bit._is_literal:
+                    raise EntityInternalError(owner=self, msg=f"Literal DotExpression not expected {bit} - should be processed in the caller.")
                 dexp_node_name = bit._node
                 current_dexp_node = registry.create_node(
                             dexp_node_name=dexp_node_name,
@@ -770,7 +773,7 @@ class Just(DotExpression):
             raise NotImplementedError(f"{value}.type unhandled: '{type(value)}'")
         super().__init__(
             node = value,
-            namespace=OperationsNS,
+            namespace=ContextNS,
             is_literal=True,
             )
 
@@ -841,6 +844,7 @@ class LiteralDexpNode(IDotExpressionNode):
 
     # later evaluated
     is_finished: bool = field(init=False, repr=False, default=False)
+    full_name: str = field(init=False, repr=False, default=None)
 
     def __post_init__(self):
         self.dexp_result = ExecResult()
@@ -848,6 +852,7 @@ class LiteralDexpNode(IDotExpressionNode):
             raise EntitySetupValueError(owner=self, msg=f"Expected some standard type '{STANDARD_TYPE_W_NONE_LIST}', got: {self.value}")
         self.dexp_result.set_value(self.value, attr_name="", changer_name="")
         self.type_info = TypeInfo.get_or_create_by_type(type(self.value), caller=self)
+        self.full_name = f"Literal({self.value})"
 
     def get_type_info(self) -> TypeInfo:
         return self.type_info

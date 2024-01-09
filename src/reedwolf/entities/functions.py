@@ -356,7 +356,7 @@ class IFunction(IFunctionDexpNode, ABC):
         #     #     model_class=model_class,
         #     # )
         else:
-            raise EntitySetupValueError(owner=self, msg=f"Unsupported type: {self.caller} / {model_class} / {type_info}")
+            raise EntitySetupValueError(owner=self, msg=f"Can not set registry for This. namespace, unsupported type: {model_class} / {type_info}. Caller: {self.caller}")
 
         self.this_registry = this_registry
         return self.this_registry
@@ -643,6 +643,9 @@ class FunctionFactoryBase(IFunctionFactory):
     # misc data, used in EnumMembers
     data: Optional[Any] = field(default=None, repr=False)
 
+    # used when custom functions needs to override builtin functions - e.g. Lower()
+    force: bool = False
+
     # autocomputed
     _output_type_info: TypeInfo = field(init=False, repr=False)
 
@@ -827,6 +830,7 @@ def Function(py_function: Callable[..., Any],
              args: Optional[List[Union[LiteralType, DotExpression]]] = UNDEFINED,
              kwargs: Optional[Dict[str, Union[LiteralType, DotExpression]]] = UNDEFINED,
              arg_validators: Optional[ValueArgValidatorPyFuncDictType] = None,
+             force: bool = False,
              ) -> CustomFunctionFactory:
     """
     goes to Global namespace (Ctx.)
@@ -856,6 +860,7 @@ def Function(py_function: Callable[..., Any],
                     kwargs if kwargs is not UNDEFINED else {}
                     ),
                 arg_validators=arg_validators,
+                force=force,
                 )
 
 
@@ -953,8 +958,11 @@ class FunctionsFactoryRegistry:
                     raise EntitySetupNameError(owner=self, msg=f"Function '{function_factory}' should be CustomFunctionFactory instance. Maybe you need to wrap it with Function() or FunctionByMethod()?")
                 self.add(function_factory)
 
-    def __str__(self):
+    def as_str(self):
         return f"{self.__class__.__name__}(functions={', '.join(self.store.keys())}, include_builtin={self.include_builtin})"
+
+    def __str__(self):
+        return f"{self.__class__.__name__}({len(self.store)})"
     __repr__ = __str__
 
     def items(self) -> List[Tuple[str, Type[IFunction]]]:
@@ -984,7 +992,8 @@ class FunctionsFactoryRegistry:
         assert isinstance(func_name, str) and func_name, func_name
 
         if func_name in self.store:
-            raise EntitySetupNameError(owner=self, msg=f"Function '{func_name}' already in registry: {self.store[func_name]}.")
+            if not function_factory.force:
+                raise EntitySetupNameError(owner=self, msg=f"Function '{func_name}' is already defined: {self.store[func_name]}. You may choose another name.")
         self.store[func_name] = function_factory
 
 

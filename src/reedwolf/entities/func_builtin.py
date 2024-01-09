@@ -111,7 +111,6 @@ SingleBoolSelected = create_builtin_function_factory(  # noqa: E305
             )
 
 
-
 def length(value_sized: Sized) -> int:
     """ TODO: for string and other similar """
     return len(value_sized)
@@ -120,6 +119,7 @@ Length = create_builtin_function_factory( # noqa: E305
             length, name="Length", 
             # arg_validators={"item_list": ensure_has_len},
             )
+
 
 def upper(str_value: str) -> str:
     return str.upper(str_value)

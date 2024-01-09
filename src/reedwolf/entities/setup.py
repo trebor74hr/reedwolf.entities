@@ -430,7 +430,7 @@ class RegistryBase(IRegistry):
                 raise EntitySetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': '{dexp_node_name}' -> owner_dexp_node={owner_dexp_node}: {type(owner_dexp_node)} is not IDotExpressionNode")
 
         # TODO: za Sum(This.name) this is not good. Should be unique, since 
-        #       This is ambigous - can evaluate to different contexts. 
+        #       This is ambiguous - can evaluate to different contexts.
         #       should have some settings @ID (owner)
         full_dexp_node_name = get_dexp_node_name(
                                     owner_name=owner_dexp_node.name if owner_dexp_node else None, 
