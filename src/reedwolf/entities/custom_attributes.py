@@ -3,9 +3,15 @@ from dataclasses import dataclass, field
 from typing import Optional, Union, List, Dict, Callable, Tuple
 
 from .exceptions import EntitySetupNameError
-from .expressions import DotExpression
-from .meta import LiteralType, UNDEFINED, IAttribute, ValueArgValidatorPyFuncDictType, is_instancemethod_by_name, \
-    FunctionNoArgs, TypeInfo, SettingsSource, ModelField
+from .meta import (
+    UNDEFINED,
+    IAttribute,
+    is_instancemethod_by_name,
+    FunctionNoArgs,
+    TypeInfo,
+    SettingsSource,
+    ModelField, SELF_ARG_NAME, get_function_non_empty_arguments,
+)
 from .utils import get_available_names_example
 
 
@@ -44,13 +50,13 @@ class Attribute(IAttribute):
 class AttributeByMethod(IAttribute):
     """
     Attribute from to method's by its name.
-
-    NOTE: make list of input fields/args in sync with functions.py :: FunctionFactoryBase
     """
-    value_arg_name: Optional[str]=None
-    args: Optional[List[Union[LiteralType, DotExpression]]] = UNDEFINED
-    kwargs: Optional[Dict[str, Union[LiteralType, DotExpression]]] = UNDEFINED
-    arg_validators: Optional[ValueArgValidatorPyFuncDictType] = None
+    # TODO: try to reuse IFunction() logic to enable more advanced method configuration by using: args/kwargs
+    #    # NOTE: make list of input fields/args in sync with functions.py :: FunctionFactoryBase
+    #    args: Optional[List[Union[LiteralType, DotExpression]]] = UNDEFINED
+    #    kwargs: Optional[Dict[str, Union[LiteralType, DotExpression]]] = UNDEFINED
+    #    arg_validators: Optional[ValueArgValidatorPyFuncDictType] = None
+    # TODO: if previous task is done, then maybe make AttributeByFunction()
 
     # filled later
     output_type_info: TypeInfo = field(repr=False, init=False, default=None)
@@ -58,6 +64,7 @@ class AttributeByMethod(IAttribute):
     settings_source: SettingsSource = field(repr=False, init=False, default=None)
 
     def setup_dexp_attr_source(self, settings_source_list: List[SettingsSource]) -> Tuple[TypeInfo, SettingsSource]:
+        # NOTE: similar logic in functions.py :: FunctionByMethod.set_settings_class()
         py_function = settings_source = UNDEFINED
         for settings_source in settings_source_list:
             py_function: FunctionNoArgs = getattr(settings_source.klass, self.name, UNDEFINED)
@@ -76,10 +83,7 @@ class AttributeByMethod(IAttribute):
             raise EntitySetupNameError(owner=self, msg=f"Function '{self.name}' is not instance method of class '{klass.__name__}'.")
 
         # Check that function receives only single param if method(self), or no param if function()
-        py_fun_signature = inspect.signature(py_function)
-        # TODO: resolve properly first arg name as 'self' convention
-        non_empty_params = [param.name for param in py_fun_signature.parameters.values() if
-                            param.empty and param.name != 'self']
+        non_empty_params = get_function_non_empty_arguments(py_function)
         if len(non_empty_params) != 0:
             raise EntitySetupNameError(owner=self,
                                        msg=f"Method '{klass.__name__}.{self.name}()' must not have arguments without defaults. Found unfilled arguments: {', '.join(non_empty_params)} ")

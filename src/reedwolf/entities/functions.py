@@ -14,6 +14,7 @@ function is registereed and can be used in
 
 extra args could be passed and must be called as function.
 """
+import inspect
 from dataclasses import (
     dataclass,
     field,
@@ -62,7 +63,11 @@ from .meta import (
     ComponentTreeWValuesType,
     IInjectFuncArgHint,
     AttrValue,
-    IExecuteFuncArgHint, LiteralType, ValueArgValidatorPyFuncDictType,
+    IExecuteFuncArgHint,
+    LiteralType,
+    ValueArgValidatorPyFuncDictType,
+    AttrName,
+    is_instancemethod_by_name, SELF_ARG_NAME, get_function_non_empty_arguments, SettingsType,
 )
 from .expressions import (
     DotExpression,
@@ -72,7 +77,8 @@ from .expressions import (
     ISetupSession,
     IThisRegistry,
     JustDotexprFuncArgHint,
-    DotexprFuncArgHint, IFunctionFactory,
+    DotexprFuncArgHint,
+    IFunctionFactory,
 )
 from .func_args import (
     FunctionArguments,
@@ -81,6 +87,7 @@ from .func_args import (
     FuncArg,
     PrepArg,
 )
+from .settings import Settings, SettingsBase, ApplySettings
 from .base import (
     AttrDexpNodeTypeEnum,
     IField,
@@ -431,6 +438,8 @@ class IFunction(IFunctionDexpNode, ABC):
             # TODO: Explain when this happens!!
             # NOTE: currently no inner type is passed
             execute_func_arg_hint = DotexprFuncArgHint()
+        elif isinstance(arg_value, InjectFuncArgValueByCallable):
+            arg_value = arg_value.get_apply_value()
 
         if execute_func_arg_hint:
             arg_value = execute_func_arg_hint.get_apply_value(
@@ -549,12 +558,13 @@ class IFunction(IFunctionDexpNode, ABC):
         kwargs_all.update(kwargs_from_args)
 
         try:
-            ouptut_value = self.py_function(**kwargs_all)
+            # Finally call the function with all arguments prepared
+            output_value = self.py_function(**kwargs_all)
         except Exception as ex:
             # REMOVE_THIS: raise
             raise EntityApplyError(owner=self, msg=f"failed in calling '{self.name}({args}, {kwargs})' => {ex}")
 
-        dexp_result.set_value(ouptut_value, attr_name="", changer_name=f"{self.name}")
+        dexp_result.set_value(output_value, attr_name="", changer_name=f"{self.name}")
 
         return dexp_result
 
@@ -576,44 +586,6 @@ class IFunction(IFunctionDexpNode, ABC):
         assert prep_arg.name not in kwargs
         kwargs[prep_arg.name] = output
 
-
-@dataclass
-class InjectComponentTreeValuesFuncArgHint(IInjectFuncArgHint):
-
-    def setup_check(self, setup_session: ISetupSession, caller: Optional[IDotExpressionNode], func_arg: FuncArg):
-        if not (isinstance(caller, AttrDexpNode)
-                and caller.namespace == FieldsNS):
-            raise EntityInternalError(owner=self, msg=f"Expected F.<fieldname>, got: {caller}")
-
-    def get_type(self) -> Type:
-        return self.__class__
-
-    def get_inner_type(self) -> Optional[Type]:
-        return ComponentTreeWValuesType
-
-    def get_apply_inject_value(self, apply_result: IApplyResult, prep_arg: PrepArg) -> AttrValue:
-        # maybe belongs to implementation
-        if not isinstance(prep_arg.caller, IDotExpressionNode):
-            raise EntityInternalError(owner=self, msg=f"Expected IDotExpressionNode, got: {type(prep_arg.caller)} / {prep_arg.caller}")
-
-        dexp_node: IDotExpressionNode = prep_arg.caller
-
-        if not (dexp_node.attr_node_type == AttrDexpNodeTypeEnum.FIELD
-                and dexp_node.namespace == FieldsNS
-                and isinstance(dexp_node.data, IField)):
-            raise EntityInternalError(owner=self, msg=f"Inject function argument value:: PrepArg '{prep_arg.name}' expected DExp(F.<field>) -> Field(),  got: '{dexp_node}' -> '{dexp_node.data}' ")
-
-        component: IComponent = dexp_node.data
-        assert component == apply_result.current_frame.component
-
-        key_string = apply_result.get_key_string(component)
-
-        # get complete tree with values
-        output = apply_result.get_values_tree(key_string=key_string)
-        return output
-
-    def __hash__(self):
-        return hash((self.__class__.__name__))
 
 # ------------------------------------------------------------
 # CustomFunctions - need 2 steps and 3 layers:
@@ -699,7 +671,7 @@ class FunctionFactoryBase(IFunctionFactory):
     # def get_type_info(self) -> TypeInfo: return self._output_type_info
 
     def create_function(self, 
-                func_args:FunctionArgumentsType, 
+                func_args: FunctionArgumentsType,
                 setup_session: ISetupSession, # noqa: F821
                 value_arg_type_info: Optional[TypeInfo] = None,
                 name: Optional[str] = None,
@@ -743,6 +715,111 @@ class BuiltinFunctionFactory(FunctionFactoryBase):
 class BuiltinItemsFunctionFactory(BuiltinFunctionFactory):
     FUNCTION_CLASS: ClassVar[Type[IFunction]] = BuiltinItemsFunction
 
+
+@dataclass
+class FunctionByMethod(IFunctionFactory):
+    """
+    Proxy class to Function() / FunctionFactory, needs extra step - set_instance(settings)
+    """
+    method_name: AttrName
+    name: Optional[str] = None
+    value_arg_name:Optional[str]=None
+    args: Optional[List[Union[LiteralType, DotExpression]]] = UNDEFINED
+    kwargs: Optional[Dict[str, Union[LiteralType, DotExpression]]] = UNDEFINED
+    arg_validators: Optional[ValueArgValidatorPyFuncDictType] = None
+
+    # setup later
+    settings_class: Optional[Type[SettingsBase]] = field(init=False, repr=False, default=None)
+    settings_type: Optional[SettingsType] = field(init=False, repr=False, default=None)
+    function_factory: Optional[CustomFunctionFactory] = field(init=False, repr=False, default=None)
+
+    # setup after later
+    settings: Union[SettingsBase, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
+
+    def set_settings_class(self, settings_type: SettingsType, settings_class: Type[SettingsBase]):
+        """
+        Called in setup phase - no apply-settings instance available.
+        """
+        if self.settings_class:
+            raise EntityInternalError(owner=self, msg=f"Settings class already set to: {self.settings_class}")
+        if settings_type == SettingsType.SETUP_SETTINGS:
+            if Settings not in inspect.getmro(settings_class):
+                raise EntityInternalError(owner=self, msg=f"Argument 'settings_class' must inherit Settings class, got: {settings_class}")
+        else:
+            assert settings_type == SettingsType.APPLY_SETTINGS, settings_type
+            if ApplySettings not in inspect.getmro(settings_class):
+                raise EntityInternalError(owner=self, msg=f"Argument 'settings_class' must inherit ApplySettings class, got: {settings_class}")
+
+        # NOTE: similar logic in custom_attributes.py :: AttributeByMethod.setup_dexp_attr_source()
+
+        # Method used for custom function must be member of settings class that defines this function entry - what
+        # is different from custom_ctx_attributes logic.
+        py_function: Callable = getattr(settings_class, self.method_name, UNDEFINED)
+        if py_function is UNDEFINED:
+            raise EntitySetupNameError(owner=self, msg=f"Method name '{self.method_name}' is not found within class: {settings_class}")
+
+        self.settings_class = settings_class
+        self.settings_type = settings_type
+
+        if is_instancemethod_by_name(settings_class, self.method_name):
+            kwargs = self.kwargs.copy()
+            if SELF_ARG_NAME in kwargs:
+                raise EntitySetupNameError(owner=self,
+                                           msg=f"FunctionByMethod('{self.method_name}') has already 'self' argument set, so settings instance could not be set. Use Function() instead or unset 'self' argument value.")
+            kwargs[SELF_ARG_NAME] = InjectFuncArgValueByCallable(self.get_settings_instance)
+        else:
+            kwargs = self.kwargs
+
+        self.function_factory = Function(
+            py_function=py_function,
+            name=self.name,
+            value_arg_name=self.value_arg_name,
+            args=self.args,
+            kwargs=kwargs,
+            arg_validators=self.arg_validators,
+        )
+
+    def set_settings_instance(self, settings: Union[SettingsBase, UndefinedType]):
+        """
+        Called in early step of apply phase when apply_settings instance is available. No user caused error expected.
+        """
+        if settings is UNDEFINED and self.settings is UNDEFINED:
+            raise EntityInternalError(owner=self, msg=f"Settings already reset to: {self.settings}")
+        if settings is not UNDEFINED:
+            if self.settings is not UNDEFINED:
+                raise EntityInternalError(owner=self, msg=f"Settings already set to: {self.settings}")
+            if not isinstance(settings, self.settings_class):
+                raise EntityInternalError(owner=self, msg=f"Argument 'settings' must be instance of {self.settings_class} class, got: {settings}")
+        self.settings = settings
+
+    def get_settings_instance(self) -> SettingsBase:
+        if self.settings is UNDEFINED:
+            raise EntityInternalError(owner=self, msg="Settings not yet set. Call set_settings_instance() first.")
+        return self.settings
+
+    def create_function(self,
+                        func_args:FunctionArgumentsType,
+                        setup_session: ISetupSession, # noqa: F821
+                        value_arg_type_info: Optional[TypeInfo] = None,
+                        name: Optional[str] = None,
+                        caller: Optional[IDotExpressionNode] = None,
+                        ) -> IFunctionDexpNode:  # IFunction
+        if self.function_factory is None:
+            raise EntityInternalError(owner=self, msg="Attribute 'function_factory' not set, call 'set_instance()' method first.")
+        return self.function_factory.create_function(
+                    func_args=func_args,
+                    setup_session=setup_session,
+                    value_arg_type_info=value_arg_type_info,
+                    name=name,
+                    caller=caller,
+                    )
+
+    def get_type_info(self) -> TypeInfo:
+        if self.function_factory is None:
+            raise EntityInternalError(owner=self, msg="Attribute 'function_factory' not set, call 'set_instance()' method first.")
+        return self.function_factory.get_type_info()
+
+# ------------------------------------------------------------
 
 def Function(py_function: Callable[..., Any],
              name: Optional[str] = None,
@@ -872,8 +949,8 @@ class FunctionsFactoryRegistry:
 
         if functions:
             for function_factory in functions:
-                if not isinstance(function_factory, CustomFunctionFactory):
-                    raise EntitySetupNameError(owner=self, msg=f"Function '{function_factory}' should be CustomFunctionFactory instance. Maybe you need to wrap it with Function()?")
+                if not isinstance(function_factory, (CustomFunctionFactory, FunctionByMethod)):
+                    raise EntitySetupNameError(owner=self, msg=f"Function '{function_factory}' should be CustomFunctionFactory instance. Maybe you need to wrap it with Function() or FunctionByMethod()?")
                 self.add(function_factory)
 
     def __str__(self):
@@ -898,7 +975,7 @@ class FunctionsFactoryRegistry:
 
     def add(self, function_factory: FunctionFactoryBase, func_name: Optional[str]=None):
         # IFunction
-        if not isinstance(function_factory, FunctionFactoryBase):
+        if not isinstance(function_factory, (FunctionFactoryBase, FunctionByMethod)):
             raise EntityInternalError(f"Exepected function factory, got: {type(function_factory)} -> {function_factory}")
 
         if not func_name:
@@ -945,8 +1022,6 @@ class FunctionsFactoryRegistry:
         for func_name, function in self.store.items():
             print(f"  {func_name} -> {function}")
 
-
-# ------------------------------------------------------------
 
 # ------------------------------------------------------------
 
@@ -1010,6 +1085,53 @@ def try_create_function(
 
     return func_node
 
+# ---------------------------------------------------------------------
+# Special function arguments helpers - custom type hints or wrappers
+# ---------------------------------------------------------------------
+# TODO: other are in expressions.py - move all to the same place:
+#       class AttrnameFuncArgHint(IExecuteFuncArgHint):
+#       class DotexprFuncArgHint(IExecuteFuncArgHint):
+#       class JustDotexprFuncArgHint(IFuncArgHint):
+
+@dataclass
+class InjectComponentTreeValuesFuncArgHint(IInjectFuncArgHint):
+
+    def setup_check(self, setup_session: ISetupSession, caller: Optional[IDotExpressionNode], func_arg: FuncArg):
+        if not (isinstance(caller, AttrDexpNode)
+                and caller.namespace == FieldsNS):
+            raise EntityInternalError(owner=self, msg=f"Expected F.<fieldname>, got: {caller}")
+
+    def get_type(self) -> Type:
+        return self.__class__
+
+    def get_inner_type(self) -> Optional[Type]:
+        return ComponentTreeWValuesType
+
+    def get_apply_inject_value(self, apply_result: IApplyResult, prep_arg: PrepArg) -> AttrValue:
+        # maybe belongs to implementation
+        if not isinstance(prep_arg.caller, IDotExpressionNode):
+            raise EntityInternalError(owner=self, msg=f"Expected IDotExpressionNode, got: {type(prep_arg.caller)} / {prep_arg.caller}")
+
+        dexp_node: IDotExpressionNode = prep_arg.caller
+
+        if not (dexp_node.attr_node_type == AttrDexpNodeTypeEnum.FIELD
+                and dexp_node.namespace == FieldsNS
+                and isinstance(dexp_node.data, IField)):
+            raise EntityInternalError(owner=self, msg=f"Inject function argument value:: PrepArg '{prep_arg.name}' expected DExp(F.<field>) -> Field(),  got: '{dexp_node}' -> '{dexp_node.data}' ")
+
+        component: IComponent = dexp_node.data
+        assert component == apply_result.current_frame.component
+
+        key_string = apply_result.get_key_string(component)
+
+        # get complete tree with values
+        output = apply_result.get_values_tree(key_string=key_string)
+        return output
+
+    def __hash__(self):
+        return hash((self.__class__.__name__))
+
+# ------------------------------------------------------------
 
 @dataclass
 class DotexprExecuteOnItemFactoryFuncArgHint(IInjectFuncArgHint):
@@ -1068,3 +1190,19 @@ class DotexprExecuteOnItemFactoryFuncArgHint(IInjectFuncArgHint):
             return dexp_result.value
 
         return execute_dot_expr_w_this_registry_of_item
+
+# ------------------------------------------------------------
+
+@dataclass
+class InjectFuncArgValueByCallable:
+    py_function: Callable
+
+    def __post_init__(self):
+        non_empty_params = get_function_non_empty_arguments(self.py_function)
+        if len(non_empty_params) != 0:
+            raise EntitySetupNameError(owner=self,
+                                       msg=f"Function '{self.py_function}' must not have arguments without defaults. Found unfilled arguments: {', '.join(non_empty_params)} ")
+
+    def get_apply_value(self) -> AttrValue:
+        return self.py_function()
+

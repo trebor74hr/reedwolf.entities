@@ -141,6 +141,8 @@ AttrName = TypeVar("AttrName", bound=str)
 AttrValue = TypeVar("AttrValue", bound=Any)
 AttrIndex = TypeVar("AttrIndex", bound=int)
 
+SELF_ARG_NAME = "self"
+
 # ------------------------------------------------------------
 # functions.py
 # ------------------------------------------------------------
@@ -352,6 +354,14 @@ def get_enum_members(enum_kls) -> List[Tuple[str, Any]]:
     assert is_enum(enum_kls)
     return [(k, ev.value) for k, ev in enum_kls.__members__.items()]
 
+def get_function_non_empty_arguments(py_function: Callable) -> List[AttrName]:
+    # Check that function receives only single param if method(self), or no param if function()
+    py_fun_signature = inspect.signature(py_function)
+    # TODO: resolve properly first arg name as 'self' convention
+    non_empty_params = [param.name for param in py_fun_signature.parameters.values() if
+                        param.empty and param.name != SELF_ARG_NAME]
+    return non_empty_params
+
 
 # def is_method(obj, name):
 #     return hasattr(obj, name) and ismethod(getattr(obj, name))
@@ -406,9 +416,9 @@ def is_instancemethod_by_name(owner: Any, name:str) -> bool:
     #       # will return True for classmethods but not for staticmethod
     #       return True
     #   args = signature(method).parameters
-    #   return bool('.' in method.__qualname__ and args and list(args.keys())[0] == 'self')
+    #   return bool('.' in method.__qualname__ and args and list(args.keys())[0] == SELF_ARG_NAME)
     args = inspect.getfullargspec(method).args
-    return bool('.' in method.__qualname__ and args and args[0] == 'self')
+    return bool('.' in method.__qualname__ and args and args[0] == SELF_ARG_NAME)
 
 
 def is_classmethod_by_name(owner: Any, name: str) -> bool:
@@ -1066,10 +1076,13 @@ class SettingsType(str, Enum):
 class SettingsSource:
     settings_type: SettingsType
     klass: ModelType
-    fields: Dict[AttrName, ModelField] = field(init=False, repr=False)
+    _fields: Optional[Dict[AttrName, ModelField]] = field(init=False, repr=False, default=None)
 
-    def __post_init__(self):
-        self.fields = get_model_fields(self.klass)
+    @property
+    def fields(self):
+        if self._fields is None:
+            self._fields = get_model_fields(self.klass)
+        return self._fields
 
 @dataclass
 class IAttribute:

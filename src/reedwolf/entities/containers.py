@@ -75,7 +75,7 @@ from .attr_nodes import (
     )
 from .functions import (
     CustomFunctionFactory,
-    IFunction, FunctionFactoryBase,
+    IFunction, FunctionFactoryBase, FunctionByMethod,
 )
 from .registries import (
     SetupSession,
@@ -198,7 +198,7 @@ class ContainerBase(IContainer, ABC):
 
         # TODO: remove exception case: entity can be UNDEFINED in unit test cases only
         apply_settings_class = self.entity.apply_settings_class if self.entity else None
-        functions = self.entity.settings._get_all_custom_functions(apply_settings_class) if self.entity else []
+        functions = self.entity.settings.get_all_custom_functions() if self.entity else []
         settings = settings if settings else self.settings
 
         setup_session = SetupSession(
@@ -399,6 +399,8 @@ class ContainerBase(IContainer, ABC):
             # ----------------------------------------
             # SETUP PHASE one (recursive)
             # ----------------------------------------
+            self.settings._setup_all_custom_functions(self.apply_settings_class)
+
             # Traverse all subcomponents and call the same method for each (recursion)
             # NOTE: Will setup all bound_model and bind and ModelsNS.
             #       In phase two will setup all other components and FieldsNS, ThisNS and FunctionsNS.
@@ -719,12 +721,6 @@ class Entity(IEntity, ContainerBase):
                 inspect.isclass(self.apply_settings_class)
                 and ApplySettings in inspect.getmro(self.apply_settings_class)):
             raise EntityTypeError(owner=self, msg=f"apply_settings_class needs to be class that inherits ApplySettings, got: {self.apply_settings_class}")
-
-        if self.settings.custom_functions:
-            for function in self.settings.custom_functions:
-                if not isinstance(function, FunctionFactoryBase):
-                    raise EntityTypeError(owner=self,
-                                          msg=f"Function '{function.name}' needs to be class of FunctionFactoryBase, got: {function}. Have you used function Function()?")
 
     # def setup(self):
     #     ret = super().setup()

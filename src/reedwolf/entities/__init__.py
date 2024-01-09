@@ -97,7 +97,8 @@ from .containers import (  # noqa: F401
     Entity,
     )
 from .functions import (
-    Function
+    Function,
+    FunctionByMethod,
     )
 from . import functions
 
@@ -204,6 +205,7 @@ __all__ = [
     # functions
     "functions",
     "Function",
+    "FunctionByMethod",
     # "_",
 
     # func_builtin

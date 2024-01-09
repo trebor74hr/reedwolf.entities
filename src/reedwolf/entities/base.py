@@ -995,8 +995,9 @@ class IComponent(ReedwolfDataclassBase, ABC):
                 # SubEntityItems() / SubEntitySingle()
                 assert self.is_subentity()
 
-            if not self.setup_session:
-                self.create_setup_session()
+            assert not self.setup_session
+            # TODO: explain when is not set
+            self.create_setup_session()
 
             setup_session = self.setup_session
             container = self

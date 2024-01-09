@@ -32,7 +32,7 @@ from .meta import (
     extract_function_args_default_dict,
     is_function,
     NoneType,
-    IFuncArgHint,
+    IFuncArgHint, SELF_ARG_NAME,
 )
 from .expressions import (
     DotExpression,
@@ -593,7 +593,7 @@ def create_function_arguments(
     args_default = set(arguments_default_dict.keys())
     args_types   = set(type_info_dict.keys())
 
-    if "self" in (args_default - args_types):
+    if SELF_ARG_NAME in (args_default - args_types):
         # To support late binding of method by providing class instance to
         # 'self' parameter explicitly, e.g.
         #     CatalogManager.my_method(self=CatalogManager())
@@ -617,9 +617,9 @@ def create_function_arguments(
         #       in this case report ValueError - unbound method not supported
         diff_left = args_default - args_types
         diff_right = args_types - args_default
-        if "self" in diff_left:
+        if SELF_ARG_NAME in diff_left:
             raise EntityInternalError(owner=py_function, 
-                    msg=f"Function's default arguments '{args_default}' not same as all arguments:  {args_types}. Found 'self' in diference. Did you forget to instatiate object, to mark method as class/static or to provide instance to 'self' directly?")
+                    msg=f"Function's default arguments '{args_default}' not same as all arguments:  {args_types}. Found 'self' in diference. Did you forget to instatiate object, to mark method as class/static or to use FunctionByMethod() or to provide instance to 'self' directly?")
 
         diff_left = ", ".join(list(diff_left))
         diff_right = ", ".join(list(diff_right))

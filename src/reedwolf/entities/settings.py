@@ -3,13 +3,17 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from typing import Optional, Union, List, Type, Dict, Tuple
 
-from .exceptions import EntityInternalError, EntitySetupNameError
-from .expressions import IFunctionFactory
+from .exceptions import EntityInternalError, EntitySetupNameError, EntityTypeError
 from .meta import (
     Self,
     AttrName,
-    IAttribute, SettingsType, SettingsSource, )
-from . import AttributeByMethod, CustomCtxAttributeList
+    IAttribute,
+    SettingsType,
+    SettingsSource,
+    CustomCtxAttributeList,
+)
+from .expressions import IFunctionFactory
+from .custom_attributes import AttributeByMethod
 from .utils import UndefinedType, UNDEFINED
 from .values_accessor import IValueAccessor
 
@@ -113,6 +117,7 @@ class Settings(SettingsBase):
 
     # set and reset back in apply phase
     _apply_settings: Union[Self, None, UndefinedType] = field(init=False, repr=False, compare=False, default=UNDEFINED)
+    _all_custom_functions: Optional[List[IFunctionFactory]] = field(init=False, repr=False, compare=False, default=None)
 
     # TODO: ...
     # def set_value_accessor(self, value_accessor: IValueAccessor) -> None:
@@ -144,16 +149,38 @@ class Settings(SettingsBase):
             function_dict[func.name] = func
         return function_dict
 
+    def get_all_custom_functions(self) -> List[IFunctionFactory]:
+        if self._all_custom_functions is None:
+            raise EntityInternalError(owner=self, msg="Call _get_all_custom_functions() first")
+        return self._all_custom_functions
 
-    def _get_all_custom_functions(self, apply_settings_class: Optional[Type[ApplySettings]]) -> List[IFunctionFactory]:
+    def _setup_all_custom_functions(self, apply_settings_class: Optional[Type[ApplySettings]]):
         # make a copy and merge with instance defined functions
+        if self._all_custom_functions is not None:
+            raise EntityInternalError(owner=self, msg=f"Attribute ._all_custom_functions already set.")
+
         custom_functions = self._custom_function_list_to_dict(self.get_custom_functions())
         custom_functions.update(self._custom_function_list_to_dict(self.custom_functions))
-        if apply_settings_class:
-            # this one wins. Last wins.
-            custom_functions.update(self._custom_function_list_to_dict(apply_settings_class.get_custom_functions()))
-        return list(custom_functions.values())
 
+        apply_custom_functions = self._custom_function_list_to_dict(apply_settings_class.get_custom_functions()) \
+                                 if apply_settings_class else {}
+        # this one wins. Last wins.
+        custom_functions.update(apply_custom_functions)
+
+        # TODO: resolve this dependency properly
+        from .functions import FunctionByMethod
+        custom_functions = list(custom_functions.values())
+        for function in custom_functions:
+            if not isinstance(function, IFunctionFactory):
+                raise EntityTypeError(owner=self,
+                                      msg=f"Function '{function.name}' needs to be class of IFunctionFactory, got: {function}. Have you used Function() or FunctionByMethod()?")
+
+            if isinstance(function, FunctionByMethod):
+                settings_type, settings_class = (SettingsType.APPLY_SETTINGS, apply_settings_class) \
+                                                if function.name in apply_custom_functions else \
+                                                (SettingsType.SETUP_SETTINGS, self.__class__)
+                function.set_settings_class(settings_type=settings_type, settings_class=settings_class)
+        self._all_custom_functions = custom_functions
 
     def _custom_ctx_attribute_list_to_dict(self, attributes: CustomCtxAttributeList) -> Dict[AttrName, IAttribute]:
         attribute_dict = OrderedDict()
@@ -219,7 +246,8 @@ class Settings(SettingsBase):
         return UseApplySettingsCtxManager(setup_settings=self, apply_settings=apply_settings)
 
     def _set_apply_settings(self, apply_settings: Union[Self, None, UndefinedType]):
-        if apply_settings is not UNDEFINED:
+        is_reset = (apply_settings is UNDEFINED)
+        if not is_reset:
             if self._apply_settings is not UNDEFINED:
                 raise EntityInternalError(owner=self, msg=f"Can not set new settings to {apply_settings}, already set to: {self._apply_settings}")
         else:
@@ -227,6 +255,13 @@ class Settings(SettingsBase):
                 raise EntityInternalError(owner=self, msg=f"Can not set new settings back to {apply_settings}, it is already reset to: {self._apply_settings}")
         self._apply_settings = apply_settings
 
+        # TODO: resolve this dependency properly
+        from .functions import FunctionByMethod
+        for function in self.get_all_custom_functions():
+            if isinstance(function, FunctionByMethod):
+                settings = (apply_settings if function.settings_type == SettingsType.APPLY_SETTINGS else self) \
+                           if not is_reset else UNDEFINED
+                function.set_settings_instance(settings)
 
 
 

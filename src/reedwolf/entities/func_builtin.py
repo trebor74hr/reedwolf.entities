@@ -204,6 +204,7 @@ def filter_(item_list: Sequence[ItemType],
     #     raise TypeError(f"Argument expected to be callable, got: {term_dot_expr} -> {type(dot_expr_execute_on_item_function)}")
     output = []
     for item in item_list:
+        # TODO: try/catch?
         term_value = dot_expr_execute_on_item_function(term_dot_expr, item)
         if term_value:
             output.append(item)
