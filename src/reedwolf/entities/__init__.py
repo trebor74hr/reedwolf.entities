@@ -25,7 +25,9 @@ from .custom_attributes import (
     Attribute,
     AttributeByMethod,
 )
-from .meta import CustomCtxAttributeList
+from .meta import (
+    CustomCtxAttributeList,
+)
 from .bound_models import (
     BoundModel,
     BoundModelWithHandlers,
@@ -89,6 +91,7 @@ from .eval_children import (
 from .settings import (
     Settings,
     ApplySettings,
+    CustomFunctionList,
 )
 from .containers import (  # noqa: F401
     KeyFields,
@@ -136,6 +139,8 @@ __all__ = [
     "EntityNameNotFoundError",
 
     # meta
+    "CustomCtxAttributeList",
+
     # expressions
     "Just",
 
@@ -214,6 +219,7 @@ __all__ = [
     # settings
     "Settings",
     "ApplySettings",
+    "CustomFunctionList",
 
     # apply
     "IApplyResult",  # from base.py

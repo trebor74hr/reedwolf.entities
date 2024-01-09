@@ -17,6 +17,9 @@ from .custom_attributes import AttributeByMethod
 from .utils import UndefinedType, UNDEFINED
 from .values_accessor import IValueAccessor
 
+
+CustomFunctionList = List[IFunctionFactory]
+
 # ------------------------------------------------------------
 # Settings
 # ------------------------------------------------------------
@@ -56,7 +59,7 @@ class SettingsBase:
 
     @classmethod
     # TODO: CustomFunctionFactory
-    def get_custom_functions(cls) -> List[IFunctionFactory]:
+    def get_custom_functions(cls) -> CustomFunctionList:
         """
         For override.
         Defined on class level.
@@ -110,14 +113,14 @@ class Settings(SettingsBase):
     If both defined then last wins.
     """
     # TODO: CustomFunctionFactory
-    custom_functions: List[IFunctionFactory] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
+    custom_functions: CustomFunctionList = field(repr=False, default_factory=list, metadata={"skip_dump": True})
     custom_ctx_attributes: CustomCtxAttributeList = field(repr=False, default_factory=list, metadata={"skip_dump": True})
 
     apply_settings_class: Optional[Type[ApplySettings]] = field(repr=False, default=None)
 
     # set and reset back in apply phase
     _apply_settings: Union[Self, None, UndefinedType] = field(init=False, repr=False, compare=False, default=UNDEFINED)
-    _all_custom_functions: Optional[List[IFunctionFactory]] = field(init=False, repr=False, compare=False, default=None)
+    _all_custom_functions: Optional[CustomFunctionList] = field(init=False, repr=False, compare=False, default=None)
 
     # TODO: ...
     # def set_value_accessor(self, value_accessor: IValueAccessor) -> None:
@@ -140,7 +143,7 @@ class Settings(SettingsBase):
         out = self._apply_settings.debug if self._apply_settings is not None else self.debug
         return out if out is not UNDEFINED else False
 
-    def _custom_function_list_to_dict(self, functions: List[IFunctionFactory]) -> Dict[AttrName, IFunctionFactory]:
+    def _custom_function_list_to_dict(self, functions: CustomFunctionList) -> Dict[AttrName, IFunctionFactory]:
         function_dict = OrderedDict()
         for func in functions:
             if func.name in function_dict:
@@ -149,7 +152,7 @@ class Settings(SettingsBase):
             function_dict[func.name] = func
         return function_dict
 
-    def get_all_custom_functions(self) -> List[IFunctionFactory]:
+    def get_all_custom_functions(self) -> CustomFunctionList:
         if self._all_custom_functions is None:
             raise EntityInternalError(owner=self, msg="Call _get_all_custom_functions() first")
         return self._all_custom_functions
