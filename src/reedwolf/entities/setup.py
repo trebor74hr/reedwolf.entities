@@ -11,6 +11,9 @@ from typing import (
     Dict,
 )
 
+from .settings import (
+    CustomFunctionFactoryList,
+)
 from .utils import (
     get_available_names_example,
     UNDEFINED,
@@ -66,7 +69,6 @@ from .base import (
 )
 from .functions import (
     FunctionsFactoryRegistry,
-    CustomFunctionFactory,
     try_create_function,
 )
 from .attr_nodes import (
@@ -574,10 +576,8 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
     container:                  Optional[IContainer]
     parent_setup_session:       Optional[ISetupSession]
 
-    # custom_function_factories store 
-    functions:                  Optional[List[CustomFunctionFactory]] = field(repr=False, default=None)
+    # builtin + custom_function_factories store
     functions_factory_registry: Optional[FunctionsFactoryRegistry] = field(repr=False, default=None)
-    include_builtin_functions:  bool = field(repr=False, default=True)
 
     # autocomputed and internals
     is_top_setup_session:       bool = field(init=False, repr=False)
@@ -619,13 +619,6 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
         # self.finished: bool = False
 
         self.name: str = self.container.name if self.container else "no-container"
-
-        if self.functions_factory_registry:
-            assert not self.functions
-        else:
-            self.functions_factory_registry: FunctionsFactoryRegistry = \
-                    FunctionsFactoryRegistry(functions=self.functions, 
-                                            include_builtin=self.include_builtin_functions)
 
         self.hook_on_finished_all_list: Optional[List[HookOnFinishedAllCallable]] =  \
             [] if self.is_top_setup_session else None

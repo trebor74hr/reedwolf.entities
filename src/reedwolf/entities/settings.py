@@ -21,7 +21,7 @@ from .values_accessor import (
     get_standard_value_accessor_class_registry,
 )
 
-CustomFunctionList = List[IFunctionFactory]
+CustomFunctionFactoryList = List[IFunctionFactory]
 
 # ------------------------------------------------------------
 # Settings
@@ -62,7 +62,7 @@ class SettingsBase:
 
     @classmethod
     # TODO: CustomFunctionFactory
-    def get_custom_functions(cls) -> CustomFunctionList:
+    def get_custom_functions(cls) -> CustomFunctionFactoryList:
         """
         For override.
         Defined on class level.
@@ -100,6 +100,28 @@ class ApplySettings(SettingsBase):
     ...
 
 
+_BUILTIN_FUNCTION_FACTORIES_DICT = None
+
+
+def get_builtin_function_factories_dict() -> Dict[str, IFunctionFactory]:
+    """
+    will return same instance every time
+    """
+    global _BUILTIN_FUNCTION_FACTORIES_DICT
+    if _BUILTIN_FUNCTION_FACTORIES_DICT is None:
+        # TODO: resolve this properly
+        from . import func_builtin
+
+        out: Dict[str, IFunctionFactory] = {}
+        for func_name, global_var in vars(func_builtin).items():
+            if not (global_var and isinstance(global_var, IFunctionFactory)):
+                continue
+            assert func_name
+            out[func_name] = global_var
+        _BUILTIN_FUNCTION_FACTORIES_DICT = out
+    return _BUILTIN_FUNCTION_FACTORIES_DICT
+
+
 # ------------------------------------------------------------
 
 @dataclass
@@ -116,15 +138,17 @@ class Settings(SettingsBase):
     If both defined then last wins.
     """
     # TODO: CustomFunctionFactory
-    custom_functions: CustomFunctionList = field(repr=False, default_factory=list, metadata={"skip_dump": True})
+    custom_functions: CustomFunctionFactoryList = field(repr=False, default_factory=list, metadata={"skip_dump": True})
     custom_ctx_attributes: CustomCtxAttributeList = field(repr=False, default_factory=list)
     custom_value_accessor_class_registry : Dict[str, Type[IValueAccessor]] = field(repr=False, default_factory=dict)
     apply_settings_class: Optional[Type[ApplySettings]] = field(repr=False, default=None)
 
     # set and reset back in apply phase
     _apply_settings: Union[Self, None, UndefinedType] = field(init=False, repr=False, compare=False, default=UNDEFINED)
-    _all_custom_functions: Optional[CustomFunctionList] = field(init=False, repr=False, compare=False, default=None)
+    _all_custom_functions: Optional[CustomFunctionFactoryList] = field(init=False, repr=False, compare=False, default=None)
+    # _all_builtin_functions_dict: Optional[Dict[AttrName, IFunctionFactory]] = field(init=False, repr=False, compare=False, default=None)
     _value_accessor_class_registry : Optional[Dict[str, Type[IValueAccessor]]] = field(init=False, repr=False, default=None)
+
 
     # TODO: ...
     # def set_value_accessor(self, value_accessor: IValueAccessor) -> None:
@@ -157,7 +181,7 @@ class Settings(SettingsBase):
         out = self._apply_settings.debug if self._apply_settings is not None else self.debug
         return out if out is not UNDEFINED else False
 
-    def _custom_function_list_to_dict(self, functions: CustomFunctionList) -> Dict[AttrName, IFunctionFactory]:
+    def _custom_function_list_to_dict(self, functions: CustomFunctionFactoryList) -> Dict[AttrName, IFunctionFactory]:
         function_dict = OrderedDict()
         for func in functions:
             if func.name in function_dict:
@@ -166,7 +190,7 @@ class Settings(SettingsBase):
             function_dict[func.name] = func
         return function_dict
 
-    def get_all_custom_functions(self) -> CustomFunctionList:
+    def get_all_custom_functions(self) -> CustomFunctionFactoryList:
         if self._all_custom_functions is None:
             raise EntityInternalError(owner=self, msg="Call _get_all_custom_functions() first")
         return self._all_custom_functions
@@ -198,6 +222,17 @@ class Settings(SettingsBase):
                                                 (SettingsType.SETUP_SETTINGS, self.__class__)
                 function.set_settings_class(settings_type=settings_type, settings_class=settings_class)
         self._all_custom_functions = custom_functions
+
+
+    def get_all_builtin_functions_dict(self) -> Dict[AttrName, IFunctionFactory]:
+        """
+        can be overridden in order to setup own standard functions
+        TODO: not so nice - but good enough for the start
+        """
+        # if self._all_builtin_functions_dict is None:
+        #     self._all_builtin_functions_dict = get_builtin_function_factories_dict()
+        # return self._all_builtin_functions_dict
+        return get_builtin_function_factories_dict()
 
     def _custom_ctx_attribute_list_to_dict(self, attributes: CustomCtxAttributeList) -> Dict[AttrName, IAttribute]:
         attribute_dict = OrderedDict()

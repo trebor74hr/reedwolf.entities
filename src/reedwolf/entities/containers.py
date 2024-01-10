@@ -75,7 +75,7 @@ from .attr_nodes import (
     )
 from .functions import (
     CustomFunctionFactory,
-    IFunction, FunctionFactoryBase, FunctionByMethod,
+    IFunction, FunctionFactoryBase, FunctionByMethod, FunctionsFactoryRegistry,
 )
 from .registries import (
     SetupSession,
@@ -198,12 +198,18 @@ class ContainerBase(IContainer, ABC):
         apply_settings_class = self.entity.apply_settings_class if self.entity else None
         functions = self.entity.settings.get_all_custom_functions() if self.entity else []
         settings = settings if settings else self.settings
+        builtin_functions_dict = self.entity.settings.get_all_builtin_functions_dict() \
+                                 if self.entity and self.is_entity() else {}
+
+        functions_factory_registry: FunctionsFactoryRegistry = \
+            FunctionsFactoryRegistry(functions=functions,
+                                     builtin_functions_dict=builtin_functions_dict)
 
         setup_session = SetupSession(
             container=self,
-            functions=functions,
+            functions_factory_registry = functions_factory_registry,
             parent_setup_session=self.setup_session if self.parent else None,
-            include_builtin_functions=self.is_entity())
+        )
 
         if self.is_unbound():
             setup_session.add_registry(UnboundModelsRegistry())
@@ -643,9 +649,6 @@ class Entity(IEntity, ContainerBase):
     # will be filled automatically with Settings() if not supplied
     settings:           Optional[Settings] = field(repr=False, default=None, metadata={"skip_dump": True})
     apply_settings_class: Optional[Type[ApplySettings]] = field(repr=False, default=None, metadata={"skip_dump": True})
-    # moved to settings=Settings(functions=...)
-    # functions:          Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
-
 
     # --- validators and evaluators
     cleaners:           Optional[List[Union[ChildrenValidationBase, ChildrenEvaluationBase]]] = field(repr=False, default_factory=list)
@@ -730,7 +733,6 @@ class Entity(IEntity, ContainerBase):
                 bound_model:Union[UndefinedType, BoundModel]=UNDEFINED,
                 settings: Optional[Settings]=None,
                 apply_settings_class: Optional[Type[ApplySettings]]=None,
-                functions: Optional[List[CustomFunctionFactory]]=None,
                 do_setup:bool = True,
                 ):
         """
@@ -745,16 +747,6 @@ class Entity(IEntity, ContainerBase):
             # if self.bound_model is not None:
             #     raise EntitySetupError(owner=self, msg="bound_model already already set, late binding not allowed.")
             self.bound_model = bound_model
-
-        # if data:
-        #     if self.data:
-        #         raise EntitySetupError(owner=self, msg="data already set, late binding not allowed.")
-        #     self.data = data
-
-        # if functions:
-        #     if self.functions:
-        #         raise EntitySetupError(owner=self, msg="functions already set, late binding not allowed.")
-        #     self.functions = functions
 
         if apply_settings_class:
             if self.apply_settings_class:
@@ -895,7 +887,7 @@ class SubEntityBase(ContainerBase, ABC):
     # be unique in self.components (SubEntityItems and BoundModel will share the same name)
     name:           Optional[str] = field(default=None)
     title:          Optional[TransMessageType] = field(repr=False, default=None)
-    # functions:    Optional[List[CustomFunctionFactory]] = field(repr=False, default_factory=list, metadata={"skip_dump": True})
+
     # --- can be index based or standard key-fields names
     keys:           Optional[KeysBase] = field(repr=False, default=None)
     # --- validators and evaluators

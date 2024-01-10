@@ -87,7 +87,12 @@ from .func_args import (
     FuncArg,
     PrepArg,
 )
-from .settings import Settings, SettingsBase, ApplySettings
+from .settings import (
+    Settings,
+    SettingsBase,
+    ApplySettings,
+    CustomFunctionFactoryList,
+)
 from .base import (
     AttrDexpNodeTypeEnum,
     IField,
@@ -935,50 +940,45 @@ def create_builtin_items_function_factory(
 #    Currently IFunction class and CustomFunctionFactory function
 # =====================================================================
 
+@dataclass(repr=False)
 class FunctionsFactoryRegistry:
 
-    def __init__(self, functions: Optional[List[CustomFunctionFactory]] = None,
-                 include_builtin:bool = True, 
-                 ):
+    functions: CustomFunctionFactoryList
+    builtin_functions_dict: Dict[AttrName, IFunctionFactory]
+
+    # later evaluated
+    store: Dict[str, FunctionFactoryBase] = field(repr=False, init=False, default_factory=dict)
+
+    def __post_init__(self):
         """
         functions are custom_function_factories
         """
         # TODO: typing is not good
         #       Union[type(IFunction), CustomFunctionFactory]
         #       ex. Type[IFunction]
-        self.store: Dict[str, FunctionFactoryBase]= {}
-        self.include_builtin:bool = include_builtin
 
-        if self.include_builtin:
+        if self.builtin_functions_dict:
+            # NOTE: not called for subentities
             self.register_builtin_functions()
 
-        if functions:
-            for function_factory in functions:
+        if self.functions:
+            for function_factory in self.functions:
                 if not isinstance(function_factory, (CustomFunctionFactory, FunctionByMethod)):
                     raise EntitySetupNameError(owner=self, msg=f"Function '{function_factory}' should be CustomFunctionFactory instance. Maybe you need to wrap it with Function() or FunctionByMethod()?")
                 self.add(function_factory)
 
-    def as_str(self):
-        return f"{self.__class__.__name__}(functions={', '.join(self.store.keys())}, include_builtin={self.include_builtin})"
 
-    def __str__(self):
-        return f"{self.__class__.__name__}({len(self.store)})"
-    __repr__ = __str__
+    def register_builtin_functions(self) -> int:
+        # init_functions_factory_registry
+        """
+        Traverse all classes that inherit IFunction and register them
+        This function needs to be inside of this module or change to: import .functions; for ... vars(functions)
+        """
+        for func_name, builtin_function in self.builtin_functions_dict.items():
+            self.add(builtin_function, func_name=func_name)
 
-    def items(self) -> List[Tuple[str, Type[IFunction]]]:
-        return self.store.items()
-
-    # @staticmethod
-    # def is_function_factory(function_factory: Any, exclude_custom: bool = False):
-    #     out = isinstance(function_factory, FunctionFactoryBase)
-    #     # out = (inspect.isclass(function_factory) 
-    #     #         and IFunction in inspect.getmro(function_factory) 
-    #     #         and not inspect.isabstract(function_factory)
-    #     #         and function_factory not in (CustomFunction, IFunction)
-    #     #         )
-    #     if not out and not exclude_custom:
-    #         out = out or isinstance(function_factory, (CustomFunctionFactory))
-    #     return out
+        # assert len(self.store)>=3, self.store
+        return len(self.store)
 
 
     def add(self, function_factory: FunctionFactoryBase, func_name: Optional[str]=None):
@@ -997,6 +997,17 @@ class FunctionsFactoryRegistry:
         self.store[func_name] = function_factory
 
 
+
+    def as_str(self):
+        return f"{self.__class__.__name__}(functions={', '.join(self.store.keys())}, include_builtin={self.builtin_functions_dict})"
+
+    def __str__(self):
+        return f"{self.__class__.__name__}({len(self.store)})"
+    __repr__ = __str__
+
+    def items(self) -> List[Tuple[str, FunctionFactoryBase]]:
+        return list(self.store.items())
+
     def get(self, name:str, strict:bool=False) -> Optional[IFunction]:
         if strict and name not in self.store:
             funcs_avail = get_available_names_example(name, self.store.keys())
@@ -1011,20 +1022,6 @@ class FunctionsFactoryRegistry:
             return out
         return list(self.store.keys())
 
-    def register_builtin_functions(self) -> int:
-        # init_functions_factory_registry
-        """
-        Traverse all classes that inherit IFunction and register them
-        This function needs to be inside of this module or change to: import .functions; for ... vars(functions)
-        """
-        from .func_builtin import get_builtin_function_factories_dict
-
-        items = get_builtin_function_factories_dict().items()
-        for func_name, builtin_function in items:
-            self.add(builtin_function, func_name=func_name)
-
-        assert len(self.store)>=3, self.store
-        return len(self.store)
 
     def pprint(self):
         print("Functions:")

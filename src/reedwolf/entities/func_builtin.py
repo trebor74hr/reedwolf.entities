@@ -35,17 +35,6 @@ from .functions import (
     DotexprExecuteOnItemFactoryFuncArgHint,
 )
 
-
-def get_builtin_function_factories_dict() -> Dict[str, BuiltinFunctionFactory]:
-    out: Dict[str, BuiltinFunctionFactory] = {}
-    for func_name, global_var in globals().copy().items():
-        if not (global_var and isinstance(global_var, BuiltinFunctionFactory)):
-            continue
-        assert func_name
-        out[func_name] = global_var
-    return out
-
-
 # ------------------------------------------------------------
 # Builtin function factories
 # ------------------------------------------------------------

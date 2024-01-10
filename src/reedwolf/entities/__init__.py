@@ -91,7 +91,7 @@ from .eval_children import (
 from .settings import (
     Settings,
     ApplySettings,
-    CustomFunctionList,
+    CustomFunctionFactoryList,
 )
 from .containers import (  # noqa: F401
     KeyFields,
@@ -219,7 +219,7 @@ __all__ = [
     # settings
     "Settings",
     "ApplySettings",
-    "CustomFunctionList",
+    "CustomFunctionFactoryList",
 
     # apply
     "IApplyResult",  # from base.py
