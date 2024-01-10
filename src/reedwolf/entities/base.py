@@ -409,7 +409,6 @@ class IComponent(ReedwolfDataclassBase, ABC):
     # TODO: name:   Optional[str] = field(init=False, default=None)
 
     name_counter_by_parent_name: Dict[str, int] = field(init=False, repr=False, default_factory=dict)
-    # value_accessor_default: IValueAccessor = field(init=False, repr=False)
 
     # ------------------------------------------------------------
 
@@ -452,7 +451,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
         if self.parent is None:
             self.entity = self
             if not self.value_accessor:
-                self.value_accessor = self.entity.value_accessor_default
+                self.value_accessor = self.entity.settings.value_accessor
         else:
             # just copy the same object
             self.entity = self.parent.entity
@@ -1405,8 +1404,6 @@ class IComponent(ReedwolfDataclassBase, ABC):
                                       "keys",
                                       "entity",
                                       "value_accessor",
-                                      "value_accessor_default",
-                                      "value_accessor_class_registry",
                                       "name_counter_by_parent_name",
                                       # "value",
                                       # "enum",

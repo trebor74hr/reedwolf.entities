@@ -15,8 +15,11 @@ from .meta import (
 from .expressions import IFunctionFactory
 from .custom_attributes import AttributeByMethod
 from .utils import UndefinedType, UNDEFINED
-from .values_accessor import IValueAccessor
-
+from .values_accessor import (
+    IValueAccessor,
+    AttributeValueAccessor,
+    get_standard_value_accessor_class_registry,
+)
 
 CustomFunctionList = List[IFunctionFactory]
 
@@ -43,8 +46,8 @@ class SettingsBase:
 
     See ContextRegistry.
     """
-    # if not set will use default ValueExpress
-    value_accessor: Union[IValueAccessor, UndefinedType] = field(default=UNDEFINED, metadata={"dexp_exposed": False})
+    # default_factory must be IValueAccessor class with no required arguments
+    value_accessor: Union[IValueAccessor] = field(repr=False, default_factory=AttributeValueAccessor)
 
     # -----------------------------------------------------------
     # Tracing, analytics, debug ...
@@ -114,19 +117,30 @@ class Settings(SettingsBase):
     """
     # TODO: CustomFunctionFactory
     custom_functions: CustomFunctionList = field(repr=False, default_factory=list, metadata={"skip_dump": True})
-    custom_ctx_attributes: CustomCtxAttributeList = field(repr=False, default_factory=list, metadata={"skip_dump": True})
-
+    custom_ctx_attributes: CustomCtxAttributeList = field(repr=False, default_factory=list)
+    custom_value_accessor_class_registry : Dict[str, Type[IValueAccessor]] = field(repr=False, default_factory=dict)
     apply_settings_class: Optional[Type[ApplySettings]] = field(repr=False, default=None)
 
     # set and reset back in apply phase
     _apply_settings: Union[Self, None, UndefinedType] = field(init=False, repr=False, compare=False, default=UNDEFINED)
     _all_custom_functions: Optional[CustomFunctionList] = field(init=False, repr=False, compare=False, default=None)
+    _value_accessor_class_registry : Optional[Dict[str, Type[IValueAccessor]]] = field(init=False, repr=False, default=None)
 
     # TODO: ...
     # def set_value_accessor(self, value_accessor: IValueAccessor) -> None:
     #     assert isinstance(value_accessor, IValueAccessor)
     #     assert self.value_accessor is None
     #     self.value_accessor = value_accessor
+
+    def get_standard_value_accessor_class_registry(self) -> Dict[str, Type[IValueAccessor]]:
+        """
+        copies standard registry and updates with custom
+        TODO: currently not used
+        """
+        if self._value_accessor_class_registry is None:
+            self._value_accessor_class_registry = get_standard_value_accessor_class_registry().copy()
+            self._value_accessor_class_registry.update(self.custom_value_accessor_class_registry)
+        return self._value_accessor_class_registry
 
     def _ensure_in_with_block(self, method_name: str):
         if self._apply_settings is UNDEFINED:

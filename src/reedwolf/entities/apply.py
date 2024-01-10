@@ -166,7 +166,7 @@ class ApplyResult(IApplyResult):
 
             else:
                 if not self.entity.is_unbound():
-                    self.entity.value_accessor_default.validate_instance_type(owner_name=self.entity.name,
+                    self.entity.settings.value_accessor.validate_instance_type(owner_name=self.entity.name,
                                                                               instance=self.instance,
                                                                               model_type=self.bound_model.model)
 

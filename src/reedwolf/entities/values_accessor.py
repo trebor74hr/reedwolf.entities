@@ -8,7 +8,7 @@ from inspect import isclass
 from typing import (
     Dict,
     Any,
-    Optional,
+    Optional, Type,
 )
 
 from .exceptions import (
@@ -188,10 +188,19 @@ class AutodetectValueAccessor(IValueAccessor):
 # ------------------------------------------------------------
 # REGISTRY
 # ------------------------------------------------------------
-STANDARD_VALUE_ACCESSOR_CLASS_REGISTRY: Dict[str, IValueAccessor] = {
-    obj.get_code(): obj
-    for _, obj in globals().items()
-    if isclass(obj) and issubclass(obj, IValueAccessor) and obj!=IValueAccessor
-}
-DEFAULT_VALUE_ACCESSOR_CLASS = AttributeValueAccessor
+_STANDARD_VALUE_ACCESSOR_CLASS_REGISTRY = UNDEFINED
+
+
+def get_standard_value_accessor_class_registry() -> Dict[str, Type[IValueAccessor]]:
+    """
+    Cached
+    """
+    global _STANDARD_VALUE_ACCESSOR_CLASS_REGISTRY
+    if _STANDARD_VALUE_ACCESSOR_CLASS_REGISTRY is UNDEFINED:
+        _STANDARD_VALUE_ACCESSOR_CLASS_REGISTRY = {
+            obj.get_code(): obj
+            for _, obj in globals().items()
+            if isclass(obj) and issubclass(obj, IValueAccessor) and obj!=IValueAccessor
+        }
+    return _STANDARD_VALUE_ACCESSOR_CLASS_REGISTRY
 

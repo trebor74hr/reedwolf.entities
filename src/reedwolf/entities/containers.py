@@ -125,8 +125,6 @@ from . import (
 )
 from .values_accessor import (
     IValueAccessor,
-    STANDARD_VALUE_ACCESSOR_CLASS_REGISTRY,
-    DEFAULT_VALUE_ACCESSOR_CLASS,
 )
 
 
@@ -667,8 +665,6 @@ class Entity(IEntity, ContainerBase):
 
     # used for automatic component's naming, <parent_name/class_name>__<counter>
     name_counter_by_parent_name: Dict[str, int] = field(init=False, repr=False, default_factory=dict)
-    value_accessor_class_registry: Dict[str, Type[IValueAccessor]] = field(init=False, repr=False)
-    value_accessor_default: IValueAccessor = field(init=False, repr=False)
 
     # is_unbound to model case - must be cached since bound_model could be dynamically changed in setup phase with normal
     _is_unbound: bool = field(init=False, repr=False)
@@ -705,11 +701,10 @@ class Entity(IEntity, ContainerBase):
         if not isinstance(self.settings, Settings):
             raise EntitySetupValueError(owner=self, msg=f"settings needs to be Settings instance, got: {type(self.settings)} / {self.settings}")
 
-        # TODO: it is copied to enable user to extend with new ones (should be added in Settings/Resource/Repository)
-        self.value_accessor_class_registry = STANDARD_VALUE_ACCESSOR_CLASS_REGISTRY.copy()
-        self.value_accessor_default = self.settings.value_accessor if self.settings.value_accessor \
-                                      else DEFAULT_VALUE_ACCESSOR_CLASS()
-        assert isinstance(self.value_accessor_default, IValueAccessor)
+        if not isinstance(self.settings.value_accessor, IValueAccessor):
+            raise EntityValueError(owner=self, msg=f"settings.value_accessor must be some IValueAccessor instance, got: {self.settings.value_accessor}")
+
+        # TODO: use - self.settings.get_standard_value_accessor_class_registry().copy()
 
         if self.settings.apply_settings_class:
             if self.apply_settings_class:
