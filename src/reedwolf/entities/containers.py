@@ -123,7 +123,7 @@ from . import (
     eval_items,
     eval_children,
 )
-from .values_accessor import (
+from .value_accessors import (
     ValueAccessorInputType,
 )
 

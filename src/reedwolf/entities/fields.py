@@ -116,7 +116,7 @@ from .valid_base import (
 from .eval_base import (
     EvaluationBase,
 )
-from .values_accessor import ValueAccessorInputType
+from .value_accessors import ValueAccessorInputType
 
 # Items are:
 #   - when single - that must be added

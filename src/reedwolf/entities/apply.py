@@ -63,8 +63,9 @@ from .base import (
     ApplyExecPhasesEnum,
     IValidation,
     IEvaluation,
-    ValueNode, ValueSetPhase,
+    ValueSetPhase,
 )
+from .value_node import ValueNode
 from .valid_base     import ValidationBase
 from .eval_base      import EvaluationBase
 from .valid_field    import FieldValidationBase

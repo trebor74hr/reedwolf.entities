@@ -25,7 +25,7 @@ from .utils import (
     UNDEFINED,
     get_available_names_example,
 )
-from .values_accessor import (
+from .value_accessors import (
     IValueAccessor,
     AttributeValueAccessor,
     get_standard_accessor_class_registry,
