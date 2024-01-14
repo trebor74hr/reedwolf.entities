@@ -99,7 +99,7 @@ from .expressions import (
 from .settings import (
     Settings, ApplySettings,
 )
-from .values_accessor import IValueAccessor
+from .values_accessor import IValueAccessor, ValueAccessorInputType
 
 # ------------------------------------------------------------
 
@@ -394,7 +394,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
         name
         parent_name
         parent
-        value_accessor
+        _accessor
         entity
     """
     # NOTE: I wanted to skip saving parent reference/object within component - to
@@ -405,7 +405,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
     parent:         Union[Self, UndefinedType] = field(init=False, compare=False, default=UNDEFINED, repr=False)
     parent_name:    Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
     entity:         Union[Self, "IContainer"] = field(init=False, compare=False, default=UNDEFINED, repr=False)
-    value_accessor: Union[IValueAccessor, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    _accessor:      IValueAccessor = field(init=False, default=UNDEFINED, repr=False)
     # TODO: name:   Optional[str] = field(init=False, default=None)
 
     name_counter_by_parent_name: Dict[str, int] = field(init=False, repr=False, default_factory=dict)
@@ -448,17 +448,22 @@ class IComponent(ReedwolfDataclassBase, ABC):
         if not self.name:
             raise EntityInternalError(owner=self, msg=f"Name is not set: {self}")
 
-        if self.parent is None:
-            self.entity = self
-            if not self.value_accessor:
-                self.value_accessor = self.entity.settings.value_accessor
-        else:
-            # just copy the same object
-            self.entity = self.parent.entity
-            if not self.value_accessor:
-                self.value_accessor = self.parent.value_accessor
+        self.entity = self if self.parent is None else self.parent.entity
+        assert self.entity
 
-        assert self.value_accessor and self.entity
+        self._setup_accessor()
+
+
+    def _setup_accessor(self):
+        assert not self._accessor
+
+        if hasattr(self, "accessor") and self.accessor:
+            self._accessor = self.entity.settings._get_accessor(self.accessor)
+        elif self.parent is not None:
+            self._accessor = self.parent._accessor
+        else:
+            self._accessor = self.entity.settings._accessor
+        assert self._accessor
 
 
     def _getset_name(self):
@@ -1403,7 +1408,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
                                       "min", "max", "allow_none", "ignore_none",
                                       "keys",
                                       "entity",
-                                      "value_accessor",
+                                      "_accessor",
                                       "name_counter_by_parent_name",
                                       # "value",
                                       # "enum",
@@ -1614,7 +1619,8 @@ class IContainer(IComponent, ABC):
 
     bound_model:    "IBoundModel" = field(repr=False)
     settings:       Optional[Settings] = field(repr=False, default=None)
-    contains:       List[IComponent] = field(repr=False, init=False)
+    contains:       List[IComponent] = field(repr=False, init=False, default=None)
+
     # NOTE: used only internally in fill_models, so I removed the references
     # models:       Dict[str, Union[type, DotExpression]] = field(init=False, repr=False, default_factory=dict)
     components:     Optional[Dict[str, IComponent]]  = field(init=False, repr=False, default=None)
@@ -2059,6 +2065,7 @@ class InstanceAttrValue:
                 }
 
 # ------------------------------------------------------------
+
 class ValueSetPhase(str, Enum):
     """
     Two phases:
@@ -2089,6 +2096,8 @@ class ValueSetPhase(str, Enum):
 
     # used only for unit tests
     UNDEFINED = "UNDEFINED"
+
+# ------------------------------------------------------------
 
 @dataclass
 class ValueNode:
@@ -2133,6 +2142,11 @@ class ValueNode:
     # set only when item of parent.items (parent is SubentityItems)
     index0: Optional[Index0Type] = field(repr=False, default=None)
     key: Optional[KeyType] = field(repr=False, default=None)
+
+    # ----------------------------------------
+    # AUTOCOMPUTED
+    # ----------------------------------------
+    _accessor: IValueAccessor = field(init=False, default=UNDEFINED, repr=False)
 
     # F.<field-name>
     # - contains all fields accessible in. autocomputed.
@@ -2197,7 +2211,6 @@ class ValueNode:
     # see . _init_instance_attr_access_objects()
     _instance_parent: Union[ModelType, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
     _attr_name_last: Union[AttrName, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
-    _value_accessor: Union[IValueAccessor, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
 
 
     def __post_init__(self):
@@ -2300,6 +2313,8 @@ class ValueNode:
         # ---- 2) register within apply_result - regsiter node to value_node_list
         apply_result.register_value_node(value_node=self)
 
+        self._accessor = apply_result._apply_accessor if apply_result._apply_accessor else self.component._accessor
+
         return self
 
     def set_apply_stack_frame(self, apply_stack_frame: IStackFrame):
@@ -2393,12 +2408,12 @@ class ValueNode:
         type_info = self.container.bound_model.get_type_info()
         if self.container.entity.is_unbound():
             # TODO: check if it has attribute and it has corresponding type
-            #       check with value_accessor
+            #       check with _accessor
             # attr_name = self._attr_name_last, model=
             pass
         else:
             model = type_info.type_
-            # TODO: check with value_accessor?
+            # TODO: check with _accessor?
             if not self.instance_none_mode \
                     and not isinstance(self.instance, model):
                 raise EntityInternalError(owner=self, msg=f"Parent instance {self.instance} has wrong type")
@@ -2416,7 +2431,7 @@ class ValueNode:
 
         # Finally change instance value by last attribute name
         assert self._attr_name_last
-        self._value_accessor.set_value(instance=self._instance_parent,
+        self._accessor.set_value(instance=self._instance_parent,
                                  attr_name=self._attr_name_last,
                                  attr_index=None,
                                  new_value=self._value)
@@ -2428,13 +2443,14 @@ class ValueNode:
         initialize:
             self._instance_parent
             self._attr_name_last
-            self._value_accessor
 
         used in call to:
-           self._value_accessor.set_value()
+           self._accessor.set_value()
         """
         assert self._instance_parent is UNDEFINED
-        component = self.component
+        if not self._accessor:
+            raise EntityInternalError(owner=self, msg=f"_accessor not set")
+
         # "for" loop is required for attributes from substructure that
         # is not done as SubEntity rather direct reference, like:
         #   bind=M.access.alive
@@ -2442,16 +2458,7 @@ class ValueNode:
                           for init_raw_attr_value in self.init_dexp_result.dexp_value_node_list
                           ]
         if not attr_name_path:
-            raise EntityInternalError(owner=self, msg=f"{component}: attr_name_path is empty")
-
-        if isinstance(component, IField):
-            # TODO: what about Boolean + enables? Better to check .get_children() ?
-            # value accessor should be used from parent of the component
-            assert component.parent
-            value_accessor = component.parent.value_accessor
-        else:
-            # contaainers + fieldgroup
-            value_accessor = component.value_accessor
+            raise EntityInternalError(owner=self, msg=f"{self.component}: attr_name_path is empty")
 
         current_instance_parent = None
         parent_instance = self.instance
@@ -2476,7 +2483,7 @@ class ValueNode:
                         attr_name=attr_name,
                     )
                     current_instance = temp_dataclass_model()
-                    value_accessor.set_value(instance=current_instance_parent,
+                    self._accessor.set_value(instance=current_instance_parent,
                                              attr_name=attr_name_prev,
                                              attr_index=None,
                                              new_value=current_instance)
@@ -2487,7 +2494,7 @@ class ValueNode:
                                                 msg=f"Attribute '{attr_name}' can not be set while '{parent_instance}.{attr_name_path_prev}' is not set. Is '{attr_name_path_prev}' obligatory?")
 
             current_instance_parent = current_instance
-            current_instance = value_accessor.get_value(instance=current_instance_parent,
+            current_instance = self._accessor.get_value(instance=current_instance_parent,
                                                         attr_name=attr_name,
                                                         attr_index=None)
             if current_instance is UNDEFINED:
@@ -2497,7 +2504,6 @@ class ValueNode:
         self._instance_parent = current_instance_parent
         # attribute name is in the last item
         self._attr_name_last = attr_name_last
-        self._value_accessor = value_accessor
 
 
     # ------------------------------------------------------------
@@ -2790,7 +2796,7 @@ class ApplyStackFrame(IStackFrame):
             # TODO: this should be checked only once per container, and I am not sure what is good way to do it
             # # if not is_model_class(instance_to_test.__class__):
             # #     raise EntityInternalError(owner=self, msg=f"Expected model instance: {instance_to_test.__class__} or list[instances], got: {self.instance}")
-            # self.component.value_accessor.validate_instance_type(owner_name=self.component.name,
+            # self._accessor.validate_instance_type(owner_name=self.component.name,
             #                                                      instance=instance_to_test,
             #                                                      model_type=self.container.bound_model.model)
 
@@ -2907,6 +2913,8 @@ class IApplyResult(IStackOwnerSession):
     # used in dump_defaults() - to get defaults dictionary
     defaults_mode: bool = field(repr=False, default=False)
 
+    accessor: Optional[ValueAccessorInputType] = field(repr=False, default=None)
+
     # ---- automatically computed -----
 
     # top of value tree - head of the tree
@@ -2917,6 +2925,9 @@ class IApplyResult(IStackOwnerSession):
 
     # extracted from component
     bound_model: IBoundModel = field(repr=False, init=False)
+
+    # will be extracted from self.settings.accessor, None if not set
+    _apply_accessor: Optional[IValueAccessor] = field(init=False, default=UNDEFINED, repr=False)
 
     # final status
     finished: bool = field(repr=False, init=False, default=False)
@@ -2942,9 +2953,9 @@ class IApplyResult(IStackOwnerSession):
         # Accessing instance attribute values are done in 2 places:
         #   a) getting/setting in processing children
         #   b) getting in executing DotExpression's AttributeNode-s
-        # for a) value_accessor is used in all cases,
+        # for a) _accessor is used in all cases,
         # for b) not-attribute-instance it is too complicated to get values
-        # with value_accessor, so input instance is copied to this shadow
+        # with _accessor, so input instance is copied to this shadow
         # dataclass instance which is used for AttributeNode's DotExpression-s.
         # instance_shadow_dc: DataclassType = field(init=False, repr=False)
 
@@ -3007,10 +3018,6 @@ class IApplyResult(IStackOwnerSession):
         if self.current_frame is None:
             raise EntityInternalError(owner=self, msg="Setup session can't be get, no current frame set")
         return self.current_frame.container.setup_session
-
-    @abstractmethod
-    def apply(self) -> Self:
-        ...
 
     @abstractmethod
     def get_current_value(self, strict: bool) -> LiteralType:

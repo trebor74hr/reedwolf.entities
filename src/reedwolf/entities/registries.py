@@ -267,7 +267,7 @@ class ModelsRegistry(RegistryBase):
             if not apply_result.entity.is_unbound() \
               and not apply_result.instance_none_mode \
               and instance_to_test:
-                apply_result.current_frame.component.value_accessor.validate_instance_type(
+                apply_result.current_frame.component._accessor.validate_instance_type(
                         owner_name=f"{apply_result.current_frame.component.name} -> {self}.{attr_name}",
                         instance=instance_to_test,
                         model_type=expected_type,

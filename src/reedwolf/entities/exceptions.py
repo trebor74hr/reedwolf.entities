@@ -63,6 +63,9 @@ class EntityTypeError(EntityError):
 class EntityValueError(EntityError):
     pass
 
+class EntityInstatiateError(EntityError):
+    pass
+
 # ------------------------------------------------------------
 # Entity Setup phase (boot time) validation errors
 # ------------------------------------------------------------

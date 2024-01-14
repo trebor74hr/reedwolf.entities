@@ -166,9 +166,9 @@ class ApplyResult(IApplyResult):
 
             else:
                 if not self.entity.is_unbound():
-                    self.entity.settings.value_accessor.validate_instance_type(owner_name=self.entity.name,
-                                                                              instance=self.instance,
-                                                                              model_type=self.bound_model.model)
+                    self.entity.settings._accessor.validate_instance_type(owner_name=self.entity.name,
+                                                                          instance=self.instance,
+                                                                          model_type=self.bound_model.model)
 
             if self.instance_new is not None and not self.component_name_only:
                 self._detect_instance_new_struct_type(self.entity)
@@ -176,6 +176,17 @@ class ApplyResult(IApplyResult):
         # ----------------------------------------
         # see IApplyResult for description
         self.binary_operations_type_adapters[(str, int)] = str
+        self._setup_accessor()
+
+
+    def _setup_accessor(self):
+        if self.accessor:
+            accessor = self.accessor
+        elif self.settings and self.settings.accessor:
+            accessor = self.settings.accessor
+        else:
+            accessor = None
+        self._apply_accessor = self.entity.settings._get_accessor(accessor) if accessor else None
 
 
     def is_ok(self) -> bool:
@@ -512,7 +523,7 @@ class ApplyResult(IApplyResult):
                         raise EntityInternalError(owner=self, msg=f"Defaults mode - current frame's instance's model must be NA_DEFAULTS_MODE, got: {type(self.instance)}")
                 #  TODO: consider adding validation again with:
                 #    else:
-                #      self.component.value_accessor.validate_instance_type(owner_name=self.component.name,
+                #      self.component._accessor.validate_instance_type(owner_name=self.component.name,
 
             if mode_subentity_items:
                 # reuse already created in caller
@@ -1611,7 +1622,7 @@ class ApplyResult(IApplyResult):
 
     def get_attr_value_by_comp_name(self, component:IComponent, instance: ModelType) -> ExecResult:
         attr_name = component.name
-        value = component.value_accessor.get_value(instance=instance, attr_name=attr_name, attr_index=None)
+        value = component._accessor.get_value(instance=instance, attr_name=attr_name, attr_index=None)
         if value is UNDEFINED:
             # TODO: depending of self.entity strategy or apply(strategy)
             #   - raise error

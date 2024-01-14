@@ -350,13 +350,13 @@ class AttrDexpNode(IDotExpressionNode):
                     value_new = value_prev
                 else:
                     # if self.namespace == ThisNS:
-                    #     value_new = apply_result.current_frame.component.value_accessor.get_value(
+                    #     value_new = apply_result.current_frame.component._accessor.get_value(
                     #                     instance=value_prev, attr_name=attr_name, attr_index=None)
                     # else:
                     #     # TODO: this is not easy - how to detect to which component this attribute belongs,
-                    #     #       if it belongs to any. So using default accessor and hope for the best.
+                    #     #       if it belongs to any. So using default _accessor and hope for the best.
                     #     #       ListByIndex can not be used since, attr_index is not available.
-                    #     value_new = apply_result.current_frame.component.entity.value_accessor.get_value(
+                    #     value_new = apply_result.current_frame.component.entity._accessor.get_value(
                     #         instance=value_prev, attr_name=attr_name, attr_index=None)
                     # if value_new is UNDEFINED:
                     #     raise EntityApplyNameError(owner=self,

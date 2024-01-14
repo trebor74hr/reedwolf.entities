@@ -116,6 +116,7 @@ from .valid_base import (
 from .eval_base import (
     EvaluationBase,
 )
+from .values_accessor import ValueAccessorInputType
 
 # Items are:
 #   - when single - that must be added
@@ -168,6 +169,7 @@ class FieldBase(IField, ABC):
 
     # if enables is filled - then it Supports Children* cleaners too since it can have nested field hierarchy
     cleaners:       Optional[List[Union[ChildrenValidationBase, ChildrenEvaluationBase, FieldValidationBase, FieldEvaluationBase]]] = field(repr=False, default_factory=list)
+    accessor:       Optional[ValueAccessorInputType] = field(repr=False, default=None)
     autocomputed:   Union[bool, AutocomputedEnum] = field(repr=False, default=False)
 
     # BooleanField.enables that yields False/None (value must be bool/None)
@@ -859,6 +861,7 @@ class FieldGroup(IFieldGroup):
     name:           Optional[str] = field(default=None)
     title:          Optional[TransMessageType] = field(repr=False, default=None)
     cleaners:       Optional[List[Union[ChildrenValidationBase, ChildrenEvaluationBase]]] = field(repr=False, default_factory=list)
+    accessor:       Optional[ValueAccessorInputType] = field(repr=False, default=None)
     # NOTE: see available_old_logic
     #   available:      Union[bool, DotExpression] = field(repr=False, default=True)
 

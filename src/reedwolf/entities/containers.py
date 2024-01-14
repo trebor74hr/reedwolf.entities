@@ -124,7 +124,7 @@ from . import (
     eval_children,
 )
 from .values_accessor import (
-    IValueAccessor,
+    ValueAccessorInputType,
 )
 
 
@@ -541,10 +541,6 @@ class ContainerBase(IContainer, ABC):
 # ------------------------------------------------------------
 
 
-
-# ------------------------------------------------------------
-
-
 class KeysBase(ABC):
 
     @abstractmethod
@@ -649,6 +645,7 @@ class Entity(IEntity, ContainerBase):
     # will be filled automatically with Settings() if not supplied
     settings:           Optional[Settings] = field(repr=False, default=None, metadata={"skip_dump": True})
     apply_settings_class: Optional[Type[ApplySettings]] = field(repr=False, default=None, metadata={"skip_dump": True})
+    accessor:           Optional[ValueAccessorInputType] = field(repr=False, default=None)
 
     # --- validators and evaluators
     cleaners:           Optional[List[Union[ChildrenValidationBase, ChildrenEvaluationBase]]] = field(repr=False, default_factory=list)
@@ -664,7 +661,6 @@ class Entity(IEntity, ContainerBase):
     parent:             Union[NoneType, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     parent_name:        Union[str, UndefinedType]  = field(init=False, default=UNDEFINED)
     entity:             Union[ContainerBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    value_accessor:     IValueAccessor = field(init=False, repr=False)
 
     # used for automatic component's naming, <parent_name/class_name>__<counter>
     name_counter_by_parent_name: Dict[str, int] = field(init=False, repr=False, default_factory=dict)
@@ -704,10 +700,11 @@ class Entity(IEntity, ContainerBase):
         if not isinstance(self.settings, Settings):
             raise EntitySetupValueError(owner=self, msg=f"settings needs to be Settings instance, got: {type(self.settings)} / {self.settings}")
 
-        if not isinstance(self.settings.value_accessor, IValueAccessor):
-            raise EntityValueError(owner=self, msg=f"settings.value_accessor must be some IValueAccessor instance, got: {self.settings.value_accessor}")
-
-        # TODO: use - self.settings.get_standard_value_accessor_class_registry().copy()
+        # ------------------------------------------------------------
+        # Settings check / setup not done in Settings.__post_init__ since the method is not guaranteed to be called
+        # for custom implementations.
+        # ------------------------------------------------------------
+        self.settings._init()
 
         if self.settings.apply_settings_class:
             if self.apply_settings_class:
@@ -770,25 +767,29 @@ class Entity(IEntity, ContainerBase):
               instance: DataclassType,
               instance_new: Optional[ModelType] = None,
               settings: Optional[ApplySettings] = None,
+              accessor: Optional[ValueAccessorInputType] = None,
               raise_if_failed:bool = True) -> IApplyResult:
         return self._apply(
-                  instance=instance,
-                  instance_new=instance_new,
-                  settings=settings,
-                  raise_if_failed=raise_if_failed)
+                    instance=instance,
+                    instance_new=instance_new,
+                    settings=settings,
+                    accessor=accessor,
+                    raise_if_failed=raise_if_failed)
 
     def apply_partial(self,
                       component_name_only:str,
                       instance: DataclassType,
                       instance_new: Optional[ModelType] = None,
                       settings: Optional[Settings] = None,
+                      accessor: Optional[ValueAccessorInputType] = None,
                       raise_if_failed:bool = True) -> IApplyResult:
         return self._apply(
-                  instance=instance,
-                  instance_new=instance_new,
-                  component_name_only=component_name_only,
-                  settings=settings,
-                  raise_if_failed=raise_if_failed)
+                    instance=instance,
+                    instance_new=instance_new,
+                    component_name_only=component_name_only,
+                    settings=settings,
+                    accessor=accessor,
+                    raise_if_failed=raise_if_failed)
 
 
     def _apply(self,
@@ -796,6 +797,7 @@ class Entity(IEntity, ContainerBase):
                instance_new: Optional[ModelType] = None,
                component_name_only:Optional[str] = None,
                settings: Optional[Settings] = None,
+               accessor: Optional[ValueAccessorInputType] = None,
                raise_if_failed:bool = True) -> IApplyResult:
         """
         create and settings ApplyResult() and call apply_result.apply()
@@ -883,6 +885,8 @@ class SubEntityBase(ContainerBase, ABC):
     # cardinality:  ICardinalityValidation
     contains:       List[IComponent] = field(repr=False)
 
+    accessor:       Optional[ValueAccessorInputType] = field(repr=False, default=None)
+
     # required since if it inherit name from BoundModel then the name will not
     # be unique in self.components (SubEntityItems and BoundModel will share the same name)
     name:           Optional[str] = field(default=None)
@@ -904,7 +908,6 @@ class SubEntityBase(ContainerBase, ABC):
     parent:         Union[IComponent, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     parent_name:    Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
     entity:         Union[ContainerBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-    value_accessor: IValueAccessor = field(init=False, repr=False)
 
     # subentity_items specific - is this top parent or what? what is the difference to self.parent
 
@@ -943,11 +946,11 @@ class SubEntityBase(ContainerBase, ABC):
 
         super().__post_init__()
 
-    def set_parent(self, parent:ContainerBase):
+    def set_parent(self, parent: ContainerBase):
         super().set_parent(parent=parent)
 
         # can be self
-        self.parent_container     = self.get_first_parent_container(consider_self=True)
+        self.parent_container = self.get_first_parent_container(consider_self=True)
 
         # take from real first container parent
         non_self_parent_container = self.get_first_parent_container(consider_self=False)
@@ -955,6 +958,9 @@ class SubEntityBase(ContainerBase, ABC):
         self.settings = non_self_parent_container.settings
         if not self.settings:
             raise EntityInternalError(owner=self, msg=f"settings not set from parent: {self.parent_container}")
+
+        # self._accessor = self.settings.get_accessor(self._accessor) if self._accessor is not None else non_self_parent_container._accessor
+
 
     def setup(self, setup_session:SetupSession):
         # NOTE: setup_session is not used, can be reached with parent.setup_session(). left param

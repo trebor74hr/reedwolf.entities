@@ -1,6 +1,6 @@
-# NOTE: naming: storage vs accessor - what to do? I chose accessor - feels more natural
+# NOTE: naming: storage vs _accessor - what to do? I chose _accessor - feels more natural
 
-# TODO: Single child instance accessor - Items(contains=[IntField(M.day_in_week])) -> parse: [1,2,3])
+# TODO: Single child instance _accessor - Items(contains=[IntField(M.day_in_week])) -> parse: [1,2,3])
 # TODO: autodetect
 
 from abc import abstractmethod
@@ -8,7 +8,7 @@ from inspect import isclass
 from typing import (
     Dict,
     Any,
-    Optional, Type,
+    Optional, Type, Union,
 )
 
 from .exceptions import (
@@ -19,7 +19,7 @@ from .meta import (
     AttrName,
     AttrIndex,
     AttrValue,
-    UNDEFINED,
+    UNDEFINED, NoneType,
 )
 from .utils import to_repr
 
@@ -29,7 +29,7 @@ from .utils import to_repr
 
 class IValueAccessor:
     """
-    Valuue accessor has role of reading and setting value of the data instance.
+    Valuue _accessor has role of reading and setting value of the data instance.
     Currently only 2 functions are used, one for
         get_getter - getting the value from the instance based on the "attribute" name or attribute index
         set_setter - setting the value to the instance based on the "attribute" name or attribute index
@@ -38,7 +38,7 @@ class IValueAccessor:
     @abstractmethod
     def get_code() -> str:
         """
-        code of the accessor - must be unique, can be used in Component.value_accessor
+        code of the _accessor - must be unique, can be used in Component._accessor
         """
         ...
 
@@ -191,7 +191,7 @@ class AutodetectValueAccessor(IValueAccessor):
 _STANDARD_VALUE_ACCESSOR_CLASS_REGISTRY = UNDEFINED
 
 
-def get_standard_value_accessor_class_registry() -> Dict[str, Type[IValueAccessor]]:
+def get_standard_accessor_class_registry() -> Dict[str, Type[IValueAccessor]]:
     """
     Cached
     """
@@ -204,3 +204,8 @@ def get_standard_value_accessor_class_registry() -> Dict[str, Type[IValueAccesso
         }
     return _STANDARD_VALUE_ACCESSOR_CLASS_REGISTRY
 
+# by this value will fetch from accessor_registry
+# ValueAccessor class and create an instance
+ValueAccessorCode = str
+
+ValueAccessorInputType = Union[ValueAccessorCode, IValueAccessor, Type[IValueAccessor]]

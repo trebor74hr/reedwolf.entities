@@ -56,7 +56,6 @@ from .registries import (
     ThisRegistry, UnboundModelsRegistry,
 )
 
-
 # ------------------------------------------------------------
 
 @dataclass
@@ -67,6 +66,7 @@ class ModelWithHandlers:
     type_info: TypeInfo = field(repr=False)
 
 
+@dataclass
 class NestedBoundModelBase(IBoundModel):
 
     def create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:
