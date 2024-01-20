@@ -4,7 +4,6 @@ from dataclasses import (
     dataclass,
     field,
 )
-from enum import Enum
 from typing import (
     List,
     Union,
@@ -15,13 +14,11 @@ from typing import (
 )
 
 from .utils import (
-    UNDEFINED,
     UndefinedType,
     to_repr, get_available_names_example,
 )
 from .exceptions import (
     EntitySetupError,
-    EntitySetupNameError,
     EntitySetupValueError,
     EntityInternalError,
     EntitySetupTypeError,
@@ -62,7 +59,7 @@ from .base import (
     ISetupSession,
     IContainer,
 )
-from .attr_nodes import (
+from .expr_attr_nodes import (
     AttrDexpNode,
 )
 from .valid_base import (
@@ -77,7 +74,6 @@ from .setup import (
     RegistryBase,
     RegistryUseDenied,
     ComponentAttributeAccessor,
-    SetupSessionBase,
 )
 
 # ------------------------------------------------------------
@@ -351,8 +347,9 @@ class FieldsRegistry(RegistryBase):
         # container = apply_result.current_frame.component.get_first_parent_container(consider_self=True)
         component = apply_result.current_frame.component
         instance  = apply_result.current_frame.instance
-        # value_node = apply_result.current_frame.value_node
-        top_attr_accessor = ComponentAttributeAccessor(component, instance)
+        # TODO: use this ...
+        value_node = apply_result.current_frame.value_node
+        top_attr_accessor = ComponentAttributeAccessor(component=component, instance=instance, value_node=value_node)
         return RegistryRootValue(top_attr_accessor, None)
 
 
@@ -680,30 +677,4 @@ class ThisRegistry(IThisRegistry, RegistryBase):
         return f'{self.__class__.__name__}({", ".join(out)})'
 
     __str__ = __repr__
-
-
-# ------------------------------------------------------------
-
-class SetupSession(SetupSessionBase):
-    ...
-
-    # def create_local_setup_session(self, this_registry: IThisRegistry) -> Self:
-    #     """ Currently creates only local ThisNS registry, which is used for
-    #     some local settings, e.g. Component This. dexps
-    #     Args:
-    #         a) this_ns_instance_model_class -> This.Instance + This.<all-attribute-names> logic
-    #         b) this_ns_value_attr_node -> .Value logic, no other attributes for now
-    #     """
-    #     if not (this_registry and isinstance(this_registry, IThisRegistry)):
-    #         raise EntityInternalError(owner=self, msg=f"Expected IThisRegistry instance, got: {this_registry}")
-
-    #     local_setup_session = SetupSession(
-    #                             container=self.container,
-    #                             parent_setup_session=None,
-    #                             functions_factory_registry=self.functions_factory_registry,
-    #                             )
-    #     local_setup_session.add_registry(this_registry)
-
-    #     return local_setup_session
-
 

@@ -86,7 +86,7 @@ from .expressions import (
     IThisRegistry,
     DEXP_VALIDATOR_FOR_BIND,
 )
-from .attr_nodes import (
+from .expr_attr_nodes import (
     AttrDexpNode
 )
 from .functions import (
@@ -252,7 +252,8 @@ class FieldBase(IField, ABC):
 
         if self.bind:
             self.attr_node = setup_session.get_registry(FieldsNS).get(self.name)
-            assert self.attr_node
+            if not self.attr_node:
+                raise EntityInternalError(owner=self, msg=f"Attribute not found: {self.name}")
             if not self.is_unbound() and not self.bound_attr_node:
                 # warn(f"TODO: {self}.bind = {self.bind} -> bound_attr_node can not be found.")
                 raise EntitySetupValueError(owner=self, msg=f"bind={self.bind}: bound_attr_node can not be found.")

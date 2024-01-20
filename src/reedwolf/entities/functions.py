@@ -33,7 +33,7 @@ from typing import (
     Tuple,
 )
 
-from .attr_nodes import AttrDexpNode
+from .expr_attr_nodes import AttrDexpNode
 from .utils import (
     UNDEFINED,
     get_available_names_example, UndefinedType,

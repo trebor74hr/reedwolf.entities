@@ -65,13 +65,13 @@ from .base import (
     IBoundModel,
     ReservedAttributeNames,
     SetupStackFrame,
-    UseStackFrameCtxManagerBase,
+    UseStackFrameCtxManagerBase, IValueNode,
 )
 from .functions import (
     FunctionsFactoryRegistry,
     try_create_function,
 )
-from .attr_nodes import (
+from .expr_attr_nodes import (
     AttrDexpNode,
 )
 
@@ -534,14 +534,18 @@ class RegistryUseDenied(RegistryBase):
 
 @dataclass
 class ComponentAttributeAccessor(IAttributeAccessorBase):
-    " used in FieldsNS "
+    """
+    Used in FieldsNS
+    Value will be fetched by evaluating .bind of Field component.
+    """
     component: IComponent
     instance: ModelType
+    value_node: IValueNode
 
     def get_attribute(self, apply_result:IApplyResult, attr_name: str) -> Self:
         children_dict = apply_result.get_upward_components_dict(self.component)
         if attr_name not in children_dict:
-            avail_names = get_available_names_example(attr_name, children_dict.keys())
+            avail_names = get_available_names_example(attr_name, list(children_dict.keys()))
             raise EntityApplyNameError(owner=self.component, 
                     msg=f"Attribute '{attr_name}' not found in '{self.component.name}' ({type(self.component.name)}). Available: {avail_names}")
 
@@ -564,7 +568,7 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
 
 class UseSetupStackFrameCtxManager(UseStackFrameCtxManagerBase):
     " with() ... custom settings manager. "
-    owner_session: "SetupSessionBase"
+    owner_session: "SetupSession"
     frame: SetupStackFrame
 
 
@@ -574,20 +578,20 @@ class UseSetupStackFrameCtxManager(UseStackFrameCtxManagerBase):
 class SetupSessionBase(IStackOwnerSession, ISetupSession):
 
     container:                  Optional[IContainer]
-    parent_setup_session:       Optional[ISetupSession]
+
+    # obligatory init arg - used to compute *top_setup_session - None for TopParentSession
+    parent_setup_session:       Optional["SetupSessionBase"] = None
 
     # builtin + custom_function_factories store
     functions_factory_registry: Optional[FunctionsFactoryRegistry] = field(repr=False, default=None)
 
     # autocomputed and internals
-    is_top_setup_session:       bool = field(init=False, repr=False)
-    top_parent_setup_session:   ISetupSession = field(init=False, repr=False)
+    top_setup_session:          "TopSetupSession" = field(init=False, repr=False)
 
     _registry_dict:             Dict[str, IRegistry] = field(init=False, repr=False, default_factory=dict)
     name:                       str = field(init=False, repr=False)
     dexp_node_dict:             Dict[str, IDotExpressionNode] = field(init=False, repr=False, default_factory=dict)
     finished:                   bool = field(init=False, repr=False, default=False)
-    hook_on_finished_all_list:  Optional[List[HookOnFinishedAllCallable]] = field(init=False, repr=False)
 
     # stack of frames - first frame is current. On the end of the process the stack must be empty
     stack_frames:               List[SetupStackFrame] = field(repr=False, init=False, default_factory=list)
@@ -601,28 +605,7 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
     def __post_init__(self):
         if self.container is not None and not isinstance(self.container, IContainer):
             raise EntityInternalError(owner=self, msg=f"Expecting container for parent, got: {type(self.container)} / {self.container}")
-
-        self.is_top_setup_session: bool = self.parent_setup_session is None
-
-        if self.is_top_setup_session:
-            self.top_parent_setup_session = self
-        else:
-            self.top_parent_setup_session = self.parent_setup_session
-            while self.top_parent_setup_session.parent_setup_session:
-                self.top_parent_setup_session = self.top_parent_setup_session.parent_setup_session
-
-        assert self.top_parent_setup_session
-
-        # compputed
-        # self._registry_dict: Dict[str, IRegistry] = {}
-        # self.dexp_node_dict: Dict[str, IDotExpressionNode] = {}
-        # self.finished: bool = False
-
         self.name: str = self.container.name if self.container else "no-container"
-
-        self.hook_on_finished_all_list: Optional[List[HookOnFinishedAllCallable]] =  \
-            [] if self.is_top_setup_session else None
-
 
     # ------------------------------------------------------------
 
@@ -680,20 +663,10 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
 
         return self._registry_dict[namespace._name]
 
-    # def __getitem__(self, namespace: Namespace) -> IRegistry:
-    #     return self._registry_dict[namespace._name]
-
-
     # ------------------------------------------------------------
 
     def add_hook_on_finished_all(self, hook_function: HookOnFinishedAllCallable):
-        self.top_parent_setup_session.hook_on_finished_all_list.append(hook_function)
-
-    def call_hooks_on_finished_all(self):
-        if not self.is_top_setup_session:
-            raise EntityInternalError(owner=self, msg="call_hooks_on_finished_all() can be called on top setup_session") 
-        for hook_function in self.hook_on_finished_all_list:
-            hook_function()
+        self.top_setup_session.hook_on_finished_all_list.append(hook_function)
 
     # ------------------------------------------------------------
 
@@ -775,16 +748,31 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
 
         self.finished = True
 
-    # ------------------------------------------------------------
+# ------------------------------------------------------------
 
-    # def create_local_setup_session_for_this_instance(self,
-    #                                                  model_class: ModelType,
-    #                                                  ) -> IThisRegistry:
-    #     # NOTE: must be placed here since:
-    #     #   expressions
-    #     this_registry = self.container.create_this_registry_for_instance(model_class=model_class)
-    #     local_setup_session = self.create_local_setup_session(this_registry)
-    #     return local_setup_session
+class SetupSession(SetupSessionBase):
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.top_setup_session = self.parent_setup_session.top_setup_session
+        assert isinstance(self.top_setup_session, TopSetupSession), self.top_setup_session
+        # ALT: while self.top_setup_session.parent_setup_session:
+        #     self.top_setup_session = self.top_setup_session.parent_setup_session
+
+# ------------------------------------------------------------
+
+class TopSetupSession(SetupSessionBase):
+
+    hook_on_finished_all_list:  Optional[List[HookOnFinishedAllCallable]] = field(init=False, repr=False)
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.top_setup_session = self
+        self.hook_on_finished_all_list: Optional[List[HookOnFinishedAllCallable]] = []
+
+    def call_hooks_on_finished_all(self):
+        for hook_function in self.hook_on_finished_all_list:
+            hook_function()
 
 
 

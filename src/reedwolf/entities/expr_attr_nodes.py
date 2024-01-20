@@ -332,6 +332,8 @@ class AttrDexpNode(IDotExpressionNode):
 
 
     def _get_value_new(self, apply_result: IApplyResult, value_prev: AttrValue, attr_name: AttrName) -> AttrValue:
+        # if isinstance(value_prev, IAttributeAccessorBase):
+        #     print("here333")
         if isinstance(value_prev, IAttributeAccessorBase):
             # NOTE: if this is last in chain - fetch final value
             value_new = value_prev.get_attribute(
@@ -363,8 +365,10 @@ class AttrDexpNode(IDotExpressionNode):
                     #            msg=f"Attribute '{attr_name}' not found in '{to_repr(value_prev)}': '{type(value_prev)}'")
                     if isinstance(attr_name, (Attribute, AttributeByMethod)):
                         attr_name = attr_name.name
+
                     if not isinstance(attr_name, str):
                         raise EntityInternalError(owner=self, msg=f"Attribute name must be a string, got. {attr_name}")
+
                     if not hasattr(value_prev, attr_name):
                         # TODO: list which fields are available
                         # if all types match - could be internal problem?

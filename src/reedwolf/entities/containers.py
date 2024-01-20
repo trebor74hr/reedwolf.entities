@@ -70,15 +70,15 @@ from .bound_models import (
     BoundModel,
     BoundModelWithHandlers, UnboundModel,
 )
-from .attr_nodes import (
+from .expr_attr_nodes import (
     AttrDexpNode,
     )
 from .functions import (
-    CustomFunctionFactory,
-    IFunction, FunctionFactoryBase, FunctionByMethod, FunctionsFactoryRegistry,
+    IFunction,
+    FunctionsFactoryRegistry,
 )
+from .setup import SetupSession, TopSetupSession
 from .registries import (
-    SetupSession,
     ModelsRegistry,
     FieldsRegistry,
     OperationsRegistry,
@@ -205,11 +205,17 @@ class ContainerBase(IContainer, ABC):
             FunctionsFactoryRegistry(functions=functions,
                                      builtin_functions_dict=builtin_functions_dict)
 
-        setup_session = SetupSession(
-            container=self,
-            functions_factory_registry = functions_factory_registry,
-            parent_setup_session=self.setup_session if self.parent else None,
-        )
+        if not self.parent:
+            setup_session = TopSetupSession(
+                container=self,
+                functions_factory_registry = functions_factory_registry,
+            )
+        else:
+            setup_session = SetupSession(
+                container=self,
+                functions_factory_registry = functions_factory_registry,
+                parent_setup_session=self.parent.setup_session
+            )
 
         if self.is_unbound():
             setup_session.add_registry(UnboundModelsRegistry())
@@ -356,8 +362,10 @@ class ContainerBase(IContainer, ABC):
         simple flat list. It will set parent for each child component.
         """
         # A.3. COMPONENTS - collect attr_nodes - previously flattened (recursive function fill_components)
+        fields_registry: FieldsRegistry = self.setup_session.get_registry(FieldsNS)
         for component_name, component in self.components.items():
-            self.setup_session.get_registry(FieldsNS).register(component)
+            fields_registry.register(component)
+        return
 
     # ------------------------------------------------------------
     def _replace_modelsns_registry(self, setup_session: SetupSession):
@@ -473,7 +481,6 @@ class ContainerBase(IContainer, ABC):
     # ------------------------------------------------------------
 
     def get_component(self, name:str) -> IComponent:
-        # TODO: currently components are retrieved only from contains - but should include validations + cardinality
         if name not in self.components:
             vars_avail = get_available_names_example(name, self.components.keys())
             raise EntityNameNotFoundError(owner=self, msg=f"Component '{name}' not found, some valid_are: {vars_avail}")
@@ -651,10 +658,9 @@ class Entity(IEntity, ContainerBase):
     cleaners:           Optional[List[Union[ChildrenValidationBase, ChildrenEvaluationBase]]] = field(repr=False, default_factory=list)
 
     # --- Evaluated later
-    setup_session:      Optional[SetupSession]    = field(init=False, repr=False, default=None)
-    components:         Optional[Dict[str, IComponent]]  = field(init=False, repr=False, default=None)
-    # NOTE: used only internally:
-    # models:           Dict[str, Union[type, DotExpression]] = field(repr=False, init=False, default_factory=dict)
+    setup_session:      Optional[SetupSession] = field(init=False, repr=False, default=None)
+    # see comment in IContainer
+    components:         Optional[Dict[str, IComponent]] = field(init=False, repr=False, default=None)
 
     # in Entity (top object) this case allways None - since it is top object
     # NOTE: not DRY: Entity, SubentityBase and ComponentBase
@@ -899,9 +905,8 @@ class SubEntityBase(ContainerBase, ABC):
 
     # --- Evaluated later
     setup_session:  Optional[SetupSession] = field(init=False, repr=False, default=None)
+    # see comment in IContainer
     components:     Optional[Dict[str, IComponent]]  = field(init=False, repr=False, default=None)
-    # NOTE: used only internally:
-    # models:       Dict[str, Union[type, DotExpression]] = field(init=False, repr=False, default_factory=dict)
 
     # --- IComponent common attrs
     # NOTE: not DRY: Entity, SubentityBase and ComponentBase

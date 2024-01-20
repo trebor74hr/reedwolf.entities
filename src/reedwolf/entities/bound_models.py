@@ -38,7 +38,7 @@ from .expressions import (
     ISetupSession,
     ExecResult, IThisRegistry,
 )
-from .attr_nodes import (
+from .expr_attr_nodes import (
     AttrDexpNode,
 )
 from .functions import (

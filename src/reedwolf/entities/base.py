@@ -1007,6 +1007,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
             container = self.get_first_parent_container(consider_self=False)
             setup_session = container.setup_session
 
+        # even for owner/container add self (owner itself) to self.components
         self._add_component(component=self, components=components)
 
         with setup_session.use_stack_frame(
@@ -1130,14 +1131,11 @@ class IComponent(ReedwolfDataclassBase, ABC):
             dexp: DotExpression = component
             # namespace = dexp._namespace
             if dexp.IsFinished():
-                # Setup() was called in container.setup() before or in some
-                #         other dependency
+                # Setup() was called in container.setup() before or in some other dependency
                 called = False
             else:
                 dexp.Setup(setup_session=setup_session, owner=self)
                 called = True
-        # elif isinstance(component, IBoundModel):
-        #     called = False
         elif isinstance(component, IComponent):
             assert "Entity(" not in repr(component)
             component.setup(setup_session=setup_session)  # , parent=self)
@@ -1618,9 +1616,11 @@ class IContainer(IComponent, ABC):
     settings:       Optional[Settings] = field(repr=False, default=None)
     contains:       List[IComponent] = field(repr=False, init=False, default=None)
 
-    # NOTE: used only internally in fill_models, so I removed the references
-    # models:       Dict[str, Union[type, DotExpression]] = field(init=False, repr=False, default_factory=dict)
+    # Components contain container: itself AND all other attributes - single or lists which are of type component
+    # e.g. contains + bound_model + cleaners + ...
     components:     Optional[Dict[str, IComponent]]  = field(init=False, repr=False, default=None)
+
+    # will be used in apply phase to get some already computed metadata
     setup_session:  Optional[ISetupSession]    = field(init=False, repr=False, default=None)
 
     @abstractmethod
@@ -2100,7 +2100,6 @@ class ValueSetPhase(str, Enum):
 class IValueNode:
     component:  IComponent = field(repr=False)
     instance: DataclassType = field(repr=False)
-    container: IContainer = field(repr=False)
     instance_none_mode: bool = field(repr=False)
 
     # ------------------------------------------------------------
@@ -2111,17 +2110,22 @@ class IValueNode:
     # should collect value history or not? defined by Settings.trace
     trace_value_history: bool = field(repr=False)
 
+    # it is  init=False in TopValueNode
+    container: IContainer = field(repr=False)
+
+    # init=False for TopValueNode
     # <field>.Parent
     # - empty only on top tree node (Entity component)
     parent_node:  Optional[Self] = field(repr=False)
 
-    # top of the tree - automatically computed
+    # top of the tree - automatically computed, must be TopValueNode
     top_node:  Self = field(repr=False, init=False, compare=False)
 
-    # when SubentityItems - hodls 2 types of ValueNodes:
+    # when ItemsValueNode (container=SubentityItems):
     #   has_items=True  - container - has filled .items[], has no children
+    # otherwise:
     #   has_items=False - individual item - with values, has children (some with values)
-    has_items: bool = field(repr=True, default=False)
+    has_items: bool = field(init=False, repr=True, default=False)
 
     # set only when item of parent.items (parent is SubentityItems)
     # set only when item is deleted (DELETE) or item is added (ADDED)
@@ -2130,6 +2134,27 @@ class IValueNode:
     # set only when item of parent.items (parent is SubentityItems)
     index0: Optional[Index0Type] = field(repr=False, default=None)
     key: Optional[KeyType] = field(repr=False, default=None)
+
+    @abstractmethod
+    def get_value(self, strict:bool) -> AttrValue:
+        ...
+
+    @abstractmethod
+    def set_instance_attr_to_value(self):
+        ...
+
+    @abstractmethod
+    def add_item(self, value_node: Self):
+        ...
+
+    @abstractmethod
+    def add_child(self, value_node: Self):
+        ...
+
+    @abstractmethod
+    def clean(self):
+        ...
+
 
 # ------------------------------------------------------------
 

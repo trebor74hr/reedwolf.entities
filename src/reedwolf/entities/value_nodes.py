@@ -52,7 +52,7 @@ from .value_accessors import (
 
 
 @dataclass
-class ValueNode(IValueNode):
+class ValueNodeBase(IValueNode):
     """
     Don't want to store apply_result into this class,
     so "setup_key_string()" method needs to be called
@@ -104,20 +104,6 @@ class ValueNode(IValueNode):
     # this is cross reference, since stack_frame has ref to ValueNode too
     apply_stack_frame: Union[IStackFrame, UndefinedType] = field(repr=False, default=UNDEFINED)
 
-    # <field>.Children
-    # - when component has children - initialized with empty {}, later filled
-    children:   Union[UndefinedType, Dict[AttrName, Self]] = field(repr=False, init=False, default=UNDEFINED)
-
-    # TODO: # F.<field-name>
-    # TODO: # originally initialized in conteiner_node and all children (except SubEntityItems),
-    # TODO: # all children use the same dictionary.
-    # TODO: # TODO: When name clashes (e.g. SubentitySingle), then ...
-    # TODO: fields_dict:   Union[UndefinedType, Dict[AttrName, Self]] = field(repr=False, init=False, default=UNDEFINED)
-
-    # <field>.Items
-    # - when component has items - initialized with empty {}, later filled
-    items:      Union[UndefinedType, List[Self]] = field(repr=False, init=False, default=UNDEFINED)
-
     # Autocomputed
     # component's name
     name:       AttrName = field(init=False, repr=False)
@@ -145,17 +131,8 @@ class ValueNode(IValueNode):
             self.top_node = self.parent_node.top_node
 
         if self.component.is_subentity():
-            if self.has_items:
-                self.items = []
             # TODO: consider what to do
             self.container_node = self
-        else:
-            assert not self.has_items
-
-        if not self.has_items and self.component.get_children():
-            # TODO: with py 3.7 {} has ordered items as default behaviour,
-            #       so std {} could be used instead
-            self.children = OrderedDict()
 
         if self.container_node is None:
             assert self.parent_node and self.parent_node.container_node
@@ -215,8 +192,10 @@ class ValueNode(IValueNode):
             elif self.index0 is not None:
                 key_string = f"{component.name}[{self.index0}]"
 
-        if not self.is_top_node():
-            if not self.is_top_node() and self.container_node is self:
+        # ALT: not (self.container_node and self.container_node is not self)
+        # ALT: not (self.parent_node is None)
+        if self is not self.top_node:
+            if self.container_node is self:
                 container_node = self.container_node.parent_node.container_node
             else:
                 container_node = self.container_node
@@ -250,10 +229,8 @@ class ValueNode(IValueNode):
         apply_stack_frame_copy = dataclass_clone(apply_stack_frame)
         self.apply_stack_frame = apply_stack_frame_copy
 
-    def is_top_node(self):
-        # ALT: self.container_node and self.container_node is not self:
-        # ALT: self.parent_node is None
-        return self is self.top_node
+    # def is_top_node(self):
+    #     return self is self.top_node
 
     def is_changed(self) -> bool:
         """
@@ -469,39 +446,28 @@ class ValueNode(IValueNode):
             self.change_op = ChangeOpEnum.UPDATE
         self.finished = True
 
-    def add_item(self, value_node: Self):
-        assert self.has_items
-        # TODO: assert value_node is not self
-        # TODO: assert value_node.parent_node is not self
-        self.items.append(value_node)
-
-    def add_child(self, value_node: Self):
-        assert not self.has_items
-        if self.children is UNDEFINED:
-            raise EntityInternalError(owner=self, msg=f"failed to add {value_node}, already children dict not initialized")
-        # TODO: assert value_node is not self
-        # TODO: assert value_node.parent_node is not self
-        if value_node.name in self.children:
-            raise EntityInternalError(owner=self, msg=f"failed to add {value_node}, already child added under same name, got: {self.children[value_node.name]}")
-        self.children[value_node.name] = value_node
-
     def clean(self):
         if self.component.is_entity():
             assert self.parent_node is None
         else:
             if self.parent_node is None:
                 raise EntityInternalError(owner=self, msg=f"parent_node not set")
-            # subentity item instance - with children
-            if self.parent_node.has_items and not self.parent_node.component == self.component:
-                # print(f"Dump:\n{self.top_node.dump_to_str()}")
-                raise EntityInternalError(owner=self, msg=f"value:node.has_items, parent_node - component does not match:"
-                                                          f"\n {self.component.parent}"
-                                                          f"\n !=\n {self.parent_node.component}")
-            elif not self.parent_node.has_items and not self.parent_node.component == self.component.parent:
-                # print(f"Dump:\n{self.top_node.dump_to_str()}")
-                raise EntityInternalError(owner=self, msg=f"value:node parent_node component does not match:"
-                                                          f"\n {self.component.parent}"
-                                                          f"\n !=\n {self.parent_node.component}")
+
+            self.parent_node._clean(child_node=self)
+
+            # # subentity item instance - with children
+            # if self.parent_node.has_items and not self.parent_node.component == self.component:
+            #     # print(f"Dump:\n{self.top_node.dump_to_str()}")
+            #     raise EntityInternalError(owner=self, msg=f"value:node.has_items, parent_node - component does not match:"
+            #                                               f"\n {self.component.parent}"
+            #                                               f"\n !=\n {self.parent_node.component}")
+
+            # elif not self.parent_node.has_items and not self.parent_node.component == self.component.parent:
+            #     # print(f"Dump:\n{self.top_node.dump_to_str()}")
+            #     raise EntityInternalError(owner=self, msg=f"value:node parent_node component does not match:"
+            #                                               f"\n {self.component.parent}"
+            #                                               f"\n !=\n {self.parent_node.component}")
+
     def dump_to_str(self) -> str:
         return "\n".join(self.dump_to_strlist())
 
@@ -525,16 +491,108 @@ class ValueNode(IValueNode):
                 if value_type!=init_type and not isinstance(init_value, (NoneType, UndefinedType)):
                     line += f":{init_type}"
                 line += f", ch: {nr_updates})"
-
         lines.append(line)
-        if self.has_items:
-            lines.append(f"{indent}- Items[{len(self.items)}]:")
-            for item_node in self.items:
-                add_lines = item_node.dump_to_strlist(depth+1)
-                lines.extend(add_lines)
+        lines_ex = self._dump_to_strlist(lines=lines, indent=indent, depth=depth)
+        lines.extend(lines_ex)
+        return lines
+
+
+@dataclass
+class ValueNode(ValueNodeBase):
+
+    has_items: bool = field(init=False, repr=True, default=False)
+
+    # <field>.Children
+    # - when component has children - initialized with empty {}, later filled
+    children:   Union[UndefinedType, Dict[AttrName, Self]] = field(repr=False, init=False, default=UNDEFINED)
+
+    # TODO: # F.<field-name>
+    # TODO: # originally initialized in conteiner_node and all children (except SubEntityItems),
+    # TODO: # all children use the same dictionary.
+    # TODO: # TODO: When name clashes (e.g. SubentitySingle), then ...
+    # TODO: fields_dict:   Union[UndefinedType, Dict[AttrName, Self]] = field(repr=False, init=False, default=UNDEFINED)
+
+
+    def __post_init__(self):
+        # self.component can be SubEntityItems - the node with Children
+        super().__post_init__()
+
+        if self.component.get_children():
+            # TODO: with py 3.7 {} has ordered items as default behaviour,
+            #       so std {} could be used instead
+            self.children = OrderedDict()
+
+    def add_child(self, value_node: Self):
+        if self.children is UNDEFINED:
+            raise EntityInternalError(owner=self, msg=f"failed to add {value_node}, already children dict not initialized")
+        # TODO: assert value_node is not self
+        # TODO: assert value_node.parent_node is not self
+        if value_node.name in self.children:
+            raise EntityInternalError(owner=self, msg=f"failed to add {value_node}, already child added under same name, got: {self.children[value_node.name]}")
+        self.children[value_node.name] = value_node
+
+    def _clean(self, child_node: "ValueNodeBase"):
+        if not self.component == child_node.component.parent:
+            # print(f"Dump:\n{self.top_node.dump_to_str()}")
+            raise EntityInternalError(owner=self, msg=f"value:node parent_node component does not match:"
+                                                      f"\n {child_node.component.parent}"
+                                                      f"\n !=\n {self.component}")
+
+    def _dump_to_strlist(self, depth, indent: str, lines: List[str]):
         if self.children != UNDEFINED:
             lines.append(f"{indent}- Children[{len(self.children)}]:")
             for child_node in self.children.values():
                 add_lines = child_node.dump_to_strlist(depth+1)
                 lines.extend(add_lines)
-        return lines
+
+
+@dataclass
+class TopValueNode(ValueNode):
+    """
+    Just to have different type
+    """
+    # <field>.Parent
+    # - empty only on top tree node (Entity component)
+    parent_node:  Optional[Self] = field(init=False, repr=False, default=None)
+
+    # autocomputed
+    container: IContainer = field(init=False, repr=False)
+
+    def __post_init__(self):
+        super().__post_init__()
+        assert self.component.is_entity()
+        self.container = self.component
+
+
+@dataclass
+class ItemsValueNode(ValueNodeBase):
+
+    has_items: bool = field(init=False, repr=True, default=True)
+    # <field>.Items
+    # - when component has items - initialized with empty {}, later filled
+    items:      Union[UndefinedType, List[Self]] = field(repr=False, init=False, default=UNDEFINED)
+
+    def __post_init__(self):
+        super().__post_init__()
+        assert self.component.is_subentity()
+        self.items = []
+
+    def add_item(self, value_node: Self):
+        # TODO: assert value_node is not self
+        # TODO: assert value_node.parent_node is not self
+        self.items.append(value_node)
+
+    def _clean(self, child_node: "ValueNodeBase"):
+        # subentity item instance - with children
+        if not self.component == child_node.component:
+            # print(f"Dump:\n{self.top_node.dump_to_str()}")
+            raise EntityInternalError(owner=child_node, msg=f"value:node.has_items, parent_node - component does not match:"
+                                                      f"\n {child_node.component.parent}"
+                                                      f"\n !=\n {self.component}")
+
+    def _dump_to_strlist(self, depth, indent: str, lines: List[str]):
+        lines.append(f"{indent}- Items[{len(self.items)}]:")
+        for item_node in self.items:
+            add_lines = item_node.dump_to_strlist(depth+1)
+            lines.extend(add_lines)
+

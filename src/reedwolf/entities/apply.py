@@ -65,7 +65,7 @@ from .base import (
     IEvaluation,
     ValueSetPhase,
 )
-from .value_node import ValueNode
+from .value_nodes import ValueNode, ItemsValueNode, TopValueNode
 from .valid_base     import ValidationBase
 from .eval_base      import EvaluationBase
 from .valid_field    import FieldValidationBase
@@ -500,11 +500,9 @@ class ApplyResult(IApplyResult):
                 if self.instance is not NA_DEFAULTS_MODE:
                     raise EntityInternalError(owner=self, msg=f"Defaults mode - instance must be NA_DEFAULTS_MODE, got: {type(self.instance)}")
 
-            value_node = ValueNode(
+            value_node = TopValueNode(
                     component=self.entity,
-                    container=self.entity,
                     instance_none_mode=self.instance_none_mode,
-                    parent_node=None,
                     instance=self.instance,
                     trace_value_history=self.entity.settings.is_trace(),
                 ).setup(apply_result=self)
@@ -532,18 +530,28 @@ class ApplyResult(IApplyResult):
                 # TODO; consider moving logic from the caller here? or just write comment
                 value_node = self.current_frame.value_node
             else:
-                parent_node = self.current_frame.value_node
+                parent_value_node = self.current_frame.value_node
                 has_items = component.is_subentity_items()
-                value_node = ValueNode(
+                if has_items:
+                    value_node = ItemsValueNode(
                         component = component,
                         container = comp_container,
                         instance_none_mode=self.instance_none_mode,
-                        parent_node = parent_node,
+                        parent_node = parent_value_node,
                         instance = self.current_frame.instance,
                         trace_value_history=self.entity.settings.is_trace(),
-                        has_items=has_items,
-                    ).setup(apply_result=self)
-                parent_node.add_child(value_node)
+                    )
+                else:
+                    value_node = ValueNode(
+                            component = component,
+                            container = comp_container,
+                            instance_none_mode=self.instance_none_mode,
+                            parent_node = parent_value_node,
+                            instance = self.current_frame.instance,
+                            trace_value_history=self.entity.settings.is_trace(),
+                        )
+                value_node.setup(apply_result=self)
+                parent_value_node.add_child(value_node)
 
         # TODO: in partial mode this raises RecursionError:
         #       component == self.component_only
@@ -1065,6 +1073,7 @@ class ApplyResult(IApplyResult):
                 instance, index0, item_instance_new = \
                     instance_item.instance, instance_item.index0, instance_item.item_instance_new
                 # Go one level deeper
+                # not ItemsValueNode - emphasize distinction of item's parent node (also subentity, but collection)
                 item_value_node = ValueNode(
                         component = subentity_items,
                         container= subentity_items,
@@ -1072,8 +1081,6 @@ class ApplyResult(IApplyResult):
                         parent_node = value_node,
                         instance = instance,
                         trace_value_history=self.entity.settings.is_trace(),
-                        # empahsize distinction of item's parent node (also subentity, but collection)
-                        has_items=False,
                         # specific when instance is item in items collection (of parent)
                         index0=index0,
                         key=key,

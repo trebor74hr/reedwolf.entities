@@ -452,7 +452,7 @@ class DotExpression(DynamicAttrsBase):
         #       setup_session.current_frame.component or owner instead?
         # TODO: circular dependency - maybe to pass eval class to this method
 
-        from .expression_evaluators import DotExpressionEvaluator
+        from .expr_evaluators import DotExpressionEvaluator
 
         self._EnsureNotFinished()
 
