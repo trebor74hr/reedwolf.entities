@@ -732,12 +732,12 @@ class Entity(IEntity, ContainerBase):
     def is_entity() -> bool:
         return True
 
-    def bind_to(self,
-                bound_model:Union[UndefinedType, EntityModel]=UNDEFINED,
-                settings: Optional[Settings]=None,
-                apply_settings_class: Optional[Type[ApplySettings]]=None,
-                do_setup:bool = True,
-                ):
+    def change(self,
+               bound_model:Union[UndefinedType, EntityModel]=UNDEFINED,
+               settings: Optional[Settings]=None,
+               apply_settings_class: Optional[Type[ApplySettings]]=None,
+               # do_setup:bool = True,
+               ) -> Self:
         """
         late binding, will call .setup()
         """
@@ -762,8 +762,10 @@ class Entity(IEntity, ContainerBase):
 
         self.init_clean()
 
-        if do_setup:
-            self.setup()
+        # if do_setup:
+        #     self.setup()
+
+        return self
 
     # ------------------------------------------------------------
     # apply - API entries
@@ -1017,7 +1019,7 @@ class SubEntitySingle(SubEntityBase):
     # def may_collect_my_children() -> bool:
     #     # currently not possible - sometimes child.bind_to need to be setup and
     #     # setup can be done only fields which are inside the same container
-    #     # share the same bound_model 
+    #     # share the same bound_model
     #     return True
 
 # ------------------------------------------------------------
