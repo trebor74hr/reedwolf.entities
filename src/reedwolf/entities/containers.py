@@ -414,7 +414,7 @@ class ContainerBase(IContainer, ABC):
             self.settings._setup_all_custom_functions(self.apply_settings_class)
 
             # Traverse all subcomponents and call the same method for each (recursion)
-            # NOTE: Will setup all bound_model and bind and ModelsNS.
+            # NOTE: Will setup all bound_model and bind_to and ModelsNS.
             #       In phase two will setup all other components and FieldsNS, ThisNS and FunctionsNS.
             self._setup_phase_one()
 
@@ -443,7 +443,7 @@ class ContainerBase(IContainer, ABC):
             #       subentity_items.setup() will do this within own tree dep (own .components / .setup_session)
 
             # NOTE: setup this_registry objects must be inside of stack_frame due
-            #       premature component.bind setup in some ThisRegistryFor* classes.
+            #       premature component.bind_to setup in some ThisRegistryFor* classes.
             # this_registry = self.create_this_registry(component=self, setup_session=self.setup_session)
             this_registry = self.get_or_create_this_registry(setup_session=self.setup_session)
             self.setup_session.current_frame.set_this_registry(this_registry)
@@ -458,7 +458,7 @@ class ContainerBase(IContainer, ABC):
 
         # check all ok?
         for component_name, component in self.components.items():
-            # TODO: maybe bound Field.bind -> Model attr_node?
+            # TODO: maybe bound Field.bind_to -> Model attr_node?
             if not isinstance(component, UnboundModel) and not component.is_finished():
                 raise EntityInternalError(owner=self, msg=f"{component} not finished. Is in overriden setup()/Setup() parent method super().setup()/Setup() been called (which sets parent and marks finished)?")
 
@@ -1015,7 +1015,7 @@ class SubEntitySingle(SubEntityBase):
 
     # @staticmethod
     # def may_collect_my_children() -> bool:
-    #     # currently not possible - sometimes child.bind need to be setup and
+    #     # currently not possible - sometimes child.bind_to need to be setup and
     #     # setup can be done only fields which are inside the same container
     #     # share the same bound_model 
     #     return True

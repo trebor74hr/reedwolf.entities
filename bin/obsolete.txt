@@ -637,7 +637,7 @@ apply.py
 
         # "for" loop is required for attributes from substructure that
         # is not done as SubEntity rather direct reference, like:
-        #   bind=M.access.alive
+        #   bind_to=M.access.alive
         attr_name_path = [init_raw_attr_value.attr_name
                           for init_raw_attr_value in init_bind_dexp_result.value_history
                           ]

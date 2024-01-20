@@ -149,7 +149,7 @@ class FieldBase(IField, ABC):
     REQUIRED_VALIDATIONS:ClassVar[Optional[RequiredValidationsType]] = None
 
     # to Model attribute
-    bind:           DotExpression
+    bind_to:           DotExpression
     title:          Optional[TransMessageType] = field(repr=False, default=None)
 
     # NOTE: required - is also Validation, i.e. Required() - just commonly used
@@ -211,16 +211,16 @@ class FieldBase(IField, ABC):
 
     def init_clean(self):
         # TODO: check that value is M ns and is a simple M. value
-        if not isinstance(self.bind, DotExpression):
-            raise EntitySetupValueError(owner=self, msg=f"Argument 'bind' needs to be DotExpression (e.g. M.status), got: {to_repr(self.bind)}")
+        if not isinstance(self.bind_to, DotExpression):
+            raise EntitySetupValueError(owner=self, msg=f"Argument 'bind_to' needs to be DotExpression (e.g. M.status), got: {to_repr(self.bind_to)}")
 
-        self.bind._SetDexpValidator(DEXP_VALIDATOR_FOR_BIND)
-        # if self.bind._namespace != ModelsNS:
-        #     raise EntitySetupValueError(owner=self, msg=f"Argument 'bind' needs to be 'Models.' / 'M.' DotExpression, got: {to_repr(self.bind)}")
+        self.bind_to._SetDexpValidator(DEXP_VALIDATOR_FOR_BIND)
+        # if self.bind_to._namespace != ModelsNS:
+        #     raise EntitySetupValueError(owner=self, msg=f"Argument 'bind_to' needs to be 'Models.' / 'M.' DotExpression, got: {to_repr(self.bind_to)}")
 
         if not self.name:
             # ModelsNs.person.surname -> surname
-            self.name = get_name_from_bind(self.bind)
+            self.name = get_name_from_bind(self.bind_to)
 
         self.autocomputed = AutocomputedEnum.from_value(self.autocomputed)
 
@@ -232,17 +232,17 @@ class FieldBase(IField, ABC):
         self.init_clean_base()
 
     def _set_bound_attr_node(self, setup_session: ISetupSession):
-        self.bound_attr_node = setup_session.get_dexp_node_by_dexp(self.bind)
+        self.bound_attr_node = setup_session.get_dexp_node_by_dexp(self.bind_to)
         if not self.bound_attr_node:
             # TODO: not nice :(
             parent_container = self.get_first_parent_container(consider_self=True)
             parent_setup_session = parent_container.parent.setup_session if parent_container.parent else parent_container.setup_session
             if parent_setup_session != setup_session:
                 # TODO: does not goes deeper - should be done with while loop until the top
-                self.bound_attr_node = parent_setup_session.get_dexp_node_by_dexp(self.bind)
+                self.bound_attr_node = parent_setup_session.get_dexp_node_by_dexp(self.bind_to)
 
         if not self.bound_attr_node:
-            raise EntitySetupValueError(owner=self, msg=f"Can not fill self.bound_attr_node by bind: {self.bind}")
+            raise EntitySetupValueError(owner=self, msg=f"Can not fill self.bound_attr_node by bind_to: {self.bind_to}")
 
     # ------------------------------------------------------------
 
@@ -250,13 +250,13 @@ class FieldBase(IField, ABC):
 
         super().setup(setup_session=setup_session)
 
-        if self.bind:
+        if self.bind_to:
             self.attr_node = setup_session.get_registry(FieldsNS).get(self.name)
             if not self.attr_node:
                 raise EntityInternalError(owner=self, msg=f"Attribute not found: {self.name}")
             if not self.is_unbound() and not self.bound_attr_node:
-                # warn(f"TODO: {self}.bind = {self.bind} -> bound_attr_node can not be found.")
-                raise EntitySetupValueError(owner=self, msg=f"bind={self.bind}: bound_attr_node can not be found.")
+                # warn(f"TODO: {self}.bind_to = {self.bind_to} -> bound_attr_node can not be found.")
+                raise EntitySetupValueError(owner=self, msg=f"bind_to={self.bind_to}: bound_attr_node can not be found.")
 
         # NOTE: can have multiple Evaluation-s
         evaluations_w_autocomp = ", ".join([cleaner.name for cleaner in self.cleaners if isinstance(cleaner, EvaluationBase) and cleaner.REQUIRES_AUTOCOMPUTE]) \
@@ -316,7 +316,7 @@ class FieldBase(IField, ABC):
         # ==== similar logic in apply.py :: _apply() ====
         # TODO: this is 2nd place to call '.Setup()'. Explain!
         assert not self.is_container()
-        assert getattr(self, "bind", None)
+        assert getattr(self, "bind_to", None)
 
         # # if not isinstance(self, (ValidationBase, EvaluationBase)):
         # if self.is_container():
@@ -326,15 +326,15 @@ class FieldBase(IField, ABC):
         has_children = bool(self.get_children())
 
         # Field -> This.Value == This.<all-attributes>
-        if not self.bind.IsFinished():
+        if not self.bind_to.IsFinished():
             # only place where container is used ...
             container = self.get_first_parent_container(consider_self=True)
-            attr_node = self.bind.Setup(setup_session=setup_session, owner=container)
+            attr_node = self.bind_to.Setup(setup_session=setup_session, owner=container)
         else:
-            attr_node = self.bind._dexp_node
+            attr_node = self.bind_to._dexp_node
 
         if not attr_node:
-            raise EntitySetupNameError(owner=self, msg=f"{attr_node.name}.bind='{self.bind}' could not be evaluated")
+            raise EntitySetupNameError(owner=self, msg=f"{attr_node.name}.bind_to='{self.bind_to}' could not be evaluated")
 
         if has_children:
             # Field with children (e.g. BooleanField.enables)
@@ -712,7 +712,7 @@ class EnumField(FieldBase):
 
     def _setup_phase_one_set_python_type(self, setup_session: ISetupSession):
         # TODO: revert to: strict=True - and process exception properly
-        attr_node = setup_session.get_dexp_node_by_dexp(dexp=self.bind, strict=False)
+        attr_node = setup_session.get_dexp_node_by_dexp(dexp=self.bind_to, strict=False)
 
         if not (attr_node or self.is_unbound()):
             # TODO: should this be an error?

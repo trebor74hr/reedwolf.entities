@@ -28,6 +28,11 @@ from .custom_attributes import (
 from .meta import (
     CustomCtxAttributeList,
 )
+from .value_accessors import (
+    AttributeValueAccessor,
+    DictValueAccessor,
+    AutodetectValueAccessor,
+)
 from .bound_models import (
     BoundModel,
     BoundModelWithHandlers,
@@ -152,6 +157,10 @@ __all__ = [
     "BoundModel",
     "BoundModelWithHandlers",
 
+    # value_accessors
+    "AttributeValueAccessor",
+    "DictValueAccessor",
+    "AutodetectValueAccessor",
 
     # fields
     "AutocomputedEnum",

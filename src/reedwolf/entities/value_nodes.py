@@ -89,8 +89,8 @@ class ValueNodeBase(IValueNode):
 
     # NOTE: used only in .set_instance_attr_to_value()
     #       to set new value on model instance.
-    #       Result of Field.bind=M.<field> DotExpression execution.
-    # TODO: consider ALT: Could be done with bind.Path() too.
+    #       Result of Field.bind_to=M.<field> DotExpression execution.
+    # TODO: consider ALT: Could be done with bind_to.Path() too.
     #       attr_name_path: Optional[List[AttrName]] = field(init=False, repr=False)
     init_dexp_result: Union[UndefinedType, NoneType, ExecResult] = \
         field(repr=False, init=False, default=UNDEFINED)
@@ -314,8 +314,8 @@ class ValueNodeBase(IValueNode):
                     and not isinstance(self.instance, model):
                 raise EntityInternalError(owner=self, msg=f"Parent instance {self.instance} has wrong type")
 
-        # -- attr_name - fetch from initial bind dexp (very first)
-        # TODO: save dexp_result in ValueNode or get from component.bind ?
+        # -- attr_name - fetch from initial bind_to dexp (very first)
+        # TODO: save dexp_result in ValueNode or get from component.bind_to ?
         init_bind_dexp_result = self.init_dexp_result
         if not init_bind_dexp_result:
             raise EntityInternalError(owner=self, msg=f"init_bind_dexp_result is not set, got: {self} . {init_bind_dexp_result}")
@@ -349,7 +349,7 @@ class ValueNodeBase(IValueNode):
 
         # "for" loop is required for attributes from substructure that
         # is not done as SubEntity rather direct reference, like:
-        #   bind=M.access.alive
+        #   bind_to=M.access.alive
         attr_name_path = [init_raw_attr_value.attr_name
                           for init_raw_attr_value in self.init_dexp_result.dexp_value_node_list
                           ]

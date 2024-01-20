@@ -467,7 +467,7 @@ class RegistryBase(IRegistry):
             # IN-DEPTH LEVEL 2+, e.g. M.company.<this-node-and-next>
             # ---------------------------------------------------------------
             if owner.is_unbound() and self.NAMESPACE == ModelsNS:
-                # search base.py:: if len(self.bind.Path) > 1:
+                # search base.py:: if len(self.bind_to.Path) > 1:
                 raise EntitySetupError(owner=self, msg=f"Should not happen, more than 1 level DotExpressions are not supported, got: {owner_dexp_node}")
 
             if isinstance(owner_dexp_node, IFunctionDexpNode):
@@ -536,7 +536,7 @@ class RegistryUseDenied(RegistryBase):
 class ComponentAttributeAccessor(IAttributeAccessorBase):
     """
     Used in FieldsNS
-    Value will be fetched by evaluating .bind of Field component.
+    Value will be fetched by evaluating .bind_to of Field component.
     """
     component: IComponent
     instance: ModelType
@@ -553,11 +553,11 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
 
         # OLD: if is_last:
         if not isinstance(component, IField):
-            # ALT: not hasattr(component, "bind")
+            # ALT: not hasattr(component, "bind_to")
             raise EntityApplyNameError(owner=self.component,
                     msg=f"Attribute '{attr_name}' is '{type(component)}' type which has no binding, therefore can not extract value. Use standard *Field components instead.")
         # TODO: needs some class wrapper and caching ...
-        dexp_result = component.bind._evaluator.execute_dexp(apply_result)
+        dexp_result = component.bind_to._evaluator.execute_dexp(apply_result)
         out = dexp_result.value
 
         return out

@@ -178,9 +178,9 @@ class StructConverterRunner(IStackOwnerSession):
         if is_field:
             field: FieldBase = component
             # TODO: can be nested, e.g. M.access.can_access, pass all
-            if len(field.bind.Path)!=1:
-                raise NotImplementedError(f"Currently nestted binds not supported: {field.bind}")
-            model_attr_name = field.bind._name
+            if len(field.bind_to.Path)!=1:
+                raise NotImplementedError(f"Currently nestted binds not supported: {field.bind_to}")
+            model_attr_name = field.bind_to._name
             instance_value = getattr(instance, model_attr_name, UNDEFINED)
             if instance_value != UNDEFINED:
                 dto_attr_name = component.name

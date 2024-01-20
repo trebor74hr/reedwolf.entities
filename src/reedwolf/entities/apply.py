@@ -248,7 +248,7 @@ class ApplyResult(IApplyResult):
                     # --- 3.b. run evaluation
                     # if not bind_dexp_result:
                     #     # TODO: this belongs to Setup phase
-                    #     raise EntityApplyError(owner=self, msg="Evaluation can be defined only for components with 'bind' defined. Remove 'Evaluation' or define 'bind'.")
+                    #     raise EntityApplyError(owner=self, msg="Evaluation can be defined only for components with 'bind_to' defined. Remove 'Evaluation' or define 'bind_to'.")
                     evaluation_list.append(cleaner)
                 elif not (isinstance(cleaner, ValidationBase) or
                           isinstance(cleaner, EvaluationBase)):
@@ -702,7 +702,7 @@ class ApplyResult(IApplyResult):
 
             # TODO: logger(f"dump of value tree:\n{self.top_value_node.dump_to_str()}")
 
-        # TODO: logger: apply_result.settings.logger.debug(f"depth={depth}, comp={component.name}, bind={bind} => {dexp_result}")
+        # TODO: logger: apply_result.settings.logger.debug(f"depth={depth}, comp={component.name}, bind_to={bind_to} => {dexp_result}")
 
         if self.instance_none_mode and component.is_top_parent():
             # create new instance of bound_model.model class
@@ -1283,8 +1283,8 @@ class ApplyResult(IApplyResult):
                 current_value_instance - object which holds evaluated value
 
         it does following:
-            1. init change history by bind of self.instance
-            2. update value by bind of self.instance_new
+            1. init change history by bind_to of self.instance
+            2. update value by bind_to of self.instance_new
             3. call cleaners - validations and evaluations in given order
             4. validate type is ok?
         """
@@ -1649,7 +1649,7 @@ class ApplyResult(IApplyResult):
         will go recursively through every children and
         fetch their "children" and collect to output structure.
         selects all nodes, put in tree, includes self
-        for every node bind (M.<field>) is evaluated
+        for every node bind_to (M.<field>) is evaluated
         """
         if self.values_tree is None:
             raise EntityInternalError(owner=self, msg="_get_values_tree() did not filled _values_tree cache") 
@@ -1688,7 +1688,7 @@ class ApplyResult(IApplyResult):
             component = self.current_frame.component
         # else:
         #     # fetching values not allowed since stack is maybe not set up correctly
-        #     assert not getattr(component, "bind", None), component
+        #     assert not getattr(component, "bind_to", None), component
 
         # process_further currently not used
         if is_init:
@@ -1720,7 +1720,7 @@ class ApplyResult(IApplyResult):
         current_value = UNDEFINED
 
         if isinstance(component, IField):
-            assert getattr(component, "bind", None)
+            assert getattr(component, "bind_to", None)
             # can trigger recursion - filling tree 
             current_value = self.get_current_value_instance(component=component, init_when_missing=True)
             # ORIG2: if current_value in not NOT_APPLIABLE:

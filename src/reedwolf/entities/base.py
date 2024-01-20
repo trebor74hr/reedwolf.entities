@@ -137,14 +137,14 @@ def list_to_strlist(args, before, after):
     return out
 
 
-def get_name_from_bind(bind: DotExpression):
-    if len(bind.Path) <= 2:
+def get_name_from_bind(bind_to: DotExpression):
+    if len(bind_to.Path) <= 2:
         # Dexpr(Person.name) -> name
-        name = bind._name
+        name = bind_to._name
     else:
         # Dexpr(Person.address.street) -> address.street
         # TODO: this is messy :( - should be one simple logic ...
-        name = "__".join([bit._name for bit in bind.Path][1:])
+        name = "__".join([bit._name for bit in bind_to.Path][1:])
     assert name
     return name
 
@@ -489,9 +489,9 @@ class IComponent(ReedwolfDataclassBase, ABC):
                 keys.append(parent_name)
 
             if isinstance(self, IField):
-                assert getattr(self, "bind", None)
+                assert getattr(self, "bind_to", None)
                 # ModelsNs.person.surname -> surname
-                this_name = get_name_from_bind(self.bind)
+                this_name = get_name_from_bind(self.bind_to)
             else:
                 this_name =self.__class__.__name__.lower()
             keys.append(this_name)
@@ -950,7 +950,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
                         + "\n   " + repr(components[component.name])[:100]
                         + "\n   " + " --------- AND --------- "
                         + "\n   " + repr(component)[:100]
-                        + "\n" + ". Remove duplicate 'bind' or use 'name' attribute to define a distinct name.")
+                        + "\n" + ". Remove duplicate 'bind_to' or use 'name' attribute to define a distinct name.")
         # Save top container too - to preserve name and for completness (if is_top)
         components[component.name] = component
 
@@ -962,7 +962,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
         - collects components:
         - set parent
         - evaluate bound_model - class or M.value_expressions
-        - evaluate bind - M.value_expressions
+        - evaluate bind_to - M.value_expressions
         - custom dataclass and fields
 
         collecting components
@@ -1036,7 +1036,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
 
                 if isinstance(component, DotExpression):
                     # NOTE:
-                    #   1) phase_one sets: Field.bind, Container.bound_model.model (BoundModel) on other place
+                    #   1) phase_one sets: Field.bind_to, Container.bound_model.model (BoundModel) on other place
                     #      bound_model.model Dexp build for bound case is done before, and for unbound after
                     #   2) phase_two sets all other: evaluation.ensure, Validation.ensure etc.
                     continue
@@ -1079,17 +1079,17 @@ class IComponent(ReedwolfDataclassBase, ABC):
                 # self.bound_model.setup(setup_session=setup_session)
             else:
                 if isinstance(self, IField):
-                    # evaluate bind: ValueExpression
+                    # evaluate bind_to: ValueExpression
                     if self.is_unbound():
                         # do it before
                         self._setup_phase_one_set_type_info(setup_session)
-                        if len(self.bind.Path) > 1:
-                            raise EntitySetupError(owner=self, msg=f"Unbound mode currently supports only 1 level deep bind DotExpressions, got: {self.bind}")
+                        if len(self.bind_to.Path) > 1:
+                            raise EntitySetupError(owner=self, msg=f"Unbound mode currently supports only 1 level deep bind_to DotExpressions, got: {self.bind_to}")
 
-                    self.bind.Setup(setup_session=setup_session, owner=self)
+                    self.bind_to.Setup(setup_session=setup_session, owner=self)
                 else:
-                    if hasattr(self, "bind"):
-                        raise EntityInternalError(owner=self, msg=f"Only fields expected to have bind attr, got: {type(self)}")
+                    if hasattr(self, "bind_to"):
+                        raise EntityInternalError(owner=self, msg=f"Only fields expected to have bind_to attr, got: {type(self)}")
 
             if self.get_children():
                 # Set up dataclass and list of fields for later use in FieldsNS.
@@ -1191,15 +1191,15 @@ class IComponent(ReedwolfDataclassBase, ABC):
 
             child_type_info = None
             if isinstance(child, IField):
-                # ALT: not hasattr(child, "bind")
+                # ALT: not hasattr(child, "bind_to")
                 # NOTE: check that sessino is setup correctly for this field?
 
-                if not child.bind.IsFinished():
+                if not child.bind_to.IsFinished():
                     # Can setup only fields which are inside the same container
                     # share the same bound_model 
-                    child.bind.Setup(setup_session=setup_session, owner=self)
+                    child.bind_to.Setup(setup_session=setup_session, owner=self)
 
-                attr_node = child.bind._dexp_node
+                attr_node = child.bind_to._dexp_node
                 child_type_info = attr_node.get_type_info()
 
             elif child.is_subentity() or child.is_fieldgroup():
@@ -1281,7 +1281,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
                     component = self, 
                 )):
             # setup this_registry objects must be inside of stack_frame due
-            # premature component.bind setup in some ThisRegistryFor* classes.
+            # premature component.bind_to setup in some ThisRegistryFor* classes.
             if not self.is_subentity():
                 # NOTE: for SubEntity* - this registry must be and is already
                 #       created in ContainerBase.setup()
@@ -1526,19 +1526,19 @@ class IComponent(ReedwolfDataclassBase, ABC):
     # ------------------------------------------------------------
 
     def get_dexp_result_from_instance(self, apply_result: "IApplyResult", strict:bool = True) -> Optional[ExecResult]:
-        """ Fetch ExecResult from component.bind from INSTANCE (storage)
-            by executing bind._evaluator.execute() fetch value process
+        """ Fetch ExecResult from component.bind_to from INSTANCE (storage)
+            by executing bind_to._evaluator.execute() fetch value process
             Work on stored fields only.
             A bit slower due getattr() logic and more complex structs.
             Does not work on initial values - when cache is not yet initialized
             with initial value for the component.
         """
         # TODO: put in common function
-        bind_dexp = self.bind
+        bind_dexp = self.bind_to
         if not bind_dexp:
             if strict:
                 # TODO: move this to Setup phase
-                raise EntityApplyError(owner=self, msg=f"Component '{self.name}' has no bind")
+                raise EntityApplyError(owner=self, msg=f"Component '{self.name}' has no bind_to")
             return None
         bind_dexp_result = bind_dexp._evaluator.execute_dexp(apply_result=apply_result)
         return bind_dexp_result
@@ -1578,7 +1578,7 @@ class IEvaluation(ICleaner, ABC):
 
 class IField(IComponent, ABC):
     # to Model attribute
-    bind: DotExpression
+    bind_to: DotExpression
 
     @abstractmethod
     def get_type_info(self) -> TypeInfo:
@@ -2037,7 +2037,7 @@ class InstanceAttrValue:
     # NOTE: value could be adapted version of dexp_result.value (can be different)
     value: LiteralType
 
-    # * first / initial record in parent list is from bind, first
+    # * first / initial record in parent list is from bind_to, first
     #   this .value could be unadapted value version (field.try_adapt_value())
     #   therefore value is in a special field.
     # * second+ - are from evaluation results
@@ -2049,7 +2049,7 @@ class InstanceAttrValue:
     # Only in UNIT TESTS "" is used
     value_parent_name: str = field(repr=False, compare=False, default="")
 
-    # is from bind or some other phase
+    # is from bind_to or some other phase
     # Only in UNIT TESTS "UNDEFINED" is used
     value_set_phase: "ValueSetPhase" = field(repr=False, compare=False, default="UNEDFINED")
 
@@ -2066,12 +2066,12 @@ class InstanceAttrValue:
 class ValueSetPhase(str, Enum):
     """
     Two phases:
-        - initial - fill from bind, update by instance_new and adapt type
+        - initial - fill from bind_to, update by instance_new and adapt type
         - evaluation - run evaluations and change / fill the value
     It is important to preserve the same index INIT_ / EVAL_, since some logic depends on it,
     see IValueNode.set_value()
     """
-    # initial value - filling from evaluation of model's .bind Dexp
+    # initial value - filling from evaluation of model's .bind_to Dexp
     INIT_BY_BIND = "INIT_BY_BIND"
 
     # udpate by instance_new + adapting this new value with type adapter

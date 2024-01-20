@@ -579,7 +579,7 @@ class DumpToBase(IStackOwnerSession):
             #   default, required, readonly, max-length, etc.
 
         else:
-            todo_comment = f"TODO: unknown type for bind: {component.bind}"
+            todo_comment = f"TODO: unknown type for bind_to: {component.bind_to}"
             py_type_name, _ = file_dump.use_type(Any)
             py_type_name_deco_templ = "{}"
 
