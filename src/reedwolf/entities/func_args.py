@@ -223,7 +223,7 @@ class FunctionArguments:
 
             # if not caller:
             #     # NOTE: Namespace top level like: Ctx.Length(This.name)
-            #     #       BoundModelWithHandlers with read_handlers case
+            #     #       EntityModelWithHandlers with read_handlers case
             #     model_class = setup_session.current_frame.bound_model.model
             # else:
             #     # TODO: drop this case - change to 'setup_session.current_frame' case

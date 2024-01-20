@@ -287,7 +287,7 @@ class IFunction(IFunctionDexpNode, ABC):
 
         if not self.caller:
             # NOTE: Namespace top level like: Ctx.Length(This.name)
-            #       BoundModelWithHandlers with read_handlers case
+            #       EntityModelWithHandlers with read_handlers case
 
             # TODO: test case self.items_func_arg: - top level function call, e.g. '<Namespace>.{self.name}(...)'
             if self.setup_session.current_frame is None:

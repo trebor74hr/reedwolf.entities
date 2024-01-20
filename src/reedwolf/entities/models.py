@@ -47,7 +47,7 @@ from .functions import (
 )
 from .base import (
     get_name_from_bind,
-    IBoundModel,
+    IEntityModel,
     SetupStackFrame,
     IApplyResult,
     ApplyStackFrame, IUnboundModel,
@@ -67,7 +67,7 @@ class ModelWithHandlers:
 
 
 @dataclass
-class NestedBoundModelBase(IBoundModel):
+class NestedEntityModelBase(IEntityModel):
 
     def create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:
         model = self.model
@@ -111,8 +111,8 @@ class NestedBoundModelBase(IBoundModel):
         #       later reuse it and use it here to check func args types.
         for child_bound_model in self.contains:
 
-            if not isinstance(child_bound_model, BoundModelWithHandlers):
-                raise EntitySetupValueError(owner=self, msg=f"Child bound model should be BoundModelWithHandlers, got: {child_bound_model.name}: {type(child_bound_model)}")
+            if not isinstance(child_bound_model, EntityModelWithHandlers):
+                raise EntitySetupValueError(owner=self, msg=f"Child bound model should be EntityModelWithHandlers, got: {child_bound_model.name}: {type(child_bound_model)}")
 
             model_name = child_bound_model.name
             if model_name in self.models_with_handlers_dict:
@@ -194,7 +194,7 @@ class NestedBoundModelBase(IBoundModel):
                 for child_bound_model in children_bound_models
                 }
 
-        # TODO: this is strange, setup this_registry in BoundModel.setup()
+        # TODO: this is strange, setup this_registry in EntityModel.setup()
         #       and then just use self.this_registry
         this_registry = self.get_this_registry()
         if not this_registry:
@@ -269,7 +269,7 @@ class UnboundModel(IUnboundModel):
     name: Optional[str] = field(default=None, init=False)
 
     # model: Union[ModelType, UndefinedType] = field(repr=False, init=False, default=UNDEFINED)
-    # parent: Union[IBoundModel, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    # parent: Union[IEntityModel, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     # parent_name: Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
     # type_info: Optional[TypeInfo] = field(init=False, default=None, repr=False)
 
@@ -283,11 +283,11 @@ class UnboundModel(IUnboundModel):
         return UnboundModelsRegistry()
 
 # ------------------------------------------------------------
-# BoundModelWithHandlers
+# EntityModelWithHandlers
 # ------------------------------------------------------------
 
 @dataclass
-class BoundModelWithHandlers(NestedBoundModelBase):
+class EntityModelWithHandlers(NestedEntityModelBase):
     # return type of this function is used as model
     read_handler:   CustomFunctionFactory
 
@@ -299,7 +299,7 @@ class BoundModelWithHandlers(NestedBoundModelBase):
     # --- evaluated later
     # Filled from from .read_hanlder -> (.type_info: TypeInfo).type_
     model:          ModelType = field(init=False, metadata={"skip_traverse": True})
-    parent:         Union[IBoundModel, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    parent:         Union[IEntityModel, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     parent_name:    Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
     type_info:      Union[TypeInfo, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
@@ -347,7 +347,7 @@ class BoundModelWithHandlers(NestedBoundModelBase):
             container =self.get_first_parent_container(consider_self=False)
             if not container.is_top_parent():
                 # NOTE: not allowed in SubEntityItems-s for now
-                raise EntitySetupValueError(owner=self, msg=f"BoundModel* nesting (attribute 'contains') is not supported for '{type(container)}'")
+                raise EntitySetupValueError(owner=self, msg=f"EntityModel* nesting (attribute 'contains') is not supported for '{type(container)}'")
 
         # self._register_nested_models(setup_session)
         self._finished = True
@@ -358,11 +358,11 @@ class BoundModelWithHandlers(NestedBoundModelBase):
         return self.type_info
 
 # ------------------------------------------------------------
-# BoundModel
+# EntityModel
 # ------------------------------------------------------------
 
 @dataclass
-class BoundModel(NestedBoundModelBase):
+class EntityModel(NestedEntityModelBase):
 
     # setup must be called first for this component, and later for others
     # bigger comes first, 0 is DotExpression default, 1 is for other copmonents default
@@ -371,12 +371,12 @@ class BoundModel(NestedBoundModelBase):
     model:              Union[ModelType, DotExpression] = field(repr=False)
 
     name:               Optional[str] = field(default=None)
-    contains:           Optional[List[Union[BoundModelWithHandlers, "BoundModel"]]] = field(repr=False, default_factory=list)
+    contains:           Optional[List[Union[EntityModelWithHandlers, "EntityModel"]]] = field(repr=False, default_factory=list)
 
     # title:            TransMessageType
 
     # evaluated later
-    parent:             Union[IBoundModel, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    parent:             Union[IEntityModel, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     parent_name:        Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
     # Filled from from model

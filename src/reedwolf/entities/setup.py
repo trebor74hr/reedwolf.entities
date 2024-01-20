@@ -62,7 +62,7 @@ from .base import (
     IContainer,
     extract_type_info,
     IApplyResult,
-    IBoundModel,
+    IEntityModel,
     ReservedAttributeNames,
     SetupStackFrame,
     UseStackFrameCtxManagerBase, IValueNode,
@@ -475,7 +475,7 @@ class RegistryBase(IRegistry):
             else:
                 assert isinstance(owner_dexp_node, AttrDexpNode)
 
-                if isinstance(owner_dexp_node.data, IBoundModel):
+                if isinstance(owner_dexp_node.data, IEntityModel):
                     inspect_object = owner_dexp_node.data.model
                 elif is_model_class(owner_dexp_node.data):
                     # @dataclass, Pydantic etc.

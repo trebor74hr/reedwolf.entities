@@ -54,7 +54,7 @@ from .base import (
     IComponent,
     IField,
     IApplyResult,
-    IBoundModel,
+    IEntityModel,
     IFieldGroup,
     ISetupSession,
     IContainer,
@@ -151,7 +151,7 @@ class ModelsRegistry(RegistryBase):
     # NOTE: no register() method due complex logic - see
     #       ContainerBase._register_bound_model()
 
-    def _create_root_attr_node(self, bound_model:IBoundModel) -> AttrDexpNode:
+    def _create_root_attr_node(self, bound_model:IEntityModel) -> AttrDexpNode:
         " models specific method "
         # standard DTO class attr_node
         # if not bound_model.type_info:
@@ -168,7 +168,7 @@ class ModelsRegistry(RegistryBase):
     # ------------------------------------------------------------
 
     def register_all_nodes(self, root_attr_node: Optional[AttrDexpNode],
-                           bound_model: IBoundModel,
+                           bound_model: IEntityModel,
                            model: ModelType,
                            unbound_mode: bool = False):
         " models specific method "
@@ -210,7 +210,7 @@ class ModelsRegistry(RegistryBase):
     # ------------------------------------------------------------
 
     def get_attr_node_by_bound_model(self,
-                                     bound_model:IBoundModel,
+                                     bound_model:IEntityModel,
                                      # default:[None, UndefinedType]=UNDEFINED,
                                      # strict:bool=False
                                      ) -> Union[AttrDexpNode, None, UndefinedType]:
@@ -285,7 +285,7 @@ class FieldsRegistry(RegistryBase):
     ALLOWED_BASE_TYPES: ClassVar[List[type]] = (IField,)
 
     # TODO: zamijeni IContainer s; IFieldGroup, IEntityBase, a dodaj u Allowed: ISubentityBase
-    DENIED_BASE_TYPES: ClassVar[List[type]] = (IBoundModel, ValidationBase, EvaluationBase, IContainer, IFieldGroup,)
+    DENIED_BASE_TYPES: ClassVar[List[type]] = (IEntityModel, ValidationBase, EvaluationBase, IContainer, IFieldGroup,)
 
     def create_attr_node(self, component:IComponent):
         # TODO: put class in container and remove these local imports

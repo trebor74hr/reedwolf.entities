@@ -56,7 +56,7 @@ from .base import (
     get_name_from_bind,
     IComponent,
     IContainer,
-    IBoundModel,
+    IEntityModel,
     GlobalConfig,
     IApplyResult,
     SetupStackFrame,
@@ -66,9 +66,9 @@ from .base import (
 from .expressions import (
     DotExpression,
 )
-from .bound_models import (
-    BoundModel,
-    BoundModelWithHandlers, UnboundModel,
+from .models import (
+    EntityModel,
+    EntityModelWithHandlers, UnboundModel,
 )
 from .expr_attr_nodes import (
     AttrDexpNode,
@@ -249,7 +249,7 @@ class ContainerBase(IContainer, ABC):
 
         assert isinstance(models, dict), models
 
-        # can have several, first is main model, other are submodels e.g. BoundModelWithHandlers
+        # can have several, first is main model, other are submodels e.g. EntityModelWithHandlers
         for nr, (bound_model_name, bound_model) in enumerate(models.items()):
             assert bound_model_name.split(".")[-1] == bound_model.name
             self._register_bound_model(bound_model=bound_model)
@@ -259,7 +259,7 @@ class ContainerBase(IContainer, ABC):
 
     # ------------------------------------------------------------
 
-    def _setup_bound_model_dot_expression(self, bound_model:IBoundModel, setup_session: Optional[SetupSession] = None) -> AttrDexpNode:
+    def _setup_bound_model_dot_expression(self, bound_model:IEntityModel, setup_session: Optional[SetupSession] = None) -> AttrDexpNode:
         model = bound_model.model
         if not isinstance(model, DotExpression):
             raise EntityInternalError(owner=self, msg=f"Expecting model is DotExpression instance, got: {model}") 
@@ -311,11 +311,11 @@ class ContainerBase(IContainer, ABC):
 
     # ------------------------------------------------------------
 
-    def _register_bound_model(self, bound_model:IBoundModel, unbound_mode: bool = False):
+    def _register_bound_model(self, bound_model:IEntityModel, unbound_mode: bool = False):
         # Entity can have one main bound_model and optionally some dependent
         # models nested in tree structure
 
-        if not isinstance(bound_model, IBoundModel):
+        if not isinstance(bound_model, IEntityModel):
             raise EntitySetupError(owner=self, msg=f"{bound_model.name}: Needs to be BoundModel* instance, got: {bound_model}")
 
         attr_node = None
@@ -377,7 +377,7 @@ class ContainerBase(IContainer, ABC):
             assert self.is_entity()
             # setup_session=None - dataclass should be already created
             fields_dataclass, _ = self.get_component_fields_dataclass(setup_session=None)
-            self.bound_model = BoundModel(model=fields_dataclass)
+            self.bound_model = EntityModel(model=fields_dataclass)
         else:
             assert not self.is_entity()
             # model_dexp_node: IDotExpressionNode
@@ -465,7 +465,7 @@ class ContainerBase(IContainer, ABC):
         self.setup_session.finish()
 
         if self.keys:
-            # Inner BoundModel can have self.bound_model.model = DotExpression
+            # Inner EntityModel can have self.bound_model.model = DotExpression
             self.keys.validate(self.bound_model.get_type_info().type_)
 
         if self.is_top_parent():
@@ -646,7 +646,7 @@ class Entity(IEntity, ContainerBase):
     title:              Optional[TransMessageType] = field(repr=False, default=None)
 
     # binding interface - not dumped/exported
-    bound_model:        Optional[Union[BoundModel, ModelType]] = field(repr=False, default=None, metadata={"skip_dump": True})
+    bound_model:        Optional[Union[EntityModel, ModelType]] = field(repr=False, default=None, metadata={"skip_dump": True})
     # list of names from model / contains element names
     keys:               Optional[KeysBase] = field(repr=False, default=None)
     # will be filled automatically with Settings() if not supplied
@@ -688,9 +688,9 @@ class Entity(IEntity, ContainerBase):
     def init_clean(self):
         if self.bound_model:
             if is_model_class(self.bound_model):
-                self.bound_model = BoundModel(model=self.bound_model)
+                self.bound_model = EntityModel(model=self.bound_model)
 
-            if not (isinstance(self.bound_model, BoundModel) and is_model_class(self.bound_model.model)):
+            if not (isinstance(self.bound_model, EntityModel) and is_model_class(self.bound_model.model)):
                 raise EntitySetupTypeError(owner=self, msg=f"Attribute 'bound_model' needs to be model DC/PYD OR BoundModel with model DC/PYD, got: {self.bound_model}")
 
             if not self.name:
@@ -733,7 +733,7 @@ class Entity(IEntity, ContainerBase):
         return True
 
     def bind_to(self,
-                bound_model:Union[UndefinedType, BoundModel]=UNDEFINED,
+                bound_model:Union[UndefinedType, EntityModel]=UNDEFINED,
                 settings: Optional[Settings]=None,
                 apply_settings_class: Optional[Type[ApplySettings]]=None,
                 do_setup:bool = True,
@@ -886,15 +886,15 @@ class SubEntityBase(ContainerBase, ABC):
     SubEntityItems or top Entity
     """
     # DotExpression based model -> can be dumped
-    bound_model:    Union[BoundModel, BoundModelWithHandlers, DotExpression] = field(repr=False)
+    bound_model:    Union[EntityModel, EntityModelWithHandlers, DotExpression] = field(repr=False)
 
     # cardinality:  ICardinalityValidation
     contains:       List[IComponent] = field(repr=False)
 
     accessor:       Optional[ValueAccessorInputType] = field(repr=False, default=None)
 
-    # required since if it inherit name from BoundModel then the name will not
-    # be unique in self.components (SubEntityItems and BoundModel will share the same name)
+    # required since if it inherit name from EntityModel then the name will not
+    # be unique in self.components (SubEntityItems and EntityModel will share the same name)
     name:           Optional[str] = field(default=None)
     title:          Optional[TransMessageType] = field(repr=False, default=None)
 
@@ -941,9 +941,9 @@ class SubEntityBase(ContainerBase, ABC):
         if isinstance(self.bound_model, DotExpression):
             # Clone it to be seure that is not used - if problem, then clone only if not built
             bound_model = self.bound_model.Clone()
-            self.bound_model = BoundModel(model=bound_model)
+            self.bound_model = EntityModel(model=bound_model)
 
-        if not (isinstance(self.bound_model, IBoundModel) and isinstance(self.bound_model.model, DotExpression)):
+        if not (isinstance(self.bound_model, IEntityModel) and isinstance(self.bound_model.model, DotExpression)):
             raise EntityInternalError(owner=self, msg=f"Attribute bound_model needs to be DotExpression OR BoundModel with DotExpression '.model', got::'{self.bound_model}'")
 
         if not self.name:
