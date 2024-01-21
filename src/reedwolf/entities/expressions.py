@@ -273,7 +273,7 @@ class ISetupSession(ABC):
 
     # @abstractmethod
     # def create_local_setup_session_for_this_instance(self,
-    #                                                  model_class: ModelType,
+    #                                                  model_class: ModelKlassType,
     #                                                  ) -> Self:
     #     " creates Session with ThisRegistryForInstance "
     #     # TODO: ugly name :(

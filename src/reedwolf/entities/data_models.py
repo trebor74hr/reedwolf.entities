@@ -28,7 +28,7 @@ from .meta import (
     Self,
     TypeInfo,
     is_model_class,
-    ModelType,
+    ModelKlassType,
     # get_model_fields,
     extract_py_type_hints,
     EmptyFunctionArguments,
@@ -47,10 +47,12 @@ from .functions import (
 )
 from .base import (
     get_name_from_bind,
-    IEntityModel,
+    IDataModel,
     SetupStackFrame,
     IApplyResult,
-    ApplyStackFrame, IUnboundModel,
+    ApplyStackFrame,
+    IUnboundDataModel,
+    IBoundDataModel,
 )
 from .registries import (
     ThisRegistry, UnboundModelsRegistry,
@@ -67,20 +69,20 @@ class ModelWithHandlers:
 
 
 @dataclass
-class NestedEntityModelBase(IEntityModel):
+class BoundDataModelBase(IBoundDataModel):
 
     def create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:
-        model = self.model
-        if isinstance(self.model, DotExpression):
-            if not self.model.IsFinished():
+        model_klass = self.model_klass
+        if isinstance(self.model_klass, DotExpression):
+            if not self.model_klass.IsFinished():
                 # container = self.get_first_parent_container(consider_self=True)
                 # model_dexp_node: IDotExpressionNode = model.Setup(setup_session=setup_session, owner=container)
-                raise EntityInternalError(owner=self, msg=f"{self.model} dot-expression is not finished")
+                raise EntityInternalError(owner=self, msg=f"{self.model_klass} dot-expression is not finished")
 
-            model_dexp_node = self.model._dexp_node
-            model = model_dexp_node.get_type_info().type_
+            model_dexp_node = self.model_klass._dexp_node
+            model_klass = model_dexp_node.get_type_info().type_
 
-        this_registry = ThisRegistry(model_class=model)
+        this_registry = ThisRegistry(model_class=model_klass)
         return this_registry
 
 
@@ -98,48 +100,48 @@ class NestedEntityModelBase(IEntityModel):
 
         container_parent = self.parent.get_first_parent_container(consider_self=True)
         if not container_parent or not container_parent.is_top_parent():
-            raise EntitySetupValueError(owner=self, msg=f"Currently child bound models ('contains') supported only for top contaainers owners (i.e. Entity), got: {self.parent} / {container_parent}")
+            raise EntitySetupValueError(owner=self, msg=f"Currently child data models ('contains') supported only for top contaainers owners (i.e. Entity), got: {self.parent} / {container_parent}")
 
-        # model_fields = get_model_fields(self.model)
-        parent_py_type_hints = extract_py_type_hints(self.model, f"{self}")
+        # model_fields = get_model_fields(self.model_klass )
+        parent_py_type_hints = extract_py_type_hints(self.model_klass, f"{self}")
 
         models_registry = setup_session.get_registry(ModelsNS)
 
         # TODO: currently validatiojn of function argument types is done only in ApplyStackFrame() in apply(), 
         #       but should be here used for check attrs in setup() phase ... Define here: 
-        #           self.this_registry = setup_session.container... create_this_registry(...self.model)
+        #           self.this_registry = setup_session.container... create_this_registry(...self.model_klass )
         #       later reuse it and use it here to check func args types.
-        for child_bound_model in self.contains:
+        for child_data_model in self.contains:
 
-            if not isinstance(child_bound_model, EntityModelWithHandlers):
-                raise EntitySetupValueError(owner=self, msg=f"Child bound model should be EntityModelWithHandlers, got: {child_bound_model.name}: {type(child_bound_model)}")
+            if not isinstance(child_data_model, DataModelWithHandlers):
+                raise EntitySetupValueError(owner=self, msg=f"Child data model should be DataModelWithHandlers, got: {child_data_model.name}: {type(child_data_model)}")
 
-            model_name = child_bound_model.name
+            model_name = child_data_model.name
             if model_name in self.models_with_handlers_dict:
-                raise EntitySetupValueError(owner=self, msg=f"Child bound model should be unique, got duplicate name: {model_name}")
+                raise EntitySetupValueError(owner=self, msg=f"Child data model should be unique, got duplicate name: {model_name}")
 
             # field = model_fields.get(model_name, None)
             field_py_type_hint = parent_py_type_hints.get(model_name, None)
-            read_handler_type_info = child_bound_model.read_handler.get_type_info()
+            read_handler_type_info = child_data_model.read_handler.get_type_info()
 
             if not field_py_type_hint:
-                if child_bound_model.in_model:
-                    raise EntitySetupValueError(owner=self, msg=f"Child bound model `{model_name}` not found in model. Choose existing model attribute name or use `in_model=False` property.")
+                if child_data_model.in_model:
+                    raise EntitySetupValueError(owner=self, msg=f"Child data model `{model_name}` not found in model. Choose existing model attribute name or use `in_model=False` property.")
             else:
-                if not child_bound_model.in_model:
-                    raise EntitySetupValueError(owner=self, msg=f"Child bound model `{model_name}` is marked with `in_model=True`, but field already exists. Unset property or use another model name.")
+                if not child_data_model.in_model:
+                    raise EntitySetupValueError(owner=self, msg=f"Child data model `{model_name}` is marked with `in_model=True`, but field already exists. Unset property or use another model name.")
 
                 field_type_info = TypeInfo.get_or_create_by_type(field_py_type_hint, caller=f"{self} ==> {model_name}")
 
                 type_err_msg = field_type_info.check_compatible(read_handler_type_info)
                 if type_err_msg:
-                    raise EntitySetupValueError(owner=self, msg=f"Child bound model `{model_name}` is not compatible with underlying field: {type_err_msg}")
+                    raise EntitySetupValueError(owner=self, msg=f"Child data model `{model_name}` is not compatible with underlying field: {type_err_msg}")
 
             # 1. if it is non-model -> Register new attribute node within M. /
             #    ModelsNS registry
-            if not child_bound_model.in_model:
+            if not child_data_model.in_model:
                 model_attr_dexp_node = AttrDexpNode(
-                                            name=child_bound_model.name,
+                                            name=child_data_model.name,
                                             data=read_handler_type_info,
                                             namespace=models_registry.NAMESPACE,
                                             type_info=read_handler_type_info, 
@@ -156,18 +158,17 @@ class NestedEntityModelBase(IEntityModel):
                     SetupStackFrame(
                         container = setup_session.current_frame.container,
                         component = self, 
-                        # bound_model_type_info=read_handler_type_info,
                     )):
-                read_handler_dexp = child_bound_model.read_handler.create_function(
+                read_handler_dexp = child_data_model.read_handler.create_function(
                                         func_args  = EmptyFunctionArguments,
                                         setup_session = setup_session,
-                                        name       = f"{child_bound_model.name}__{child_bound_model.read_handler.name}")
+                                        name       = f"{child_data_model.name}__{child_data_model.read_handler.name}")
 
             read_handler_dexp.finish()
 
             model_with_handlers = ModelWithHandlers(
                         name=model_name,
-                        in_model=child_bound_model.in_model,
+                        in_model=child_data_model.in_model,
                         read_handler_dexp=read_handler_dexp,
                         type_info=read_handler_type_info,
                         )
@@ -178,23 +179,23 @@ class NestedEntityModelBase(IEntityModel):
     # ------------------------------------------------------------
 
 
-    def _apply_nested_models(self, apply_result: IApplyResult, instance: ModelType):
-        children_bound_models = self.get_children()
-        if not children_bound_models:
+    def _apply_nested_models(self, apply_result: IApplyResult, instance: ModelKlassType):
+        children_data_models = self.get_children()
+        if not children_data_models:
             return 
 
         if not isinstance(apply_result, IApplyResult):
             raise EntityInternalError(owner=self, msg=f"apply_result is not IApplyResult, got: {apply_result}")
 
-        if not isinstance(instance, self.model):
-            raise EntityInternalError(owner=self, msg=f"Type of instance is not '{self.model}', got: {to_repr(instance)}")
+        if not isinstance(instance, self.model_klass):
+            raise EntityInternalError(owner=self, msg=f"Type of instance is not '{self.model_klass}', got: {to_repr(instance)}")
 
-        children_bound_models_dict = {
-                child_bound_model.name: child_bound_model 
-                for child_bound_model in children_bound_models
+        children_data_models_dict = {
+                child_data_model.name: child_data_model 
+                for child_data_model in children_data_models
                 }
 
-        # TODO: this is strange, setup this_registry in EntityModel.setup()
+        # TODO: this is strange, setup this_registry in DataModel.setup()
         #       and then just use self.this_registry
         this_registry = self.get_this_registry()
         if not this_registry:
@@ -202,7 +203,7 @@ class NestedEntityModelBase(IEntityModel):
         # this_registry = apply_result.setup_session.container \
         #                     .create_this_registry_for_model_class(
         #                         setup_session=apply_result.setup_session,
-        #                         model_class=self.model)
+        #                         model_class=self.model_klass )
 
         # local_setup_session = apply_result.setup_session \
         #                         .create_local_setup_session_for_this_instance(
@@ -239,16 +240,16 @@ class NestedEntityModelBase(IEntityModel):
 
                 child_instances = rh_dexp_result.value
 
-                # apply_result.settings.logger.warn(f"set bound model read_handler to instance: {to_repr(instance)}.{model_with_handler.name} = {to_repr(rh_dexp_result.value)}")
+                # apply_result.settings.logger.warn(f"set data model read_handler to instance: {to_repr(instance)}.{model_with_handler.name} = {to_repr(rh_dexp_result.value)}")
                 setattr(instance, model_with_handler.name, child_instances)
 
                 if child_instances:
                     # TODO: if expected list and result not list then convert to list and vice versa
-                    child_bound_model = children_bound_models_dict.get(model_name, None)
+                    child_data_model = children_data_models_dict.get(model_name, None)
 
-                    if not child_bound_model:
-                        names_avail = get_available_names_example(model_name, children_bound_models_dict.keys())
-                        raise EntityInternalError(owner=self, msg=f"Child bound model '{model_name}' not found, available: {names_avail}")
+                    if not child_data_model:
+                        names_avail = get_available_names_example(model_name, children_data_models_dict.keys())
+                        raise EntityInternalError(owner=self, msg=f"Child data model '{model_name}' not found, available: {names_avail}")
 
                     # ------------------------------------------------------------
                     # RECURSION
@@ -257,19 +258,19 @@ class NestedEntityModelBase(IEntityModel):
                         child_instances = [child_instances]
 
                     for child_instance in child_instances:
-                        child_bound_model._apply_nested_models(
+                        child_data_model._apply_nested_models(
                                                 apply_result=apply_result, 
                                                 instance=child_instance)
 
 @dataclass
-class UnboundModel(IUnboundModel):
+class UnboundModel(IUnboundDataModel):
     """
     This is a dummy class, just to mark unbound mode
     """
     name: Optional[str] = field(default=None, init=False)
 
-    # model: Union[ModelType, UndefinedType] = field(repr=False, init=False, default=UNDEFINED)
-    # parent: Union[IEntityModel, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    # model_klass: Union[ModelKlassType, UndefinedType] = field(repr=False, init=False, default=UNDEFINED)
+    # parent: Union[IDataModel, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     # parent_name: Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
     # type_info: Optional[TypeInfo] = field(init=False, default=None, repr=False)
 
@@ -283,11 +284,11 @@ class UnboundModel(IUnboundModel):
         return UnboundModelsRegistry()
 
 # ------------------------------------------------------------
-# EntityModelWithHandlers
+# DataModelWithHandlers
 # ------------------------------------------------------------
 
 @dataclass
-class EntityModelWithHandlers(NestedEntityModelBase):
+class DataModelWithHandlers(BoundDataModelBase):
     # return type of this function is used as model
     read_handler:   CustomFunctionFactory
 
@@ -298,8 +299,8 @@ class EntityModelWithHandlers(NestedEntityModelBase):
 
     # --- evaluated later
     # Filled from from .read_hanlder -> (.type_info: TypeInfo).type_
-    model:          ModelType = field(init=False, metadata={"skip_traverse": True})
-    parent:         Union[IEntityModel, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    model_klass:          ModelKlassType = field(init=False, metadata={"skip_traverse": True})
+    parent:         Union[IDataModel, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     parent_name:    Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
     type_info:      Union[TypeInfo, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
@@ -316,15 +317,15 @@ class EntityModelWithHandlers(NestedEntityModelBase):
         # TODO: do it better 
         # ------------------------------------------------------------
         self.type_info = self.read_handler.get_type_info() # factory
-        self.model = self.type_info.type_
+        self.model_klass = self.type_info.type_
 
-        if not is_model_class(self.model):
-            raise EntitySetupValueError(f"Model got from read_handler output type - should not be Model class (DC/PYD), got: {self.model}")
+        if not is_model_class(self.model_klass):
+            raise EntitySetupValueError(f"Model got from read_handler output type - should not be Model class (DC/PYD), got: {self.model_klass}")
 
         if not self.name:
             self.name = "__".join([
                 camel_case_to_snake(self.__class__.__name__),
-                get_name_from_bind(self.model)
+                get_name_from_bind(self.model_klass)
                 ])
 
         super().__post_init__()
@@ -347,7 +348,7 @@ class EntityModelWithHandlers(NestedEntityModelBase):
             container =self.get_first_parent_container(consider_self=False)
             if not container.is_top_parent():
                 # NOTE: not allowed in SubEntityItems-s for now
-                raise EntitySetupValueError(owner=self, msg=f"EntityModel* nesting (attribute 'contains') is not supported for '{type(container)}'")
+                raise EntitySetupValueError(owner=self, msg=f"DataModel* nesting (attribute 'contains') is not supported for '{type(container)}'")
 
         # self._register_nested_models(setup_session)
         self._finished = True
@@ -358,25 +359,25 @@ class EntityModelWithHandlers(NestedEntityModelBase):
         return self.type_info
 
 # ------------------------------------------------------------
-# EntityModel
+# DataModel
 # ------------------------------------------------------------
 
 @dataclass
-class EntityModel(NestedEntityModelBase):
+class DataModel(BoundDataModelBase):
 
     # setup must be called first for this component, and later for others
     # bigger comes first, 0 is DotExpression default, 1 is for other copmonents default
     SETUP_PRIORITY:     ClassVar[int] = 9
 
-    model:              Union[ModelType, DotExpression] = field(repr=False)
+    model_klass:              Union[ModelKlassType, DotExpression] = field(repr=False)
 
     name:               Optional[str] = field(default=None)
-    contains:           Optional[List[Union[EntityModelWithHandlers, "EntityModel"]]] = field(repr=False, default_factory=list)
+    contains:           Optional[List[Union[DataModelWithHandlers, Self]]] = field(repr=False, default_factory=list)
 
     # title:            TransMessageType
 
     # evaluated later
-    parent:             Union[IEntityModel, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    parent:             Union[IDataModel, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     parent_name:        Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
     # Filled from from model
@@ -384,22 +385,22 @@ class EntityModel(NestedEntityModelBase):
     models_with_handlers_dict: Dict[str, ModelWithHandlers] = field(init=False, repr=False, default_factory=dict)
 
     def __post_init__(self):
-        if isinstance(self.model, DotExpression):
+        if isinstance(self.model_klass, DotExpression):
             if not self.name:
                 self.name = "__".join([
                     camel_case_to_snake(self.__class__.__name__),
-                    get_name_from_bind(self.model)
+                    get_name_from_bind(self.model_klass)
                     ])
-        elif is_model_class(self.model):
+        elif is_model_class(self.model_klass):
             if not self.name:
                 self.name = "__".join([
                         camel_case_to_snake(self.__class__.__name__),
-                        camel_case_to_snake(self.model.__name__),
+                        camel_case_to_snake(self.model_klass.__name__),
                         ])
         else:
             # Similar check is done later in container too
-            raise EntitySetupValueError(owner=self, 
-                    msg=f"For 'model' argument expected model class or DotExpression, got: {self.model}")
+            raise EntitySetupValueError(owner=self,
+                                        msg=f"For 'model' argument expected model class or DotExpression, got: {self.model_klass}")
 
 
     def get_type_info(self) -> TypeInfo:
@@ -409,20 +410,20 @@ class EntityModel(NestedEntityModelBase):
 
 
     def _set_type_info(self):
-        # NOTE: model: DotExpression - would be hard to fill automatically
+        # NOTE: model_klass: DotExpression - would be hard to fill automatically
         #           when DotExpression, dexp is evaluated setup() what is a bit late in
         #           container.setup().
         assert not self.type_info
-        if not (is_model_class(self.model) or isinstance(self.model, DotExpression)):
-            raise EntitySetupValueError(f"Model should be Model class (DC/PYD) or DotExpression, got: {self.model}")
+        if not (is_model_class(self.model_klass) or isinstance(self.model_klass, DotExpression)):
+            raise EntitySetupValueError(f"Model should be Model class (DC/PYD) or DotExpression, got: {self.model_klass}")
 
-        if isinstance(self.model, DotExpression):
-            if not self.model.IsFinished():
-                raise EntityInternalError(owner=self, msg=f"model not setup: {self.model}")
-            self.type_info = self.model._evaluator.last_node().type_info
+        if isinstance(self.model_klass, DotExpression):
+            if not self.model_klass.IsFinished():
+                raise EntityInternalError(owner=self, msg=f"model not setup: {self.model_klass}")
+            self.type_info = self.model_klass._evaluator.last_node().type_info
         else:
             self.type_info = TypeInfo.get_or_create_by_type(
-                                    py_type_hint=self.model,
+                                    py_type_hint=self.model_klass,
                                     caller=self,
                                     )
 
@@ -439,11 +440,11 @@ class EntityModel(NestedEntityModelBase):
 
 
 # ------------------------------------------------------------
-# BoundModelHandler
+# DataModelHandler
 # ------------------------------------------------------------
 
 # @dataclass
-# class BoundModelHandler(EntityHandlerFunction):
+# class DataModelHandler(EntityHandlerFunction):
 #     pass
 
 # def save(self, *args, **kwargs):

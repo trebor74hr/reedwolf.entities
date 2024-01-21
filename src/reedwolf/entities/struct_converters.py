@@ -27,7 +27,7 @@ from .exceptions import (
 from .expressions import DotExpression
 from .meta import (
     MAX_RECURSIONS,
-    ModelType,
+    ModelKlassType,
     AttrValue,
     UNDEFINED,
     is_model_class,
@@ -65,8 +65,8 @@ class StructConverterStackFrame(IStackFrame):
 
     component: IComponent = field(repr=False)
     path_names: List[str] = field()
-    instance: ModelType = field(repr=False)
-    dto_class: Type[ModelType] = field(repr=False)
+    instance: ModelKlassType = field(repr=False)
+    dto_class: Type[ModelKlassType] = field(repr=False)
     # None will not trigger creation
     dto_kwargs: Union[NoneType, Dict[str, AttrValue]] = field(repr=False)
     depth: Optional[int] = field(repr=True)  # 0 based
@@ -74,7 +74,7 @@ class StructConverterStackFrame(IStackFrame):
     # autocomputed
     component_name: str = field(init=False, repr=True)
     # set manually
-    dto_instance: Union[ModelType, UndefinedType] = field(repr=False, init=False, default=UNDEFINED)
+    dto_instance: Union[ModelKlassType, UndefinedType] = field(repr=False, init=False, default=UNDEFINED)
 
     def __post_init__(self):
         if not isinstance(self.component, IComponent):
@@ -95,7 +95,7 @@ class StructConverterStackFrame(IStackFrame):
     def post_clean(self):
         pass
 
-    def set_dto_instance(self, dto_instance: ModelType):
+    def set_dto_instance(self, dto_instance: ModelKlassType):
         if self.dto_instance != UNDEFINED:
             raise EntityInternalError(owner=self, msg=f"Instance already set {self.dto_instance}")
         self.dto_instance = dto_instance
@@ -116,7 +116,7 @@ class StructConverterStackFrame(IStackFrame):
 @dataclass
 class StructConverterRunner(IStackOwnerSession):
     """
-    Will convert instance of self.bound_model.model
+    Will convert instance of self.data_model.model
     to DTO structures
         StructEnum.ENTITY_LIKE
 
@@ -138,9 +138,9 @@ class StructConverterRunner(IStackOwnerSession):
 
     def create_dto_instance_from_model_instance(self,
                                                 component: IComponent,
-                                                instance: ModelType,
-                                                dto_class: Type[ModelType],
-                                                ) -> ModelType:
+                                                instance: ModelKlassType,
+                                                dto_class: Type[ModelKlassType],
+                                                ) -> ModelKlassType:
         with self.use_stack_frame(
                 StructConverterStackFrame(
                     component=component,
@@ -156,7 +156,7 @@ class StructConverterRunner(IStackOwnerSession):
         return dto_instance
 
 
-    def _create_dto_instance_from_model_instance(self) -> ModelType:
+    def _create_dto_instance_from_model_instance(self) -> ModelKlassType:
         """
         pokriti:
             instance change - container - tj. is_container()
@@ -217,12 +217,12 @@ class StructConverterRunner(IStackOwnerSession):
                     # if not is_model_class(child_dto_class):
                     #     raise EntityTypeError(owner=self, msg=f"Field {child_dto_attr_name} not a class in {dto_class}, got: {child_dto_class}")
                     container: IContainer = child
-                    # TODO: container.get_bound_model_attr_node()
-                    assert isinstance(container.bound_model.model, DotExpression), container.bound_model.model
-                    if len(container.bound_model.model.Path) != 1:
-                        raise NotImplementedError(f"Currently nestted binds not supported: {container.bound_model.model}")
+                    # TODO: container.get_data_model_attr_node()
+                    assert isinstance(container.data_model.model_klass, DotExpression), container.data_model.model_klass
+                    if len(container.data_model.model_klass.Path) != 1:
+                        raise NotImplementedError(f"Currently nestted binds not supported: {container.data_model.model_klass}")
 
-                    model_attr_name = container.bound_model.model._name
+                    model_attr_name = container.data_model.model_klass._name
 
                     child_instance = getattr(instance, model_attr_name, UNDEFINED)
                     if child_instance == UNDEFINED:

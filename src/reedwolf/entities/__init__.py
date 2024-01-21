@@ -33,9 +33,9 @@ from .value_accessors import (
     DictValueAccessor,
     AutodetectValueAccessor,
 )
-from .models import (
-    EntityModel,
-    EntityModelWithHandlers,
+from .data_models import (
+    DataModel,
+    DataModelWithHandlers,
     )
 from .base import (  # noqa: F401
     # Not for __all__ case (from <> import *), just for direct import:
@@ -154,8 +154,8 @@ __all__ = [
     "AttributeByMethod",
 
     # models
-    "EntityModel",
-    "EntityModelWithHandlers",
+    "DataModel",
+    "DataModelWithHandlers",
 
     # value_accessors
     "AttributeValueAccessor",

@@ -39,7 +39,7 @@ from .expressions import (
     RegistryRootValue,
 )
 from .meta import (
-    ModelType,
+    ModelKlassType,
     get_model_fields,
     TypeInfo,
     AttrName,
@@ -54,7 +54,7 @@ from .base import (
     IComponent,
     IField,
     IApplyResult,
-    IEntityModel,
+    IDataModel,
     IFieldGroup,
     ISetupSession,
     IContainer,
@@ -141,7 +141,7 @@ class ModelsRegistry(RegistryBase):
     root_attr_nodes: Optional[Dict[str, AttrDexpNode]] = field(repr=False, init=False, default_factory=dict)
 
     # Just to check not duplicate. Can have several, first is main model, other are submodels
-    models_dict: Dict[str, ModelType] = field(repr=True, init=False, default_factory=OrderedDict)
+    models_dict: Dict[str, ModelKlassType] = field(repr=True, init=False, default_factory=OrderedDict)
 
     NAMESPACE: ClassVar[Namespace] = ModelsNS
 
@@ -149,37 +149,37 @@ class ModelsRegistry(RegistryBase):
     #     super().__post_init__()
 
     # NOTE: no register() method due complex logic - see
-    #       ContainerBase._register_bound_model()
+    #       ContainerBase._register_data_model()
 
-    def _create_root_attr_node(self, bound_model:IEntityModel) -> AttrDexpNode:
+    def _create_root_attr_node(self, data_model:IDataModel) -> AttrDexpNode:
         " models specific method "
         # standard DTO class attr_node
-        # if not bound_model.type_info:
-        #     bound_model.set_type_info()
-        # assert bound_model.type_info.type_==model
+        # if not data_model.type_info:
+        #     data_model.set_type_info()
+        # assert data_model.type_info.type_==model
         attr_node = AttrDexpNode(
-                        name=bound_model.name,
-                        data=bound_model,
+                        name=data_model.name,
+                        data=data_model,
                         namespace=self.NAMESPACE,
-                        type_info=bound_model.get_type_info())
+                        type_info=data_model.get_type_info())
         return attr_node
 
 
     # ------------------------------------------------------------
 
     def register_all_nodes(self, root_attr_node: Optional[AttrDexpNode],
-                           bound_model: IEntityModel,
-                           model: ModelType,
+                           data_model: IDataModel,
+                           model_klass: ModelKlassType,
                            unbound_mode: bool = False):
         " models specific method "
         if not root_attr_node:
-            root_attr_node = self._create_root_attr_node(bound_model=bound_model)
+            root_attr_node = self._create_root_attr_node(data_model=data_model)
 
-        if bound_model.name in self.models_dict:
-            raise EntityInternalError(owner=self, msg=f"Model {bound_model.name} already set {self.models_dict[bound_model.name]}, got: {model}")
-        self.models_dict[bound_model.name] = model
+        if data_model.name in self.models_dict:
+            raise EntityInternalError(owner=self, msg=f"Model {data_model.name} already set {self.models_dict[data_model.name]}, got: {model_klass}")
+        self.models_dict[data_model.name] = model_klass
 
-        name = bound_model.get_full_name(init=unbound_mode)
+        name = data_model.get_full_name(init=unbound_mode)
         is_root = "." not in name # TODO: hack
         if name in self.root_attr_nodes:
             raise EntityInternalError(owner=self, msg=f"Duplicate {name} -> {self.root_attr_nodes[name]}, already set, failed to set: {root_attr_node}")
@@ -189,16 +189,16 @@ class ModelsRegistry(RegistryBase):
         # company.business_type.name --> company__business_types__name
         name_for_reg = name.replace(".", "__")
 
-        for attr_name in get_model_fields(model):
-            attr_node = self._create_attr_node_for_model_attr(model, attr_name)
+        for attr_name in get_model_fields(model_klass):
+            attr_node = self._create_attr_node_for_model_attr(model_klass, attr_name)
             alt_attr_node_name = None if is_root else f"{name_for_reg}__{attr_name}"
             self.register_attr_node(attr_node, alt_attr_node_name=alt_attr_node_name)
 
         # register
-        type_info = bound_model.get_type_info()
-        type_info_from_model = TypeInfo.get_or_create_by_type(model)
+        type_info = data_model.get_type_info()
+        type_info_from_model = TypeInfo.get_or_create_by_type(model_klass)
         if not type_info_from_model.type_ == type_info.type_:
-            raise EntityInternalError(owner=self, msg=f"Model type info inner type <> bound_model's: {type_info} <> {type_info_from_model}")
+            raise EntityInternalError(owner=self, msg=f"Model type info inner type <> data_model's: {type_info} <> {type_info_from_model}")
 
         self._register_special_attr_node(
                         type_info = type_info,
@@ -209,15 +209,15 @@ class ModelsRegistry(RegistryBase):
 
     # ------------------------------------------------------------
 
-    def get_attr_node_by_bound_model(self,
-                                     bound_model:IEntityModel,
-                                     # default:[None, UndefinedType]=UNDEFINED,
-                                     # strict:bool=False
-                                     ) -> Union[AttrDexpNode, None, UndefinedType]:
+    def get_attr_node_by_data_model(self,
+                                    data_model:IDataModel,
+                                    # default:[None, UndefinedType]=UNDEFINED,
+                                    # strict:bool=False
+                                    ) -> Union[AttrDexpNode, None, UndefinedType]:
         " models specific method "
-        # attr_node_name = bound_model.name
+        # attr_node_name = data_model.name
         # == M.name mode
-        name = bound_model.get_full_name() 
+        name = data_model.get_full_name()
 
         # company.business_type.name --> company__business_types__name
         name_for_reg = name.replace(".", "__")
@@ -228,7 +228,7 @@ class ModelsRegistry(RegistryBase):
 
         # == M.company mode
         # allways in models
-        # attr_node_name = bound_model.name
+        # attr_node_name = data_model.name
         # assert attr_node_name
         # # return self.store.get(attr_node_name, default)
         # return self.store[attr_node_name]
@@ -240,18 +240,18 @@ class ModelsRegistry(RegistryBase):
         # component = apply_result.current_frame.component
         instance = apply_result.current_frame.instance
 
-        # bound_model = apply_result.current_frame.container.bound_model
-        bound_model_root = apply_result.current_frame.bound_model_root
+        # data_model = apply_result.current_frame.container.data_model
+        data_model_root = apply_result.current_frame.data_model_root
 
-        expected_type = bound_model_root.type_info.type_ \
-                        if isinstance(bound_model_root.model, DotExpression) \
-                        else bound_model_root.model
+        expected_type = data_model_root.type_info.type_ \
+                        if isinstance(data_model_root.model_klass, DotExpression) \
+                        else data_model_root.model_klass
 
         if instance is None:
-            if not bound_model_root.type_info.is_optional:
-                raise EntityInternalError(owner=bound_model_root, msg="Got None and type is not 'Optional'")
+            if not data_model_root.type_info.is_optional:
+                raise EntityInternalError(owner=data_model_root, msg="Got None and type is not 'Optional'")
         else:
-            if bound_model_root.type_info.is_list and isinstance(instance, (list, tuple)):
+            if data_model_root.type_info.is_list and isinstance(instance, (list, tuple)):
                 # raise EntityApplyTypeError(owner=self, msg=f"Wrong type, expected list/tuple, got '{instance}'")
                 # check only first
                 instance_to_test = instance[0] if instance else None
@@ -266,7 +266,7 @@ class ModelsRegistry(RegistryBase):
                 apply_result.current_frame.component._accessor.validate_instance_type(
                         owner_name=f"{apply_result.current_frame.component.name} -> {self}.{attr_name}",
                         instance=instance_to_test,
-                        model_type=expected_type,
+                        model_klass=expected_type,
                 )
                 # if not isinstance(instance_to_test, expected_type):
                 #     raise EntityApplyTypeError(owner=self, msg=f"Wrong type, expected '{expected_type}', got '{instance}'")
@@ -285,7 +285,7 @@ class FieldsRegistry(RegistryBase):
     ALLOWED_BASE_TYPES: ClassVar[List[type]] = (IField,)
 
     # TODO: zamijeni IContainer s; IFieldGroup, IEntityBase, a dodaj u Allowed: ISubentityBase
-    DENIED_BASE_TYPES: ClassVar[List[type]] = (IEntityModel, ValidationBase, EvaluationBase, IContainer, IFieldGroup,)
+    DENIED_BASE_TYPES: ClassVar[List[type]] = (IDataModel, ValidationBase, EvaluationBase, IContainer, IFieldGroup,)
 
     def create_attr_node(self, component:IComponent):
         # TODO: put class in container and remove these local imports
@@ -477,7 +477,7 @@ class ThisRegistry(IThisRegistry, RegistryBase):
 
     attr_node: Optional[AttrDexpNode] = field(default=None)
     component: Optional[IComponent] = field(default=None)
-    model_class: Optional[ModelType] = field(default=None)
+    model_class: Optional[ModelKlassType] = field(default=None)
     # Used for ItemsFunctions when Item attribute will be available, e.g. This.name -> AttrValue
     # TODO: do I really need this parameter - is it overlapping with is_items_mode?
     is_items_for_each_mode: bool = field(default=False)
@@ -490,10 +490,10 @@ class ThisRegistry(IThisRegistry, RegistryBase):
 
     @classmethod
     def create_for_model_class(cls,
-            setup_session: ISetupSession,
-            model_class: ModelType,
-            is_items_for_each_mode: bool = False,
-    ) -> Self:
+                               setup_session: ISetupSession,
+                               model_class: ModelKlassType,
+                               is_items_for_each_mode: bool = False,
+                               ) -> Self:
         # NOTE: must be here since:
         #   - expressions.py don't see ThisRegistry
         #   - setup.py does not see registries

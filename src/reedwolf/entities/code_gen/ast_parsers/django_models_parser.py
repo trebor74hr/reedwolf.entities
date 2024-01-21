@@ -24,8 +24,8 @@ class DjangoModelsParser(ModelsParserBase):
         "models.Manager",
     ]
 
-    # ALT: for path in Path(django_project_root_path).glob('**/models.py'):
-    # NOTE: helper: find . -name models.py # as of RL 2203xx
+    # ALT: for path in Path(django_project_root_path).glob('**/data_models.py'):
+    # NOTE: helper: find . -name data_models.py # as of RL 2203xx
     MODELS_LIST: ClassVar[List[List[str]]] = [
         ["models.py"],
     ]

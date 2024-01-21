@@ -44,7 +44,7 @@ from .meta import (
     TypeInfo,
     is_model_class,
     get_model_fields,
-    ModelType,
+    ModelKlassType,
     DataclassType,
     Self,
     NoneType,
@@ -56,19 +56,19 @@ from .base import (
     get_name_from_bind,
     IComponent,
     IContainer,
-    IEntityModel,
+    IDataModel,
     GlobalConfig,
     IApplyResult,
     SetupStackFrame,
     IEntity,
-    IUnboundModel,
+    IUnboundDataModel,
 )
 from .expressions import (
     DotExpression,
 )
-from .models import (
-    EntityModel,
-    EntityModelWithHandlers, UnboundModel,
+from .data_models import (
+    DataModel,
+    DataModelWithHandlers, UnboundModel,
 )
 from .expr_attr_nodes import (
     AttrDexpNode,
@@ -146,7 +146,7 @@ class ContainerBase(IContainer, ABC):
     #     # TODO: not sure if this is good way to do it. Maybe: isinstance(ISubEntity) would be safer?
     #     # TODO: if self.parent is not None could be used as the term, put validation somewhere
     #     " if start model is value expression - that mean that the the Entity is SubEntityItems "
-    #     return isinstance(self.bound_model.model, DotExpression)
+    #     return isinstance(self.data_model.model, DotExpression)
 
     def get_type_info(self) -> TypeInfo:
         """
@@ -239,45 +239,45 @@ class ContainerBase(IContainer, ABC):
         # ------------------------------------------------------------
         # A.1. MODELS - collect attr_nodes from managed models
         # ------------------------------------------------------------
-        models = self.bound_model.fill_models()
+        models = self.data_model.fill_models()
         if not models:
             raise EntitySetupError(owner=self, msg="Entity(models=List[models]) is required.")
 
         # if not isinstance(self.models, dict):
         #     # TODO: this never happens - define new test case, implement (or drop this logic)
-        #     self.bound_model.fill_models()
+        #     self.data_model.fill_models()
 
         assert isinstance(models, dict), models
 
-        # can have several, first is main model, other are submodels e.g. EntityModelWithHandlers
-        for nr, (bound_model_name, bound_model) in enumerate(models.items()):
-            assert bound_model_name.split(".")[-1] == bound_model.name
-            self._register_bound_model(bound_model=bound_model)
+        # can have several, first is main model, other are submodels e.g. DataModelWithHandlers
+        for nr, (data_model_name, data_model) in enumerate(models.items()):
+            assert data_model_name.split(".")[-1] == data_model.name
+            self._register_data_model(data_model=data_model)
 
         # NOTE: self.models was used only here
         #   self.models = models
 
     # ------------------------------------------------------------
 
-    def _setup_bound_model_dot_expression(self, bound_model:IEntityModel, setup_session: Optional[SetupSession] = None) -> AttrDexpNode:
-        model = bound_model.model
-        if not isinstance(model, DotExpression):
-            raise EntityInternalError(owner=self, msg=f"Expecting model is DotExpression instance, got: {model}") 
+    def _setup_data_model_dot_expression(self, data_model:IDataModel, setup_session: Optional[SetupSession] = None) -> AttrDexpNode:
+        model_klass = data_model.model_klass
+        if not isinstance(model_klass, DotExpression):
+            raise EntityInternalError(owner=self, msg=f"Expecting model is DotExpression instance, got: {model_klass}")
 
-        is_main_model = (bound_model==self.bound_model)
+        is_main_model = (data_model==self.data_model)
         is_subentity_main_model = (self.is_subentity() and is_main_model)
         if is_subentity_main_model:
-            if not isinstance(model, DotExpression):
-                raise EntitySetupError(owner=self, msg=f"{bound_model.name}: For SubEntityItems/SubEntitySingle main bound_model needs to be DotExpression: {bound_model.model}")
+            if not isinstance(model_klass, DotExpression):
+                raise EntitySetupError(owner=self, msg=f"{data_model.name}: For SubEntityItems/SubEntitySingle main data_model needs to be DotExpression: {data_model.model_klass}")
 
         # TODO: for functions value expressions need to be stored
         #       with all parameters (func_args)
         if not (self.is_subentity() or not is_main_model):
-            raise EntitySetupTypeError(owner=self, msg=f"{bound_model.name}: DotExpression should be used only in SubEntity containers and nested BoundModels")
+            raise EntitySetupTypeError(owner=self, msg=f"{data_model.name}: DotExpression should be used only in SubEntity containers and nested /DataModelDataModels")
 
-        model._SetDexpValidator(DEXP_VALIDATOR_FOR_BIND)
+        model_klass._SetDexpValidator(DEXP_VALIDATOR_FOR_BIND)
         # if model._namespace!=ModelsNS:
-        #     raise EntitySetupTypeError(owner=self, msg=f"{bound_model.name}: DotExpression should be in ModelsNS namespace, got: {model._namespace}")
+        #     raise EntitySetupTypeError(owner=self, msg=f"{data_model.name}: DotExpression should be in ModelsNS namespace, got: {model._namespace}")
 
         if setup_session:
             # TODO: not sure if this is the best solution
@@ -291,18 +291,18 @@ class ContainerBase(IContainer, ABC):
                 # Entity - top parent container / normal case
                 setup_session_from = self.setup_session
 
-        attr_node = setup_session_from.get_dexp_node_by_dexp(dexp=model)
+        attr_node = setup_session_from.get_dexp_node_by_dexp(dexp=model_klass)
         if self.is_unbound():
             if not attr_node:
-                raise EntityInternalError(owner=self, msg=f"AttrDexpNode data should already be in setup_session: {model} -> {attr_node}")
+                raise EntityInternalError(owner=self, msg=f"AttrDexpNode data should already be in setup_session: {model_klass} -> {attr_node}")
         else:
             if attr_node:
                 # NOTE: it seems this does not happen, so I added this exception. Remove it if it will be required in the future
-                raise EntityInternalError(owner=self, msg=f"TODO: AttrDexpNode data already in setup_session: {model} -> {attr_node}")
-            attr_node = model.Setup(setup_session=setup_session_from, owner=bound_model)
+                raise EntityInternalError(owner=self, msg=f"TODO: AttrDexpNode data already in setup_session: {model_klass} -> {attr_node}")
+            attr_node = model_klass.Setup(setup_session=setup_session_from, owner=data_model)
 
         if not attr_node:
-            raise EntityInternalError(owner=self, msg=f"AttrDexpNode not recognized: {model}")
+            raise EntityInternalError(owner=self, msg=f"AttrDexpNode not recognized: {model_klass}")
 
         if not isinstance(attr_node.data, TypeInfo):
             raise EntityInternalError(owner=self, msg=f"AttrDexpNode data is not TypeInfo, got: {type(attr_node.data)} / {attr_node.data}")
@@ -311,45 +311,45 @@ class ContainerBase(IContainer, ABC):
 
     # ------------------------------------------------------------
 
-    def _register_bound_model(self, bound_model:IEntityModel, unbound_mode: bool = False):
-        # Entity can have one main bound_model and optionally some dependent
+    def _register_data_model(self, data_model:IDataModel, unbound_mode: bool = False):
+        # Entity can have one main data_model and optionally some dependent
         # models nested in tree structure
 
-        if not isinstance(bound_model, IEntityModel):
-            raise EntitySetupError(owner=self, msg=f"{bound_model.name}: Needs to be BoundModel* instance, got: {bound_model}")
+        if not isinstance(data_model, IDataModel):
+            raise EntitySetupError(owner=self, msg=f"{data_model.name}: Needs to be DataModel* instance, got: {data_model}")
 
         attr_node = None
         # alias_saved = False
         is_list = False
-        model = bound_model.model
+        model_klass = data_model.model_klass
 
-        if isinstance(model, DotExpression):
-            attr_node = self._setup_bound_model_dot_expression(bound_model)
+        if isinstance(model_klass, DotExpression):
+            attr_node = self._setup_data_model_dot_expression(data_model)
 
-            model   = attr_node.data.type_
+            model_klass   = attr_node.data.type_
             is_list = attr_node.data.is_list
             py_type_hint = attr_node.data.py_type_hint
 
             if self.is_subentity_single() and is_list:
-                raise EntitySetupTypeError(owner=self, msg=f"{bound_model.name}: For SubEntitySingle did not expect List model type, got: {py_type_hint}")
+                raise EntitySetupTypeError(owner=self, msg=f"{data_model.name}: For SubEntitySingle did not expect List model type, got: {py_type_hint}")
             elif self.is_subentity_items() and not is_list:
-                raise EntitySetupTypeError(owner=self, msg=f"{bound_model.name}: For SubEntityItems expected List model type, got: {py_type_hint}")
+                raise EntitySetupTypeError(owner=self, msg=f"{data_model.name}: For SubEntityItems expected List model type, got: {py_type_hint}")
 
-            # TODO: check bound_model cases - list, not list, etc.
+            # TODO: check data_model cases - list, not list, etc.
             # elif self.is_entity_model() and ...
         else:
             if self.is_subentity():
-                raise EntitySetupTypeError(owner=self, msg=f"{bound_model.name}: For SubEntity use DotExpression as model, got: {model}")
+                raise EntitySetupTypeError(owner=self, msg=f"{data_model.name}: For SubEntity use DotExpression as model, got: {model_klass}")
             # TODO: maybe check model type_info is_list ...
 
-        if not is_model_class(model) and not (is_list and model in STANDARD_TYPE_LIST):
-            raise EntitySetupError(owner=self, msg=f"Managed model {bound_model.name} needs to be a @dataclass, pydantic.BaseModel or List[{STANDARD_TYPE_LIST}], got: {type(model)}")
+        if not is_model_class(model_klass) and not (is_list and model_klass in STANDARD_TYPE_LIST):
+            raise EntitySetupError(owner=self, msg=f"Managed model {data_model.name} needs to be a @dataclass, pydantic.BaseModel or List[{STANDARD_TYPE_LIST}], got: {type(model_klass)}")
 
         # == M.name version
         models_registry = self.setup_session.get_registry(ModelsNS)
         models_registry.register_all_nodes(root_attr_node=attr_node,
-                                           bound_model=bound_model,
-                                           model=model,
+                                           data_model=data_model,
+                                           model_klass=model_klass,
                                            unbound_mode=unbound_mode)
 
         return attr_node
@@ -371,27 +371,27 @@ class ContainerBase(IContainer, ABC):
     def _replace_modelsns_registry(self, setup_session: SetupSession):
         # subentity case
         assert (self.is_unbound())
-        self.bound_model.set_parent(self)
+        self.data_model.set_parent(self)
 
-        if isinstance(self.bound_model, IUnboundModel):
+        if isinstance(self.data_model, IUnboundDataModel):
             assert self.is_entity()
             # setup_session=None - dataclass should be already created
             fields_dataclass, _ = self.get_component_fields_dataclass(setup_session=None)
-            self.bound_model = EntityModel(model=fields_dataclass)
+            self.data_model = DataModel(model_klass=fields_dataclass)
         else:
             assert not self.is_entity()
             # model_dexp_node: IDotExpressionNode
-            if not isinstance(self.bound_model.model, DotExpression):
-                raise EntityInternalError(owner=self, msg=f"In unbound mode bound_model is expected to be DotExpression, got: {self.bound_model}")
+            if not isinstance(self.data_model.model_klass, DotExpression):
+                raise EntityInternalError(owner=self, msg=f"In unbound mode data_model is expected to be DotExpression, got: {self.data_model}")
             # Setup must be called before - in order to set type_info
-            self.bound_model.model.Setup(setup_session=setup_session, owner=self)
+            self.data_model.model_klass.Setup(setup_session=setup_session, owner=self)
 
         models_registry = self.setup_session.get_registry(ModelsNS)
         assert models_registry.is_unbound_models_registry()
         # TODO: any need to save old models_registry?
         models_registry = ModelsRegistry()
         self.setup_session.add_registry(registry=models_registry, replace=True)
-        self._register_bound_model(bound_model=self.bound_model, unbound_mode=True)
+        self._register_data_model(data_model=self.data_model, unbound_mode=True)
 
     # ------------------------------------------------------------
 
@@ -400,9 +400,9 @@ class ContainerBase(IContainer, ABC):
         if self.is_finished():
             raise EntitySetupError(owner=self, msg="setup() should be called only once")
 
-        if self.bound_model is None:
-            self.bound_model = UnboundModel()
-            # raise EntitySetupError(owner=self, msg="bound_model not set. Initialize in constructor or call bind_to() first.")
+        if self.data_model is None:
+            self.data_model = UnboundModel()
+            # raise EntitySetupError(owner=self, msg="data_model not set. Initialize in constructor or call bind_to() first.")
 
         if not self.contains:
             raise EntitySetupError(owner=self, msg="'contains' attribute is required with list of components")
@@ -414,7 +414,7 @@ class ContainerBase(IContainer, ABC):
             self.settings._setup_all_custom_functions(self.apply_settings_class)
 
             # Traverse all subcomponents and call the same method for each (recursion)
-            # NOTE: Will setup all bound_model and bind_to and ModelsNS.
+            # NOTE: Will setup all data_model and bind_to and ModelsNS.
             #       In phase two will setup all other components and FieldsNS, ThisNS and FunctionsNS.
             self._setup_phase_one()
 
@@ -465,8 +465,8 @@ class ContainerBase(IContainer, ABC):
         self.setup_session.finish()
 
         if self.keys:
-            # Inner EntityModel can have self.bound_model.model = DotExpression
-            self.keys.validate(self.bound_model.get_type_info().type_)
+            # Inner DataModel can have self.data_model.model_klass = DotExpression
+            self.keys.validate(self.data_model.get_type_info().type_)
 
         if self.is_top_parent():
             self.setup_session.call_hooks_on_finished_all()
@@ -475,8 +475,8 @@ class ContainerBase(IContainer, ABC):
 
     # ------------------------------------------------------------
 
-    def get_bound_model_attr_node(self) -> AttrDexpNode:
-        return self.setup_session.get_registry(ModelsNS).get_attr_node_by_bound_model(bound_model=self.bound_model)
+    def get_data_model_attr_node(self) -> AttrDexpNode:
+        return self.setup_session.get_registry(ModelsNS).get_attr_node_by_data_model(data_model=self.data_model)
 
     # ------------------------------------------------------------
 
@@ -501,7 +501,7 @@ class ContainerBase(IContainer, ABC):
 
     def get_key_pairs_or_index0(self,
                                 apply_result: IApplyResult,
-                                instance: ModelType,
+                                instance: ModelKlassType,
                                 index0: Index0Type,
                                 ) -> KeyType:
         """
@@ -515,7 +515,7 @@ class ContainerBase(IContainer, ABC):
         return ret
 
 
-    def get_key_pairs(self, instance: ModelType, apply_result: IApplyResult) \
+    def get_key_pairs(self, instance: ModelKlassType, apply_result: IApplyResult) \
             -> KeyPairs:
         if not self.keys:
             raise EntityInternalError(msg="get_key_pairs() should be called only when 'keys' are defined")
@@ -526,7 +526,7 @@ class ContainerBase(IContainer, ABC):
     # @staticmethod
     # def create_this_registry_for_model_class(
     #         setup_session: ISetupSession,
-    #         model_class: ModelType,
+    #         model_class: ModelKlassType,
     #         ) -> IThisRegistry:
     #     # NOTE: must be here since:
     #     #   - expressions.py don't see ThisRegistry
@@ -551,11 +551,11 @@ class ContainerBase(IContainer, ABC):
 class KeysBase(ABC):
 
     @abstractmethod
-    def validate(self, model_or_children_model: ModelType):
+    def validate(self, model_or_children_model: ModelKlassType):
         ...
 
     @abstractmethod
-    def get_key_pairs(self, instance: ModelType, container: IContainer) -> KeyPairs:
+    def get_key_pairs(self, instance: ModelKlassType, container: IContainer) -> KeyPairs:
         """ returns list of (key-name, key-value) """
         ...
 
@@ -601,15 +601,15 @@ class KeyFields(KeysBase):
         if len(set(self.field_names)) != len(self.field_names):
             raise EntitySetupNameError(f"Fields needs to be unique list of names, found duplicates: '{self.field_names}'")
 
-    def validate(self, model: ModelType):
-        model_fields = get_model_fields(model)
+    def validate(self, model_klass: ModelKlassType):
+        model_fields = get_model_fields(model_klass)
         for field_name in self.field_names:
             if field_name not in model_fields:
                 available_names = get_available_names_example(field_name, model_fields.keys())
-                raise EntitySetupNameNotFoundError(f"Field name '{field_name}' not found in list of attributes of '{model}'. Available names: {available_names}")
+                raise EntitySetupNameNotFoundError(f"Field name '{field_name}' not found in list of attributes of '{model_klass}'. Available names: {available_names}")
 
 
-    def get_key_pairs(self, instance: ModelType, apply_result: IApplyResult) -> KeyPairs:
+    def get_key_pairs(self, instance: ModelKlassType, apply_result: IApplyResult) -> KeyPairs:
         # container: IContainer
         # apply_result:IApplyResult
         # frame = apply_result.current_frame
@@ -646,7 +646,7 @@ class Entity(IEntity, ContainerBase):
     title:              Optional[TransMessageType] = field(repr=False, default=None)
 
     # binding interface - not dumped/exported
-    bound_model:        Optional[Union[EntityModel, ModelType]] = field(repr=False, default=None, metadata={"skip_dump": True})
+    data_model:        Optional[Union[DataModel, ModelKlassType]] = field(repr=False, default=None, metadata={"skip_dump": True})
     # list of names from model / contains element names
     keys:               Optional[KeysBase] = field(repr=False, default=None)
     # will be filled automatically with Settings() if not supplied
@@ -671,7 +671,7 @@ class Entity(IEntity, ContainerBase):
     # used for automatic component's naming, <parent_name/class_name>__<counter>
     name_counter_by_parent_name: Dict[str, int] = field(init=False, repr=False, default_factory=dict)
 
-    # is_unbound to model case - must be cached since bound_model could be dynamically changed in setup phase with normal
+    # is_unbound to model case - must be cached since data_model could be dynamically changed in setup phase with normal
     _is_unbound: bool = field(init=False, repr=False)
 
     def __post_init__(self):
@@ -686,20 +686,20 @@ class Entity(IEntity, ContainerBase):
         return self._is_unbound
 
     def init_clean(self):
-        if self.bound_model:
-            if is_model_class(self.bound_model):
-                self.bound_model = EntityModel(model=self.bound_model)
+        if self.data_model:
+            if is_model_class(self.data_model):
+                self.data_model = DataModel(model_klass=self.data_model)
 
-            if not (isinstance(self.bound_model, EntityModel) and is_model_class(self.bound_model.model)):
-                raise EntitySetupTypeError(owner=self, msg=f"Attribute 'bound_model' needs to be model DC/PYD OR BoundModel with model DC/PYD, got: {self.bound_model}")
+            if not (isinstance(self.data_model, DataModel) and is_model_class(self.data_model.model_klass)):
+                raise EntitySetupTypeError(owner=self, msg=f"Attribute 'data_model' needs to be model DC/PYD OR DataModel with model DC/PYD, got: {self.data_model}")
 
             if not self.name:
                 self.name = "__".join([
                     camel_case_to_snake(self.__class__.__name__),
-                    camel_case_to_snake(self.bound_model.model.__name__),
+                    camel_case_to_snake(self.data_model.model_klass.__name__),
                     ])
 
-        self._is_unbound = self.bound_model is None
+        self._is_unbound = self.data_model is None
 
         self._check_cleaners([ChildrenValidationBase, ChildrenEvaluationBase])
 
@@ -733,7 +733,7 @@ class Entity(IEntity, ContainerBase):
         return True
 
     def change(self,
-               bound_model:Union[UndefinedType, EntityModel]=UNDEFINED,
+               data_model:Union[UndefinedType, DataModel]=UNDEFINED,
                settings: Optional[Settings]=None,
                apply_settings_class: Optional[Type[ApplySettings]]=None,
                # do_setup:bool = True,
@@ -745,11 +745,11 @@ class Entity(IEntity, ContainerBase):
         if self.is_finished():
             raise EntityInternalError(owner=self, msg="Entity already marked as finished.")
 
-        if bound_model != UNDEFINED:
+        if data_model != UNDEFINED:
             # NOTE: allowed to change to None (not yet tested)
-            # if self.bound_model is not None:
-            #     raise EntitySetupError(owner=self, msg="bound_model already already set, late binding not allowed.")
-            self.bound_model = bound_model
+            # if self.data_model is not None:
+            #     raise EntitySetupError(owner=self, msg="data_model already already set, late binding not allowed.")
+            self.data_model = data_model
 
         if apply_settings_class:
             if self.apply_settings_class:
@@ -773,7 +773,7 @@ class Entity(IEntity, ContainerBase):
 
     def apply(self,
               instance: DataclassType,
-              instance_new: Optional[ModelType] = None,
+              instance_new: Optional[ModelKlassType] = None,
               settings: Optional[ApplySettings] = None,
               accessor: Optional[ValueAccessorInputType] = None,
               raise_if_failed:bool = True) -> IApplyResult:
@@ -787,7 +787,7 @@ class Entity(IEntity, ContainerBase):
     def apply_partial(self,
                       component_name_only:str,
                       instance: DataclassType,
-                      instance_new: Optional[ModelType] = None,
+                      instance_new: Optional[ModelKlassType] = None,
                       settings: Optional[Settings] = None,
                       accessor: Optional[ValueAccessorInputType] = None,
                       raise_if_failed:bool = True) -> IApplyResult:
@@ -802,7 +802,7 @@ class Entity(IEntity, ContainerBase):
 
     def _apply(self,
                instance: DataclassType,
-               instance_new: Optional[ModelType] = None,
+               instance_new: Optional[ModelKlassType] = None,
                component_name_only:Optional[str] = None,
                settings: Optional[Settings] = None,
                accessor: Optional[ValueAccessorInputType] = None,
@@ -865,9 +865,9 @@ class Entity(IEntity, ContainerBase):
 
         return output
 
-    def create_dto_instance_from_model_instance(self, instance: ModelType, dto_class: Type[ModelType]) -> ModelType:
-        if not isinstance(instance, self.bound_model.model):
-            raise EntityTypeError(owner=self, msg=f"Expected  {self.bound_model.model} instance, got: {instance}: {type(instance)}")
+    def create_dto_instance_from_model_instance(self, instance: ModelKlassType, dto_class: Type[ModelKlassType]) -> ModelKlassType:
+        if not isinstance(instance, self.data_model.model_klass):
+            raise EntityTypeError(owner=self, msg=f"Expected  {self.data_model.model_klass} instance, got: {instance}: {type(instance)}")
 
         struct_converter_runner = StructConverterRunner()
         dto_instance = struct_converter_runner.create_dto_instance_from_model_instance(
@@ -888,15 +888,15 @@ class SubEntityBase(ContainerBase, ABC):
     SubEntityItems or top Entity
     """
     # DotExpression based model -> can be dumped
-    bound_model:    Union[EntityModel, EntityModelWithHandlers, DotExpression] = field(repr=False)
+    data_model:    Union[DataModel, DataModelWithHandlers, DotExpression] = field(repr=False)
 
     # cardinality:  ICardinalityValidation
     contains:       List[IComponent] = field(repr=False)
 
     accessor:       Optional[ValueAccessorInputType] = field(repr=False, default=None)
 
-    # required since if it inherit name from EntityModel then the name will not
-    # be unique in self.components (SubEntityItems and EntityModel will share the same name)
+    # required since if it inherit name from DataModel then the name will not
+    # be unique in self.components (SubEntityItems and DataModel will share the same name)
     name:           Optional[str] = field(default=None)
     title:          Optional[TransMessageType] = field(repr=False, default=None)
 
@@ -940,16 +940,16 @@ class SubEntityBase(ContainerBase, ABC):
 
     def __post_init__(self):
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
-        if isinstance(self.bound_model, DotExpression):
+        if isinstance(self.data_model, DotExpression):
             # Clone it to be seure that is not used - if problem, then clone only if not built
-            bound_model = self.bound_model.Clone()
-            self.bound_model = EntityModel(model=bound_model)
+            data_model = self.data_model.Clone()
+            self.data_model = DataModel(model_klass=data_model)
 
-        if not (isinstance(self.bound_model, IEntityModel) and isinstance(self.bound_model.model, DotExpression)):
-            raise EntityInternalError(owner=self, msg=f"Attribute bound_model needs to be DotExpression OR BoundModel with DotExpression '.model', got::'{self.bound_model}'")
+        if not (isinstance(self.data_model, IDataModel) and isinstance(self.data_model.model_klass, DotExpression)):
+            raise EntityInternalError(owner=self, msg=f"Attribute data_model needs to be DotExpression OR DataModel with DotExpression '.model', got::'{self.data_model}'")
 
         if not self.name:
-            self.name = get_name_from_bind(self.bound_model.model)
+            self.name = get_name_from_bind(self.data_model.model_klass)
 
         super().__post_init__()
 
@@ -1019,7 +1019,7 @@ class SubEntitySingle(SubEntityBase):
     # def may_collect_my_children() -> bool:
     #     # currently not possible - sometimes child.bind_to need to be setup and
     #     # setup can be done only fields which are inside the same container
-    #     # share the same bound_model
+    #     # share the same data_model
     #     return True
 
 # ------------------------------------------------------------

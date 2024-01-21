@@ -118,10 +118,10 @@ NoneType                = type(None) # or None.__class__
 DataclassType = TypeVar("DataclassType", bound=Any)
 
 if PydBaseModel:
-    ModelType  = Union[DataclassType, PydBaseModel]
+    ModelKlassType  = Union[DataclassType, PydBaseModel]
     ModelField = Union[DcField, PydModelField]
 else:
-    ModelType  = DataclassType
+    ModelKlassType  = DataclassType
     ModelField = DcField
 
 STANDARD_TYPE_LIST      = (str, int, float, bool, Decimal, date, datetime, timedelta, time)
@@ -332,7 +332,7 @@ def is_model_class(klass: Any) -> bool:
     """
     return isclass(klass) and (is_dataclass(klass) or is_pydantic(klass))
 
-def is_model_instance(instance: ModelType) -> bool:
+def is_model_instance(instance: ModelKlassType) -> bool:
     """
     is_dataclass or is_pydantic (for now)
     in future: sqlalchemy model, django orm model, attrs
@@ -475,7 +475,7 @@ def get_dataclass_fields(inspect_object: Any) -> Tuple[DcField]:
 
 # ------------------------------------------------------------
 
-def get_model_fields(inspect_object: ModelType, strict: bool = True) -> Dict[AttrName, ModelField]:
+def get_model_fields(inspect_object: ModelKlassType, strict: bool = True) -> Dict[AttrName, ModelField]:
     if is_dataclass(inspect_object):
         # ALT: 
         #   from dataclasses import fields
@@ -1075,7 +1075,7 @@ class SettingsType(str, Enum):
 @dataclass
 class SettingsSource:
     settings_type: SettingsType
-    klass: ModelType
+    klass: ModelKlassType
     _fields: Optional[Dict[AttrName, ModelField]] = field(init=False, repr=False, default=None)
 
     @property

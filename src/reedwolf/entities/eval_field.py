@@ -84,7 +84,7 @@ class FieldEvaluation(FieldEvaluationBase):
 class Default(FieldEvaluationBase):
     """ used for generated classes, dynamically created objects or SQL or other
         storage generated code
-        for existing bound models - needs hook to ensure good value on object creation (__init__)
+        for existing data models - needs hook to ensure good value on object creation (__init__)
         in simple cases - can be used to ensure good default value
         for EnumField should have default within enum values.
     """

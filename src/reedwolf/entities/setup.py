@@ -47,7 +47,7 @@ from .meta import (
     is_model_class,
     FunctionArgumentsType,
     FunctionArgumentsTupleType,
-    ModelType,
+    ModelKlassType,
     TypeInfo,
     HookOnFinishedAllCallable,
     get_model_fields,
@@ -62,7 +62,7 @@ from .base import (
     IContainer,
     extract_type_info,
     IApplyResult,
-    IEntityModel,
+    IDataModel,
     ReservedAttributeNames,
     SetupStackFrame,
     UseStackFrameCtxManagerBase, IValueNode,
@@ -239,7 +239,7 @@ class RegistryBase(IRegistry):
     # --------------------
 
     def _register_special_attr_node(self,
-                                    # model_class: ModelType,
+                                    # model_class: ModelKlassType,
                                     type_info: TypeInfo,
                                     attr_name = ReservedAttributeNames,
                                     attr_name_prefix: Optional[str]=None,
@@ -253,7 +253,7 @@ class RegistryBase(IRegistry):
             raise EntitySetupValueError(owner=self, msg=f"Expected th_field is IComponentFields, got: {type(th_field)} / {th_field} ")
 
         # type_info = TypeInfo.get_or_create_by_type(py_type_hint=model_class)
-        # model_class: ModelType = type_info.type_
+        # model_class: ModelKlassType = type_info.type_
 
         if attr_name_prefix:
             attr_name = f"{attr_name_prefix}{attr_name}"
@@ -279,7 +279,7 @@ class RegistryBase(IRegistry):
     #     #     if not isinstance(child, IComponent):
     #     #         raise EntitySetupValueError(owner=self, msg=f"Child {nr}: Expected IComponent, got: {type(child)} / {to_repr(child)} ")
     #     assert self.is_items_mode
-    #     type_info = owner_component.bound_model.get_type_info()
+    #     type_info = owner_component.data_model.get_type_info()
     #     attr_name = ReservedAttributeNames.ITEMS_ATTR_NAME.value
     #     attr_node = AttrDexpNode(
     #                     name=attr_name,
@@ -293,7 +293,7 @@ class RegistryBase(IRegistry):
 
     # --------------------
 
-    def _register_model_nodes(self, model_class: ModelType):
+    def _register_model_nodes(self, model_class: ModelKlassType):
         if not is_model_class(model_class):
             raise EntitySetupValueError(owner=self, msg=f"Expected model class (DC/PYD), got: {type(model_class)} / {to_repr(model_class)} ")
 
@@ -306,7 +306,7 @@ class RegistryBase(IRegistry):
     # ------------------------------------------------------------
 
     @classmethod
-    def _create_attr_node_for_model_attr(cls, model_class: ModelType, attr_name:str) -> AttrDexpNode:
+    def _create_attr_node_for_model_attr(cls, model_class: ModelKlassType, attr_name:str) -> AttrDexpNode:
         # NOTE: will go again and again into get_model_fields()
         #       but shortcut like this didn't worked: 
         #           type_info: TypeInfo = TypeInfo.get_or_create_by_type(th_field)
@@ -475,8 +475,8 @@ class RegistryBase(IRegistry):
             else:
                 assert isinstance(owner_dexp_node, AttrDexpNode)
 
-                if isinstance(owner_dexp_node.data, IEntityModel):
-                    inspect_object = owner_dexp_node.data.model
+                if isinstance(owner_dexp_node.data, IDataModel):
+                    inspect_object = owner_dexp_node.data.model_klass
                 elif is_model_class(owner_dexp_node.data):
                     # @dataclass, Pydantic etc.
                     inspect_object = owner_dexp_node.data
@@ -539,7 +539,7 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
     Value will be fetched by evaluating .bind_to of Field component.
     """
     component: IComponent
-    instance: ModelType
+    instance: ModelKlassType
     value_node: IValueNode
 
     def get_attribute(self, apply_result:IApplyResult, attr_name: str) -> Self:

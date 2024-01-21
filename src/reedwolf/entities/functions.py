@@ -59,7 +59,7 @@ from .meta import (
     STANDARD_TYPE_LIST,
     is_model_class,
     ItemType,
-    ModelType,
+    ModelKlassType,
     ComponentTreeWValuesType,
     IInjectFuncArgHint,
     AttrValue,
@@ -282,31 +282,31 @@ class IFunction(IFunctionDexpNode, ABC):
             raise EntityInternalError(owner=self, msg=f"this_registry already set: {self.this_registry}")
         assert self.setup_session
 
-        # model_class: ModelType = None
+        # model_class: ModelKlassType = None
         type_info: Optional[TypeInfo] = None  # not used
 
         if not self.caller:
             # NOTE: Namespace top level like: Ctx.Length(This.name)
-            #       EntityModelWithHandlers with read_handlers case
+            #       DataModelWithHandlers with read_handlers case
 
             # TODO: test case self.items_func_arg: - top level function call, e.g. '<Namespace>.{self.name}(...)'
             if self.setup_session.current_frame is None:
                 # direct function creation - currently only unit test uses it
                 pass
             else:
-                model = self.setup_session.current_frame.bound_model.model
-                if isinstance(model, DotExpression):
-                    if not model.IsFinished():
+                model_klass = self.setup_session.current_frame.data_model.model_klass
+                if isinstance(model_klass, DotExpression):
+                    if not model_klass.IsFinished():
                         # container = self.get_first_parent_container(consider_self=True)
                         # model_dexp_node: IDotExpressionNode = model.Setup(setup_session=setup_session, owner=container)
-                        raise EntityInternalError(owner=self, msg=f"{model} dot-expression is not finished")
-                    model_dexp_node: IDotExpressionNode = model._dexp_node
+                        raise EntityInternalError(owner=self, msg=f"{model_klass} dot-expression is not finished")
+                    model_dexp_node: IDotExpressionNode = model_klass._dexp_node
                     type_info = model_dexp_node.get_type_info()
-                elif is_model_class(model):
+                elif is_model_class(model_klass):
                     # model_class = model
-                    type_info = TypeInfo.get_or_create_by_type(model)
+                    type_info = TypeInfo.get_or_create_by_type(model_klass)
                 else:
-                    raise EntityInternalError(owner=self, msg=f"expecting model class or dot expression, got: {model}")
+                    raise EntityInternalError(owner=self, msg=f"expecting model class or dot expression, got: {model_klass}")
         else:
             if isinstance(self.caller, IFunction):
                 function: IFunction = self.caller
@@ -1164,7 +1164,7 @@ class DotexprExecuteOnItemFactoryFuncArgHint(IInjectFuncArgHint):
         return hash((self.__class__.__name__, self.type, self.inner_type))
 
     def get_apply_inject_value(self, apply_result: "IApplyResult", prep_arg: "PrepArg"
-                               ) -> Callable[[DotExpression, ModelType], AttrValue]:
+                               ) -> Callable[[DotExpression, ModelKlassType], AttrValue]:
         """
         create this registry function that retriieves settings processor
         which will crearte this factory for providded item
@@ -1174,7 +1174,7 @@ class DotexprExecuteOnItemFactoryFuncArgHint(IInjectFuncArgHint):
 
         def execute_dot_expr_w_this_registry_of_item(
                 dot_expr:  DotExpression,
-                item: ModelType,
+                item: ModelKlassType,
         ) -> AttrValue:
             # TODO: if this becommes heavy - instead of new frame, reuse existing and change instance only
             #       this_registry should be the same for same session (same type items)

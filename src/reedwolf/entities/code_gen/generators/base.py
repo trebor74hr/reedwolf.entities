@@ -644,7 +644,7 @@ class DumpToBase(IStackOwnerSession):
 
         py_types_to_use = []
         if isinstance(component, SubEntityBase):
-            subitem_type_info = component.bound_model.type_info
+            subitem_type_info = component.data_model.type_info
 
             if isinstance(component, SubEntityItems):
                 py_types_to_use.append(List)

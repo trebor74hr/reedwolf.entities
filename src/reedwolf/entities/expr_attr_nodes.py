@@ -125,7 +125,7 @@ class AttrDexpNode(IDotExpressionNode):
         # CASE: Concrete type
         # ---------------------------------------------
         elif is_model_class(self.data):
-            # ModelType
+            # ModelKlassType
             assert type(self.data) == type, self.data
             # ALT: inspect.isclass()
             self.attr_node_type = AttrDexpNodeTypeEnum.MODEL_CLASS
@@ -216,7 +216,7 @@ class AttrDexpNode(IDotExpressionNode):
             raise EntityInternalError(owner=self, msg="Last dexp node is not finished.") 
 
         # TODO: not nicest way - string split
-        #       for subentity_items: [p._name for p in frame.container.bound_model.model.Path]
+        #       for subentity_items: [p._name for p in frame.container.data_model.model.Path]
         names = self.name.split(".")
         attr_name = names[-1]
         assert dexp_result not in (None,)

@@ -29,7 +29,7 @@ from .meta import (
     NoneType,
     KeyString,
     AttrName,
-    ModelType,
+    ModelKlassType,
     get_dataclass_field_type_info,
     make_dataclass_with_optional_fields,
 )
@@ -114,7 +114,7 @@ class ValueNodeBase(IValueNode):
 
     # cached values used in set_value() logic
     # see . _init_instance_attr_access_objects()
-    _instance_parent: Union[ModelType, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
+    _instance_parent: Union[ModelKlassType, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
     _attr_name_last: Union[AttrName, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
 
 
@@ -301,17 +301,17 @@ class ValueNodeBase(IValueNode):
         Functino name is odd.
         """
         # TODO: not sure if this validation is ok
-        type_info = self.container.bound_model.get_type_info()
+        type_info = self.container.data_model.get_type_info()
         if self.container.entity.is_unbound():
             # TODO: check if it has attribute and it has corresponding type
             #       check with _accessor
             # attr_name = self._attr_name_last, model=
             pass
         else:
-            model = type_info.type_
+            model_klass = type_info.type_
             # TODO: check with _accessor?
             if not self.instance_none_mode \
-                    and not isinstance(self.instance, model):
+                    and not isinstance(self.instance, model_klass):
                 raise EntityInternalError(owner=self, msg=f"Parent instance {self.instance} has wrong type")
 
         # -- attr_name - fetch from initial bind_to dexp (very first)
@@ -404,10 +404,10 @@ class ValueNodeBase(IValueNode):
 
     # ------------------------------------------------------------
     def _make_dataclass_with_opt_fields(self,
-                        current_instance_parent: ModelType,
-                        attr_name_prev: AttrName,
-                        attr_name: AttrName,
-                        ) -> ModelType:
+                                        current_instance_parent: ModelKlassType,
+                                        attr_name_prev: AttrName,
+                                        attr_name: AttrName,
+                                        ) -> ModelKlassType:
         current_instance_type_info = get_dataclass_field_type_info(current_instance_parent, attr_name_prev)
         if current_instance_type_info is None:
             raise EntityInternalError(owner=self,

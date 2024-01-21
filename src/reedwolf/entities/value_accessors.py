@@ -15,7 +15,7 @@ from .exceptions import (
     EntityTypeError,
 )
 from .meta import (
-    ModelType,
+    ModelKlassType,
     AttrName,
     AttrIndex,
     AttrValue,
@@ -23,8 +23,8 @@ from .meta import (
 )
 from .utils import to_repr
 
-# ATTR_GETTER_CALLABLE_TYPE = Callable[[ModelType, AttrName, AttrIndex], AttrValue]
-# ATTR_SETTER_CALLABLE_TYPE = Callable[[ModelType, AttrName, AttrIndex, AttrValue], None]
+# ATTR_GETTER_CALLABLE_TYPE = Callable[[ModelKlassType, AttrName, AttrIndex], AttrValue]
+# ATTR_SETTER_CALLABLE_TYPE = Callable[[ModelKlassType, AttrName, AttrIndex, AttrValue], None]
 
 
 class IValueAccessor:
@@ -44,7 +44,7 @@ class IValueAccessor:
 
     @staticmethod
     @abstractmethod
-    def validate_instance_type(owner_name: str, instance: Any, model_type: ModelType) -> None:
+    def validate_instance_type(owner_name: str, instance: Any, model_klass: ModelKlassType) -> None:
         """
         will raise EntityTypeError if type of instance is not adequate
         """
@@ -52,12 +52,12 @@ class IValueAccessor:
 
     @staticmethod
     @abstractmethod
-    def get_value(instance: ModelType, attr_name: AttrName, attr_index: Optional[AttrIndex]) -> AttrValue:
+    def get_value(instance: ModelKlassType, attr_name: AttrName, attr_index: Optional[AttrIndex]) -> AttrValue:
         ...
 
     @staticmethod
     @abstractmethod
-    def set_value(instance: ModelType, attr_name: AttrName, attr_index: Optional[AttrIndex], new_value: AttrValue) -> None:
+    def set_value(instance: ModelKlassType, attr_name: AttrName, attr_index: Optional[AttrIndex], new_value: AttrValue) -> None:
         ...
 
 
@@ -71,16 +71,16 @@ class AttributeValueAccessor(IValueAccessor):
     def get_code() -> str:
         return "attribute"
 
-    def validate_instance_type(self, owner_name: str, instance: Any, model_type: ModelType) -> None:
-        if not isinstance(instance, model_type):
-            raise EntityTypeError(owner=self, msg=f"Expecting instance of bound model '{model_type}', got: {type(instance)} / {to_repr(instance)}.")
+    def validate_instance_type(self, owner_name: str, instance: Any, model_klass: ModelKlassType) -> None:
+        if not isinstance(instance, model_klass):
+            raise EntityTypeError(owner=self, msg=f"Expecting instance of data model '{model_klass}', got: {type(instance)} / {to_repr(instance)}.")
 
     @staticmethod
-    def get_value(instance: ModelType, attr_name: AttrName, attr_index: Optional[AttrIndex]) -> AttrValue:
+    def get_value(instance: ModelKlassType, attr_name: AttrName, attr_index: Optional[AttrIndex]) -> AttrValue:
         return getattr(instance, attr_name, UNDEFINED)
 
     @staticmethod
-    def set_value(instance: ModelType, attr_name: AttrName, attr_index: Optional[AttrIndex], new_value: AttrValue) -> None:
+    def set_value(instance: ModelKlassType, attr_name: AttrName, attr_index: Optional[AttrIndex], new_value: AttrValue) -> None:
         setattr(instance, attr_name, new_value)
 
 
@@ -95,7 +95,7 @@ class DictValueAccessor(IValueAccessor):
         return "dict"
 
     @staticmethod
-    def validate_instance_type(owner_name: str, instance: Any, model_type: ModelType) -> None:
+    def validate_instance_type(owner_name: str, instance: Any, model_klass: ModelKlassType) -> None:
         if not isinstance(instance, dict):
             raise EntityTypeError(owner=owner_name, msg=f"Expecting a dict instance, got: {type(instance)} / {to_repr(instance)}.")
 
@@ -124,7 +124,7 @@ class DictValueAccessor(IValueAccessor):
 #         return "list_by_index"
 #
 #     @staticmethod
-#     def validate_instance_type(owner_name: str, instance: Any, model_type: ModelType) -> None:
+#     def validate_instance_type(owner_name: str, instance: Any, model_klass: ModelKlassType) -> None:
 #         # Tuples not supported - can not be extended in-place, set is not possible when it misses
 #         if not isinstance(instance, list):
 #             raise EntityTypeError(owner=owner_name, msg=f"Expecting list instance, got: {type(instance)} / {to_repr(instance)}.")
@@ -157,9 +157,9 @@ class AutodetectValueAccessor(IValueAccessor):
     def get_code() -> str:
         return "autodetect"
 
-    def validate_instance_type(self, owner_name: str, instance: Any, model_type: ModelType) -> None:
-        if not (isinstance(instance, model_type) or isinstance(instance, dict)): #  or isinstance(instance, list)):
-            raise EntityTypeError(owner=self, msg=f"Expecting instance of bound model '{model_type}' or dict , got: {type(instance)} / {to_repr(instance)}.")
+    def validate_instance_type(self, owner_name: str, instance: Any, model_klass: ModelKlassType) -> None:
+        if not (isinstance(instance, model_klass) or isinstance(instance, dict)): #  or isinstance(instance, list)):
+            raise EntityTypeError(owner=self, msg=f"Expecting instance of data model '{model_klass}' or dict , got: {type(instance)} / {to_repr(instance)}.")
 
     @staticmethod
     def get_value(instance: Any, attr_name: AttrName, attr_index: AttrIndex) -> AttrValue:

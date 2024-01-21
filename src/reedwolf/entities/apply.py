@@ -35,7 +35,7 @@ from .meta import (
     MAX_RECURSIONS,
     Self,
     NoneType,
-    ModelType,
+    ModelKlassType,
     is_model_class,
     is_model_instance,
     ValuesTree,
@@ -94,9 +94,9 @@ class UseApplyStackFrameCtxManager(UseStackFrameCtxManagerBase):
 @dataclass
 class InstanceItem:
     key: KeyType
-    instance: ModelType = field(repr=False)
+    instance: ModelKlassType = field(repr=False)
     index0: Index0Type = field(repr=False)
-    item_instance_new: ModelType = field(repr=False)
+    item_instance_new: ModelKlassType = field(repr=False)
     change_op: Optional[ChangeOpEnum] = field(repr=True)
 
 
@@ -124,10 +124,10 @@ class ApplyResult(IApplyResult):
             if not self.component_only.can_apply_partial():
                 raise EntityApplyError(owner=self, msg=f"Component '{self.component_only}' does not support partial apply. Use SubEntityItems, FieldGroup or similar.")
 
-        # self.bound_model = getattr(self.entity, "bound_model")
-        self.bound_model = self.entity.bound_model
-        if not self.bound_model:
-            raise EntityApplyError(owner=self, msg=f"Component object '{self.entity}' has no bound model")
+        # self.data_model = getattr(self.entity, "data_model")
+        self.data_model = self.entity.data_model
+        if not self.data_model:
+            raise EntityApplyError(owner=self, msg=f"Component object '{self.entity}' has no data model")
 
         if self.entity.apply_settings_class:
             if not self.settings:
@@ -138,9 +138,9 @@ class ApplyResult(IApplyResult):
             if self.settings:
                 raise EntityApplyError(owner=self, msg=f"Given settings object '{self.settings}', but settings class in component is not setup. Provide 'apply_settings_class' to Entity object and try again.")
 
-        # self.model = self.bound_model.model
+        # self.model_klass = self.data_model.model
         # if not self.model:
-        #     raise EntityInternalError(owner=self, item=component, msg=f"Bound model '{self.bound_model}' has empty model.")
+        #     raise EntityInternalError(owner=self, item=component, msg=f"Bound model '{self.data_model}' has empty model.")
 
         if self.defaults_mode:
             if not (self.instance is NA_DEFAULTS_MODE and self.instance_new is None and not self.component_name_only):
@@ -159,7 +159,7 @@ class ApplyResult(IApplyResult):
                 # way __post_init__, __init__ and similar methods that could
                 # change instance state are avoided.
                 # TODO: maybe this could/should be cached by dc_model?
-                temp_dataclass_model = make_dataclass_with_optional_fields(self.bound_model.model)
+                temp_dataclass_model = make_dataclass_with_optional_fields(self.data_model.model_klass)
 
                 # All fields are made optional and will have value == None
                 # (from field's default)
@@ -169,7 +169,7 @@ class ApplyResult(IApplyResult):
                 if not self.entity.is_unbound():
                     self.entity.settings._accessor.validate_instance_type(owner_name=self.entity.name,
                                                                           instance=self.instance,
-                                                                          model_type=self.bound_model.model)
+                                                                          model_klass=self.data_model.model_klass)
 
             if self.instance_new is not None and not self.component_name_only:
                 self._detect_instance_new_struct_type(self.entity)
@@ -476,7 +476,7 @@ class ApplyResult(IApplyResult):
         assert not (mode_subentity_items and mode_dexp_dependency)
 
         comp_container = component.get_first_parent_container(consider_self=True)
-        # comp_container_model = comp_container.bound_model.get_type_info().type_
+        # comp_container_model = comp_container.data_model.get_type_info().type_
 
         if mode_dexp_dependency:
             # TODO: self.settings.logger.info(f"apply - mode_dexp_dependency - {self.current_frame.component.name} depends on {component.name} - calling apply() ...")
@@ -705,11 +705,11 @@ class ApplyResult(IApplyResult):
         # TODO: logger: apply_result.settings.logger.debug(f"depth={depth}, comp={component.name}, bind_to={bind_to} => {dexp_result}")
 
         if self.instance_none_mode and component.is_top_parent():
-            # create new instance of bound_model.model class
+            # create new instance of data_model.model_klass class
             # based on temporary created dataclass
             kwargs = asdict(self.instance)
             self.instance = dataclass_from_dict(
-                               dataclass_klass=self.bound_model.model,
+                               dataclass_klass=self.data_model.model_klass,
                                values_dict=kwargs)
 
         return #  process_further
@@ -773,21 +773,21 @@ class ApplyResult(IApplyResult):
     def _get_subentity_model_instances(self,
                                        subentity: IContainer,
                                        in_component_only_tree: bool
-                                       ) -> Tuple[ModelType, ModelType]:
+                                       ) -> Tuple[ModelKlassType, ModelKlassType]:
         """
-        evaluate bound_model.model DotExpression and get instance
+        evaluate data_model.model_klass DotExpression and get instance
         and instance_new. Applies to SubentityItems and SubentitySingle.
         """
-        if not isinstance(subentity.bound_model.model, DotExpression):
+        if not isinstance(subentity.data_model.model_klass, DotExpression):
             raise EntityInternalError(owner=self,
-                                      msg=f"For SubEntityItems `bound_model` needs to be DotExpression, got: {subentity.bound_model.model}")
+                                      msg=f"For SubEntityItems `data_model` needs to be DotExpression, got: {subentity.data_model.model_klass}")
 
-        if getattr(subentity.bound_model, "contains", None):
+        if getattr(subentity.data_model, "contains", None):
             raise EntityInternalError(owner=self,
-                                      msg=f"For SubEntityItems complex `bound_model` is currently not supported (e.g. `contains`), use simple BoundModel, got: {subentity.bound_model}")
+                                      msg=f"For SubEntityItems complex `data_model` is currently not supported (e.g. `contains`), use simple DataModel, got: {subentity.data_model}")
 
             # original instance
-        dexp_result: ExecResult = subentity.bound_model.model \
+        dexp_result: ExecResult = subentity.data_model.model_klass \
             ._evaluator.execute_dexp(apply_result=self)
         instance = dexp_result.value
 
@@ -816,7 +816,7 @@ class ApplyResult(IApplyResult):
             # NOTE: frame not yet set so 'self.current_frame.instance' is not available
             #       thus sending 'instance' param
             if not self.entity.is_unbound():
-                container.bound_model._apply_nested_models(
+                container.data_model._apply_nested_models(
                     apply_result=self,
                     instance=self.instance
                 )
@@ -1159,7 +1159,7 @@ class ApplyResult(IApplyResult):
         Main function for parsing, validating and evaluating input instance.
         Returns ApplyResult object.
 
-        if all ok - Result.instance contains a new instance (clone + update) of the bound model type 
+        if all ok - Result.instance contains a new instance (clone + update) of the data model type
         if not ok - errors contain all details.
         """
         with self.entity.settings._use_apply_settings(self.settings):
@@ -1172,7 +1172,7 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def get_instance_by_key_string(self, key_string: KeyString) -> ModelType:
+    def get_instance_by_key_string(self, key_string: KeyString) -> ModelKlassType:
         " must exist in cache - see previous method which sets self.get_key_string_by_instance(container) "
         return self.instance_by_key_string_cache[key_string]
 
@@ -1188,12 +1188,12 @@ class ApplyResult(IApplyResult):
         else:
             if isinstance(component, ContainerBase):
                 # full or partial on container
-                model = component.bound_model.type_info.type_
+                model_klass = component.data_model.type_info.type_
             else:
                 # FieldGroup supported only - partial with matched compoonent
                 # raise NotImplementedError(f"TODO: currently not supported: {component}")
                 container = component.get_first_parent_container(consider_self=True)
-                model = container.bound_model.type_info.type_
+                model_klass = container.data_model.type_info.type_
 
             if isinstance(self.instance_new, (list, tuple)):
                 if not self.instance_new:
@@ -1203,14 +1203,14 @@ class ApplyResult(IApplyResult):
             else:
                 instance_to_test = self.instance_new
 
-            if isinstance(instance_to_test, model):
+            if isinstance(instance_to_test, model_klass):
                 instance_new_struct_type = StructEnum.MODELS_LIKE
             elif is_model_class(instance_to_test.__class__):
                 # TODO: it could be StructEnum.MODELS_LIKE too, but how to detect this? input param or?
                 instance_new_struct_type = StructEnum.ENTITY_LIKE
             else:
                 raise EntityApplyError(owner=self,
-                        msg=f"Object '{instance_to_test}' is not instance of bound model '{model}' and not model class: {type(instance_to_test)}.")
+                        msg=f"Object '{instance_to_test}' is not instance of data_model.model_klass '{model_klass}' and not model class: {type(instance_to_test)}.")
 
         self.instance_new_struct_type = instance_new_struct_type
         # return instance_new_struct_type: StructEnum
@@ -1221,8 +1221,8 @@ class ApplyResult(IApplyResult):
         if self.instance_new_struct_type is None:
             current_instance_new = None
         elif self.instance_new_struct_type == StructEnum.MODELS_LIKE:
-            if not isinstance(subentity.bound_model.model, DotExpression):
-                raise EntityInternalError(owner=self, msg=f"For subentity {subentity} expected bound_model based on DotExpression, got: {subentity.bound_model.model}")
+            if not isinstance(subentity.data_model.model_klass, DotExpression):
+                raise EntityInternalError(owner=self, msg=f"For subentity {subentity} expected data_model based on DotExpression, got: {subentity.data_model.model_klass}")
 
             if self.current_frame.instance_new not in (None, UNDEFINED):
 
@@ -1245,14 +1245,14 @@ class ApplyResult(IApplyResult):
                         )) as frame:
                     dexp_result: ExecResult = \
                                         subentity \
-                                        .bound_model \
-                                        .model \
+                                        .data_model \
+                                        .model_klass \
                                         ._evaluator.execute_dexp(
                                                 apply_result=self, 
                                                 )
                 # set new value
                 current_instance_new = dexp_result.value
-                if frame.bound_model_root.type_info.is_list and not isinstance(current_instance_new, (list, tuple)):
+                if frame.data_model_root.type_info.is_list and not isinstance(current_instance_new, (list, tuple)):
                     # TODO: temp fallback - resolve properly since this is not normal case ... (raise or ...)
                     current_instance_new = [current_instance_new]
             else:
@@ -1511,7 +1511,7 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def get_key_string_by_instance(self, component: IComponent, instance: ModelType, parent_instance: ModelType,
+    def get_key_string_by_instance(self, component: IComponent, instance: ModelKlassType, parent_instance: ModelKlassType,
                                    index0: Optional[Index0Type], force:bool=False) -> KeyString:
         # apply_result:IApplyResult,  -> self
         """
@@ -1628,7 +1628,7 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def get_attr_value_by_comp_name(self, component:IComponent, instance: ModelType) -> ExecResult:
+    def get_attr_value_by_comp_name(self, component:IComponent, instance: ModelKlassType) -> ExecResult:
         attr_name = component.name
         value = component._accessor.get_value(instance=instance, attr_name=attr_name, attr_index=None)
         if value is UNDEFINED:

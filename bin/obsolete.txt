@@ -102,7 +102,7 @@ meta.py
     # var_type:       TypeInfoTypeEnum = field(init=False, repr=False)
     # parent_object: type
 
-    # # Source field from model - type hinted (th_)
+    # # Source field from model_klass - type hinted (th_)
     # # It is None when function
     # th_field: OptionalModelField
     # function: Optional[Callable[..., Any]]
@@ -616,10 +616,10 @@ apply.py
         instance_none_mode = value_node.instance_none_mode
 
         # TODO: not sure if this validation is ok
-        # NOTE: bound_model.model could be VExpr
-        model = container.bound_model.get_type_info().type_
+        # NOTE: data_model.model_klass could be VExpr
+        model_klass = container.data_model.get_type_info().type_
         if not instance_none_mode \
-                and not isinstance(parent_instance, model):
+                and not isinstance(parent_instance, model_klass):
             raise EntityInternalError(owner=self, msg=f"Parent instance {parent_instance} has wrong type")
 
         # -- attr_name - fetch from initial bind dexp (very first)

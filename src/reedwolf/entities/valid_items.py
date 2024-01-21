@@ -43,7 +43,7 @@ from .base import (
 
 
 def _validate_setup_common(validation, allow_none:Optional[bool]=None) -> 'AttrDexpNode':  # noqa: F821
-    model_attr_node = validation.parent.get_bound_model_attr_node()
+    model_attr_node = validation.parent.get_data_model_attr_node()
     if allow_none is not None:
         if allow_none and not model_attr_node.isoptional():
             raise EntitySetupTypeError(owner=validation, msg="Type hint is not Optional and cardinality allows None. Add Optional or set .allow_none=False/min=1+")

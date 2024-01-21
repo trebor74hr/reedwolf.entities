@@ -69,7 +69,7 @@ from .meta import (
     is_function,
     is_method_by_name,
     is_model_class,
-    ModelType,
+    ModelKlassType,
     DataclassType,
     extract_model_field_meta,
     extract_py_type_hints,
@@ -572,8 +572,8 @@ class IComponent(ReedwolfDataclassBase, ABC):
         from .registries import (
             ThisRegistry,
         )
-        if self.is_bound_model():
-            raise EntityInternalError(owner=self, msg=f"For EntityModel create_this_registry() needs to be overridden.")
+        if self.is_data_model():
+            raise EntityInternalError(owner=self, msg=f"For DataModel create_this_registry() needs to be overridden.")
 
         has_children = bool(self.get_children())
 
@@ -586,7 +586,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
         #     # Items -> This.Items
         #     this_registry = ThisRegistry(component=self)
 
-        # # TODO: add .Instance ==> EntityModel instance
+        # # TODO: add .Instance ==> DataModel instance
         # # elif self.is_subentity_single():
         # #     # Children -> This.Children + This.<all-attributes> + This.Instance
         # #     this_registry = ThisRegistryForInstanceAndChildren(owner=self) # , setup_session=setup_session)
@@ -686,7 +686,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
         return False
 
     @staticmethod
-    def is_bound_model() -> bool:
+    def is_data_model() -> bool:
         return False
 
     @staticmethod
@@ -961,7 +961,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
         does following:
         - collects components:
         - set parent
-        - evaluate bound_model - class or M.value_expressions
+        - evaluate data_model - class or M.value_expressions
         - evaluate bind_to - M.value_expressions
         - custom dataclass and fields
 
@@ -1018,13 +1018,13 @@ class IComponent(ReedwolfDataclassBase, ABC):
                 )):
             if isinstance(self, IContainer):
                 # ----------------------------------------
-                # ModelsNS setup 1/2 phase -> bound models
+                # ModelsNS setup 1/2 phase -> data models
                 # ----------------------------------------
                 #   - direct data models setup (Entity)
                 #   - some standard NS fields (e.g. Instance)
-                # This will call complete setup() for bound_model-s
+                # This will call complete setup() for data_model-s
                 if not self.is_unbound():
-                    self.bound_model.set_parent(self)
+                    self.data_model.set_parent(self)
                     self._register_model_attr_nodes()
 
             # includes components, cleaners and all other complex objects
@@ -1036,8 +1036,8 @@ class IComponent(ReedwolfDataclassBase, ABC):
 
                 if isinstance(component, DotExpression):
                     # NOTE:
-                    #   1) phase_one sets: Field.bind_to, Container.bound_model.model (EntityModel) on other place
-                    #      bound_model.model Dexp build for bound case is done before, and for unbound after
+                    #   1) phase_one sets: Field.bind_to, Container.data_model.model_klass (DataModel) on other place
+                    #      data_model.model_klass Dexp build for bound case is done before, and for unbound after
                     #   2) phase_two sets all other: evaluation.ensure, Validation.ensure etc.
                     continue
 
@@ -1054,17 +1054,18 @@ class IComponent(ReedwolfDataclassBase, ABC):
                     else:
                         component._setup_phase_one(components=components)
                         # delete this
-                        if component.is_bound_model() and not component.entity.is_unbound():
-                            if isinstance(component.model, DotExpression):
-                                assert component.model.IsFinished()
+                        if component.is_data_model() and not component.entity.is_unbound():
+                            data_model: IDataModel = component
+                            if isinstance(data_model.model_klass, DotExpression):
+                                assert data_model.model_klass.IsFinished()
                             # NOTE: moved from setup_phase_two() - this is required for in_model=False cases,
                             #       to register non-model attributes
-                            component._register_nested_models(setup_session)
+                            data_model._register_nested_models(setup_session)
 
                 # elif isinstance(component, IBaseComponent):
                 #     component.set_parent(parent=self)
                 #     self._add_component(component=component, components=components)
-                #     # e.g. EntityModel.model - can be any custom Class(dataclass/pydantic)
+                #     # e.g. DataModel.model_klass - can be any custom Class(dataclass/pydantic)
                 else:
                     if component.__class__.__name__ not in ("ChoiceOption", "CustomFunctionFactory", "int", "str"):
                         raise EntityInternalError(owner=component, msg=f"Strange type of component, check or add to list of ignored types for _setup_phase_one() ")
@@ -1075,8 +1076,8 @@ class IComponent(ReedwolfDataclassBase, ABC):
                     raise EntityInternalError(owner=self, msg=f"components already set: {self.components}")
                 self.components = components
 
-                # evaluate bound_model - class or M.value_expression
-                # self.bound_model.setup(setup_session=setup_session)
+                # evaluate data_model - class or M.value_expression
+                # self.data_model.setup(setup_session=setup_session)
             else:
                 if isinstance(self, IField):
                     # evaluate bind_to: ValueExpression
@@ -1186,7 +1187,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
 
         for nr, child in enumerate(children, 1):
 
-            if child.is_bound_model():
+            if child.is_data_model():
                 continue
 
             child_type_info = None
@@ -1196,7 +1197,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
 
                 if not child.bind_to.IsFinished():
                     # Can setup only fields which are inside the same container
-                    # share the same bound_model 
+                    # share the same data_model
                     child.bind_to.Setup(setup_session=setup_session, owner=self)
 
                 attr_node = child.bind_to._dexp_node
@@ -1210,14 +1211,14 @@ class IComponent(ReedwolfDataclassBase, ABC):
                 #       
                 # ------------------------------------------------------------
                 # ALT: when all model fields are available:
-                #       if not child.bound_model.model.IsFinished():
+                #       if not child.data_model.model.IsFinished():
                 #           # ALT: more complex way - it seems to work, but I prefer
                 #           #      simplier solution:
-                #           attr_node = container._setup_bound_model_dot_expression(bound_model=child.bound_model, setup_session=setup_session)
+                #           attr_node = container._setup_data_model_dot_expression(data_model=child.data_model, setup_session=setup_session)
                 #
-                #       # ALT: attr_node = child.bound_model.model._dexp_node
+                #       # ALT: attr_node = child.data_model.model._dexp_node
                 #       #      child_type_info = attr_node.get_type_info()
-                #       child_type_info = child.bound_model.get_type_info()
+                #       child_type_info = child.data_model.get_type_info()
 
                 # NOTE: "make_component_fields_dataclass()" works recuresively to
                 #       enable access only to registered fields.
@@ -1294,8 +1295,8 @@ class IComponent(ReedwolfDataclassBase, ABC):
             if not self.is_finished():
                 ret = self._setup_phase_two(setup_session=setup_session)
             else:
-                if not self.is_bound_model():
-                    raise EntityInternalError(owner=self, msg=f"_setup_phase_two() is skipped only for bound models, got: {type(self)}")
+                if not self.is_data_model():
+                    raise EntityInternalError(owner=self, msg=f"_setup_phase_two() is skipped only for data models, got: {type(self)}")
                 ret = self
 
         return ret
@@ -1333,7 +1334,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
         # returns name, subcomponent
         fields = get_model_fields(self.__class__)
 
-        # ==== Order to have bound_model first, then components, then value
+        # ==== Order to have data_model first, then components, then value
         #      expressions. In the same group order by name
 
         # NOTE: with vars() not the best way, other is to put metadata in field()
@@ -1395,7 +1396,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
                                       "setup_session", "meta",
                                       # NOTE: maybe in the future will have value expressions too
                                       "error", "description", "hint", 
-                                      # now is evaluated from bound_model, bound_model is processed
+                                      # now is evaluated from data_model, data_model is processed
                                       "models", "py_type_hint", "type_info",
                                       "bound_attr_node",
                                       "read_handler",
@@ -1428,7 +1429,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
             # ----------------------------------------------------------------------
             # TODO: this is not nice - do it better
             # TODO: models should not be dict()
-            # TODO: added Self for EntityModelWithHandlers
+            # TODO: added Self for DataModelWithHandlers
             if sub_component_name not in ("models", "data", "enum") \
                     and th_field \
                     and "Component" not in str(th_field.type) \
@@ -1436,7 +1437,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
                     and "DotExpression" not in str(th_field.type) \
                     and "Validation" not in str(th_field.type) \
                     and "Evaluation" not in str(th_field.type) \
-                    and "EntityModel" not in str(th_field.type) \
+                    and "DataModel" not in str(th_field.type) \
                     and "[Self]" not in str(th_field.type) \
                     and not sub_component_name.startswith("rwf_"):
                 # TODO: Validation should be extended to test isinstance(.., ValidationBase) ... or similar to include Required(), MaxLength etc.
@@ -1494,9 +1495,9 @@ class IComponent(ReedwolfDataclassBase, ABC):
         for subcomponent in self._get_subcomponents_list():
             component = subcomponent.component
             if isinstance(component, IComponent) \
-              and (component.is_bound_model() or component.is_subentity()) \
+              and (component.is_data_model() or component.is_subentity()) \
               and component.is_finished():
-                # raise EntityInternalError(owner=self, msg=f"EntityModel.setup() should have been called before ({component})")
+                # raise EntityInternalError(owner=self, msg=f"DataModel.setup() should have been called before ({component})")
                 continue
 
             self._invoke_component_setup(
@@ -1612,12 +1613,12 @@ class IFieldGroup(IComponent, ABC):
 
 class IContainer(IComponent, ABC):
 
-    bound_model: "IEntityModel" = field(repr=False)
+    data_model: "IDataModel" = field(repr=False)
     settings:       Optional[Settings] = field(repr=False, default=None)
     contains:       List[IComponent] = field(repr=False, init=False, default=None)
 
     # Components contain container: itself AND all other attributes - single or lists which are of type component
-    # e.g. contains + bound_model + cleaners + ...
+    # e.g. contains + data_model + cleaners + ...
     components:     Optional[Dict[str, IComponent]]  = field(init=False, repr=False, default=None)
 
     # will be used in apply phase to get some already computed metadata
@@ -1648,7 +1649,7 @@ class IContainer(IComponent, ABC):
         ...
 
     @abstractmethod
-    def get_bound_model_attr_node(self) -> "AttrDexpNode":  # noqa: F821
+    def get_data_model_attr_node(self) -> "AttrDexpNode":  # noqa: F821
         ...
 
     @abstractmethod
@@ -1660,7 +1661,7 @@ class IContainer(IComponent, ABC):
     # @abstractmethod
     # def create_this_registry_for_model_class(
     #         setup_session: ISetupSession,
-    #         model_class: ModelType,
+    #         model_class: ModelKlassType,
     # ) -> IThisRegistry:
     #     """
     #     This is @staticmethod
@@ -1672,13 +1673,13 @@ class IEntity(IContainer, ABC):
     apply_settings_class: Optional[Type[ApplySettings]] = field(repr=False, default=None)
 
 # ------------------------------------------------------------
-# IEntityModel
+# IDataModel
 # ------------------------------------------------------------
 
 @dataclass
-class IEntityModel(IComponent, ABC):
+class IDataModel(IComponent, ABC):
 
-    model: ModelType = field(init=False, repr=False)
+    model_klass: ModelKlassType = field(init=False, repr=False)
     _finished: bool = field(init=False, repr=False, default=False)
 
     def setup(self, setup_session:ISetupSession):
@@ -1687,11 +1688,15 @@ class IEntityModel(IComponent, ABC):
         super().setup(setup_session=setup_session)
 
     @abstractmethod
+    def create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:
+        ...
+
+    @abstractmethod
     def get_type_info(self) -> TypeInfo:
         ...
 
     @staticmethod
-    def is_bound_model() -> bool:
+    def is_data_model() -> bool:
         return True
 
     def is_top_parent(self):
@@ -1725,21 +1730,34 @@ class IEntityModel(IComponent, ABC):
         name = self.get_full_name(parent=parent, init=True)
         models[name] = self
         if hasattr(self, "contains"):
-            for dep_bound_model in self.contains:
+            for dep_data_model in self.contains:
                 # recursion
-                dep_bound_model.set_parent(parent=self)
-                dep_bound_model.fill_models(models=models, parent=self)
+                dep_data_model.set_parent(parent=self)
+                dep_data_model.fill_models(models=models, parent=self)
         return models
 
     # Not used:
     # def get_attr_node(self, setup_session: ISetupSession) -> Union["AttrDexpNode", UndefinedType]:  # noqa: F821
-    #     return setup_session.models_registry.get_attr_node_by_bound_model(bound_model=self)
+    #     return setup_session.models_registry.get_attr_node_by_data_model(data_model=self)
 
-class IUnboundModel(IEntityModel, ABC):
+# ------------------------------------------------------------
+
+class IBoundDataModel(IDataModel, ABC):
+
+    @abstractmethod
+    def _register_nested_models(self, setup_session:ISetupSession):
+        ...
+
+    @abstractmethod
+    def _apply_nested_models(self, apply_result: "IApplyResult", instance: ModelKlassType):
+        ...
+
+# ------------------------------------------------------------
+
+class IUnboundDataModel(IDataModel, ABC):
     """
-    see models.py:: class UnboundModel
+    see data_models.py:: class UnboundModel
     """
-    pass
 
 # ============================================================
 
@@ -1923,7 +1941,7 @@ class SetupStackFrame(IStackFrame):
     # current container
     container: IContainer = field(repr=False)
 
-    # current component - can be EntityModel too
+    # current component - can be DataModel too
     component: IComponent
 
     # # used for ThisNS in some cases
@@ -1931,13 +1949,13 @@ class SetupStackFrame(IStackFrame):
     this_registry:  Optional[IThisRegistry] = field(repr=False, default=None)
 
     # Computed from container/component
-    # used for EntityModelWithHandlers cases (read_handlers()),
-    bound_model:    Optional[IEntityModel] = field(init=False, repr=False, default=None)
+    # used for DataModelWithHandlers cases (read_handlers()),
+    data_model:    Optional[IDataModel] = field(init=False, repr=False, default=None)
 
     dexp_validator: Optional[DexpValidator] = field(repr=False, default=None)
 
     # -- autocomputed
-    # bound_model_root: Optional[IEntityModel] = field(repr=False, init=False, default=None)
+    # data_model_root: Optional[IDataModel] = field(repr=False, init=False, default=None)
     # current container data instance which will be procesed: changed/validated/evaluated
     # type_info: TypeInfo
 
@@ -1952,10 +1970,10 @@ class SetupStackFrame(IStackFrame):
         if not isinstance(self.component, IComponent):
             raise EntityInternalError(owner=self, msg=f"Expected IComponent, got: {self.component}")
 
-        if isinstance(self.component, IEntityModel):
-            self.bound_model = self.component
+        if isinstance(self.component, IDataModel):
+            self.data_model = self.component
         else:
-            self.bound_model = self.container.bound_model
+            self.data_model = self.container.data_model
 
     def copy_from_previous_frame(self, previous_frame: Self):
         assert previous_frame
@@ -2184,7 +2202,7 @@ class ApplyStackFrame(IStackFrame):
 
     # UPDATE by this instance - can be ENTITY_LIKE or MODELS_LIKE (same dataclass) struct
     # required but is None when not update
-    instance_new: Union[ModelType, NoneType, UndefinedType] = field(repr=False, default=UNDEFINED)
+    instance_new: Union[ModelKlassType, NoneType, UndefinedType] = field(repr=False, default=UNDEFINED)
 
     # partial mode - component subtree in processing
     # component is found and its subtree is being processed
@@ -2211,8 +2229,8 @@ class ApplyStackFrame(IStackFrame):
     index0: Optional[Index0Type] = None
 
     # parent instance / parent_instance_new - currenntly used for key_string logic
-    parent_instance: Optional[ModelType] = field(repr=False, default=None)
-    parent_instance_new: Optional[ModelType] = field(repr=False, default=None)
+    parent_instance: Optional[ModelKlassType] = field(repr=False, default=None)
+    parent_instance_new: Optional[ModelKlassType] = field(repr=False, default=None)
 
     # Usually used for ThisNS / This. namespace 
     # local_setup_session: Optional[ISetupSession] = field(repr=False, default=None)
@@ -2229,7 +2247,7 @@ class ApplyStackFrame(IStackFrame):
     key_string: Optional[str] = field(init=False, repr=False, default=None)
 
     # used to check root value in models registry 
-    bound_model_root: Optional[IEntityModel] = field(repr=False, init=False, default=None)
+    data_model_root: Optional[IDataModel] = field(repr=False, init=False, default=None)
 
 
     def __post_init__(self):
@@ -2264,7 +2282,7 @@ class ApplyStackFrame(IStackFrame):
         if self.instance is previous_frame.instance:
             self._copy_attr_from_previous_frame(previous_frame, "container", may_be_copied=False)
             # will be autocomputed
-            # self._copy_attr_from_previous_frame(previous_frame, "bound_model_root", may_be_copied=False)
+            # self._copy_attr_from_previous_frame(previous_frame, "data_model_root", may_be_copied=False)
             self._copy_attr_from_previous_frame(previous_frame, "instance_new")
             self._copy_attr_from_previous_frame(previous_frame, "instance_is_list")
             self._copy_attr_from_previous_frame(previous_frame, "index0")
@@ -2302,18 +2320,18 @@ class ApplyStackFrame(IStackFrame):
 
         # TODO: DRY - similar logic in ApplyResult._detect_instance_new_struct_type()
         if self.on_component_only:
-            self.bound_model_root = (self.on_component_only 
+            self.data_model_root = (self.on_component_only 
                                      if self.on_component_only.is_subentity_items()
                                      else self.on_component_only.get_first_parent_container(consider_self=True)
-                                    ).bound_model
+                                    ).data_model
             # can be list in this case
-            # TODO: check if list only: if self.bound_model_root.type_info.is_list:
+            # TODO: check if list only: if self.data_model_root.type_info.is_list:
             # TODO: use self.current_frame.instance_is_list for list case
             instance_to_test = self.instance[0] \
                                if isinstance(self.instance, (list, tuple)) \
                                else self.instance
         else:
-            self.bound_model_root = self.container.bound_model
+            self.data_model_root = self.container.data_model
             if self.instance_is_list and self.instance is not None:
                 if not isinstance(self.instance, (list, tuple)):
                     raise EntityInternalError(owner=self, msg=f"Expected list of model instances, got: {self.instance}")
@@ -2334,12 +2352,12 @@ class ApplyStackFrame(IStackFrame):
             # #     raise EntityInternalError(owner=self, msg=f"Expected model instance: {instance_to_test.__class__} or list[instances], got: {self.instance}")
             # self._accessor.validate_instance_type(owner_name=self.component.name,
             #                                                      instance=instance_to_test,
-            #                                                      model_type=self.container.bound_model.model)
+            #                                                      model_klass=self.container.data_model.model_klass )
 
         if self.this_registry:
             assert isinstance(self.this_registry, IThisRegistry)
 
-        assert self.bound_model_root
+        assert self.data_model_root
 
 
     def set_parent_values_subtree(self, parent_values_subtree: Union[Dict, List]) -> Union[Dict, List]:
@@ -2439,8 +2457,8 @@ class ApplyExecCleanersRegistry:
 class IApplyResult(IStackOwnerSession):
     entity: IEntity = field(repr=False)
     instance: Any = field(repr=False)
-    # TODO: consider: instance_new: Union[ModelType, UndefinedType] = UNDEFINED,
-    instance_new: Optional[ModelType] = field(repr=False)
+    # TODO: consider: instance_new: Union[ModelKlassType, UndefinedType] = UNDEFINED,
+    instance_new: Optional[ModelKlassType] = field(repr=False)
 
     settings: Optional[Settings] = field(repr=False)
     # used in apply_partial
@@ -2460,7 +2478,7 @@ class IApplyResult(IStackOwnerSession):
     value_node_list: List[IValueNode] = field(repr=False, init=False, default_factory=list)
 
     # extracted from component
-    bound_model: IEntityModel = field(repr=False, init=False)
+    data_model: IDataModel = field(repr=False, init=False)
 
     # will be extracted from self.settings.accessor, None if not set
     _apply_accessor: Optional[IValueAccessor] = field(init=False, default=UNDEFINED, repr=False)
@@ -2481,7 +2499,7 @@ class IApplyResult(IStackOwnerSession):
                             field(repr=False, init=False, default_factory=dict)
 
     # used when when collecting list of instances/attributes which are updated
-    instance_by_key_string_cache: Dict[KeyString, ModelType] = \
+    instance_by_key_string_cache: Dict[KeyString, ModelKlassType] = \
                             field(repr=False, init=False, default_factory=dict)
 
     # TODO: consider this:
@@ -2667,15 +2685,15 @@ def extract_type_info(
     instances) member by name 'attr_node_name' -> data (struct, plain value),
     or IFunctionDexpNode instances 
 
-    This function uses specific base interfaces/classes (IEntityModel,
+    This function uses specific base interfaces/classes (IDataModel,
     IDotExpressionNode), so it can not be put in meta.py
 
     See 'meta. def get_or_create_by_type()' for further explanation when to use
     this function (preffered) and when directly some other lower level meta.py
     functions.
     """
-    if isinstance(inspect_object, IEntityModel):
-        inspect_object = inspect_object.model
+    if isinstance(inspect_object, IDataModel):
+        inspect_object = inspect_object.model_klass
 
     # Function - callable and not class and not pydantic?
     if isinstance(inspect_object, IDotExpressionNode):
@@ -2713,7 +2731,7 @@ def extract_type_info(
             # TODO: what about pydantic?
             raise EntityInternalError(item=inspect_object, msg=f"'DC/PYD class {parent_object}' has no metadata (__annotations__ / type hints), can't read '{attr_node_name}'. Add type-hints or check names.")
 
-        model_class: ModelType = parent_object
+        model_class: ModelKlassType = parent_object
 
         # === parent type hint
         parent_py_type_hints = extract_py_type_hints(model_class, f"setup_session->{attr_node_name}:DC/PYD")
