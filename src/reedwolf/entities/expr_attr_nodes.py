@@ -332,8 +332,6 @@ class AttrDexpNode(IDotExpressionNode):
 
 
     def _get_value_new(self, apply_result: IApplyResult, value_prev: AttrValue, attr_name: AttrName) -> AttrValue:
-        # if isinstance(value_prev, IAttributeAccessorBase):
-        #     print("here333")
         if isinstance(value_prev, IAttributeAccessorBase):
             # NOTE: if this is last in chain - fetch final value
             value_new = value_prev.get_attribute(

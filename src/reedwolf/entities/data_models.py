@@ -299,7 +299,7 @@ class DataModelWithHandlers(BoundDataModelBase):
 
     # --- evaluated later
     # Filled from from .read_hanlder -> (.type_info: TypeInfo).type_
-    model_klass:          ModelKlassType = field(init=False, metadata={"skip_traverse": True})
+    model_klass:          ModelKlassType = field(init=False, metadata={"skip_setup": True})
     parent:         Union[IDataModel, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     parent_name:    Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 

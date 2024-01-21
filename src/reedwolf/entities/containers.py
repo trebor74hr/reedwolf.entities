@@ -646,7 +646,8 @@ class Entity(IEntity, ContainerBase):
     title:              Optional[TransMessageType] = field(repr=False, default=None)
 
     # binding interface - not dumped/exported
-    data_model:        Optional[Union[DataModel, ModelKlassType]] = field(repr=False, default=None, metadata={"skip_dump": True})
+    bind_to:            Optional[Union[DataModel, ModelKlassType]] = field(repr=False, default=None,
+                                                                           metadata={"skip_dump": True, "skip_setup": True})
     # list of names from model / contains element names
     keys:               Optional[KeysBase] = field(repr=False, default=None)
     # will be filled automatically with Settings() if not supplied
@@ -657,7 +658,11 @@ class Entity(IEntity, ContainerBase):
     # --- validators and evaluators
     cleaners:           Optional[List[Union[ChildrenValidationBase, ChildrenEvaluationBase]]] = field(repr=False, default_factory=list)
 
+    # ------------------------------------------------------------
     # --- Evaluated later
+    # ------------------------------------------------------------
+    data_model:        Optional[DataModel] = field(init=False, repr=False, metadata={"skip_dump": True})
+
     setup_session:      Optional[SetupSession] = field(init=False, repr=False, default=None)
     # see comment in IContainer
     components:         Optional[Dict[str, IComponent]] = field(init=False, repr=False, default=None)
@@ -686,9 +691,11 @@ class Entity(IEntity, ContainerBase):
         return self._is_unbound
 
     def init_clean(self):
-        if self.data_model:
-            if is_model_class(self.data_model):
-                self.data_model = DataModel(model_klass=self.data_model)
+        if self.bind_to:
+            if is_model_class(self.bind_to):
+                self.data_model = DataModel(model_klass=self.bind_to)
+            else:
+                self.data_model = self.bind_to
 
             if not (isinstance(self.data_model, DataModel) and is_model_class(self.data_model.model_klass)):
                 raise EntitySetupTypeError(owner=self, msg=f"Attribute 'data_model' needs to be model DC/PYD OR DataModel with model DC/PYD, got: {self.data_model}")
@@ -698,6 +705,9 @@ class Entity(IEntity, ContainerBase):
                     camel_case_to_snake(self.__class__.__name__),
                     camel_case_to_snake(self.data_model.model_klass.__name__),
                     ])
+        else:
+            # unbound mode
+            self.data_model = None
 
         self._is_unbound = self.data_model is None
 
@@ -733,7 +743,7 @@ class Entity(IEntity, ContainerBase):
         return True
 
     def change(self,
-               data_model:Union[UndefinedType, DataModel]=UNDEFINED,
+               bind_to:Union[UndefinedType, DataModel]=UNDEFINED,
                settings: Optional[Settings]=None,
                apply_settings_class: Optional[Type[ApplySettings]]=None,
                # do_setup:bool = True,
@@ -745,11 +755,9 @@ class Entity(IEntity, ContainerBase):
         if self.is_finished():
             raise EntityInternalError(owner=self, msg="Entity already marked as finished.")
 
-        if data_model != UNDEFINED:
+        if bind_to != UNDEFINED:
             # NOTE: allowed to change to None (not yet tested)
-            # if self.data_model is not None:
-            #     raise EntitySetupError(owner=self, msg="data_model already already set, late binding not allowed.")
-            self.data_model = data_model
+            self.bind_to = bind_to
 
         if apply_settings_class:
             if self.apply_settings_class:
@@ -888,7 +896,8 @@ class SubEntityBase(ContainerBase, ABC):
     SubEntityItems or top Entity
     """
     # DotExpression based model -> can be dumped
-    data_model:    Union[DataModel, DataModelWithHandlers, DotExpression] = field(repr=False)
+    bind_to:        Union[DataModel, DataModelWithHandlers, DotExpression] = field(repr=False,
+                                                                                   metadata = {"skip_setup": True})
 
     # cardinality:  ICardinalityValidation
     contains:       List[IComponent] = field(repr=False)
@@ -905,7 +914,13 @@ class SubEntityBase(ContainerBase, ABC):
     # --- validators and evaluators
     cleaners:       Optional[List[Union[ValidationBase, EvaluationBase]]] = field(repr=False, default_factory=list)
 
+    # ------------------------------------------------------------
     # --- Evaluated later
+    # ------------------------------------------------------------
+
+    # DotExpression based model -> can be dumped
+    data_model:    Union[DataModel, DataModelWithHandlers] = field(init=False, repr=False)
+
     setup_session:  Optional[SetupSession] = field(init=False, repr=False, default=None)
     # see comment in IContainer
     components:     Optional[Dict[str, IComponent]]  = field(init=False, repr=False, default=None)
@@ -940,10 +955,12 @@ class SubEntityBase(ContainerBase, ABC):
 
     def __post_init__(self):
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
-        if isinstance(self.data_model, DotExpression):
+        if isinstance(self.bind_to, DotExpression):
             # Clone it to be seure that is not used - if problem, then clone only if not built
-            data_model = self.data_model.Clone()
-            self.data_model = DataModel(model_klass=data_model)
+            model_klass_dexp = self.bind_to.Clone()
+            self.data_model = DataModel(model_klass=model_klass_dexp)
+        else:
+            self.data_model = self.bind_to
 
         if not (isinstance(self.data_model, IDataModel) and isinstance(self.data_model.model_klass, DotExpression)):
             raise EntityInternalError(owner=self, msg=f"Attribute data_model needs to be DotExpression OR DataModel with DotExpression '.model', got::'{self.data_model}'")

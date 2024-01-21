@@ -1376,9 +1376,8 @@ class IComponent(ReedwolfDataclassBase, ABC):
             # type_hint = type_hints.get(sub_component_name)
             th_field = fields.get(sub_component_name)
 
-            if th_field and th_field.metadata.get("skip_traverse", False):
+            if th_field and th_field.metadata.get("skip_setup", False):
                 continue
-
 
             if is_function(sub_component):
                 # TODO: check that this is not class too
@@ -1418,7 +1417,8 @@ class IComponent(ReedwolfDataclassBase, ABC):
                 continue
 
 
-            if not th_field or getattr(th_field, "init", True) is False:
+            if not th_field or getattr(th_field, "init", True) is False \
+              and sub_component_name not in ("data_model", ):
                 # warn(f"TODO: _get_subcomponents_list: {self} -> {sub_component_name} -> {th_field}")
                 raise EntityInternalError(owner=sub_component, msg=f"Should '{sub_component_name}' field be excluded from processing: {th_field}")
 
@@ -1613,7 +1613,7 @@ class IFieldGroup(IComponent, ABC):
 
 class IContainer(IComponent, ABC):
 
-    data_model: "IDataModel" = field(repr=False)
+    bind_to:        Optional[Union["IDataModel", ModelKlassType, DotExpression]] = field(repr=False, default=None)
     settings:       Optional[Settings] = field(repr=False, default=None)
     contains:       List[IComponent] = field(repr=False, init=False, default=None)
 
@@ -1623,6 +1623,7 @@ class IContainer(IComponent, ABC):
 
     # will be used in apply phase to get some already computed metadata
     setup_session:  Optional[ISetupSession]    = field(init=False, repr=False, default=None)
+    data_model:     "IDataModel" = field(init=False, repr=False)
 
     @abstractmethod
     def _register_model_attr_nodes(self):
