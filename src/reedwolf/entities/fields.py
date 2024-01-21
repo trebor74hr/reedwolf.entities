@@ -61,7 +61,7 @@ from .meta import (
     TransMessageType,
     TypeInfo,
     is_enum,
-    is_model_class,
+    is_model_klass,
     is_function,
     get_enum_member_py_type,
     EmptyFunctionArguments,
@@ -339,7 +339,7 @@ class FieldBase(IField, ABC):
         if has_children:
             # Field with children (e.g. BooleanField.enables)
             # Children -> This..Children + This.<all-attributes>
-            # model_class = self.get_type_info().type_
+            # model_klass = self.get_type_info().type_
             this_registry = ThisRegistry(attr_node=attr_node, component=self)
         else:
             this_registry = ThisRegistry(attr_node=attr_node)
@@ -592,7 +592,7 @@ class ChoiceField(FieldBase):
                 choices = attr_node.data.type_
                 is_list = attr_node.data.is_list
 
-                if is_list and attr_node.namespace==ModelsNS and is_model_class(choices):
+                if is_list and attr_node.namespace==ModelsNS and is_model_klass(choices):
                     # FK case - e.g. Company -> company_types: List[CompanyType]
 
                     # TODO: I don't like 'choices_checked' this attr_node and the logic it uses
@@ -612,8 +612,8 @@ class ChoiceField(FieldBase):
         elif choices is None:
             # ignored
             pass
-        elif is_model_class(choices):
-            model_class = choices
+        elif is_model_klass(choices):
+            model_klass = choices
             if choice_from_function:
                 if not is_list:
                     raise NotImplementedError("Not a list! Enum or what? To be done: {choices}")
@@ -624,13 +624,13 @@ class ChoiceField(FieldBase):
                     raise EntityInternalError(owner=self, msg="Choices is a a list of model instances, expecting single instance.")
 
             #  exception to the rule - ChoiceFileld value and title from This.
-            this_registry = ThisRegistry.create_for_model_class(
+            this_registry = ThisRegistry.create_for_model_klass(
                  setup_session=setup_session,
-                 model_class=model_class)
+                 model_klass=model_klass)
 
             # this_registry = setup_session.container.create_this_registry_for_model_class(
             #     setup_session=setup_session,
-            #     model_class=model_class,
+            #     model_klass=model_klass,
             # )
 
             with setup_session.use_stack_frame(

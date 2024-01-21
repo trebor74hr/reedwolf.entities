@@ -204,7 +204,7 @@ class ModelsRegistry(RegistryBase):
                         type_info = type_info,
                         attr_name = ReservedAttributeNames.INSTANCE_ATTR_NAME.value,
                         attr_name_prefix = None if is_root else f"{name_for_reg}__",
-                        # model_class=model,
+                        # model_klass=model,
                         )
 
     # ------------------------------------------------------------
@@ -477,7 +477,7 @@ class ThisRegistry(IThisRegistry, RegistryBase):
 
     attr_node: Optional[AttrDexpNode] = field(default=None)
     component: Optional[IComponent] = field(default=None)
-    model_class: Optional[ModelKlassType] = field(default=None)
+    model_klass: Optional[ModelKlassType] = field(default=None)
     # Used for ItemsFunctions when Item attribute will be available, e.g. This.name -> AttrValue
     # TODO: do I really need this parameter - is it overlapping with is_items_mode?
     is_items_for_each_mode: bool = field(default=False)
@@ -486,12 +486,12 @@ class ThisRegistry(IThisRegistry, RegistryBase):
     # This.Items -> List[Item]
     is_items_mode: bool = field(init=False, default=False)
     attr_name: Optional[str] = field(init=False, repr=False, default=None)
-    model_class_type_info: Optional[TypeInfo] = field(default=None)
+    model_klass_type_info: Optional[TypeInfo] = field(default=None)
 
     @classmethod
-    def create_for_model_class(cls,
+    def create_for_model_klass(cls,
                                setup_session: ISetupSession,
-                               model_class: ModelKlassType,
+                               model_klass: ModelKlassType,
                                is_items_for_each_mode: bool = False,
                                ) -> Self:
         # NOTE: must be here since:
@@ -505,7 +505,7 @@ class ThisRegistry(IThisRegistry, RegistryBase):
         - .Instance + <attr-names> is used only in manual setup cases,
           e.g. ChoiceField()
         """
-        this_registry = ThisRegistry(model_class=model_class, is_items_for_each_mode=is_items_for_each_mode)
+        this_registry = ThisRegistry(model_klass=model_klass, is_items_for_each_mode=is_items_for_each_mode)
         this_registry.setup(setup_session=setup_session)
         this_registry.finish()
 
@@ -517,19 +517,19 @@ class ThisRegistry(IThisRegistry, RegistryBase):
                 raise EntitySetupValueError(owner=self, msg=f"Expected AttrDexpNode, got: {type(self.attr_node)} / {self.attr_node}")
             self.attr_name = self.attr_node.name
 
-        if self.model_class:
+        if self.model_klass:
             if self.attr_node or self.component:
-                raise EntityInternalError(owner=self, msg="model_class can not be combined with attr_node nor component cases.")
-            self.model_class_type_info = TypeInfo.get_or_create_by_type(self.model_class)
+                raise EntityInternalError(owner=self, msg="model_klass can not be combined with attr_node nor component cases.")
+            self.model_klass_type_info = TypeInfo.get_or_create_by_type(self.model_klass)
 
         if self.is_items_for_each_mode:
             if not ((self.component and self.component.is_subentity_items())   \
-                    or (self.model_class and self.model_class_type_info.is_list)):
-                raise EntitySetupTypeError(owner=self, msg=f"is_items_for_each_mode needs to operate on List[Any], got: {self.model_class} / {self.component} ")
+                    or (self.model_klass and self.model_klass_type_info.is_list)):
+                raise EntitySetupTypeError(owner=self, msg=f"is_items_for_each_mode needs to operate on List[Any], got: {self.model_klass} / {self.component} ")
         else:
             if self.component and self.component.is_subentity_items():
                 self.is_items_mode = True
-            elif self.model_class and self.model_class_type_info.is_list:
+            elif self.model_klass and self.model_klass_type_info.is_list:
                 self.is_items_mode = True
 
     def setup(self, setup_session: ISetupSession) -> None:
@@ -541,26 +541,26 @@ class ThisRegistry(IThisRegistry, RegistryBase):
             self._register_special_attr_node(
                 type_info=type_info,
                 attr_name=ReservedAttributeNames.VALUE_ATTR_NAME.value,
-                # model_class=type_info.type_,
+                # model_klass=type_info.type_,
                 )
 
-        if self.model_class:
+        if self.model_klass:
             if not self.is_items_for_each_mode and self.is_items_mode:
                 # This.Items
                 self._register_special_attr_node(
-                    type_info=self.model_class_type_info,  # already a List
+                    type_info=self.model_klass_type_info,  # already a List
                     attr_name=ReservedAttributeNames.ITEMS_ATTR_NAME.value,
                 )
             else:
                 # NOTE: Includes self.is_items_for_each_mode too
                 # This.<all-attributes>
-                self._register_model_nodes(model_class=self.model_class_type_info.type_)
+                self._register_model_nodes(model_klass=self.model_klass_type_info.type_)
                 # This.Instance
                 self._register_special_attr_node(
-                    type_info=self.model_class_type_info,
+                    type_info=self.model_klass_type_info,
                     attr_name=ReservedAttributeNames.INSTANCE_ATTR_NAME,
                     attr_name_prefix=None,
-                    # model_class=self.model_class_type_info.type_,
+                    # model_klass=self.model_klass_type_info.type_,
                 )
 
         if self.component:
@@ -573,7 +573,7 @@ class ThisRegistry(IThisRegistry, RegistryBase):
                 self._register_special_attr_node(
                     type_info=type_info,
                     attr_name=ReservedAttributeNames.ITEMS_ATTR_NAME.value,
-                    # model_class=component_fields_dataclass,
+                    # model_klass=component_fields_dataclass,
                 )
             else:
                 # NOTE: Includes self.is_items_for_each_mode too
@@ -596,10 +596,10 @@ class ThisRegistry(IThisRegistry, RegistryBase):
             #                   fetch component's bound attribute
             root_value = RegistryRootValue(value_root=apply_result.current_frame.instance,
                                            attr_name_new=self.attr_name)
-        elif self.model_class:
-            if not isinstance(apply_result.current_frame.instance, self.model_class):
+        elif self.model_klass:
+            if not isinstance(apply_result.current_frame.instance, self.model_klass):
                 raise EntityInternalError(owner=self,
-                                          msg=f"Type of apply session's instance expected to be '{self.model_class}, got: {apply_result.current_frame.instance}")
+                                          msg=f"Type of apply session's instance expected to be '{self.model_klass}, got: {apply_result.current_frame.instance}")
 
             if attr_name == ReservedAttributeNames.INSTANCE_ATTR_NAME:
                 # with 2nd param == None -> do not fetch further
@@ -643,9 +643,9 @@ class ThisRegistry(IThisRegistry, RegistryBase):
                     raise EntityInternalError(owner=self, msg=f"Expected attribute name: {ReservedAttributeNames.ITEMS_ATTR_NAME.value} or {ReservedAttributeNames.CHILDREN_ATTR_NAME.value} , got: {attr_name}")
             else:
                 # single item component
-                if not isinstance(apply_result.current_frame.instance, self.model_class):
+                if not isinstance(apply_result.current_frame.instance, self.model_klass):
                     raise EntityInternalError(owner=self,
-                                              msg=f"Type of apply session's instance expected to be '{self.model_class}, got: {apply_result.current_frame.instance}")
+                                              msg=f"Type of apply session's instance expected to be '{self.model_klass}, got: {apply_result.current_frame.instance}")
 
                 if attr_name == ReservedAttributeNames.CHILDREN_ATTR_NAME:
                     # with 2nd param == None -> do not fetch further
@@ -670,8 +670,8 @@ class ThisRegistry(IThisRegistry, RegistryBase):
             out.append(
                 f"{'items' if self.is_items_mode else 'component'}=" 
                 f"{self.component.__class__.__name__}({self.component.name})")
-        if self.model_class:
-            out.append(f"model={self.model_class}")
+        if self.model_klass:
+            out.append(f"model={self.model_klass}")
         # if not out:
         #     raise EntityInternalError(owner=self, msg="__repr__ failed -> no mode selected")
         return f'{self.__class__.__name__}({", ".join(out)})'

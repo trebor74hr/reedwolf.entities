@@ -32,7 +32,7 @@ from .expressions import (
 )
 from .meta import (
     TypeInfo,
-    is_model_class,
+    is_model_klass,
     is_function,
     ModelField,
     AttrName,
@@ -124,7 +124,7 @@ class AttrDexpNode(IDotExpressionNode):
         # ---------------------------------------------
         # CASE: Concrete type
         # ---------------------------------------------
-        elif is_model_class(self.data):
+        elif is_model_klass(self.data):
             # ModelKlassType
             assert type(self.data) == type, self.data
             # ALT: inspect.isclass()

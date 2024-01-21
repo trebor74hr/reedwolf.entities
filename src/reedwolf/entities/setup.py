@@ -44,14 +44,14 @@ from .expressions import (
 )
 from .meta import (
     Self,
-    is_model_class,
+    is_model_klass,
     FunctionArgumentsType,
     FunctionArgumentsTupleType,
     ModelKlassType,
     TypeInfo,
     HookOnFinishedAllCallable,
     get_model_fields,
-    AttrName,
+    AttrName, ModelInstanceType,
 )
 from .base import (
     IComponentFields,
@@ -227,7 +227,7 @@ class RegistryBase(IRegistry):
 
         # owner_model_class = List[component_fields_dataclass]
         children_attr_node = self._register_special_attr_node(
-                        # model_class = owner_model_class,
+                        # model_klass = owner_model_class,
                         type_info=type_info,
                         attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME.value,
                         attr_name_prefix = attr_name_prefix,
@@ -239,21 +239,21 @@ class RegistryBase(IRegistry):
     # --------------------
 
     def _register_special_attr_node(self,
-                                    # model_class: ModelKlassType,
+                                    # model_klass: ModelKlassType,
                                     type_info: TypeInfo,
                                     attr_name = ReservedAttributeNames,
                                     attr_name_prefix: Optional[str]=None,
                                     th_field: Optional[Any] = None,
                                     ) -> AttrDexpNode:
         # NOTE: removed restriction - was too strict
-        # if not (is_model_class(model_class) or model_class in STANDARD_TYPE_LIST or is_enum(model_class)):
-        #     raise EntitySetupValueError(owner=self, msg=f"Expected model class (DC/PYD), got: {type(model_class)} / {model_class} ")
+        # if not (is_model_klass(model_klass) or model_klass in STANDARD_TYPE_LIST or is_enum(model_klass)):
+        #     raise EntitySetupValueError(owner=self, msg=f"Expected model class (DC/PYD), got: {type(model_klass)} / {model_klass} ")
 
         if th_field and not (inspect.isclass(th_field) and issubclass(th_field, IComponentFields)):
             raise EntitySetupValueError(owner=self, msg=f"Expected th_field is IComponentFields, got: {type(th_field)} / {th_field} ")
 
-        # type_info = TypeInfo.get_or_create_by_type(py_type_hint=model_class)
-        # model_class: ModelKlassType = type_info.type_
+        # type_info = TypeInfo.get_or_create_by_type(py_type_hint=model_klass)
+        # model_klass: ModelKlassType = type_info.type_
 
         if attr_name_prefix:
             attr_name = f"{attr_name_prefix}{attr_name}"
@@ -293,12 +293,12 @@ class RegistryBase(IRegistry):
 
     # --------------------
 
-    def _register_model_nodes(self, model_class: ModelKlassType):
-        if not is_model_class(model_class):
-            raise EntitySetupValueError(owner=self, msg=f"Expected model class (DC/PYD), got: {type(model_class)} / {to_repr(model_class)} ")
+    def _register_model_nodes(self, model_klass: ModelKlassType):
+        if not is_model_klass(model_klass):
+            raise EntitySetupValueError(owner=self, msg=f"Expected model class (DC/PYD), got: {type(model_klass)} / {to_repr(model_klass)} ")
 
-        for attr_name in get_model_fields(model_class):
-            attr_node = self._create_attr_node_for_model_attr(model_class, attr_name)
+        for attr_name in get_model_fields(model_klass):
+            attr_node = self._create_attr_node_for_model_attr(model_klass, attr_name)
             self.register_attr_node(attr_node)
 
 
@@ -306,20 +306,20 @@ class RegistryBase(IRegistry):
     # ------------------------------------------------------------
 
     @classmethod
-    def _create_attr_node_for_model_attr(cls, model_class: ModelKlassType, attr_name:str) -> AttrDexpNode:
+    def _create_attr_node_for_model_attr(cls, model_klass: ModelKlassType, attr_name:str) -> AttrDexpNode:
         # NOTE: will go again and again into get_model_fields()
         #       but shortcut like this didn't worked: 
         #           type_info: TypeInfo = TypeInfo.get_or_create_by_type(th_field)
 
         if attr_name in (ReservedAttributeNames.INSTANCE_ATTR_NAME,):
-            raise EntitySetupNameError(msg=f"Model attribute name '{attr_name} is reserved. Rename it and try again (model={model_class.__name__}).")
+            raise EntitySetupNameError(msg=f"Model attribute name '{attr_name} is reserved. Rename it and try again (model={model_klass.__name__}).")
 
         # This one should not fail
         # , func_node
         type_info, th_field = \
                 extract_type_info(
                     attr_node_name=attr_name,
-                    inspect_object=model_class)
+                    inspect_object=model_klass)
 
         attr_node = AttrDexpNode(
                         name=attr_name,
@@ -477,7 +477,7 @@ class RegistryBase(IRegistry):
 
                 if isinstance(owner_dexp_node.data, IDataModel):
                     inspect_object = owner_dexp_node.data.model_klass
-                elif is_model_class(owner_dexp_node.data):
+                elif is_model_klass(owner_dexp_node.data):
                     # @dataclass, Pydantic etc.
                     inspect_object = owner_dexp_node.data
                 else:
@@ -539,7 +539,7 @@ class ComponentAttributeAccessor(IAttributeAccessorBase):
     Value will be fetched by evaluating .bind_to of Field component.
     """
     component: IComponent
-    instance: ModelKlassType
+    instance: ModelInstanceType
     value_node: IValueNode
 
     def get_attribute(self, apply_result:IApplyResult, attr_name: str) -> Self:

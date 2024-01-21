@@ -118,11 +118,14 @@ NoneType                = type(None) # or None.__class__
 DataclassType = TypeVar("DataclassType", bound=Any)
 
 if PydBaseModel:
-    ModelKlassType  = Union[DataclassType, PydBaseModel]
+    ModelKlassType  = Union[DataclassType, Type[PydBaseModel]]
     ModelField = Union[DcField, PydModelField]
 else:
     ModelKlassType  = DataclassType
     ModelField = DcField
+
+# instance of ModelKlassType
+ModelInstanceType  = Any
 
 STANDARD_TYPE_LIST      = (str, int, float, bool, Decimal, date, datetime, timedelta, time)
 STANDARD_TYPE_W_NONE_LIST = (NoneType,) + STANDARD_TYPE_LIST 
@@ -325,21 +328,21 @@ def is_pydantic(maybe_pydantic_class: Any) -> bool:
     # TODO: ALT: maybe fails for partial functions: isinstance(maybe_pydantic_class) and issubclass(maybe_pydantic_class, PydBaseModel)
     return bool(PydBaseModel) and isinstance(maybe_pydantic_class, PydModelMetaclass)
 
-def is_model_class(klass: Any) -> bool:
+def is_model_klass(klass: Any) -> bool:
     """
     is_dataclass or is_pydantic (for now)
     in future: sqlalchemy model, django orm model, attrs
     """
     return isclass(klass) and (is_dataclass(klass) or is_pydantic(klass))
 
-def is_model_instance(instance: ModelKlassType) -> bool:
+def is_model_instance(instance: ModelInstanceType) -> bool:
     """
     is_dataclass or is_pydantic (for now)
     in future: sqlalchemy model, django orm model, attrs
     """
     if isclass(instance):
         return False
-    return is_model_class(instance.__class__)
+    return is_model_klass(instance.__class__)
 
 def is_enum(maybe_enum: Any) -> bool:
     return isinstance(maybe_enum, type) and issubclass(maybe_enum, Enum)

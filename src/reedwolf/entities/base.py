@@ -68,9 +68,8 @@ from .meta import (
     get_model_fields,
     is_function,
     is_method_by_name,
-    is_model_class,
+    is_model_klass,
     ModelKlassType,
-    DataclassType,
     extract_model_field_meta,
     extract_py_type_hints,
     STANDARD_TYPE_LIST,
@@ -80,7 +79,9 @@ from .meta import (
     KeyString,
     AttrName,
     AttrValue,
-    Index0Type, KeyType,
+    Index0Type,
+    KeyType,
+    ModelInstanceType,
 )
 from .expressions import (
     DotExpression,
@@ -1658,17 +1659,6 @@ class IContainer(IComponent, ABC):
         """ pretty print - prints to stdout all components """
         ...
 
-    # @staticmethod
-    # @abstractmethod
-    # def create_this_registry_for_model_class(
-    #         setup_session: ISetupSession,
-    #         model_class: ModelKlassType,
-    # ) -> IThisRegistry:
-    #     """
-    #     This is @staticmethod
-    #     """
-    #     ...
-
 class IEntity(IContainer, ABC):
     settings: Settings = field(repr=False, )
     apply_settings_class: Optional[Type[ApplySettings]] = field(repr=False, default=None)
@@ -1750,7 +1740,7 @@ class IBoundDataModel(IDataModel, ABC):
         ...
 
     @abstractmethod
-    def _apply_nested_models(self, apply_result: "IApplyResult", instance: ModelKlassType):
+    def _apply_nested_models(self, apply_result: "IApplyResult", instance: ModelInstanceType):
         ...
 
 # ------------------------------------------------------------
@@ -2118,7 +2108,7 @@ class ValueSetPhase(str, Enum):
 @dataclass
 class IValueNode:
     component:  IComponent = field(repr=False)
-    instance: DataclassType = field(repr=False)
+    instance: ModelInstanceType = field(repr=False)
     instance_none_mode: bool = field(repr=False)
 
     # ------------------------------------------------------------
@@ -2190,7 +2180,7 @@ class ApplyStackFrame(IStackFrame):
     component: IComponent
     # main container - class of instance - can be copied too but is a bit complicated
     container: IContainer = field(repr=False)
-    instance: DataclassType
+    instance: ModelInstanceType
 
     # in value-node-tree current node - holds component/instance/container
     # can be NOT_APPLIABLE
@@ -2203,7 +2193,7 @@ class ApplyStackFrame(IStackFrame):
 
     # UPDATE by this instance - can be ENTITY_LIKE or MODELS_LIKE (same dataclass) struct
     # required but is None when not update
-    instance_new: Union[ModelKlassType, NoneType, UndefinedType] = field(repr=False, default=UNDEFINED)
+    instance_new: Union[ModelInstanceType, NoneType, UndefinedType] = field(repr=False, default=UNDEFINED)
 
     # partial mode - component subtree in processing
     # component is found and its subtree is being processed
@@ -2230,8 +2220,8 @@ class ApplyStackFrame(IStackFrame):
     index0: Optional[Index0Type] = None
 
     # parent instance / parent_instance_new - currenntly used for key_string logic
-    parent_instance: Optional[ModelKlassType] = field(repr=False, default=None)
-    parent_instance_new: Optional[ModelKlassType] = field(repr=False, default=None)
+    parent_instance: Optional[ModelInstanceType] = field(repr=False, default=None)
+    parent_instance_new: Optional[ModelInstanceType] = field(repr=False, default=None)
 
     # Usually used for ThisNS / This. namespace 
     # local_setup_session: Optional[ISetupSession] = field(repr=False, default=None)
@@ -2349,7 +2339,7 @@ class ApplyStackFrame(IStackFrame):
         else:
             pass
             # TODO: this should be checked only once per container, and I am not sure what is good way to do it
-            # # if not is_model_class(instance_to_test.__class__):
+            # # if not is_model_klass(instance_to_test.__class__):
             # #     raise EntityInternalError(owner=self, msg=f"Expected model instance: {instance_to_test.__class__} or list[instances], got: {self.instance}")
             # self._accessor.validate_instance_type(owner_name=self.component.name,
             #                                                      instance=instance_to_test,
@@ -2458,8 +2448,8 @@ class ApplyExecCleanersRegistry:
 class IApplyResult(IStackOwnerSession):
     entity: IEntity = field(repr=False)
     instance: Any = field(repr=False)
-    # TODO: consider: instance_new: Union[ModelKlassType, UndefinedType] = UNDEFINED,
-    instance_new: Optional[ModelKlassType] = field(repr=False)
+    # TODO: consider: instance_new: Union[ModelInstanceType, UndefinedType] = UNDEFINED,
+    instance_new: Optional[ModelInstanceType] = field(repr=False)
 
     settings: Optional[Settings] = field(repr=False)
     # used in apply_partial
@@ -2500,7 +2490,7 @@ class IApplyResult(IStackOwnerSession):
                             field(repr=False, init=False, default_factory=dict)
 
     # used when when collecting list of instances/attributes which are updated
-    instance_by_key_string_cache: Dict[KeyString, ModelKlassType] = \
+    instance_by_key_string_cache: Dict[KeyString, ModelInstanceType] = \
                             field(repr=False, init=False, default_factory=dict)
 
     # TODO: consider this:
@@ -2512,7 +2502,7 @@ class IApplyResult(IStackOwnerSession):
         # for b) not-attribute-instance it is too complicated to get values
         # with _accessor, so input instance is copied to this shadow
         # dataclass instance which is used for AttributeNode's DotExpression-s.
-        # instance_shadow_dc: DataclassType = field(init=False, repr=False)
+        # instance_shadow_dc: ModelInstanceType = field(init=False, repr=False)
 
     # Registry of history of attribute values for each IValueNode.
     # Filled only when Settings.trace =True (see .register_instance_attr_change()).
@@ -2726,16 +2716,16 @@ def extract_type_info(
                     msg=f"Inspected object's is a method: {parent_object}.{attr_node_name}. "
                     "Calling methods on instances are not allowed.")
 
-    if is_model_class(parent_object):
+    if is_model_klass(parent_object):
         # raise EntityInternalError(item=inspect_object, msg=f"'Parent is not DC/PYD class -> {parent_object}: {type(parent_object)}'.")
         if not hasattr(parent_object, "__annotations__"):
             # TODO: what about pydantic?
             raise EntityInternalError(item=inspect_object, msg=f"'DC/PYD class {parent_object}' has no metadata (__annotations__ / type hints), can't read '{attr_node_name}'. Add type-hints or check names.")
 
-        model_class: ModelKlassType = parent_object
+        model_klass: ModelKlassType = parent_object
 
         # === parent type hint
-        parent_py_type_hints = extract_py_type_hints(model_class, f"setup_session->{attr_node_name}:DC/PYD")
+        parent_py_type_hints = extract_py_type_hints(model_klass, f"setup_session->{attr_node_name}:DC/PYD")
 
         py_type_hint = parent_py_type_hints.get(attr_node_name, None)
         if py_type_hint:
@@ -2745,7 +2735,7 @@ def extract_type_info(
                             )
 
         # === Dataclass / pydantic field metadata - only for information
-        th_field, fields = extract_model_field_meta(inspect_object=model_class, attr_node_name=attr_node_name)
+        th_field, fields = extract_model_field_meta(inspect_object=model_klass, attr_node_name=attr_node_name)
 
     if not type_info:
         if not fields:

@@ -256,7 +256,7 @@ base.py
     #     #     # TODO: filter functions based on type: is_list or similar ...
     #     #     names_avail = get_available_names_example(attr_node_name,
     #     #                         functions_factory_registry.get_all_names())
-    #     #     raise RuleSetupNameNotFoundError(item=inspect_object, msg=f"Function name '{attr_node_name}' not found (parent={model_class}). Valid are: {names_avail}")
+    #     #     raise RuleSetupNameNotFoundError(item=inspect_object, msg=f"Function name '{attr_node_name}' not found (parent={model_klass}). Valid are: {names_avail}")
     # else:
 
 fields.py

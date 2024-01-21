@@ -19,7 +19,8 @@ from .meta import (
     AttrName,
     AttrIndex,
     AttrValue,
-    UNDEFINED, NoneType,
+    UNDEFINED,
+    ModelInstanceType,
 )
 from .utils import to_repr
 
@@ -52,12 +53,12 @@ class IValueAccessor:
 
     @staticmethod
     @abstractmethod
-    def get_value(instance: ModelKlassType, attr_name: AttrName, attr_index: Optional[AttrIndex]) -> AttrValue:
+    def get_value(instance: ModelInstanceType, attr_name: AttrName, attr_index: Optional[AttrIndex]) -> AttrValue:
         ...
 
     @staticmethod
     @abstractmethod
-    def set_value(instance: ModelKlassType, attr_name: AttrName, attr_index: Optional[AttrIndex], new_value: AttrValue) -> None:
+    def set_value(instance: ModelInstanceType, attr_name: AttrName, attr_index: Optional[AttrIndex], new_value: AttrValue) -> None:
         ...
 
 
@@ -76,11 +77,11 @@ class AttributeValueAccessor(IValueAccessor):
             raise EntityTypeError(owner=self, msg=f"Expecting instance of data model '{model_klass}', got: {type(instance)} / {to_repr(instance)}.")
 
     @staticmethod
-    def get_value(instance: ModelKlassType, attr_name: AttrName, attr_index: Optional[AttrIndex]) -> AttrValue:
+    def get_value(instance: ModelInstanceType, attr_name: AttrName, attr_index: Optional[AttrIndex]) -> AttrValue:
         return getattr(instance, attr_name, UNDEFINED)
 
     @staticmethod
-    def set_value(instance: ModelKlassType, attr_name: AttrName, attr_index: Optional[AttrIndex], new_value: AttrValue) -> None:
+    def set_value(instance: ModelInstanceType, attr_name: AttrName, attr_index: Optional[AttrIndex], new_value: AttrValue) -> None:
         setattr(instance, attr_name, new_value)
 
 

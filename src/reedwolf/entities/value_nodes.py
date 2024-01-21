@@ -31,7 +31,7 @@ from .meta import (
     AttrName,
     ModelKlassType,
     get_dataclass_field_type_info,
-    make_dataclass_with_optional_fields,
+    make_dataclass_with_optional_fields, ModelInstanceType,
 )
 from .expressions import (
     ExecResult,
@@ -114,7 +114,7 @@ class ValueNodeBase(IValueNode):
 
     # cached values used in set_value() logic
     # see . _init_instance_attr_access_objects()
-    _instance_parent: Union[ModelKlassType, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
+    _instance_parent: Union[ModelInstanceType, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
     _attr_name_last: Union[AttrName, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
 
 

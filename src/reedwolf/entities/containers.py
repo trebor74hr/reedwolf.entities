@@ -42,15 +42,15 @@ from .meta import (
     STANDARD_TYPE_LIST,
     TransMessageType,
     TypeInfo,
-    is_model_class,
+    is_model_klass,
     get_model_fields,
     ModelKlassType,
-    DataclassType,
     Self,
     NoneType,
     Index0Type,
     KeyType,
     KeyPairs,
+    ModelInstanceType,
 )
 from .base import (
     get_name_from_bind,
@@ -342,7 +342,7 @@ class ContainerBase(IContainer, ABC):
                 raise EntitySetupTypeError(owner=self, msg=f"{data_model.name}: For SubEntity use DotExpression as model, got: {model_klass}")
             # TODO: maybe check model type_info is_list ...
 
-        if not is_model_class(model_klass) and not (is_list and model_klass in STANDARD_TYPE_LIST):
+        if not is_model_klass(model_klass) and not (is_list and model_klass in STANDARD_TYPE_LIST):
             raise EntitySetupError(owner=self, msg=f"Managed model {data_model.name} needs to be a @dataclass, pydantic.BaseModel or List[{STANDARD_TYPE_LIST}], got: {type(model_klass)}")
 
         # == M.name version
@@ -501,7 +501,7 @@ class ContainerBase(IContainer, ABC):
 
     def get_key_pairs_or_index0(self,
                                 apply_result: IApplyResult,
-                                instance: ModelKlassType,
+                                instance: ModelInstanceType,
                                 index0: Index0Type,
                                 ) -> KeyType:
         """
@@ -515,35 +515,13 @@ class ContainerBase(IContainer, ABC):
         return ret
 
 
-    def get_key_pairs(self, instance: ModelKlassType, apply_result: IApplyResult) \
+    def get_key_pairs(self, instance: ModelInstanceType, apply_result: IApplyResult) \
             -> KeyPairs:
         if not self.keys:
             raise EntityInternalError(msg="get_key_pairs() should be called only when 'keys' are defined")
         key_pairs = self.keys.get_key_pairs(instance, apply_result=apply_result)
         return key_pairs
 
-
-    # @staticmethod
-    # def create_this_registry_for_model_class(
-    #         setup_session: ISetupSession,
-    #         model_class: ModelKlassType,
-    #         ) -> IThisRegistry:
-    #     # NOTE: must be here since:
-    #     #   - expressions.py don't see ThisRegistry
-    #     #   - setup.py does not see registries
-    #     #   - registries - needed by setup.py which can not see registries
-    #     # TODO: try to resolve this and put
-    #     """
-    #     - ThisRegistry is unavailable to low-level modules -
-    #       e.g. func_args -> setup.
-    #     - .Instance + <attr-names> is used only in manual setup cases,
-    #       e.g. ChoiceField()
-    #     """
-    #     this_registry = ThisRegistry(model_class=model_class)
-    #     this_registry.setup(setup_session=setup_session)
-    #     this_registry.finish()
-
-    #     return this_registry
 
 # ------------------------------------------------------------
 
@@ -555,7 +533,7 @@ class KeysBase(ABC):
         ...
 
     @abstractmethod
-    def get_key_pairs(self, instance: ModelKlassType, container: IContainer) -> KeyPairs:
+    def get_key_pairs(self, instance: ModelInstanceType, container: IContainer) -> KeyPairs:
         """ returns list of (key-name, key-value) """
         ...
 
@@ -609,7 +587,7 @@ class KeyFields(KeysBase):
                 raise EntitySetupNameNotFoundError(f"Field name '{field_name}' not found in list of attributes of '{model_klass}'. Available names: {available_names}")
 
 
-    def get_key_pairs(self, instance: ModelKlassType, apply_result: IApplyResult) -> KeyPairs:
+    def get_key_pairs(self, instance: ModelInstanceType, apply_result: IApplyResult) -> KeyPairs:
         # container: IContainer
         # apply_result:IApplyResult
         # frame = apply_result.current_frame
@@ -692,12 +670,12 @@ class Entity(IEntity, ContainerBase):
 
     def init_clean(self):
         if self.bind_to:
-            if is_model_class(self.bind_to):
+            if is_model_klass(self.bind_to):
                 self.data_model = DataModel(model_klass=self.bind_to)
             else:
                 self.data_model = self.bind_to
 
-            if not (isinstance(self.data_model, DataModel) and is_model_class(self.data_model.model_klass)):
+            if not (isinstance(self.data_model, DataModel) and is_model_klass(self.data_model.model_klass)):
                 raise EntitySetupTypeError(owner=self, msg=f"Attribute 'data_model' needs to be model DC/PYD OR DataModel with model DC/PYD, got: {self.data_model}")
 
             if not self.name:
@@ -780,8 +758,8 @@ class Entity(IEntity, ContainerBase):
     # ------------------------------------------------------------
 
     def apply(self,
-              instance: DataclassType,
-              instance_new: Optional[ModelKlassType] = None,
+              instance: ModelInstanceType,
+              instance_new: Optional[ModelInstanceType] = None,
               settings: Optional[ApplySettings] = None,
               accessor: Optional[ValueAccessorInputType] = None,
               raise_if_failed:bool = True) -> IApplyResult:
@@ -794,8 +772,8 @@ class Entity(IEntity, ContainerBase):
 
     def apply_partial(self,
                       component_name_only:str,
-                      instance: DataclassType,
-                      instance_new: Optional[ModelKlassType] = None,
+                      instance: ModelInstanceType,
+                      instance_new: Optional[ModelInstanceType] = None,
                       settings: Optional[Settings] = None,
                       accessor: Optional[ValueAccessorInputType] = None,
                       raise_if_failed:bool = True) -> IApplyResult:
@@ -809,8 +787,8 @@ class Entity(IEntity, ContainerBase):
 
 
     def _apply(self,
-               instance: DataclassType,
-               instance_new: Optional[ModelKlassType] = None,
+               instance: ModelInstanceType,
+               instance_new: Optional[ModelInstanceType] = None,
                component_name_only:Optional[str] = None,
                settings: Optional[Settings] = None,
                accessor: Optional[ValueAccessorInputType] = None,
@@ -873,7 +851,7 @@ class Entity(IEntity, ContainerBase):
 
         return output
 
-    def create_dto_instance_from_model_instance(self, instance: ModelKlassType, dto_class: Type[ModelKlassType]) -> ModelKlassType:
+    def create_dto_instance_from_model_instance(self, instance: ModelInstanceType, dto_class: ModelKlassType) -> ModelInstanceType:
         if not isinstance(instance, self.data_model.model_klass):
             raise EntityTypeError(owner=self, msg=f"Expected  {self.data_model.model_klass} instance, got: {instance}: {type(instance)}")
 

@@ -224,29 +224,29 @@ class FunctionArguments:
             # if not caller:
             #     # NOTE: Namespace top level like: Ctx.Length(This.name)
             #     #       DataModelWithHandlers with read_handlers case
-            #     model_class = setup_session.current_frame.data_model.model
+            #     model_klass = setup_session.current_frame.data_model.model
             # else:
             #     # TODO: drop this case - change to 'setup_session.current_frame' case
-            #     model_class = caller.type_info.type_
+            #     model_klass = caller.type_info.type_
 
-            # assert model_class
+            # assert model_klass
 
-            # if is_model_class(model_class):
+            # if is_model_klass(model_klass):
             #     # pydantic / dataclasses
             #     assert setup_session
             #     # NOTE: ThisRegistryForInstance not available so low, using path:
             #     #       session -> container -> ...
             #     this_registry = setup_session.container.create_this_registry_for_model_class(
             #         setup_session=setup_session,
-            #         model_class=model_class,
+            #         model_klass=model_klass,
             #     )
             #     # local_setup_session = setup_session.create_local_setup_session_for_this_instance(
-            #     #                                             model_class=model_class,
+            #     #                                             model_klass=model_klass,
             #     #                                             )
-            # elif model_class in STANDARD_TYPE_LIST:
+            # elif model_klass in STANDARD_TYPE_LIST:
             #     this_registry = None
             # else:
-            #     raise EntitySetupValueError(owner=self, msg=f"{parent_name}: Unsupported type: {caller} / {model_class}")
+            #     raise EntitySetupValueError(owner=self, msg=f"{parent_name}: Unsupported type: {caller} / {model_klass}")
 
             # with setup_session.use_stack_frame(
             #         SetupStackFrame(

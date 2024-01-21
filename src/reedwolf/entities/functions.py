@@ -57,7 +57,7 @@ from .meta import (
     EmptyFunctionArguments,
     NoneType,
     STANDARD_TYPE_LIST,
-    is_model_class,
+    is_model_klass,
     ItemType,
     ModelKlassType,
     ComponentTreeWValuesType,
@@ -282,7 +282,7 @@ class IFunction(IFunctionDexpNode, ABC):
             raise EntityInternalError(owner=self, msg=f"this_registry already set: {self.this_registry}")
         assert self.setup_session
 
-        # model_class: ModelKlassType = None
+        # model_klass: ModelKlassType = None
         type_info: Optional[TypeInfo] = None  # not used
 
         if not self.caller:
@@ -302,8 +302,8 @@ class IFunction(IFunctionDexpNode, ABC):
                         raise EntityInternalError(owner=self, msg=f"{model_klass} dot-expression is not finished")
                     model_dexp_node: IDotExpressionNode = model_klass._dexp_node
                     type_info = model_dexp_node.get_type_info()
-                elif is_model_class(model_klass):
-                    # model_class = model
+                elif is_model_klass(model_klass):
+                    # model_klass = model
                     type_info = TypeInfo.get_or_create_by_type(model_klass)
                 else:
                     raise EntityInternalError(owner=self, msg=f"expecting model class or dot expression, got: {model_klass}")
@@ -335,15 +335,15 @@ class IFunction(IFunctionDexpNode, ABC):
             # direct function creation - currently only unit test uses it
             this_registry = None
 
-        elif self.items_func_arg or is_model_class(model_class) or type_info.is_list:
+        elif self.items_func_arg or is_model_klass(model_class) or type_info.is_list:
             # complex structs: pydantic / dataclasses / List[Any] / ...
             if self.items_func_arg and not type_info.is_list:
                 raise EntitySetupTypeError(owner=self, msg=f"For 'Items' functions only list types are supported, got: {type_info.py_type_hint}")
 
-            this_registry = ThisRegistry.create_for_model_class(
+            this_registry = ThisRegistry.create_for_model_klass(
                 is_items_for_each_mode = (self.items_func_arg is not None),
                 setup_session=self.setup_session,
-                model_class=type_info.py_type_hint)
+                model_klass=type_info.py_type_hint)
 
             if self.items_func_arg and not this_registry.is_items_for_each_mode:
                 raise EntityInternalError(owner=self, msg=f"Failed to setup this_registry for Items in 'for-each' mode: {this_registry}")
@@ -352,13 +352,13 @@ class IFunction(IFunctionDexpNode, ABC):
             this_registry = None
         # elif type_info and type_info.is_list:
         #     # NOTE: u ovaj slučaj nikad se ne ulazi
-        #     model_class = type_info.type_
+        #     model_klass = type_info.type_
         #     this_registry = ThisRegistry.create_for_model_class(
         #         setup_session=self.setup_session,
-        #         model_class=model_class)
+        #         model_klass=model_klass)
         #     # this_registry = self.setup_session.container.create_this_registry_for_model_class(
         #     #     setup_session=self.setup_session,
-        #     #     model_class=model_class,
+        #     #     model_klass=model_klass,
         #     # )
         else:
             raise EntitySetupValueError(owner=self, msg=f"Can not set registry for This. namespace, unsupported type: {model_class} / {type_info}. Caller: {self.caller}")
@@ -1179,9 +1179,9 @@ class DotexprExecuteOnItemFactoryFuncArgHint(IInjectFuncArgHint):
             # TODO: if this becommes heavy - instead of new frame, reuse existing and change instance only
             #       this_registry should be the same for same session (same type items)
             setup_session = apply_result.current_frame.component.setup_session
-            this_registry = ThisRegistry.create_for_model_class(
+            this_registry = ThisRegistry.create_for_model_klass(
                 setup_session=setup_session,
-                model_class=type(item),
+                model_klass=type(item),
             )
             with apply_result.use_stack_frame(
                     ApplyStackFrame(

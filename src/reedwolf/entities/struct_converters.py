@@ -30,12 +30,12 @@ from .meta import (
     ModelKlassType,
     AttrValue,
     UNDEFINED,
-    is_model_class,
+    is_model_klass,
     get_model_fields,
     ModelField,
     is_pydantic,
     NoneType,
-    AttrName,
+    AttrName, ModelInstanceType,
 )
 from .base import (
     DTO_STRUCT_CHILDREN_SUFFIX,
@@ -65,7 +65,7 @@ class StructConverterStackFrame(IStackFrame):
 
     component: IComponent = field(repr=False)
     path_names: List[str] = field()
-    instance: ModelKlassType = field(repr=False)
+    instance: ModelInstanceType = field(repr=False)
     dto_class: Type[ModelKlassType] = field(repr=False)
     # None will not trigger creation
     dto_kwargs: Union[NoneType, Dict[str, AttrValue]] = field(repr=False)
@@ -74,7 +74,7 @@ class StructConverterStackFrame(IStackFrame):
     # autocomputed
     component_name: str = field(init=False, repr=True)
     # set manually
-    dto_instance: Union[ModelKlassType, UndefinedType] = field(repr=False, init=False, default=UNDEFINED)
+    dto_instance: Union[ModelInstanceType, UndefinedType] = field(repr=False, init=False, default=UNDEFINED)
 
     def __post_init__(self):
         if not isinstance(self.component, IComponent):
@@ -95,7 +95,7 @@ class StructConverterStackFrame(IStackFrame):
     def post_clean(self):
         pass
 
-    def set_dto_instance(self, dto_instance: ModelKlassType):
+    def set_dto_instance(self, dto_instance: ModelInstanceType):
         if self.dto_instance != UNDEFINED:
             raise EntityInternalError(owner=self, msg=f"Instance already set {self.dto_instance}")
         self.dto_instance = dto_instance
@@ -138,7 +138,7 @@ class StructConverterRunner(IStackOwnerSession):
 
     def create_dto_instance_from_model_instance(self,
                                                 component: IComponent,
-                                                instance: ModelKlassType,
+                                                instance: ModelInstanceType,
                                                 dto_class: Type[ModelKlassType],
                                                 ) -> ModelKlassType:
         with self.use_stack_frame(
@@ -156,7 +156,7 @@ class StructConverterRunner(IStackOwnerSession):
         return dto_instance
 
 
-    def _create_dto_instance_from_model_instance(self) -> ModelKlassType:
+    def _create_dto_instance_from_model_instance(self) -> ModelInstanceType:
         """
         pokriti:
             instance change - container - tj. is_container()
@@ -191,7 +191,7 @@ class StructConverterRunner(IStackOwnerSession):
 
         if children: #  and component.can_have_children():
             # for boolean without children - dto_class will be this will be {}
-            if not is_model_class(dto_class):
+            if not is_model_klass(dto_class):
                 raise EntityInternalError(owner=self, msg=f"dto_class not a model, got: {dto_class}")
             dto_class_field_dict = get_model_fields(dto_class)
 
@@ -214,7 +214,7 @@ class StructConverterRunner(IStackOwnerSession):
                     child_dto_class = child_dto_model_field.type_
 
                 if child.is_container():
-                    # if not is_model_class(child_dto_class):
+                    # if not is_model_klass(child_dto_class):
                     #     raise EntityTypeError(owner=self, msg=f"Field {child_dto_attr_name} not a class in {dto_class}, got: {child_dto_class}")
                     container: IContainer = child
                     # TODO: container.get_data_model_attr_node()
@@ -228,7 +228,7 @@ class StructConverterRunner(IStackOwnerSession):
                     if child_instance == UNDEFINED:
                         raise EntityTypeError(owner=self, msg=f"Instance {model_attr_name} not available in {instance}")
                 else:
-                    # if is_model_class(child_dto_class):
+                    # if is_model_klass(child_dto_class):
                     #     raise EntityTypeError(owner=self, msg=f"Field {child_dto_attr_name} should not be a class in {dto_class}, got: {child_dto_class}")
                     # may check a type child_dto_class and type(instance)
                     child_instance = instance

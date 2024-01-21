@@ -27,11 +27,11 @@ from .namespaces import (
 from .meta import (
     Self,
     TypeInfo,
-    is_model_class,
+    is_model_klass,
     ModelKlassType,
     # get_model_fields,
     extract_py_type_hints,
-    EmptyFunctionArguments,
+    EmptyFunctionArguments, ModelInstanceType,
 )
 from .expressions import (
     DotExpression,
@@ -82,7 +82,7 @@ class BoundDataModelBase(IBoundDataModel):
             model_dexp_node = self.model_klass._dexp_node
             model_klass = model_dexp_node.get_type_info().type_
 
-        this_registry = ThisRegistry(model_class=model_klass)
+        this_registry = ThisRegistry(model_klass=model_klass)
         return this_registry
 
 
@@ -179,7 +179,7 @@ class BoundDataModelBase(IBoundDataModel):
     # ------------------------------------------------------------
 
 
-    def _apply_nested_models(self, apply_result: IApplyResult, instance: ModelKlassType):
+    def _apply_nested_models(self, apply_result: IApplyResult, instance: ModelInstanceType):
         children_data_models = self.get_children()
         if not children_data_models:
             return 
@@ -203,11 +203,11 @@ class BoundDataModelBase(IBoundDataModel):
         # this_registry = apply_result.setup_session.container \
         #                     .create_this_registry_for_model_class(
         #                         setup_session=apply_result.setup_session,
-        #                         model_class=self.model_klass )
+        #                         model_klass=self.model_klass )
 
         # local_setup_session = apply_result.setup_session \
         #                         .create_local_setup_session_for_this_instance(
-        #                                 model_class=self.model,
+        #                                 model_klass=self.model,
         #                                 )
 
         container = self.get_first_parent_container(consider_self=False)
@@ -319,7 +319,7 @@ class DataModelWithHandlers(BoundDataModelBase):
         self.type_info = self.read_handler.get_type_info() # factory
         self.model_klass = self.type_info.type_
 
-        if not is_model_class(self.model_klass):
+        if not is_model_klass(self.model_klass):
             raise EntitySetupValueError(f"Model got from read_handler output type - should not be Model class (DC/PYD), got: {self.model_klass}")
 
         if not self.name:
@@ -391,7 +391,7 @@ class DataModel(BoundDataModelBase):
                     camel_case_to_snake(self.__class__.__name__),
                     get_name_from_bind(self.model_klass)
                     ])
-        elif is_model_class(self.model_klass):
+        elif is_model_klass(self.model_klass):
             if not self.name:
                 self.name = "__".join([
                         camel_case_to_snake(self.__class__.__name__),
@@ -414,7 +414,7 @@ class DataModel(BoundDataModelBase):
         #           when DotExpression, dexp is evaluated setup() what is a bit late in
         #           container.setup().
         assert not self.type_info
-        if not (is_model_class(self.model_klass) or isinstance(self.model_klass, DotExpression)):
+        if not (is_model_klass(self.model_klass) or isinstance(self.model_klass, DotExpression)):
             raise EntitySetupValueError(f"Model should be Model class (DC/PYD) or DotExpression, got: {self.model_klass}")
 
         if isinstance(self.model_klass, DotExpression):

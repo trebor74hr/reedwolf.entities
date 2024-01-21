@@ -36,7 +36,7 @@ from .meta import (
     Self,
     NoneType,
     ModelKlassType,
-    is_model_class,
+    is_model_klass,
     is_model_instance,
     ValuesTree,
     ComponentTreeWValuesType,
@@ -45,6 +45,7 @@ from .meta import (
     dataclass_from_dict,
     Index0Type,
     KeyType,
+    ModelInstanceType,
 )
 from .base import (
     IField,
@@ -94,9 +95,9 @@ class UseApplyStackFrameCtxManager(UseStackFrameCtxManagerBase):
 @dataclass
 class InstanceItem:
     key: KeyType
-    instance: ModelKlassType = field(repr=False)
+    instance: ModelInstanceType = field(repr=False)
     index0: Index0Type = field(repr=False)
-    item_instance_new: ModelKlassType = field(repr=False)
+    item_instance_new: ModelInstanceType = field(repr=False)
     change_op: Optional[ChangeOpEnum] = field(repr=True)
 
 
@@ -1172,7 +1173,7 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def get_instance_by_key_string(self, key_string: KeyString) -> ModelKlassType:
+    def get_instance_by_key_string(self, key_string: KeyString) -> ModelInstanceType:
         " must exist in cache - see previous method which sets self.get_key_string_by_instance(container) "
         return self.instance_by_key_string_cache[key_string]
 
@@ -1205,7 +1206,7 @@ class ApplyResult(IApplyResult):
 
             if isinstance(instance_to_test, model_klass):
                 instance_new_struct_type = StructEnum.MODELS_LIKE
-            elif is_model_class(instance_to_test.__class__):
+            elif is_model_klass(instance_to_test.__class__):
                 # TODO: it could be StructEnum.MODELS_LIKE too, but how to detect this? input param or?
                 instance_new_struct_type = StructEnum.ENTITY_LIKE
             else:
@@ -1511,7 +1512,7 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def get_key_string_by_instance(self, component: IComponent, instance: ModelKlassType, parent_instance: ModelKlassType,
+    def get_key_string_by_instance(self, component: IComponent, instance: ModelInstanceType, parent_instance: ModelInstanceType,
                                    index0: Optional[Index0Type], force:bool=False) -> KeyString:
         # apply_result:IApplyResult,  -> self
         """
@@ -1628,7 +1629,7 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def get_attr_value_by_comp_name(self, component:IComponent, instance: ModelKlassType) -> ExecResult:
+    def get_attr_value_by_comp_name(self, component:IComponent, instance: ModelInstanceType) -> ExecResult:
         attr_name = component.name
         value = component._accessor.get_value(instance=instance, attr_name=attr_name, attr_index=None)
         if value is UNDEFINED:
