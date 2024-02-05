@@ -360,7 +360,7 @@ class LocalFieldsRegistry(RegistryBase):
                         deny_reason=deny_reason)
         return attr_node
 
-    def dexp_not_found_fallback(self, full_dexp_node_name: AttrName) -> Union[AttrDexpNode, UndefinedType]:
+    def dexp_not_found_fallback(self, owner: IComponent, full_dexp_node_name: AttrName) -> Union[AttrDexpNode, UndefinedType]:
         """
         when field name is not found in self.store (local store)
         tries to find if attribute is in TopFieldsRegistry store and is visible.
@@ -429,11 +429,20 @@ class LocalFieldsRegistry(RegistryBase):
             # TODO: if settings.debug:
             #   print(f"Container {self.container.container_id} refs {full_dexp_node_name} -> testing {ho_container_id} - found: up={path_up} + down={path_down}, items={subentity_items_in_path_down}, ok={ok}")
 
+        if len(candidates) > 1:
+            custom_msg_bits = ["{}{}{}".format("^".join(cand[1].path_up),
+                                               "->" if cand[1].path_up and cand[1].path_down else "",
+                                               ".".join(cand[1].path_down))
+                               for cand in candidates]
+            custom_msg = f"Field name '{full_dexp_node_name}' is ambiguous, can not use it directly. " \
+                         f"Found {len(custom_msg_bits)} candidates: {', '.join(custom_msg_bits)}."
+            raise self.create_exception_name_not_found_error(owner=owner, full_dexp_node_name=full_dexp_node_name, custom_msg=custom_msg)
+
         if len(candidates) == 1:
-            attr_dexp_node_orig, attr_value_container_path = candidates[0]
-            # return attr_dexp_node_orig
+            # found one unique field in some other visible container -> use it.
             # convert this node to a new one AttrDexpNodeWithValuePath:
             #   will be created with same input arguments + one extra (path info)
+            attr_dexp_node_orig, attr_value_container_path = candidates[0]
             attr_dexp_node_w_value_path = attr_dexp_node_orig.copy(
                 traverse=False, # NOTE: hope this is not bad idea
                 as_class = AttrDexpNodeWithValuePath,
@@ -444,11 +453,6 @@ class LocalFieldsRegistry(RegistryBase):
             self.store[full_dexp_node_name] = attr_dexp_node_w_value_path
             return attr_dexp_node_w_value_path
 
-        # TODO: custom message how to reach
-        #  if len(candidates) > 1:
-
-        # in_path_container: IContainer = self.container.entity.containers_dict.get(
-        #     container_attr_dexp_node_pair.container_id, UNDEFINED)
         return UNDEFINED
 
 

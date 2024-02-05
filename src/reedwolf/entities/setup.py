@@ -130,7 +130,7 @@ class RegistryBase(IRegistry):
         """ default implementation """
         return False
 
-    def dexp_not_found_fallback(self, full_dexp_node_name: AttrName) -> Union[AttrDexpNode, UndefinedType]:
+    def dexp_not_found_fallback(self, owner: IComponent, full_dexp_node_name: AttrName) -> Union[AttrDexpNode, UndefinedType]:
         """
         method is called when CALL_DEXP_NOT_FOUND_FALLBACK is set to True
         returns:
@@ -413,6 +413,16 @@ class RegistryBase(IRegistry):
         valid_varnames_str = get_available_names_example(attr_name, list(valid_varnames_list), max_display=7)
         return valid_varnames_list, valid_varnames_str
 
+    def create_exception_name_not_found_error(self, owner: IComponent,
+                                              full_dexp_node_name: str, custom_msg: str = "") -> EntitySetupNameNotFoundError:
+        valid_varnames_list, valid_varnames_str = self.get_valid_varnames(full_dexp_node_name)
+        valid_names = f"Valid attributes: {valid_varnames_str}" if valid_varnames_list \
+                      else "Namespace has no attributes at all."
+        if custom_msg:
+            valid_names = f"{custom_msg} {valid_names}"
+        return EntitySetupNameNotFoundError(owner=owner,
+                                            msg=f"Namespace '{self.NAMESPACE}': Invalid attribute name '{full_dexp_node_name}'. {valid_names}")
+
     # ------------------------------------------------------------
     # create_node -> AttrDexpNode, Operation or IFunctionDexpNode
     # ------------------------------------------------------------
@@ -465,12 +475,10 @@ class RegistryBase(IRegistry):
                 attr_node_template = self.store.get(full_dexp_node_name, UNDEFINED)
                 if attr_node_template is UNDEFINED:
                     if self.CALL_DEXP_NOT_FOUND_FALLBACK:
-                        attr_node_template = self.dexp_not_found_fallback(full_dexp_node_name)
+                        attr_node_template = self.dexp_not_found_fallback(owner=owner, full_dexp_node_name=full_dexp_node_name)
 
                     if attr_node_template is UNDEFINED:
-                        valid_varnames_list, valid_varnames_str  = self.get_valid_varnames(full_dexp_node_name)
-                        valid_names = f"Valid attributes: {valid_varnames_str}" if valid_varnames_list else "Namespace has no attributes at all."
-                        raise EntitySetupNameNotFoundError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': Invalid attribute name '{full_dexp_node_name}'. {valid_names}")
+                        raise self.create_exception_name_not_found_error(owner=owner, full_dexp_node_name=full_dexp_node_name)
 
 
             # NOTE: RL 230525 do not clone, .finish() is not called for cloned,
