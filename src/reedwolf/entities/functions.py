@@ -78,7 +78,7 @@ from .expressions import (
     IThisRegistry,
     JustDotexprFuncArgHint,
     DotexprFuncArgHint,
-    IFunctionFactory,
+    IFunctionFactory, IDexpValueSource,
 )
 from .func_args import (
     FunctionArguments,
@@ -439,6 +439,8 @@ class IFunction(IFunctionDexpNode, ABC):
             execute_func_arg_hint = None
         elif isinstance(exp_arg.type_info.py_type_hint, IExecuteFuncArgHint):
             execute_func_arg_hint: DotexprFuncArgHint = exp_arg.type_info.py_type_hint
+        elif isinstance(arg_value, IDexpValueSource):
+            arg_value = arg_value.get_value(strict=False)
         elif isinstance(arg_value, (DotExpression, IDotExpressionNode)):
             # TODO: Explain when this happens!!
             # NOTE: currently no inner type is passed

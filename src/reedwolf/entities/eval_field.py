@@ -88,11 +88,10 @@ class Default(FieldEvaluationBase):
         in simple cases - can be used to ensure good default value
         for EnumField should have default within enum values.
     """
-
-    value:          Union[LiteralType, DotExpression]
-    name:           Optional[str] = None
-    title:          Optional[TransMessageType] = None
-    available:      Optional[Union[bool, DotExpression]] = True
+    # value:          Union[LiteralType, DotExpression]
+    # name:           Optional[str] = None
+    # available:      Optional[Union[bool, DotExpression]] = True
+    # title:          Optional[TransMessageType] = None
 
     REQUIRES_AUTOCOMPUTE: ClassVar[bool] = False
 

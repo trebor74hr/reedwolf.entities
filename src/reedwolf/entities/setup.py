@@ -11,9 +11,6 @@ from typing import (
     Dict,
 )
 
-from .settings import (
-    CustomFunctionFactoryList,
-)
 from .utils import (
     get_available_names_example,
     UNDEFINED,
@@ -39,7 +36,6 @@ from .expressions import (
     IFunctionDexpNode,
     IRegistry,
     ISetupSession,
-    IAttributeAccessorBase,
     RegistryRootValue,
 )
 from .meta import (
@@ -65,7 +61,8 @@ from .base import (
     IDataModel,
     ReservedAttributeNames,
     SetupStackFrame,
-    UseStackFrameCtxManagerBase, IValueNode,
+    UseStackFrameCtxManagerBase,
+    IValueNode
 )
 from .functions import (
     FunctionsFactoryRegistry,
@@ -119,18 +116,28 @@ class RegistryBase(IRegistry):
     convenient to have some advanced logic within. Thus Registry logic 
     is put in specialized classes - SetupSession.
     """
-    store: Dict[str, AttrDexpNode] = field(repr=False, init=False, default_factory=dict)
+    store: Dict[AttrName, AttrDexpNode] = field(repr=False, init=False, default_factory=dict)
     setup_session: Union[ISetupSession, UndefinedType] = field(repr=False, init=False, default=UNDEFINED)
     finished: bool                  = field(init=False, repr=False, default=False)
 
     # TODO: with 3.11 - Protocol
     NAMESPACE: ClassVar[Namespace] = None
     ROOT_VALUE_NEEDS_FETCH_BY_NAME: ClassVar[bool] = True
+    CALL_DEXP_NOT_FOUND_FALLBACK: ClassVar[bool] = False
 
     @staticmethod
     def is_unbound_models_registry() -> bool:
         """ default implementation """
         return False
+
+    def dexp_not_found_fallback(self, full_dexp_node_name: AttrName) -> Union[AttrDexpNode, UndefinedType]:
+        """
+        method is called when CALL_DEXP_NOT_FOUND_FALLBACK is set to True
+        returns:
+            - UNDEFINED if this functino does not find attribute
+            - otherwise return AttrDexpNode.
+        """
+        raise NotImplementedError("When setting CALL_DEXP_NOT_FOUND_FALLBACK to True, you must implement dexp_not_found_fallback() method")
 
     def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName, caller: Optional[str] = None) -> RegistryRootValue: # noqa: F821
         # TODO: same method declared in IRegistry
@@ -145,8 +152,8 @@ class RegistryBase(IRegistry):
 
         if attr_name not in self.store:
             # NOTE: Should not hhappen if DotExpression.setup() has done its job properly
-            names_avail = get_available_names_example(attr_name, list(self.store.keys()))
-            raise EntityApplyNameError(owner=self, msg=f"Unknown attribute '{attr_name}, available attribute(s): {names_avail}."
+            _, valid_varnames_str = self.get_valid_varnames(attr_name)
+            raise EntityApplyNameError(owner=self, msg=f"Unknown attribute '{attr_name}', available attribute(s): {valid_varnames_str}."
                                                        + (f" Caller: {caller}" if caller else ""))
 
         attr_dexp_node: AttrDexpNode = self.store[attr_name]
@@ -401,6 +408,10 @@ class RegistryBase(IRegistry):
                     )
         return func_node
 
+    def get_valid_varnames(self, attr_name: str) -> Tuple[List[str], str]:
+        valid_varnames_list = [vn for vn, attr_dexp_node in self.store.items() if not attr_dexp_node.denied]
+        valid_varnames_str = get_available_names_example(attr_name, list(valid_varnames_list), max_display=7)
+        return valid_varnames_list, valid_varnames_str
 
     # ------------------------------------------------------------
     # create_node -> AttrDexpNode, Operation or IFunctionDexpNode
@@ -448,14 +459,19 @@ class RegistryBase(IRegistry):
             if owner.is_unbound() and self.NAMESPACE == ModelsNS:
                 if full_dexp_node_name in self.store:
                     raise EntitySetupNameError(owner=self, msg=f"full_dexp_node_name={full_dexp_node_name} already in store: {self.store[full_dexp_node_name]}")
-                self.register_unbound_attr_node(component=owner, full_dexp_node_name=full_dexp_node_name)
+                # TODO: solve with IUnboundModelsRegistry - method available in UnboundModelsRegistry only
+                attr_node_template = self.register_unbound_attr_node(component=owner, full_dexp_node_name=full_dexp_node_name)
             else:
-                if full_dexp_node_name not in self.store:
-                    names_avail = get_available_names_example(full_dexp_node_name, list(self.store.keys()), max_display=7)
-                    valid_names = f"Valid attributes: {names_avail}" if self.store.keys() else "Namespace has no attributes at all."
-                    raise EntitySetupNameNotFoundError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': Invalid attribute name '{full_dexp_node_name}'. {valid_names}")
+                attr_node_template = self.store.get(full_dexp_node_name, UNDEFINED)
+                if attr_node_template is UNDEFINED:
+                    if self.CALL_DEXP_NOT_FOUND_FALLBACK:
+                        attr_node_template = self.dexp_not_found_fallback(full_dexp_node_name)
 
-            attr_node_template = self.store.get(full_dexp_node_name)
+                    if attr_node_template is UNDEFINED:
+                        valid_varnames_list, valid_varnames_str  = self.get_valid_varnames(full_dexp_node_name)
+                        valid_names = f"Valid attributes: {valid_varnames_str}" if valid_varnames_list else "Namespace has no attributes at all."
+                        raise EntitySetupNameNotFoundError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': Invalid attribute name '{full_dexp_node_name}'. {valid_names}")
+
 
             # NOTE: RL 230525 do not clone, .finish() is not called for cloned,
             #       they were not registered anywhere. OLD:
@@ -527,40 +543,6 @@ class RegistryUseDenied(RegistryBase):
 
     def apply_to_get_root_value(self, apply_result: "IApplyResult", attr_name: AttrName, caller: Optional[str] = None) -> RegistryRootValue: # noqa: F821
         raise EntityInternalError(owner=self, msg="Registry should not be used to get root value.")
-
-
-# ------------------------------------------------------------
-
-
-@dataclass
-class ComponentAttributeAccessor(IAttributeAccessorBase):
-    """
-    Used in FieldsNS
-    Value will be fetched by evaluating .bind_to of Field component.
-    """
-    component: IComponent
-    instance: ModelInstanceType
-    value_node: IValueNode
-
-    def get_attribute(self, apply_result:IApplyResult, attr_name: str) -> Self:
-        children_dict = apply_result.get_upward_components_dict(self.component)
-        if attr_name not in children_dict:
-            avail_names = get_available_names_example(attr_name, list(children_dict.keys()))
-            raise EntityApplyNameError(owner=self.component, 
-                    msg=f"Attribute '{attr_name}' not found in '{self.component.name}' ({type(self.component.name)}). Available: {avail_names}")
-
-        component = children_dict[attr_name]
-
-        # OLD: if is_last:
-        if not isinstance(component, IField):
-            # ALT: not hasattr(component, "bind_to")
-            raise EntityApplyNameError(owner=self.component,
-                    msg=f"Attribute '{attr_name}' is '{type(component)}' type which has no binding, therefore can not extract value. Use standard *Field components instead.")
-        # TODO: needs some class wrapper and caching ...
-        dexp_result = component.bind_to._evaluator.execute_dexp(apply_result)
-        out = dexp_result.value
-
-        return out
 
 
 # ------------------------------------------------------------
@@ -761,12 +743,16 @@ class SetupSession(SetupSessionBase):
 
 # ------------------------------------------------------------
 
+@dataclass
 class TopSetupSession(SetupSessionBase):
-
+    # TODO: :TopFieldsRegistry
+    top_fields_registry: RegistryBase = field(repr=False, default=None)
     hook_on_finished_all_list:  Optional[List[HookOnFinishedAllCallable]] = field(init=False, repr=False)
 
     def __post_init__(self):
         super().__post_init__()
+        if not self.top_fields_registry:
+            raise EntityInternalError(owner=self, msg=f"top_fields_registry is obligatory.")
         self.top_setup_session = self
         self.hook_on_finished_all_list: Optional[List[HookOnFinishedAllCallable]] = []
 
@@ -774,5 +760,40 @@ class TopSetupSession(SetupSessionBase):
         for hook_function in self.hook_on_finished_all_list:
             hook_function()
 
+
+# ============================================================
+# OBSOLETE
+# ============================================================
+# @dataclass
+# class ComponentAttributeAccessor(IAttributeAccessorBase):
+#     """
+#     Used in FieldsNS
+#     Value will be fetched by evaluating .bind_to of Field component.
+#     """
+#     component: IComponent
+#     instance: ModelInstanceType
+#     value_node: IValueNode
+#
+#     def get_attribute(self, apply_result:IApplyResult, attr_name: str) -> Self:
+#         raise Exception("should not be used any more - use ValueNode instead")
+#         children_dict = apply_result.get_upward_components_dict(self.component)
+#         if attr_name not in children_dict:
+#             avail_names = get_available_names_example(attr_name, list(children_dict.keys()))
+#             raise EntityApplyNameError(owner=self.component,
+#                     msg=f"Attribute '{attr_name}' not found in '{self.component.name}' ({type(self.component.name)}). Available: {avail_names}")
+#
+#         component = children_dict[attr_name]
+#
+#         # OLD: if is_last:
+#         if not isinstance(component, IField):
+#             # ALT: not hasattr(component, "bind_to")
+#             raise EntityApplyNameError(owner=self.component,
+#                     msg=f"Attribute '{attr_name}' is '{type(component)}' type which has no binding, therefore can not extract value. Use standard *Field components instead.")
+#
+#         # TODO: needs some class wrapper and caching ...
+#         dexp_result = component.bind_to._evaluator.execute_dexp(apply_result)
+#         out = dexp_result.value
+#
+#         return out
 
 

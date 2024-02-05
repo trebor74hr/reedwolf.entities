@@ -527,7 +527,7 @@ class ApplyResult(IApplyResult):
 
             if mode_subentity_items:
                 # reuse already created in caller
-                assert not self.current_frame.value_node.has_items and self.current_frame.value_node.component.is_subentity_items()
+                assert not self.current_frame.value_node.is_list() and self.current_frame.value_node.component.is_subentity_items()
                 # TODO; consider moving logic from the caller here? or just write comment
                 value_node = self.current_frame.value_node
             else:
@@ -917,7 +917,7 @@ class ApplyResult(IApplyResult):
         for value_node in self.value_node_list:
             if not value_node.finished:
                 raise EntityInternalError(owner=value_node, msg=f"ValueNode not finished")
-            if value_node.has_items or not value_node.is_changed():
+            if value_node.is_list() or not value_node.is_changed():
                 continue
 
             assert value_node.change_op

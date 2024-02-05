@@ -10,12 +10,12 @@ from typing import (
     Optional,
     ClassVar,
     Dict,
-    Type,
+    Type, Tuple,
 )
 
 from .utils import (
     UndefinedType,
-    to_repr, get_available_names_example,
+    to_repr, get_available_names_example, UNDEFINED,
 )
 from .exceptions import (
     EntitySetupError,
@@ -47,7 +47,7 @@ from .meta import (
     KlassMember,
     SettingsType,
     IAttribute,
-    CustomCtxAttributeList,
+    CustomCtxAttributeList, ContainerId,
 )
 from .base import (
     ReservedAttributeNames,
@@ -57,10 +57,10 @@ from .base import (
     IDataModel,
     IFieldGroup,
     ISetupSession,
-    IContainer,
+    IContainer, IEntity, IValueNode,
 )
 from .expr_attr_nodes import (
-    AttrDexpNode,
+    AttrDexpNode, AttrValueContainerPath, AttrDexpNodeWithValuePath,
 )
 from .valid_base import (
     ValidationBase,
@@ -73,7 +73,6 @@ from .settings import (
 from .setup import (
     RegistryBase,
     RegistryUseDenied,
-    ComponentAttributeAccessor,
 )
 
 # ------------------------------------------------------------
@@ -273,47 +272,72 @@ class ModelsRegistry(RegistryBase):
 
         return RegistryRootValue(instance, None)
 
-
 # ------------------------------------------------------------
 
-
 @dataclass
-class FieldsRegistry(RegistryBase):
-
+class LocalFieldsRegistry(RegistryBase):
+    """
+    Created on a per container base.
+    Sees only children of a container.
+    """
     NAMESPACE: ClassVar[Namespace] = FieldsNS
-
+    # fallback to check in TopFieldRegistry if attribute name is available
+    CALL_DEXP_NOT_FOUND_FALLBACK: ClassVar[bool] = True
     ALLOWED_BASE_TYPES: ClassVar[List[type]] = (IField,)
-
     # TODO: zamijeni IContainer s; IFieldGroup, IEntityBase, a dodaj u Allowed: ISubentityBase
     DENIED_BASE_TYPES: ClassVar[List[type]] = (IDataModel, ValidationBase, EvaluationBase, IContainer, IFieldGroup,)
 
-    def create_attr_node(self, component:IComponent):
+    container: IContainer = field(repr=False)
+    top_fields_registry: "TopFieldsRegistry" = field(repr=False)
+
+    # ------------------------------------------------------------
+
+    def register_all(self):
+        """
+        container.components - flattened list of descendants - traversed tree of components (recursion)
+            but does not go deeper for SubEntity* children.
+        # TODO: same attr_dexp_node will be created here and in TopFieldsRegistry.register_fields_of_container()
+        #       cache in TopFieldsRegistry and reuse here.
+        """
+        # A.3. COMPONENTS - collect attr_nodes - previously flattened (recursive function fill_components)
+        container_id = self.container.container_id
+        for component_name, component in self.container.components.items():
+            self.register(component)
+        return
+
+    def register(self, component:IComponent) -> AttrDexpNode:
+        attr_node = self.create_attr_node(component)
+        self.register_attr_node(attr_node) # , is_list=False))
+        return attr_node
+
+    @classmethod
+    def create_attr_node(cls, component:IComponent):
         # TODO: put class in container and remove these local imports
         # ------------------------------------------------------------
         # A.3. COMPONENTS - collect attr_nodes - previously flattened (recursive function fill_components)
         # ------------------------------------------------------------
         if not isinstance(component, (IComponent,)):
-            raise EntitySetupError(owner=self, msg=f"Register expexted ComponentBase, got {component} / {type(component)}.")
+            raise EntitySetupError(owner=cls, msg=f"Register expexted ComponentBase, got {component} / {type(component)}.")
 
         component_name = component.name
 
         # TODO: to have standard types in some global list in fields.py
         #           containers, validations, evaluations, 
-        if isinstance(component, (IField,)):
+        if isinstance(component, cls.ALLOWED_BASE_TYPES):
             denied = False
             deny_reason = ""
             type_info = component.type_info if component.type_info else None
         # elif isinstance(component, (ISubentityBase, )):
         #     denied = False
         #     deny_reason = ""
-        #     d1, d2 = component.get_component_fields_dataclass(setup_session=self.setup_session)
+        #     d1, d2 = component.get_component_fields_dataclass(setup_session=cls.setup_session)
         #     type_info = None # component.get_type_info()
 
         # TODO: to have standard types in some global list in fields.py
         #           containers, validations, evaluations,
-        elif isinstance(component, self.DENIED_BASE_TYPES): # 
+        elif isinstance(component, cls.DENIED_BASE_TYPES): #
             # stored - but should not be used
-            assert not isinstance(component, self.ALLOWED_BASE_TYPES), component
+            assert not isinstance(component, cls.ALLOWED_BASE_TYPES), component
             denied = True
             deny_reason = f"Component of type {component.__class__.__name__} can not be referenced in DotExpressions"
             if hasattr(component, "type_info"):
@@ -321,11 +345,11 @@ class FieldsRegistry(RegistryBase):
             else:
                 type_info=None
         else:
-            if isinstance(component, self.ALLOWED_BASE_TYPES):
-                raise EntityInternalError(owner=self, msg=f"Component is in ALLOWED_BASE_TYPES, and is not processed: {type(component)}. Add new if isinstance() here.")
+            if isinstance(component, cls.ALLOWED_BASE_TYPES):
+                raise EntityInternalError(owner=cls, msg=f"Component is in ALLOWED_BASE_TYPES, and is not processed: {type(component)}. Add new if isinstance() here.")
             # TODO: this should be automatic, a new registry for field types
-            valid_types = ', '.join([t.__name__ for t in self.ALLOWED_BASE_TYPES])
-            raise EntitySetupError(owner=self, msg=f"Valid type of objects or objects inherited from: {valid_types}. Got: {type(component)} / {to_repr(component)}. ")
+            valid_types = ', '.join([t.__name__ for t in cls.ALLOWED_BASE_TYPES])
+            raise EntitySetupError(owner=cls, msg=f"Valid type of objects or objects inherited from: {valid_types}. Got: {type(component)} / {to_repr(component)}. ")
 
         attr_node = AttrDexpNode(
                         name=component_name,
@@ -336,24 +360,189 @@ class FieldsRegistry(RegistryBase):
                         deny_reason=deny_reason)
         return attr_node
 
+    def dexp_not_found_fallback(self, full_dexp_node_name: AttrName) -> Union[AttrDexpNode, UndefinedType]:
+        """
+        when field name is not found in self.store (local store)
+        tries to find if attribute is in TopFieldsRegistry store and is visible.
+        returns:
+            - UNDEFINED if does not find or is not visible
+            - otherwise return AttrDexpNode.
+        """
+        container_attr_dexp_node_pair_list: Optional[List[ContainerAttrDexpNodePair]] = self.top_fields_registry.store.get(full_dexp_node_name, None)
+        if container_attr_dexp_node_pair_list is None:
+            return UNDEFINED
 
-    def register(self, component:IComponent):
-        attr_node = self.create_attr_node(component)
-        self.register_attr_node(attr_node) # , is_list=False))
-        return attr_node
+        containers_dict = self.container.entity.containers_dict
+        my_containers_id_path = self.container.containers_id_path
+        assert my_containers_id_path
+        candidates: List[Tuple[AttrDexpNode, AttrValueContainerPath]] = []
+
+        for container_attr_dexp_node_pair in container_attr_dexp_node_pair_list:
+            ho_container_id = container_attr_dexp_node_pair.container_id
+            holder_container: IContainer = containers_dict.get(ho_container_id, UNDEFINED)
+            assert holder_container
+
+            # TODO: if this block will become problematic - put in plain utils function and make unit tests on it
+            #       find path from one container to another
+            path_up: List[ContainerId] = None
+            path_down: List[ContainerId] = None
+
+            for idx, ho_container_id_bit in enumerate(holder_container.containers_id_path, 0):
+                if not (idx < len(my_containers_id_path) and ho_container_id_bit == my_containers_id_path[idx]):
+                    if idx==0:
+                        raise EntityInternalError(owner=self,
+                                msg=f"First node must match (entity) - Entity references itself? LocalFieldsRegistry should have done this")
+                    path_up = list(reversed(my_containers_id_path[idx-1:]))
+                    path_down = holder_container.containers_id_path[idx:]
+                    break
+
+            if path_up is None:
+                # TODO: this and similar cases could be done easier -> detect direct parent. do it before for loop:
+                #       if hoder_container_id is in my_container_id_path: then ...
+                # holder is entity, everybody can reach it
+                assert path_down is None
+                path_up = list(reversed(my_containers_id_path))
+                path_down = []
+
+            if path_down:
+                # in path down - skip this if you find any SubEntityItems in the path
+                subentity_items_in_path_down = [
+                    container_id_in_path for container_id_in_path in path_down
+                    if containers_dict[container_id_in_path].is_subentity_items()]
+            else:
+                subentity_items_in_path_down = None
+
+            ok = (not subentity_items_in_path_down)
+            if ok:
+                # Store path up and down
+                attr_value_container_path = AttrValueContainerPath(
+                    attr_name=full_dexp_node_name,
+                    container_id_from=self.container.container_id,
+                    container_id_to=ho_container_id,
+                    path_up=path_up,
+                    path_down=path_down,
+                )
+                candidates.append((container_attr_dexp_node_pair.attr_dexp_node,
+                                   attr_value_container_path))
+
+
+            # TODO: if settings.debug:
+            #   print(f"Container {self.container.container_id} refs {full_dexp_node_name} -> testing {ho_container_id} - found: up={path_up} + down={path_down}, items={subentity_items_in_path_down}, ok={ok}")
+
+        if len(candidates) == 1:
+            attr_dexp_node_orig, attr_value_container_path = candidates[0]
+            # return attr_dexp_node_orig
+            # convert this node to a new one AttrDexpNodeWithValuePath:
+            #   will be created with same input arguments + one extra (path info)
+            attr_dexp_node_w_value_path = attr_dexp_node_orig.copy(
+                traverse=False, # NOTE: hope this is not bad idea
+                as_class = AttrDexpNodeWithValuePath,
+                custom_kwargs=dict(attr_value_container_path=attr_value_container_path),
+            )
+            if full_dexp_node_name in self.store:
+                raise EntityInternalError(owner=self, msg=f"Value '{full_dexp_node_name}' already in the store: {self.store[full_dexp_node_name]}?")
+            self.store[full_dexp_node_name] = attr_dexp_node_w_value_path
+            return attr_dexp_node_w_value_path
+
+        # TODO: custom message how to reach
+        #  if len(candidates) > 1:
+
+        # in_path_container: IContainer = self.container.entity.containers_dict.get(
+        #     container_attr_dexp_node_pair.container_id, UNDEFINED)
+        return UNDEFINED
 
 
     def _apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RegistryRootValue:
-        # container = apply_result.current_frame.component.get_first_parent_container(consider_self=True)
-        component = apply_result.current_frame.component
-        instance  = apply_result.current_frame.instance
-        # TODO: use this ...
         value_node = apply_result.current_frame.value_node
-        top_attr_accessor = ComponentAttributeAccessor(component=component, instance=instance, value_node=value_node)
-        return RegistryRootValue(top_attr_accessor, None)
+        attr_dexp_node = self.store.get(attr_name, UNDEFINED)
+        if attr_dexp_node is UNDEFINED:
+            raise EntityInternalError(owner=self, msg=f"{attr_name} not found in self.store: {self.store}")
 
+        if isinstance(attr_dexp_node, AttrDexpNodeWithValuePath):
+            # complex case - field is not in current value_node container
+            # - the setup phase has found it in some other container
+            # - follow the path, first go up and then go down to locate the container
+            # - in down path no ItemsValueNode container should be found
+            # TODO: logger.log() # print(f"{attr_name} -> up: {attr_dexp_node.attr_value_container_path.path_up}, down: {attr_dexp_node.attr_value_container_path.path_down}")
+            # ------------------------------------------------------------
+            # GO UP
+            # ------------------------------------------------------------
+            path_up = attr_dexp_node.attr_value_container_path.path_up[:]
+            container_value_node_curr: IValueNode = None
+            while True:
+                if not path_up:
+                    break # travel up ended
+                container_id = path_up.pop(0)
+                container_value_node_curr = (container_value_node_curr if container_value_node_curr else value_node).parent_container_node
+                if not (container_value_node_curr and container_value_node_curr.name == container_id):
+                    raise EntityInternalError(owner=self, msg=f"Expected container_id={container_id}, got: {container_value_node_curr}")
+
+            assert container_value_node_curr
+
+            # ------------------------------------------------------------
+            # GO DOWN
+            # ------------------------------------------------------------
+            path_down = attr_dexp_node.attr_value_container_path.path_down[:]
+
+            # Fetching attribute from container node will be done later
+            while True:
+                if not path_down:
+                    break # travel up ended
+                value_node_name = path_down.pop(0)
+                if not hasattr(container_value_node_curr, "container_children"):
+                    # ItemsValueNode does not have this property
+                    raise EntityInternalError(owner=self, msg=f"IValueNode is not ValueNode container {container_value_node_curr}")
+                value_node_temp = container_value_node_curr.container_children.get(value_node_name, None)
+                if not value_node_temp:
+                    raise EntityInternalError(owner=self, msg=f"{value_node_name} not found, available for container {container_value_node_curr.name} are: {', '.join(container_value_node_curr.children.keys())}")
+                container_value_node_curr = value_node_temp
+        else:
+            # simple case - from current value_node -> the searched attribute should be in the same container
+            assert isinstance(attr_dexp_node, AttrDexpNode), attr_dexp_node
+            container_value_node_curr = value_node.parent_container_node
+
+        return RegistryRootValue(value_root=container_value_node_curr, attr_name_new=None, do_fetch_by_name=True)
 
 # -------------------------------------------------------------
+
+
+@dataclass
+class ContainerAttrDexpNodePair:
+    container_id: ContainerId
+    attr_dexp_node: AttrDexpNode
+
+@dataclass
+class TopFieldsRegistry(RegistryBase):
+    """
+    Created for all fields, used in 2nd try to reach not-local fields.
+    Checks upward and downward (stops on SubEntityItems).
+    Not standard registry - stores only referenced fields.
+    Stored within Entity.
+    """
+    NAMESPACE: ClassVar[Namespace] = FieldsNS
+
+    entity: IEntity = field(repr=False)
+
+    # TODO: internal - shadows .store, has different type, probably should be renamed
+    store: Dict[AttrName, List[ContainerAttrDexpNodePair]] = field(repr=False, init=False, default_factory=dict)
+
+    def register_fields_of_container(self, container: IContainer):
+        """
+        container.components - flattened list of descendants - traversed tree of components (recursion)
+            but does not go deeper for SubEntity* children.
+        """
+        # A.3. COMPONENTS - collect attr_nodes - previously flattened (recursive function fill_components)
+        container_id = container.container_id
+        for component_name, component in container.components.items():
+            # TODO: same content attr_dexp_node will be created here and in LocalFieldsRegistry.register_all()
+            #       Cache this one and reuse.
+            attr_dexp_node = LocalFieldsRegistry.create_attr_node(component)
+            if not attr_dexp_node.denied:
+                self.store.setdefault(attr_dexp_node.name, []).append(
+                    ContainerAttrDexpNodePair(container_id, attr_dexp_node)
+                )
+        return
+
 
 @dataclass
 class SettingsKlassMember(KlassMember):
@@ -678,3 +867,10 @@ class ThisRegistry(IThisRegistry, RegistryBase):
 
     __str__ = __repr__
 
+# ============================================================
+# OBSOLETE
+# ============================================================
+# component = apply_result.current_frame.component
+# instance = apply_result.current_frame.instance
+# top_attr_accessor = ComponentAttributeAccessor(component=component, instance=instance, value_node=value_node)
+# return RegistryRootValue(top_attr_accessor, None)

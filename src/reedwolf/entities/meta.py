@@ -6,7 +6,7 @@ extract_* - the most interesting functions
 import inspect
 from collections import OrderedDict
 from inspect import getmro, isclass,  getmembers, signature, Parameter
-from abc import abstractmethod
+from abc import abstractmethod, ABCMeta
 from copy import copy
 from collections.abc import Sequence
 from functools import partial
@@ -24,11 +24,17 @@ from typing import (
     Union,
     get_type_hints,
     TypeVar,
-    Sequence as SequenceType, Iterable
+    Sequence as SequenceType,
+    Iterable,
 )
 from enum import Enum
 from decimal import Decimal
-from datetime import date, datetime, time, timedelta
+from datetime import (
+    date,
+    datetime,
+    time,
+    timedelta,
+)
 from dataclasses import (
     is_dataclass,
     dataclass,
@@ -74,8 +80,8 @@ from .utils import (
     format_arg_name_list, to_repr,
 )
 from .exceptions import (
-    EntityTypeError, 
-    EntityInternalError,
+    EntityTypeError,
+    EntityInternalError, EntityError,
 )
 from .namespaces import (
     DynamicAttrsBase,
@@ -145,6 +151,9 @@ AttrValue = TypeVar("AttrValue", bound=Any)
 AttrIndex = TypeVar("AttrIndex", bound=int)
 
 SELF_ARG_NAME = "self"
+
+# used in Container.container_id and Entity.containers
+ContainerId = TypeVar("ContainerId", bound=str)
 
 # ------------------------------------------------------------
 # functions.py
@@ -1115,6 +1124,115 @@ class KlassMember:
 CustomCtxAttributeList = List[IAttribute]
 FunctionNoArgs = Callable[[], Any]
 
+
+# ------------------------------------------------------------
+# ReedwolfMetaclass
+# ------------------------------------------------------------
+class ReedwolfMetaclass(ABCMeta):
+    """
+    This metaclass enables:
+        - storing initial args and kwargs to enable copy() later (see ReedwolfDataclassBase
+        - TODO: storing extra arguments - to enable custom attributes features
+    """
+
+    def __call__(cls, *args, **kwargs):
+        # extra_kwargs = {name: kwargs.pop(name)
+        #                 for name in list(kwargs.keys())
+        #                 if name not in cls.__annotations__}
+        try:
+            instance = super().__call__(*args, **kwargs)
+        except TypeError as ex:
+            if "__init__()" in str(ex):
+                all_args: List[str] = []
+                if args:
+                    all_args.append(", ".join(map(repr, args)))
+                if kwargs:
+                    all_args.append(", ".join([f"{k}={v!r}" for k,v in kwargs.items()]))
+                raise EntityError(msg=f"Failed to construct:\n    {cls.__name__}({', '.join(all_args)})\n  with error:\n    {ex}") from ex
+            raise
+        # instance.rwf_extra_kwargs = extra_kwargs
+        instance.rwf_args = args
+        instance.rwf_kwargs = kwargs
+        return instance
+
+
+class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
+
+    # def __eq__(self, other: Any):
+    #     # TODO: this method for dataclass is overridden by dataclass generatad. Can be:
+    #     #       a) replaced again in metaclass, b) compare=False on dataclass
+    #     return (self is other) \
+    #         or (type(other) == self.__class__ and super().__eq__(other)) \
+    #         or False
+
+    def copy(self, traverse: bool = True, as_class: Optional[Type]=None, custom_kwargs: Optional[Dict]=None):
+        """
+        traverse - to copy deep every ReedwolfDataclassBase. TODO: not nice and clean solution :(
+        TODO: pass additional arrguments to modify new instance - e.g. EntityChange(...)
+        """
+        return self._copy(traverse=traverse, as_class=as_class, custom_kwargs=custom_kwargs)
+
+    def _copy(self,
+              traverse: bool,
+              depth=0,
+              instances_copied=None,
+              as_class: Optional[Type]=None,
+              custom_kwargs: Optional[Dict]=None):
+        if custom_kwargs:
+            rwf_kwargs = self.rwf_kwargs.copy()
+            rwf_kwargs.update(custom_kwargs)
+        else:
+            rwf_kwargs = self.rwf_kwargs
+
+        if as_class:
+            # NOTE: this is not the best way how to handle case when constructor has not the same signature
+            # if issubclass(as_class, self.__class__):
+            #     raise EntityInternalError(owner=self, msg=f"Class provided in as_class={as_class} is not subclass of: {self.__class__}")
+            pass
+        else:
+            as_class = self.__class__
+
+        if depth==0:
+            instances_copied = {}
+        elif depth>MAX_RECURSIONS:
+            raise EntityInternalError(owner=self, msg=f"Too deep recursion: {depth}")
+
+        self_id = id(self)
+        instance_copy = instances_copied.get(self_id, UNDEFINED)
+        if instance_copy is UNDEFINED:
+            # Recursion x 2
+            # not yet copied within this session
+            args = [self._try_call_copy(aval=aval, depth=depth, instances_copied=instances_copied, traverse=traverse)
+                    for aval in self.rwf_args]
+            kwargs = {aname: self._try_call_copy(aval=aval, depth=depth, instances_copied=instances_copied, traverse=traverse)
+                      for aname, aval in rwf_kwargs.items()}
+            # create instance from the same class with *identical* arguments
+            instance_copy = as_class(*args, **kwargs)
+            instances_copied[self_id] = instance_copy
+
+        return instance_copy
+
+    @classmethod
+    def _try_call_copy(cls, traverse:bool, aval: Any, depth: int, instances_copied: Dict) -> Any:
+        # TODO: resolve this properly
+        from .expressions import DotExpression
+
+        if isinstance(aval, DotExpression): # must be first
+        # if hasattr(aval, "Clone"): # DotExpression - must be first
+            aval_new = aval.Clone()
+        elif isinstance(aval, (tuple, list)):
+            aval_new = [cls._try_call_copy(traverse=traverse, aval=aval_item, depth=depth+1, instances_copied=instances_copied)
+                        for aval_item in aval]
+        elif isinstance(aval, (dict,)):
+            aval_new = {aval_name: cls._try_call_copy(traverse=traverse, aval=aval_item, depth=depth+1, instances_copied=instances_copied)
+                        for aval_name, aval_item in aval.items()}
+        # ALT: elif hasattr(aval, "_copy") and callable(aval._copy):
+        elif traverse and isinstance(aval, ReedwolfDataclassBase):
+            aval_new = aval._copy(traverse=traverse, depth=depth + 1, instances_copied=instances_copied)
+        else:
+            # TODO: if not primitive type - use copy.deepcopy() instead?
+            aval_new = aval
+        return aval_new
 
 # ------------------------------------------------------------
 # OBSOLETE

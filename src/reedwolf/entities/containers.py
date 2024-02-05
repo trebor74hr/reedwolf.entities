@@ -50,7 +50,7 @@ from .meta import (
     Index0Type,
     KeyType,
     KeyPairs,
-    ModelInstanceType,
+    ModelInstanceType, ContainerId,
 )
 from .base import (
     get_name_from_bind,
@@ -77,13 +77,16 @@ from .functions import (
     IFunction,
     FunctionsFactoryRegistry,
 )
-from .setup import SetupSession, TopSetupSession
+from .setup import (
+    SetupSession,
+    TopSetupSession,
+)
 from .registries import (
     ModelsRegistry,
-    FieldsRegistry,
+    LocalFieldsRegistry,
     OperationsRegistry,
     ContextRegistry,
-    UnboundModelsRegistry,
+    UnboundModelsRegistry, TopFieldsRegistry,
 )
 from .valid_children import (
     ChildrenValidationBase,
@@ -206,9 +209,11 @@ class ContainerBase(IContainer, ABC):
                                      builtin_functions_dict=builtin_functions_dict)
 
         if not self.parent:
+            top_fields_registry = TopFieldsRegistry(entity=self)
             setup_session = TopSetupSession(
                 container=self,
                 functions_factory_registry = functions_factory_registry,
+                top_fields_registry = top_fields_registry,
             )
         else:
             setup_session = SetupSession(
@@ -216,12 +221,16 @@ class ContainerBase(IContainer, ABC):
                 functions_factory_registry = functions_factory_registry,
                 parent_setup_session=self.parent.setup_session
             )
+            top_fields_registry = setup_session.top_setup_session.top_fields_registry
 
         if self.is_unbound():
             setup_session.add_registry(UnboundModelsRegistry())
         else:
             setup_session.add_registry(ModelsRegistry())
-        setup_session.add_registry(FieldsRegistry())
+        setup_session.add_registry(LocalFieldsRegistry(
+                                        container=self,
+                                        top_fields_registry=top_fields_registry,
+                                        ))
         # setup_session.add_registry(FunctionsRegistry())
         setup_session.add_registry(OperationsRegistry())
         setup_session.add_registry(ContextRegistry(setup_settings=settings,
@@ -355,19 +364,6 @@ class ContainerBase(IContainer, ABC):
         return attr_node
 
     # ------------------------------------------------------------
-
-    def _register_fields_components_attr_nodes(self):
-        """
-        Traverse the whole tree (recursion) and collect all components into
-        simple flat list. It will set parent for each child component.
-        """
-        # A.3. COMPONENTS - collect attr_nodes - previously flattened (recursive function fill_components)
-        fields_registry: FieldsRegistry = self.setup_session.get_registry(FieldsNS)
-        for component_name, component in self.components.items():
-            fields_registry.register(component)
-        return
-
-    # ------------------------------------------------------------
     def _replace_modelsns_registry(self, setup_session: SetupSession):
         # subentity case
         assert (self.is_unbound())
@@ -425,9 +421,9 @@ class ContainerBase(IContainer, ABC):
                     this_registry = None,
                 )):
 
-            # TODO: FieldsNS - in session - for future improvement - to allow
-            #       use of SubentityItems() (now in denied)
-            self._register_fields_components_attr_nodes()
+            # A.3. COMPONENTS - collect attr_nodes - previously flattened (recursive function fill_components)
+            fields_registry: LocalFieldsRegistry = self.setup_session.get_registry(FieldsNS)
+            fields_registry.register_all()
 
             # ----------------------------------------
             # SETUP PHASE TWO (recursive)
@@ -649,10 +645,7 @@ class Entity(IEntity, ContainerBase):
     # NOTE: not DRY: Entity, SubentityBase and ComponentBase
     parent:             Union[NoneType, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     parent_name:        Union[str, UndefinedType]  = field(init=False, default=UNDEFINED)
-    entity:             Union[ContainerBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
-
-    # used for automatic component's naming, <parent_name/class_name>__<counter>
-    name_counter_by_parent_name: Dict[str, int] = field(init=False, repr=False, default_factory=dict)
+    entity:             Union[Self, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
 
     # is_unbound to model case - must be cached since data_model could be dynamically changed in setup phase with normal
     _is_unbound: bool = field(init=False, repr=False)
@@ -710,6 +703,16 @@ class Entity(IEntity, ContainerBase):
                 inspect.isclass(self.apply_settings_class)
                 and ApplySettings in inspect.getmro(self.apply_settings_class)):
             raise EntityTypeError(owner=self, msg=f"apply_settings_class needs to be class that inherits ApplySettings, got: {self.apply_settings_class}")
+
+    def set_parent(self, parent: NoneType):
+        assert parent is None
+        self.containers_dict = {}
+        self.container_id_counter = 1
+        self.container_id = self.name
+        self.containers_dict[self.container_id] = self
+        self.containers_id_path = [self.container_id]
+        super().set_parent(parent=parent)
+
 
     # def setup(self):
     #     ret = super().setup()
@@ -870,10 +873,10 @@ class Entity(IEntity, ContainerBase):
 @dataclass
 class SubEntityBase(ContainerBase, ABC):
     """
-    can not be used individually - must be directly embedded into Other
+    Can not be used individually - must be directly embedded into Other
     SubEntityItems or top Entity
     """
-    # DotExpression based model -> can be dumped
+    # DotExpression based model -> can be dumped, obligatory
     bind_to:        Union[DataModel, DataModelWithHandlers, DotExpression] = field(repr=False,
                                                                                    metadata = {"skip_setup": True})
 
@@ -907,11 +910,11 @@ class SubEntityBase(ContainerBase, ABC):
     # NOTE: not DRY: Entity, SubentityBase and ComponentBase
     parent:         Union[IComponent, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     parent_name:    Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
-    entity:         Union[ContainerBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
+    entity:         Union[Entity, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
 
     # subentity_items specific - is this top parent or what? what is the difference to self.parent
 
-    # in parents' chain (including self) -> first container
+    # NOTE: in parents' chain (not including self) -> first container.
     parent_container: Union[ContainerBase, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
 
     # NOTE: this is dropped and replaced with parent.setup_session
@@ -922,9 +925,6 @@ class SubEntityBase(ContainerBase, ABC):
     #   NTOE: for this use self.entity.apply_settings_class instad
     #       apply_settings_class: Optional[Type[ApplySettings]] = field(repr=False, init=False, default=None)
     settings: Optional[Settings] = field(repr=False, init=False, default=None)
-
-    # used for automatic component's naming, <class_name>__<counter>
-    name_counter_by_parent_name: Dict[str, int] = field(init=False, repr=False, default_factory=dict)
 
     # bound_attr_node: Union[AttrDexpNode, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
 
@@ -951,13 +951,29 @@ class SubEntityBase(ContainerBase, ABC):
     def set_parent(self, parent: ContainerBase):
         super().set_parent(parent=parent)
 
-        # can be self
-        self.parent_container = self.get_first_parent_container(consider_self=True)
+        # first parent which is container (not including self)
+        self.parent_container = self.get_first_parent_container(consider_self=False)
+        assert self.parent_container and self.parent_container != self
+
+        # --- setup container_id and register container in entity.containers_dict ---
+        container_id = self.name
+        if container_id in self.entity.containers_dict:
+            # using - to avoid another variable clash. Component's name must be identifiers, no - is allowed.
+            container_id = f"{container_id}--{self.entity.container_id_counter}"
+            self.entity.container_id_counter += 1
+        if container_id in self.entity.containers_dict:
+            raise EntityInternalError(owner=self, msg=f"Failed to get container unique name (id_name={container_id}.")
+        self.container_id = container_id
+        self.entity.containers_dict[self.container_id] = self
+        self.containers_id_path = self.parent_container.containers_id_path + [self.container_id]
 
         # take from real first container parent
-        non_self_parent_container = self.get_first_parent_container(consider_self=False)
-        # self.apply_settings_class = non_self_parent_container.apply_settings_class
-        self.settings = non_self_parent_container.settings
+        # non_self_parent_container = self.get_first_parent_container(consider_self=False)
+        # # self.apply_settings_class = non_self_parent_container.apply_settings_class
+        # self.settings = non_self_parent_container.settings
+
+        # --- Setup settings ---
+        self.settings = self.parent_container.settings
         if not self.settings:
             raise EntityInternalError(owner=self, msg=f"settings not set from parent: {self.parent_container}")
 

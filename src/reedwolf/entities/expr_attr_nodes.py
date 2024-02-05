@@ -1,7 +1,7 @@
 from typing import (
     Any,
     Union,
-    Optional,
+    Optional, List,
 )
 from dataclasses import (
     dataclass,
@@ -28,7 +28,8 @@ from .namespaces import (
 from .expressions import (
     DotExpression,
     IDotExpressionNode,
-    IAttributeAccessorBase,
+    RegistryRootValue,
+    IDexpValueSource,
 )
 from .meta import (
     TypeInfo,
@@ -37,7 +38,9 @@ from .meta import (
     ModelField,
     AttrName,
     AttrValue,
-    NoneType, KlassMember,
+    NoneType,
+    KlassMember,
+    ContainerId,
 )
 from .custom_attributes import (
     Attribute,
@@ -80,7 +83,8 @@ class AttrDexpNode(IDotExpressionNode):
     # TODO: rename to: func_node or function_node
     # function: Optional[Union[IFunctionDexpNode]] = field(repr=False, default=None)
 
-    # TODO: explain!
+    # in some cases (LocalFieldsNS) some fields should not be referenced, but are registered within Registry.store,
+    # in order to report to user the reason for denial - better than just to report - attribute / field name not found.
     denied: bool = False
     deny_reason: str = ""
 
@@ -242,10 +246,12 @@ class AttrDexpNode(IDotExpressionNode):
                 setup_session = apply_result.get_setup_session()
                 registry = setup_session.get_registry(self.namespace)
 
-            # get starting instance
-            root_value = registry.apply_to_get_root_value(apply_result=apply_result, attr_name=attr_name, caller=self)
+            # Get starting instance. For FieldsNS.<field> can be ValueNode instance
+            root_value: RegistryRootValue = registry.apply_to_get_root_value(apply_result=apply_result,
+                                                                             attr_name=attr_name,
+                                                                             caller=str(self))
 
-            value_previous = root_value.value_root
+            value_prev = root_value.value_root
             attr_name_new = root_value.attr_name_new
 
             if attr_name_new:
@@ -264,45 +270,30 @@ class AttrDexpNode(IDotExpressionNode):
             # ==== 2+ value - based on previous result and evolved one step further, e.g. M.access.alive
             if not len(names)>1:
                 raise EntityInternalError(owner=self, msg=f"Names need to be list of at least 2 members: {names}") 
-            value_previous = dexp_result.value
+            value_prev = dexp_result.value
             do_fetch_by_name = True
 
         if do_fetch_by_name:
-            if isinstance(value_previous, (list, tuple)):
-                raise EntityInternalError(owner=self, msg=f"Expected standard object, got list: {type(value_previous)}: {to_repr(value_previous)}")
+            # TODO: check ValueNode and Items/list cases - is type_info needed?
+            if isinstance(value_prev, (list, tuple)):
+                raise EntityInternalError(owner=self, msg=f"Expected standard object, got list: {type(value_prev)}: {to_repr(value_prev)}")
 
             if prev_node_type_info and prev_node_type_info.is_list:
-                  raise EntityApplyNameError(owner=self, msg=f"Fetching attribute '{attr_name}' expected list and got: '{to_repr(value_previous)}': '{type(value_previous)}'")
+                raise EntityApplyNameError(owner=self, msg=f"Fetching attribute '{attr_name}' expected list and got: '{to_repr(value_prev)}': '{type(value_prev)}'")
 
+            # Handles ValueNode cases too
             value_new = self._get_value_new(apply_result=apply_result,
-                                            value_prev=value_previous,
+                                            value_prev=value_prev,
                                             attr_name=attr_name)
-            # ------------------------------------------------------------
+
             # NOTE: dropped iterating list results - no such test example and hard to imagine which syntax to
-            #       use and when to use it.
-            # # Ponvert previous value to list, process all and convert back to
-            # # single object when previous_value is not a list
-            # result_is_list = isinstance(value_previous, (list, tuple))
-            # if not result_is_list:
-            #   # TODO: handle None, UNDEFINED?
-            #   if prev_node_type_info and prev_node_type_info.is_list:
-            #         raise EntityApplyNameError(owner=self, msg=f"Fetching attribute '{attr_name}' expected list and got: '{to_repr(value_previous)}': '{type(value_previous)}'")
-            #   value_prev_as_list = [value_previous]
-            # else:
-            #   value_prev_as_list = value_previous
-            #   if prev_node_type_info and not prev_node_type_info.is_list:
-            #     raise EntityApplyNameError(owner=self, msg=f"Fetching attribute '{attr_name}' got list what is not expected, got: '{to_repr(value_previous)}': '{type(value_previous)}'")
-            # value_new_as_list = []
-            # for idx, value_prev in enumerate(value_prev_as_list, 0):
-            #   value_new = self._get_value_new(apply_result=apply_result,
-            #   value_new_as_list.append(value_new)
-            # if result_is_list:
-            #   value_new = value_new_as_list
-            # else:
-            #   assert len(value_new_as_list) == 1
-            #   value_new = value_new_as_list[0]
+            #       use and when to use it: Convert previous value to list, process all and convert back to
+            #       single object when previous_value is not a list.
         else:
-            value_new = value_previous
+            value_new = value_prev
+
+        value_is_list = (value_new.is_list() if isinstance(value_new, IDexpValueSource)
+                         else isinstance(value_new, (list, tuple)))
 
         # TODO: currently this is not done, too many issues, needs further investigation
         # if root_value:
@@ -313,7 +304,7 @@ class AttrDexpNode(IDotExpressionNode):
             # TODO: this is workaround when single instance is passed to update single item in SubEntityItems[List]
             #       not good solution
             ...
-        elif isinstance(value_new, (list, tuple)):
+        elif value_is_list:
             if not self.islist():
                 raise EntityApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should not be a list, got: '{to_repr(value_new)}': '{type(value_new)}'")
         elif value_new is None:
@@ -326,17 +317,28 @@ class AttrDexpNode(IDotExpressionNode):
             raise EntityApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should be a list, got: '{to_repr(value_new)}': '{type(value_new)}'")
 
         # TODO: hm, changer_name is equal to attr_name, any problem / check / fix ...
+
+        # ValueNode case
+        if is_last and isinstance(value_new, IDexpValueSource):
+            # fetch unfinished value
+            value_new = value_new.get_value(strict=False)
+
         dexp_result.set_value(attr_name=attr_name, changer_name=attr_name, value=value_new)
 
         return dexp_result
 
 
     def _get_value_new(self, apply_result: IApplyResult, value_prev: AttrValue, attr_name: AttrName) -> AttrValue:
-        if isinstance(value_prev, IAttributeAccessorBase):
-            # NOTE: if this is last in chain - fetch final value
-            value_new = value_prev.get_attribute(
-                apply_result=apply_result,
-                attr_name=attr_name)
+        if isinstance(value_prev, IDexpValueSource):
+            # try to find in children first, then in container_children if applicable
+            if not hasattr(value_prev, "children"):
+                raise EntityInternalError(owner=self, msg=f"Attribute '{attr_name}' can not be found, node '{value_prev.name}' has no children")
+            dexp_value_node = value_prev.children.get(attr_name, UNDEFINED)
+            if dexp_value_node is UNDEFINED and hasattr(value_prev, "container_children"):
+                dexp_value_node = value_prev.container_children.get(attr_name, UNDEFINED)
+            if dexp_value_node is UNDEFINED:
+                raise EntityInternalError(owner=self, msg=f"Attribute '{attr_name}' can not be found in '{value_prev.name}'")
+            value_new = dexp_value_node
         else:
             # removed. idx == 0 and
             if attr_name == ReservedAttributeNames.INSTANCE_ATTR_NAME:
@@ -370,8 +372,7 @@ class AttrDexpNode(IDotExpressionNode):
                     if not hasattr(value_prev, attr_name):
                         # TODO: list which fields are available
                         # if all types match - could be internal problem?
-                        raise EntityApplyNameError(owner=self,
-                                                   msg=f"Attribute '{attr_name}' not found in '{to_repr(value_prev)}': '{type(value_prev)}'")
+                        raise EntityApplyNameError(owner=self, msg=f"Attribute '{attr_name}' not found in '{to_repr(value_prev)}': '{type(value_prev)}'")
                     value_new = getattr(value_prev, attr_name)
                     if callable(value_new):
                         try:
@@ -433,3 +434,61 @@ class AttrDexpNode(IDotExpressionNode):
     def __repr__(self):
         return str(self)
 
+@dataclass
+class AttrValueContainerPath:
+    """
+    Used in TopFieldsRegistry as a result when
+    Attribute/Field (by AttrName) is found within
+    some other visible Container.
+    """
+    attr_name: AttrName
+    container_id_from: ContainerId = field(repr=False)
+    container_id_to: ContainerId = field(repr=False)
+    path_up: List[ContainerId]
+    path_down: List[ContainerId]
+
+@dataclass
+class AttrDexpNodeWithValuePath(AttrDexpNode):
+    """
+    Used in TopFieldsRegistry - contains path to the ValueNode tree container owner.
+    """
+    attr_value_container_path: Union[AttrValueContainerPath, UndefinedType] = field(repr=False, default=UNDEFINED)
+
+    def __post_init__(self):
+        super().__post_init__()
+        if self.attr_value_container_path is UNDEFINED:
+            raise EntityInternalError(owner=self, msg=f"Attribute attr_value_container_path is required")
+
+# ============================================================
+# Obsolete code
+# ============================================================
+# # Convert previous value to list, process all and convert back to
+# # single object when previous_value is not a list
+# ------------------------------------------------------------
+# NOTE: dropped iterating list results - no such test example and hard to imagine which syntax to
+#       use and when to use it.
+# result_is_list = isinstance(value_previous, (list, tuple))
+# if not result_is_list:
+#   # TODO: handle None, UNDEFINED?
+#   if prev_node_type_info and prev_node_type_info.is_list:
+#         raise EntityApplyNameError(owner=self, msg=f"Fetching attribute '{attr_name}' expected list and got: '{to_repr(value_previous)}': '{type(value_previous)}'")
+#   value_prev_as_list = [value_previous]
+# else:
+#   value_prev_as_list = value_previous
+#   if prev_node_type_info and not prev_node_type_info.is_list:
+#     raise EntityApplyNameError(owner=self, msg=f"Fetching attribute '{attr_name}' got list what is not expected, got: '{to_repr(value_previous)}': '{type(value_previous)}'")
+# value_new_as_list = []
+# for idx, value_prev in enumerate(value_prev_as_list, 0):
+#   value_new = self._get_value_new(apply_result=apply_result,
+#   value_new_as_list.append(value_new)
+# if result_is_list:
+#   value_new = value_new_as_list
+# else:
+#   assert len(value_new_as_list) == 1
+#   value_new = value_new_as_list[0]
+
+# elif isinstance(value_prev, IAttributeAccessorBase):
+#     # NOTE: if this is last in chain - fetch final value
+#     value_new = value_prev.get_attribute(
+#         apply_result=apply_result,
+#         attr_name=attr_name)

@@ -55,7 +55,7 @@ from .meta import (
     IFuncArgHint,
     AttrValue,
     IExecuteFuncArgHint,
-    NoneType, KlassMember,
+    NoneType, KlassMember, ReedwolfDataclassBase,
 )
 
 
@@ -64,7 +64,7 @@ from .meta import (
 # ------------------------------------------------------------
 
 @dataclass
-class DexpValueNode:
+class DexpValue:
     value: Any
     attr_name: str
     changer_name: str
@@ -76,10 +76,10 @@ class ExecResult:
     # last value, mutable
     value: AttrValue  = field(init=False, default=UNDEFINED)
 
-    # Every DotExpression member (e.g. Ctx.name.Fun().member) will get one DexpValueNode.
+    # Every DotExpression member (e.g. Ctx.name.Fun().member) will get one DexpValue.
     # TODO: consider adding set compoenent (owner) that triggerred value change
     #       value evaluation - can have attr_node.name
-    dexp_value_node_list: List[DexpValueNode] = field(repr=False, init=False, default_factory=list)
+    dexp_value_list: List[DexpValue] = field(repr=False, init=False, default_factory=list)
 
     @classmethod
     def create(cls, value: Any, attr_name: str="", changer_name: str=""):
@@ -88,8 +88,8 @@ class ExecResult:
         return instance
 
     def set_value(self, value: Any, attr_name: str, changer_name: str):
-        self.dexp_value_node_list.append(
-                DexpValueNode(value=value, attr_name=attr_name, changer_name=changer_name)
+        self.dexp_value_list.append(
+                DexpValue(value=value, attr_name=attr_name, changer_name=changer_name)
                 )
         self.value = value
 
@@ -102,7 +102,7 @@ class ExecResult:
 # ------------------------------------------------------------
 
 @dataclass
-class IDotExpressionNode(ABC):
+class IDotExpressionNode(ReedwolfDataclassBase, ABC):
     """ wrapper around one element in DotExpression e.g. M.name.Count()
     .company, .name, .Count() are nodes
     """
@@ -206,7 +206,7 @@ class IRegistry:
         ...
 
     @abstractmethod
-    def register(self, component:"IComponent"):
+    def register(self, component:"IComponent") -> "AttrDexpNode":
         ...
 
     @abstractmethod
@@ -240,6 +240,17 @@ class IRegistry:
 
 # ------------------------------------------------------------
 
+class IDexpValueSource:
+    """
+    Used in IValueNode
+    """
+    @abstractmethod
+    def get_value(self, strict:bool) -> AttrValue:
+        ...
+
+    @abstractmethod
+    def is_list(self) -> bool:
+        ...
 
 
 # ------------------------------------------------------------
@@ -301,19 +312,6 @@ class ISetupSession(ABC):
 
 class IThisRegistry(IRegistry):
     ...
-
-# ------------------------------------------------------------
-
-class IAttributeAccessorBase(ABC):
-    " used in registry "
-
-    @abstractmethod
-    def get_attribute(self, apply_result: 'IApplyResult', attr_name:str) -> Self: # noqa: F821
-        """ 
-        is_last -> True - need to get final literal value from object
-        (usually primitive type like int/str/date ...) 
-        """
-        ...
 
 # ------------------------------------------------------------
 # DotExpression
@@ -1322,3 +1320,20 @@ def clean_dexp_bool_term(owner: Any, attr_name: str, dexp: Union[NoneType, DotEx
         else:
             raise EntitySetupValueError(owner=owner,
                                         msg=f"Argument '{attr_name}' needs to DotExpression (e.g. F.name != ''), got: {to_repr(dexp)}")
+
+
+# ============================================================
+# OBSOLETE
+# ===========================================================-
+
+# class IAttributeAccessorBase(ABC):
+#     " used in registry "
+#
+#     @abstractmethod
+#     def get_attribute(self, apply_result: 'IApplyResult', attr_name:str) -> Self: # noqa: F821
+#         """
+#         is_last -> True - need to get final literal value from object
+#         (usually primitive type like int/str/date ...)
+#         """
+#         ...
+

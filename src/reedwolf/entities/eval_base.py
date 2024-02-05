@@ -21,7 +21,7 @@ from .expressions import (
     DotExpression,
     DEXP_VALIDATOR_NOT_MODELS,
 )
-from .meta import TransMessageType, STANDARD_TYPE_LIST
+from .meta import TransMessageType, STANDARD_TYPE_LIST, LiteralType
 from .utils import to_repr
 
 
@@ -37,7 +37,7 @@ class EvaluationBase(IEvaluation, ABC):
     """
     REQUIRES_AUTOCOMPUTE: ClassVar[bool] = field(default=True)
 
-    value:          DotExpression
+    value:          Union[LiteralType, DotExpression]
     name:           Optional[str] = field(default=None)
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
     title:          Optional[TransMessageType] = field(repr=False, default=None)

@@ -24,7 +24,8 @@ from dataclasses import (
     fields,
     MISSING as DC_MISSING,
     make_dataclass,
-    asdict, )
+    asdict,
+)
 from types import (
     MappingProxyType,
 )
@@ -40,7 +41,9 @@ from .utils import (
     UndefinedType,
     get_available_names_example,
     DumpFormatEnum,
-    dump_to_format, NOT_APPLIABLE, )
+    dump_to_format,
+    NOT_APPLIABLE,
+)
 from .exceptions import (
     EntityInternalError,
     EntitySetupTypeError,
@@ -48,7 +51,7 @@ from .exceptions import (
     EntitySetupNameError,
     EntitySetupValueError,
     EntitySetupNameNotFoundError,
-    EntityApplyError, 
+    EntityApplyError,
     EntityApplyValueError,
 )
 from .namespaces import (
@@ -81,7 +84,7 @@ from .meta import (
     AttrValue,
     Index0Type,
     KeyType,
-    ModelInstanceType,
+    ModelInstanceType, ContainerId, ReedwolfDataclassBase,
 )
 from .expressions import (
     DotExpression,
@@ -89,7 +92,7 @@ from .expressions import (
     IDotExpressionNode,
     ISetupSession,
     IThisRegistry,
-    DexpValidator,
+    DexpValidator, IDexpValueSource,
 )
 from .settings import (
     Settings, ApplySettings,
@@ -312,78 +315,6 @@ def make_component_fields_dataclass(class_name: str, child_field_list: List[Chil
     return new_dataclass
 
 
-# ------------------------------------------------------------
-# IComponent
-# ------------------------------------------------------------
-class ReedwolfMetaclass(ABCMeta):
-    """
-    This metaclass enables:
-        - storing initial args and kwargs to enable copy() later (see ReedwolfDataclassBase
-        - TODO: storing extra arguments - to enable custom attributes features
-    """
-
-    def __call__(cls, *args, **kwargs):
-        # extra_kwargs = {name: kwargs.pop(name)
-        #                 for name in list(kwargs.keys())
-        #                 if name not in cls.__annotations__}
-        instance = super().__call__(*args, **kwargs)
-        # instance.rwf_extra_kwargs = extra_kwargs
-        instance.rwf_args = args
-        instance.rwf_kwargs = kwargs
-        return instance
-
-
-class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
-
-    # def __eq__(self, other: Any):
-    #     # TODO: this method for dataclass is overridden by dataclass generatad. Can be:
-    #     #       a) replaced again in metaclass, b) compare=False on dataclass
-    #     return (self is other) \
-    #         or (type(other) == self.__class__ and super().__eq__(other)) \
-    #         or False
-
-    def copy(self):
-        """
-        TODO: pass additional arrguments to modify new instance - e.g. EntityChange(...)
-        """
-        return self._copy()
-
-    def _copy(self, depth=0, instances_copied=None):
-        if depth==0:
-            instances_copied = {}
-        elif depth>MAX_RECURSIONS:
-            raise EntityInternalError(owner=self, msg=f"Too deep recursion: {depth}")
-
-        self_id = id(self)
-        instance_copy = instances_copied.get(self_id, UNDEFINED)
-        if instance_copy is UNDEFINED:
-            # Recursionn x 2
-            # not yet copied within this session
-            args = [self._try_call_copy(aval, depth, instances_copied) for aval in self.rwf_args]
-            kwargs = {aname: self._try_call_copy(aval, depth, instances_copied) for aname, aval in self.rwf_kwargs.items()}
-            # create instance from the same class with *identical* arguments
-            instance_copy = self.__class__(*args, **kwargs)
-            instances_copied[self_id] = instance_copy
-
-        return instance_copy
-
-    @classmethod
-    def _try_call_copy(cls, aval: Any, depth: int, instances_copied: Dict) -> Any:
-        if isinstance(aval, DotExpression): # must be first
-            aval_new = aval.Clone()
-        elif isinstance(aval, (tuple, list)):
-            aval_new = [cls._try_call_copy(aval_item, depth+1, instances_copied)
-                        for aval_item in aval]
-        elif isinstance(aval, (dict,)):
-            aval_new = {aval_name: cls._try_call_copy(aval_item, depth+1, instances_copied)
-                        for aval_name, aval_item in aval.items()}
-        # ALT: elif hasattr(aval, "_copy") and callable(aval._copy):
-        elif isinstance(aval, ReedwolfDataclassBase):
-            aval_new = aval._copy(depth=depth + 1, instances_copied=instances_copied)
-        else:
-            # TODO: if not primitive type - use copy.deepcopy() instead?
-            aval_new = aval
-        return aval_new
 
 
 @dataclass
@@ -402,7 +333,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
     # TODO: cleaners:       Optional[List["ICleaner"]] = field(repr=False, init=False, default=None)
     parent:         Union[Self, UndefinedType] = field(init=False, compare=False, default=UNDEFINED, repr=False)
     parent_name:    Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
-    entity:         Union[Self, "IContainer"] = field(init=False, compare=False, default=UNDEFINED, repr=False)
+    entity:         Union[Self, "IEntity"] = field(init=False, compare=False, default=UNDEFINED, repr=False)
     _accessor:      IValueAccessor = field(init=False, default=UNDEFINED, repr=False)
     # TODO: name:   Optional[str] = field(init=False, default=None)
 
@@ -1028,6 +959,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
                     self.data_model.set_parent(self)
                     self._register_model_attr_nodes()
 
+
             # includes components, cleaners and all other complex objects
             for subcomponent in self._get_subcomponents_list():
                 component = subcomponent.component
@@ -1076,6 +1008,8 @@ class IComponent(ReedwolfDataclassBase, ABC):
                 if self.components is not None:
                     raise EntityInternalError(owner=self, msg=f"components already set: {self.components}")
                 self.components = components
+
+                setup_session.top_setup_session.top_fields_registry.register_fields_of_container(self)
 
                 # evaluate data_model - class or M.value_expression
                 # self.data_model.setup(setup_session=setup_session)
@@ -1406,6 +1340,10 @@ class IComponent(ReedwolfDataclassBase, ABC):
                                       "entity",
                                       "_accessor",
                                       "name_counter_by_parent_name",
+                                      "containers_dict",
+                                      "container_id",
+                                      "container_id_counter",
+                                      "containers_id_path",
                                       # "value",
                                       # "enum",
                                       )
@@ -1618,6 +1556,7 @@ class IContainer(IComponent, ABC):
     settings:       Optional[Settings] = field(repr=False, default=None)
     contains:       List[IComponent] = field(repr=False, init=False, default=None)
 
+    # evaluated later
     # Components contain container: itself AND all other attributes - single or lists which are of type component
     # e.g. contains + data_model + cleaners + ...
     components:     Optional[Dict[str, IComponent]]  = field(init=False, repr=False, default=None)
@@ -1625,6 +1564,17 @@ class IContainer(IComponent, ABC):
     # will be used in apply phase to get some already computed metadata
     setup_session:  Optional[ISetupSession]    = field(init=False, repr=False, default=None)
     data_model:     "IDataModel" = field(init=False, repr=False)
+
+    # used for automatic component's naming, <parent_name/class_name>__<counter>
+    # TODO: there is some logic overlap with container_id and Entity.container_id_counter
+    name_counter_by_parent_name: Dict[str, int] = field(init=False, repr=False, default_factory=dict)
+
+    # unique name in Entity space - set in set_parent()
+    container_id:        Union[ContainerId, UndefinedType] = field(init=False, default=UNDEFINED)
+
+    # path of container parents from Entity to this Containers. List of container_id, containing Entity and self.
+    containers_id_path:   Union[List[ContainerId], UndefinedType] = field(init=False, default=UNDEFINED)
+
 
     @abstractmethod
     def _register_model_attr_nodes(self):
@@ -1662,6 +1612,18 @@ class IContainer(IComponent, ABC):
 class IEntity(IContainer, ABC):
     settings: Settings = field(repr=False, )
     apply_settings_class: Optional[Type[ApplySettings]] = field(repr=False, default=None)
+
+    # ------------------------------------------------------------
+    # evaluated / computed later
+    # ------------------------------------------------------------
+
+    # will be filled in set_parent(). Key is Container.container_id
+    containers_dict: Optional[Dict[ContainerId, IContainer]] = field(init=False, repr=False, default=None)
+
+    # will be used in setting Container.container_id unique name for each container in Entity space
+    # TODO: there is some logic overlap with Container.name_counter_by_parent_name
+    container_id_counter: int = field(init=False, repr=False, default=None)
+
 
 # ------------------------------------------------------------
 # IDataModel
@@ -2106,7 +2068,8 @@ class ValueSetPhase(str, Enum):
 # ------------------------------------------------------------
 
 @dataclass
-class IValueNode:
+class IValueNode(IDexpValueSource):
+
     component:  IComponent = field(repr=False)
     instance: ModelInstanceType = field(repr=False)
     instance_none_mode: bool = field(repr=False)
@@ -2130,11 +2093,11 @@ class IValueNode:
     # top of the tree - automatically computed, must be TopValueNode
     top_node:  Self = field(repr=False, init=False, compare=False)
 
-    # when ItemsValueNode (container=SubentityItems):
-    #   has_items=True  - container - has filled .items[], has no children
-    # otherwise:
-    #   has_items=False - individual item - with values, has children (some with values)
-    has_items: bool = field(init=False, repr=True, default=False)
+    # use is_list() instead has_items
+    #   when ItemsValueNode (container=SubentityItems)
+    #     has_items=True  - container - has filled .items[], has no children
+    #   otherwise:
+    #     has_items=False - individual item - with values, has children (some with values)
 
     # set only when item of parent.items (parent is SubentityItems)
     # set only when item is deleted (DELETE) or item is added (ADDED)
@@ -2143,6 +2106,15 @@ class IValueNode:
     # set only when item of parent.items (parent is SubentityItems)
     index0: Optional[Index0Type] = field(repr=False, default=None)
     key: Optional[KeyType] = field(repr=False, default=None)
+
+    # ------------------------------------------------------------
+    # AUTOCOMPUTED
+    # ------------------------------------------------------------
+    # copy of component's name
+    name:       AttrName = field(init=False, repr=False)
+
+    # used on locating F.<field-value-node> from other containers
+    parent_container_node: Union[Self, UndefinedType] = field(init=False, repr=False, compare=False, default=UNDEFINED)
 
     @abstractmethod
     def get_value(self, strict:bool) -> AttrValue:
