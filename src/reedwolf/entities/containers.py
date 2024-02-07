@@ -216,10 +216,11 @@ class ContainerBase(IContainer, ABC):
                 top_fields_registry = top_fields_registry,
             )
         else:
+            # for FieldGroup/BooleanField + children cases needs to use parent_container instead of parent
             setup_session = SetupSession(
                 container=self,
                 functions_factory_registry = functions_factory_registry,
-                parent_setup_session=self.parent.setup_session
+                parent_setup_session=self.parent_container.setup_session
             )
             top_fields_registry = setup_session.top_setup_session.top_fields_registry
 
@@ -295,7 +296,7 @@ class ContainerBase(IContainer, ABC):
             if is_subentity_main_model:
                 # TODO: DRY this - the only difference is setup_session - extract common logic outside / 
                 # bound attr_node
-                setup_session_from = self.parent.setup_session
+                setup_session_from = self.parent_container.setup_session
             else:
                 # Entity - top parent container / normal case
                 setup_session_from = self.setup_session
