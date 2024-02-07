@@ -74,6 +74,8 @@ from .setup import (
     RegistryBase,
     RegistryUseDenied,
 )
+from .value_nodes import ItemsValueNode
+
 
 # ------------------------------------------------------------
 
@@ -478,6 +480,11 @@ class LocalFieldsRegistry(RegistryBase):
                     break # travel up ended
                 container_id = path_up.pop(0)
                 container_value_node_curr = (container_value_node_curr if container_value_node_curr else value_node).parent_container_node
+                if isinstance(container_value_node_curr, ItemsValueNode):
+                    # when items, need to jump over - i.e. one level up
+                    # ItemsValueNode is intermediate node object that holds all items
+                    container_value_node_curr = container_value_node_curr.parent_container_node
+
                 if not (container_value_node_curr and container_value_node_curr.name == container_id):
                     raise EntityInternalError(owner=self, msg=f"Expected container_id={container_id}, got: {container_value_node_curr}")
 
