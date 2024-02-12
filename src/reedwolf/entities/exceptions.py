@@ -72,6 +72,9 @@ class EntityInstatiateError(EntityError):
 class EntityInitError(EntityError):
     pass
 
+class EntityImmutableError(EntityError):
+    pass
+
 # ------------------------------------------------------------
 # Entity Setup phase - boot time - on .setup() call
 # ------------------------------------------------------------

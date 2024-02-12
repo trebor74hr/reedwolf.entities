@@ -81,7 +81,7 @@ from .utils import (
 )
 from .exceptions import (
     EntityTypeError,
-    EntityInternalError, EntityError, EntityInitError,
+    EntityInternalError, EntityError, EntityInitError, EntityImmutableError,
 )
 from .namespaces import (
     DynamicAttrsBase,
@@ -373,6 +373,11 @@ def get_function_non_empty_arguments(py_function: Callable) -> List[AttrName]:
     non_empty_params = [param.name for param in py_fun_signature.parameters.values() if
                         param.empty and param.name != SELF_ARG_NAME]
     return non_empty_params
+
+# TODO: Any -> Parameter
+def get_func_arguments(func: Callable) -> Dict[str, Any]:
+    # presuming order is preserved
+    return {k: v for k, v in inspect.signature(func).parameters.items() if k != SELF_ARG_NAME}
 
 
 # def is_method(obj, name):
@@ -1139,6 +1144,7 @@ class ReedwolfMetaclass(ABCMeta):
     def __new__(cls, name, bases, dct):
         # kwargs: name, bases, dct
         new_class = super().__new__(cls, name, bases, dct)
+
         if getattr(new_class, "DENY_POST_INIT", None) and hasattr(new_class, "__post_init__"):
             raise EntityInitError(owner=new_class,
                                   msg=f"Class '{new_class.__name__}' should not have '__post_init__' method." 
@@ -1147,6 +1153,19 @@ class ReedwolfMetaclass(ABCMeta):
         return new_class
 
     def __call__(cls, *args, **kwargs):
+        """
+        Several uses:
+           1) create instance and save initial arguments to instance._rwf_kwargs.
+              args are matched to function arguments and converted to kwargs.
+              Will be used later in copy().
+           2) Fill klass._RWF_ARG_NAMES with __init__() argument names.
+              Must do it in lazy-init fashion - on first instance creation.
+              Class argument will be used in copy().
+              Can not do it in __new__, it is too early, I need result of decorator,
+              i.e. dataclass(new_class), and in that moment fields/__init__ are not created.
+           3) fill klass._RWF_INIT_FUNC_ARGS - list of __init__ function arguments
+              used internally for first 2 purposes.
+        """
         # extra_kwargs = {name: kwargs.pop(name)
         #                 for name in list(kwargs.keys())
         #                 if name not in cls.__annotations__}
@@ -1161,25 +1180,81 @@ class ReedwolfMetaclass(ABCMeta):
                     all_args.append(", ".join([f"{k}={v!r}" for k,v in kwargs.items()]))
                 raise EntityError(msg=f"Failed to construct:\n    {cls.__name__}({', '.join(all_args)})\n  with error:\n    {ex}") from ex
             raise
-        # instance.rwf_extra_kwargs = extra_kwargs
-        instance.rwf_args = args
-        instance.rwf_kwargs = kwargs
+
+        instance._immutable = False
+
+        # ------------------------------------------------------------
+        instance._rwf_kwargs = kwargs
+        # ex. instance._rwf_args = args
+
+        klass = instance.__class__
+        if args:
+            # NOTE: presuming order is preserved
+            if not hasattr(klass, "_RWF_INIT_FUNC_ARGS"):
+                klass._RWF_INIT_FUNC_ARGS = get_func_arguments(instance.__init__)
+
+            # ------------------------------------------------------------
+            # merge: args + kwargs => self._rwf_kwargs
+            kwargs_from_args = {param_name: arg_value  for param_name, arg_value in zip(klass._RWF_INIT_FUNC_ARGS, args)}
+            same_params = set(kwargs_from_args.keys()).intersection(set(kwargs))
+            if same_params:
+                raise EntityInternalError(owner=instance, msg=f"Params overlap: {same_params}")
+            # if args: print("here33", kwargs_from_args)
+            # ex. instance._rwf_kwargs = kwargs
+            instance._rwf_kwargs.update(kwargs_from_args)
+
+        # ------------------------------------------------------------
+        # fill klass._RWF_ARG_NAMES
+        if not hasattr(instance.__class__, "_RWF_ARG_NAMES"):
+            # code duplication for speed optimization
+            if not hasattr(klass, "_RWF_INIT_FUNC_ARGS"):
+                klass._RWF_INIT_FUNC_ARGS = get_func_arguments(instance.__init__)
+
+            # Should produce the same result as __init__ params parsing
+            # if is_dataclass(instance):
+            #     arg_names = [fld.name for fld in dc_fields(instance) if fld.init]
+            klass._RWF_ARG_NAMES = tuple(klass._RWF_INIT_FUNC_ARGS.keys()) \
+                    if hasattr(klass, "__init__") else ()
+
         return instance
 
 
 class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
 
-    # def __eq__(self, other: Any):
-    #     # TODO: this method for dataclass is overridden by dataclass generatad. Can be:
-    #     #       a) replaced again in metaclass, b) compare=False on dataclass
-    #     return (self is other) \
-    #         or (type(other) == self.__class__ and super().__eq__(other)) \
-    #         or False
+    def __raise_immutable_error(self, key=None, value=None):
+        """
+        This function will be set as __setattr__ in ._set_immutable()
+        Btw. having __setattr__ function defined for all attr access adds 5-8% performance penalty.
+        """
+        raise EntityImmutableError(owner=self,
+                                   msg="Instance is in immutable state, change is not allowed. "
+                                       "You can .copy() and change the new instance.")
 
-    def copy(self, change: Optional[Dict]=None, traverse: bool = True, as_class: Optional[Type]=None):
+    def _set_immutable(self):
+        """
+        deny further attribute changes
+        deny .change() method
+        """
+        assert not self._immutable
+        self._immutable = True
+        self.__setattr__ = self.__raise_immutable_error
+
+    def change(self, **kwargs) -> Self:
+        if self._immutable:
+            self.__raise_immutable_error()
+        unknown = set(kwargs.keys()) - set(self._RWF_ARG_NAMES)
+        if unknown:
+            raise EntityInitError(owner=self, msg=f"Unknown arguments: {', '.join(unknown)}. Supported arguments: {', '.join(self._RWF_ARG_NAMES)}")
+        self._rwf_kwargs.update(kwargs)
+        for k,v in kwargs.items():
+            setattr(self, k, v)
+        return self
+
+    def copy(self, change: Optional[Dict]=None, traverse: bool = True, as_class: Optional[Type]=None) -> Union[Self, Any]:
         """
         change - dictionary with list of attributes which need to be overridden/passed to constructor for new instance
         traverse - to copy deep every ReedwolfDataclassBase. TODO: not nice and clean solution :(
+        as_class - when constructor is not self.__class__ but some other class. Class must support all provided fields
 
         TODO: pass additional arrguments to modify new instance - e.g. EntityChange(...)
         """
@@ -1193,18 +1268,17 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
               as_class: Optional[Type]=None,
               ):
         if change:
-            rwf_kwargs = self.rwf_kwargs.copy()
+            rwf_kwargs = self._rwf_kwargs.copy()
             rwf_kwargs.update(change)
         else:
-            rwf_kwargs = self.rwf_kwargs
+            rwf_kwargs = self._rwf_kwargs
 
-        if as_class:
-            # NOTE: this is not the best way how to handle case when constructor has not the same signature
-            # if issubclass(as_class, self.__class__):
-            #     raise EntityInternalError(owner=self, msg=f"Class provided in as_class={as_class} is not subclass of: {self.__class__}")
-            pass
-        else:
+        if not as_class:
             as_class = self.__class__
+        # else:
+        # # NOTE: this is not the best way how to handle case when constructor has not the same signature
+        #     if issubclass(as_class, self.__class__):
+        #         raise EntityInternalError(owner=self, msg=f"Class provided in as_class={as_class} is not subclass of: {self.__class__}")
 
         if depth==0:
             instances_copied = {}
@@ -1216,12 +1290,13 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
         if instance_copy is UNDEFINED:
             # Recursion x 2
             # not yet copied within this session
-            args = [self._try_call_copy(aval=aval, depth=depth, instances_copied=instances_copied, traverse=traverse)
-                    for aval in self.rwf_args]
+            # OLD: args = [self._try_call_copy(aval=aval, depth=depth, instances_copied=instances_copied, traverse=traverse)
+            #         for aval in self._rwf_args]
             kwargs = {aname: self._try_call_copy(aval=aval, depth=depth, instances_copied=instances_copied, traverse=traverse)
                       for aname, aval in rwf_kwargs.items()}
             # create instance from the same class with *identical* arguments
-            instance_copy = as_class(*args, **kwargs)
+            # OLD: instance_copy = as_class(*args, **kwargs)
+            instance_copy = as_class(**kwargs)
             instances_copied[self_id] = instance_copy
 
         return instance_copy
