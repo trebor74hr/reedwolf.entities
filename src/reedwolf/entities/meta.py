@@ -81,7 +81,7 @@ from .utils import (
 )
 from .exceptions import (
     EntityTypeError,
-    EntityInternalError, EntityError,
+    EntityInternalError, EntityError, EntityInitError,
 )
 from .namespaces import (
     DynamicAttrsBase,
@@ -1133,7 +1133,18 @@ class ReedwolfMetaclass(ABCMeta):
     This metaclass enables:
         - storing initial args and kwargs to enable copy() later (see ReedwolfDataclassBase
         - TODO: storing extra arguments - to enable custom attributes features
+    References:
+        - https://realpython.com/python-metaclasses/
     """
+    def __new__(cls, name, bases, dct):
+        # kwargs: name, bases, dct
+        new_class = super().__new__(cls, name, bases, dct)
+        if getattr(new_class, "DENY_POST_INIT", None) and hasattr(new_class, "__post_init__"):
+            raise EntityInitError(owner=new_class,
+                                  msg=f"Class '{new_class.__name__}' should not have '__post_init__' method." 
+                                      "Initialization checks and instance configuration is be done in setup phase. "
+                                      "Move logic to init() method (don't forget to call super().init() method).")
+        return new_class
 
     def __call__(cls, *args, **kwargs):
         # extra_kwargs = {name: kwargs.pop(name)

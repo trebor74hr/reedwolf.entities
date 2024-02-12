@@ -1,6 +1,6 @@
 # from __future__ import annotations
 
-from abc import ABC, abstractmethod, ABCMeta
+from abc import ABC, abstractmethod
 import inspect
 from contextlib import AbstractContextManager
 from enum import Enum
@@ -84,7 +84,9 @@ from .meta import (
     AttrValue,
     Index0Type,
     KeyType,
-    ModelInstanceType, ContainerId, ReedwolfDataclassBase,
+    ModelInstanceType,
+    ContainerId,
+    ReedwolfDataclassBase,
 )
 from .expressions import (
     DotExpression,
@@ -325,7 +327,13 @@ class IComponent(ReedwolfDataclassBase, ABC):
         parent
         _accessor
         entity
+
+    ReedwolfDataclassBase.DENY_POST_INIT - don't allow __post_init__ methods
+    since before setup() phase objects can be configured, adapted, changed as wanted.
+    After setup() is done, instances are checked, configured internally and become immutable.
     """
+    DENY_POST_INIT = True
+
     # NOTE: I wanted to skip saving parent reference/object within component - to
     #       preserve single and one-direction references.
     # NOTE: Not DRY: Entity, SubentityBase and ComponentBase
@@ -346,11 +354,20 @@ class IComponent(ReedwolfDataclassBase, ABC):
     _component_fields_dataclass: Optional[Type[IComponentFields]] = field(init=False, repr=False, default=None)
     _this_registry: Union[IThisRegistry, NoneType, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
     _setup_phase_one_called: bool = field(init=False, repr=False, default=False)
+    _initialized: bool = field(init=False, repr=False, default=False)
 
+    # def __post_init__(self):
+    #     self.init_base()
 
-    def __post_init__(self):
-        self.init_clean_base()
+    def init(self):
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
+        # when not set then will be later defined - see set_parent()
+        if self._initialized:
+            raise EntityInternalError(owner=self, msg=f"Component already initialized.")
+        if self.name not in (None, "", UNDEFINED):
+            if not self.name.isidentifier():
+                raise EntitySetupValueError(owner=self, msg="Attribute name needs to be valid python identifier name")
+        self._initialized = True
 
     def set_parent(self, parent: Optional["IComponent"]):
         if self.parent is not UNDEFINED:
@@ -432,6 +449,8 @@ class IComponent(ReedwolfDataclassBase, ABC):
 
             name_id = container._get_new_id_by_parent_name(key)
             self.name = f"{key}__{name_id}"
+        if self.name == "company_entity__datamodel__1":
+            print("here33")
 
         return self.name
 
@@ -478,14 +497,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
     def is_unbound(self) -> bool:
         return self.entity.is_unbound()
 
-    def init_clean_base(self):
-        # when not set then will be later defined - see set_parent()
-        if self.name not in (None, "", UNDEFINED):
-            if not self.name.isidentifier():
-                raise EntitySetupValueError(owner=self, msg="Attribute name needs to be valid python identifier name")
-
-
-    def _check_cleaners(self, allowed_cleaner_base_list: List[Type]):
+    def _check_cleaners(self, allowed_cleaner_base_list: List["VALIDATION_OR_EVALUATION_TYPE"]):
         allowed_cleaner_base_list = tuple(allowed_cleaner_base_list)
         if self.cleaners is not None:
             cl_names = ", ".join([cl.__name__ for cl in allowed_cleaner_base_list])
@@ -911,6 +923,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
         if self._setup_phase_one_called:
             raise EntityInternalError(owner=self, msg="fill_components already called")
 
+
         # for children/contains attributes - parent is set here
         if not hasattr(self, "name"):
             raise EntitySetupError(owner=self, msg=f"Component should have 'name' attribute, got class: {self.__class__.__name__}")
@@ -922,7 +935,8 @@ class IComponent(ReedwolfDataclassBase, ABC):
             components = {}
 
             if self.is_entity():
-                # Entityy()
+                self.init()
+                self.settings._setup_all_custom_functions(self.apply_settings_class)
                 self.set_parent(None)
             else:
                 # SubEntityItems() / SubEntitySingle()
@@ -955,10 +969,11 @@ class IComponent(ReedwolfDataclassBase, ABC):
                 #   - direct data models setup (Entity)
                 #   - some standard NS fields (e.g. Instance)
                 # This will call complete setup() for data_model-s
+                self.data_model.init()
+
                 if not self.is_unbound():
                     self.data_model.set_parent(self)
-                    self._register_model_attr_nodes()
-
+                    data_models = self._register_model_attr_nodes()
 
             # includes components, cleaners and all other complex objects
             for subcomponent in self._get_subcomponents_list():
@@ -975,6 +990,10 @@ class IComponent(ReedwolfDataclassBase, ABC):
                     continue
 
                 if isinstance(component, IComponent):
+                    # for IDataModel init is done before, don't do it again.
+                    if not isinstance(component, IDataModel):
+                        component.init()
+
                     component.set_parent(self)
                     # ALT: component.is_subentity()
                     if component.is_subentity():
@@ -1048,43 +1067,6 @@ class IComponent(ReedwolfDataclassBase, ABC):
         self._setup_phase_one_called = True
 
         return None
-
-    # ------------------------------------------------------------
-
-    @abstractmethod
-    def setup(self, setup_session: ISetupSession):
-        ...
-
-    # ------------------------------------------------------------
-
-    def _invoke_component_setup(self, 
-                    component_name: str, 
-                    component: Union[Self, DotExpression], 
-                    setup_session: ISetupSession):  # noqa: F821
-        called = False
-
-        if isinstance(component, (DotExpression,)):
-            dexp: DotExpression = component
-            # namespace = dexp._namespace
-            if dexp.IsFinished():
-                # Setup() was called in container.setup() before or in some other dependency
-                called = False
-            else:
-                dexp.Setup(setup_session=setup_session, owner=self)
-                called = True
-        elif isinstance(component, IComponent):
-            assert "Entity(" not in repr(component)
-            component.setup(setup_session=setup_session)  # , parent=self)
-            called = True
-        elif isinstance(component, (dict, list, tuple)):
-            raise EntitySetupValueError(owner=self, msg=f"components should not be dictionaries, lists or tuples, got: {type(component)} / {component}")
-        else:
-            if hasattr(component, "Setup"):
-                raise EntityInternalError(owner=self, msg=f"{self.name}.{component_name} has attribute that is not DotExpression: {type(component)}")
-            if hasattr(component, "setup"): 
-                raise EntityInternalError(owner=self, msg=f"{self.name}.{component_name} has attribute that is not Component: {type(component)}")
-        return called
-
 
     # ------------------------------------------------------------
 
@@ -1364,7 +1346,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
             # ----------------------------------------------------------------------
             # Classes of attribute members that are included in a subcomponents list 
             # each will be "Setup" if they have appropriate class and method
-            # (see _invoke_component_setup).
+            # (see _setup_phase_two()).
             # ----------------------------------------------------------------------
             # TODO: this is not nice - do it better
             # TODO: models should not be dict()
@@ -1439,10 +1421,27 @@ class IComponent(ReedwolfDataclassBase, ABC):
                 # raise EntityInternalError(owner=self, msg=f"DataModel.setup() should have been called before ({component})")
                 continue
 
-            self._invoke_component_setup(
-                    subcomponent.name, 
-                    component=component, 
-                    setup_session=setup_session)
+            component_name = subcomponent.name
+            if isinstance(component, (DotExpression,)):
+                dexp: DotExpression = component
+                # namespace = dexp._namespace
+                if dexp.IsFinished():
+                    # Setup() was called in container.setup() before or in some other dependency
+                    called = False
+                else:
+                    dexp.Setup(setup_session=setup_session, owner=self)
+                    called = True
+            elif isinstance(component, IComponent):
+                assert "Entity(" not in repr(component)
+                component.setup(setup_session=setup_session)  # , parent=self)
+                called = True
+            elif isinstance(component, (dict, list, tuple)):
+                raise EntitySetupValueError(owner=self, msg=f"components should not be dictionaries, lists or tuples, got: {type(component)} / {component}")
+            else:
+                if hasattr(component, "Setup"):
+                    raise EntityInternalError(owner=self, msg=f"{self.name}.{component_name} has attribute that is not DotExpression: {type(component)}")
+                if hasattr(component, "setup"):
+                    raise EntityInternalError(owner=self, msg=f"{self.name}.{component_name} has attribute that is not Component: {type(component)}")
 
         # if not self.is_finished():
         self.finish()
@@ -1514,6 +1513,8 @@ class IValidation(ICleaner, ABC):
 class IEvaluation(ICleaner, ABC):
     ...
 
+VALIDATION_OR_EVALUATION_TYPE = Union[Type[IValidation], Type[IEvaluation]]
+
 # ------------------------------------------------------------
 
 class IField(IComponent, ABC):
@@ -1554,15 +1555,15 @@ class IContainer(IComponent, ABC):
 
     bind_to:        Optional[Union["IDataModel", ModelKlassType, DotExpression]] = field(repr=False, default=None)
     settings:       Optional[Settings] = field(repr=False, default=None)
-    contains:       List[IComponent] = field(repr=False, init=False, default=None)
+    contains:       List[IComponent] = field(repr=False, init=False, default_factory=list)
 
     # evaluated later
     # Components contain container: itself AND all other attributes - single or lists which are of type component
     # e.g. contains + data_model + cleaners + ...
-    components:     Optional[Dict[str, IComponent]]  = field(init=False, repr=False, default=None)
+    components:     Optional[Dict[str, IComponent]] = field(init=False, repr=False, default=None)
 
     # will be used in apply phase to get some already computed metadata
-    setup_session:  Optional[ISetupSession]    = field(init=False, repr=False, default=None)
+    setup_session:  Optional[ISetupSession] = field(init=False, repr=False, default=None)
     data_model:     "IDataModel" = field(init=False, repr=False)
 
     # used for automatic component's naming, <parent_name/class_name>__<counter>
@@ -1577,7 +1578,7 @@ class IContainer(IComponent, ABC):
 
 
     @abstractmethod
-    def _register_model_attr_nodes(self):
+    def _register_model_attr_nodes(self) -> Dict[str, "IDataModel"]:
         ...
 
     @abstractmethod
@@ -1671,7 +1672,7 @@ class IDataModel(IComponent, ABC):
         return self._name
 
 
-    def fill_models(self, models: Dict[str, Self] = None, parent: Self = None):
+    def fill_models(self, models: Dict[str, Self] = None, parent: Self = None) -> Dict[str, Self]:
         """
         Recursion
         """
@@ -1684,6 +1685,7 @@ class IDataModel(IComponent, ABC):
         models[name] = self
         if hasattr(self, "contains"):
             for dep_data_model in self.contains:
+                dep_data_model.init()
                 # recursion
                 dep_data_model.set_parent(parent=self)
                 dep_data_model.fill_models(models=models, parent=self)
@@ -2722,3 +2724,38 @@ def extract_type_info(
     return type_info, th_field # , func_node
 
 
+
+# ------------------------------------------------------------
+# OBSOLETE
+# ------------------------------------------------------------
+#
+#     def _invoke_component_setup(self,
+#                                 component_name: str,
+#                                 component: Union[Self, DotExpression],
+#                                 setup_session: ISetupSession):  # noqa: F821
+#         called = False
+#
+#         if isinstance(component, (DotExpression,)):
+#             dexp: DotExpression = component
+#             # namespace = dexp._namespace
+#             if dexp.IsFinished():
+#                 # Setup() was called in container.setup() before or in some other dependency
+#                 called = False
+#             else:
+#                 dexp.Setup(setup_session=setup_session, owner=self)
+#                 called = True
+#         elif isinstance(component, IComponent):
+#             assert "Entity(" not in repr(component)
+#             component.setup(setup_session=setup_session)  # , parent=self)
+#             called = True
+#         elif isinstance(component, (dict, list, tuple)):
+#             raise EntitySetupValueError(owner=self, msg=f"components should not be dictionaries, lists or tuples, got: {type(component)} / {component}")
+#         else:
+#             if hasattr(component, "Setup"):
+#                 raise EntityInternalError(owner=self, msg=f"{self.name}.{component_name} has attribute that is not DotExpression: {type(component)}")
+#             if hasattr(component, "setup"):
+#                 raise EntityInternalError(owner=self, msg=f"{self.name}.{component_name} has attribute that is not Component: {type(component)}")
+#         return called
+#
+#
+#

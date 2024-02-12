@@ -124,8 +124,8 @@ class Cardinality: # namespace holder
         parent:     Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
         parent_name: Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
-        def __post_init__(self):
-            super().__post_init__()
+        def init(self):
+            super().init()
             if self.min is None and self.max is None:
                 raise EntitySetupError(owner=self, msg="Please provide min and/or max")
             if self.min is not None and (to_int(self.min) is None or to_int(self.min)<0):

@@ -64,12 +64,12 @@ class FieldEvaluation(FieldEvaluationBase):
     # TODO: check in Setup phase if type of evaluated DotExpression has correct
     #       type - e.g.  for EnumField evaluated value must be within enum values.
 
-    def __post_init__(self):
+    def init(self):
         if not isinstance(self.value, DotExpression):
             raise EntitySetupTypeError(owner=self, msg=f"Argument 'value' needs to be DotExpression, "
                                                        f"got: {type(self.value)} / {self.value}")
         # self._fill_name_when_missing()
-        super().__post_init__()
+        super().init()
 
     def execute(self, apply_result: IApplyResult) -> Optional[ExecResult]:
         not_available_dexp_result = execute_available_dexp(self.available, apply_result=apply_result)
@@ -94,10 +94,6 @@ class Default(FieldEvaluationBase):
     # title:          Optional[TransMessageType] = None
 
     REQUIRES_AUTOCOMPUTE: ClassVar[bool] = False
-
-    def __post_init__(self):
-        # assert isinstance(self.value, DotExpression), self.value
-        super().__post_init__()
 
     def execute(self, apply_result: IApplyResult) -> Optional[ExecResult]:
         if isinstance(self.value, DotExpression):

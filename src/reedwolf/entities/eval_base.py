@@ -42,7 +42,7 @@ class EvaluationBase(IEvaluation, ABC):
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
     title:          Optional[TransMessageType] = field(repr=False, default=None)
 
-    def __post_init__(self):
+    def init(self):
         if hasattr(self, "available"):
             clean_available(owner=self, attr_name="available", dexp_or_bool=self.available)
 
@@ -52,6 +52,7 @@ class EvaluationBase(IEvaluation, ABC):
             raise EntitySetupValueError(owner=self,
                                         msg=f"Argument 'value' needs to DotExpression (e.g. F.name != '') "
                                             f"or some standard type ({STANDARD_TYPE_LIST}), got: {to_repr(self.value)}")
+        super().init()
 
     def create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:
         """

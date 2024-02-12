@@ -306,7 +306,7 @@ class DataModelWithHandlers(BoundDataModelBase):
     type_info:      Union[TypeInfo, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     models_with_handlers_dict: Dict[str, ModelWithHandlers] = field(init=False, repr=False, default_factory=dict)
 
-    def __post_init__(self):
+    def init(self):
 
         if not isinstance(self.read_handler, CustomFunctionFactory):
             raise EntitySetupValueError(owner=self, msg=f"read_handler={self.read_handler} should be instance of CustomFunctionFactory. Maybe wrap plain python function with Function(? ")
@@ -328,7 +328,7 @@ class DataModelWithHandlers(BoundDataModelBase):
                 get_name_from_bind(self.model_klass)
                 ])
 
-        super().__post_init__()
+        super().init()
 
         # self.read_handler
 
@@ -384,7 +384,7 @@ class DataModel(BoundDataModelBase):
     type_info:          Optional[TypeInfo] = field(init=False, default=None, repr=False)
     models_with_handlers_dict: Dict[str, ModelWithHandlers] = field(init=False, repr=False, default_factory=dict)
 
-    def __post_init__(self):
+    def init(self):
         if isinstance(self.model_klass, DotExpression):
             if not self.name:
                 self.name = "__".join([
@@ -401,6 +401,7 @@ class DataModel(BoundDataModelBase):
             # Similar check is done later in container too
             raise EntitySetupValueError(owner=self,
                                         msg=f"For 'model' argument expected model class or DotExpression, got: {self.model_klass}")
+        super().init()
 
 
     def get_type_info(self) -> TypeInfo:

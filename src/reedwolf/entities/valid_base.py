@@ -46,7 +46,7 @@ class ValidationBase(IValidation, ABC):
     """ Executes validate() method which checks all ok
     """
 
-    def __post_init__(self):
+    def init(self):
         if hasattr(self, "available"):
              clean_available(owner=self, attr_name="available", dexp_or_bool=self.available)
 
@@ -67,7 +67,7 @@ class ValidationBase(IValidation, ABC):
         elif not self.title:
             self.title = self.error
 
-        super().__post_init__()
+        super().init()
 
 
     # def __repr__(self):

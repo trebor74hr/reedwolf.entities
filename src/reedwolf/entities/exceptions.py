@@ -67,7 +67,13 @@ class EntityInstatiateError(EntityError):
     pass
 
 # ------------------------------------------------------------
-# Entity Setup phase (boot time) validation errors
+# Entity Init phase - boot time - before setup()
+# ------------------------------------------------------------
+class EntityInitError(EntityError):
+    pass
+
+# ------------------------------------------------------------
+# Entity Setup phase - boot time - on .setup() call
 # ------------------------------------------------------------
 class EntitySetupError(EntityError):
     pass

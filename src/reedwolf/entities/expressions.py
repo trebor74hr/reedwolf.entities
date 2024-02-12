@@ -103,14 +103,21 @@ class ExecResult:
 
 @dataclass
 class IDotExpressionNode(ReedwolfDataclassBase, ABC):
-    """ wrapper around one element in DotExpression e.g. M.name.Count()
-    .company, .name, .Count() are nodes
     """
+    Wrapper around one element in DotExpression e.g. M.name.Count()
+    .company, .name, .Count() are nodes
+
+    Inheriting ReedwolfDataclassBase but __post_init__ are allowed since
+    instances are used for internal structs (created in setup phase),
+    and copy() method is needed.
+    """
+    DENY_POST_INIT = False
+
     dexp_validate_type_info_func: Optional[Callable[[Self], None]] = field(repr=False, init=False, default=None)
 
-    def clone(self):
-        # If already setup then copy it and reuse
-        return dataclasses_replace(self)
+    # def clone(self):
+    #     # If already setup then copy it and reuse
+    #     return dataclasses_replace(self)
 
     @abstractmethod
     def execute_node(self, 

@@ -243,7 +243,7 @@ class ContainerBase(IContainer, ABC):
 
     # ------------------------------------------------------------
 
-    def _register_model_attr_nodes(self):
+    def _register_model_attr_nodes(self) -> Dict[str, IDataModel]:
         # ----------------------------------------
         # A. 1st level attr_nodes
         # ------------------------------------------------------------
@@ -266,6 +266,7 @@ class ContainerBase(IContainer, ABC):
 
         # NOTE: self.models was used only here
         #   self.models = models
+        return models
 
     # ------------------------------------------------------------
 
@@ -331,6 +332,8 @@ class ContainerBase(IContainer, ABC):
         attr_node = None
         # alias_saved = False
         is_list = False
+        if not hasattr(data_model, "model_klass"):
+            raise EntityInternalError(owner=self, msg=f"data_model.model_klass not set")
         model_klass = data_model.model_klass
 
         if isinstance(model_klass, DotExpression):
@@ -366,16 +369,23 @@ class ContainerBase(IContainer, ABC):
 
     # ------------------------------------------------------------
     def _replace_modelsns_registry(self, setup_session: SetupSession):
-        # subentity case
-        assert (self.is_unbound())
-        self.data_model.set_parent(self)
+        # subentity case?
+        assert self.is_unbound()
+        # self.data_model.set_parent(self)
 
-        if isinstance(self.data_model, IUnboundDataModel):
+        is_unbound_data_model = isinstance(self.data_model, IUnboundDataModel)
+        if is_unbound_data_model:
             assert self.is_entity()
             # setup_session=None - dataclass should be already created
             fields_dataclass, _ = self.get_component_fields_dataclass(setup_session=None)
             self.data_model = DataModel(model_klass=fields_dataclass)
-        else:
+
+        if self.data_model is None:
+            raise EntityInternalError(owner=self, msg=f"data_model not set")
+
+        self.data_model.set_parent(self)
+
+        if not is_unbound_data_model:
             assert not self.is_entity()
             # model_dexp_node: IDotExpressionNode
             if not isinstance(self.data_model.model_klass, DotExpression):
@@ -392,14 +402,18 @@ class ContainerBase(IContainer, ABC):
 
     # ------------------------------------------------------------
 
+    def init(self):
+        super().init()
+        if self.data_model is None:
+            self.data_model = UnboundModel()
+            # raise EntitySetupError(owner=self, msg="data_model not set. Initialize in constructor or call bind_to() first.")
+
+    # ------------------------------------------------------------
+
     def setup(self) -> Self:
         # components are flat list, no recursion/hierarchy browsing needed
         if self.is_finished():
             raise EntitySetupError(owner=self, msg="setup() should be called only once")
-
-        if self.data_model is None:
-            self.data_model = UnboundModel()
-            # raise EntitySetupError(owner=self, msg="data_model not set. Initialize in constructor or call bind_to() first.")
 
         if not self.contains:
             raise EntitySetupError(owner=self, msg="'contains' attribute is required with list of components")
@@ -408,8 +422,6 @@ class ContainerBase(IContainer, ABC):
             # ----------------------------------------
             # SETUP PHASE one (recursive)
             # ----------------------------------------
-            self.settings._setup_all_custom_functions(self.apply_settings_class)
-
             # Traverse all subcomponents and call the same method for each (recursion)
             # NOTE: Will setup all data_model and bind_to and ModelsNS.
             #       In phase two will setup all other components and FieldsNS, ThisNS and FunctionsNS.
@@ -523,6 +535,7 @@ class ContainerBase(IContainer, ABC):
 # ------------------------------------------------------------
 
 
+# TODO: inherit ReedwolfDataclassBase to have copy() or not?
 class KeysBase(ABC):
 
     @abstractmethod
@@ -614,7 +627,7 @@ class KeyFields(KeysBase):
 class Entity(IEntity, ContainerBase):
 
     # NOTE: only this one is obligatory
-    contains:           List[IComponent] = field(repr=False)
+    contains:           List[IComponent] = field(repr=False, default_factory=list)
 
     # --- optional - following can be bound later with .bind_to()
     name:               Optional[str] = field(default=None)
@@ -651,18 +664,12 @@ class Entity(IEntity, ContainerBase):
     # is_unbound to model case - must be cached since data_model could be dynamically changed in setup phase with normal
     _is_unbound: bool = field(init=False, repr=False)
 
-    def __post_init__(self):
-        # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
+
+    def init(self):
         if not self.settings:
             # default setup
             self.settings = Settings()
-        self.init_clean()
-        super().__post_init__()
 
-    def is_unbound(self) -> bool:
-        return self._is_unbound
-
-    def init_clean(self):
         if self.bind_to:
             if is_model_klass(self.bind_to):
                 self.data_model = DataModel(model_klass=self.bind_to)
@@ -705,6 +712,11 @@ class Entity(IEntity, ContainerBase):
                 and ApplySettings in inspect.getmro(self.apply_settings_class)):
             raise EntityTypeError(owner=self, msg=f"apply_settings_class needs to be class that inherits ApplySettings, got: {self.apply_settings_class}")
 
+        super().init()
+
+    def is_unbound(self) -> bool:
+        return self._is_unbound
+
     def set_parent(self, parent: NoneType):
         assert parent is None
         self.containers_dict = {}
@@ -713,12 +725,6 @@ class Entity(IEntity, ContainerBase):
         self.containers_dict[self.container_id] = self
         self.containers_id_path = [self.container_id]
         super().set_parent(parent=parent)
-
-
-    # def setup(self):
-    #     ret = super().setup()
-    #     self.setup_session.call_hooks_on_finished_all()
-    #     return ret
 
     @staticmethod
     def is_entity() -> bool:
@@ -731,9 +737,9 @@ class Entity(IEntity, ContainerBase):
                # do_setup:bool = True,
                ) -> Self:
         """
-        late binding, will call .setup()
+        Handy function that returns entity back -> allows dot-chaining.
+        Just sets/updates some attributes. No checks until setup() is called.
         """
-        # TODO: DRY this - for loop
         if self.is_finished():
             raise EntityInternalError(owner=self, msg="Entity already marked as finished.")
 
@@ -741,19 +747,15 @@ class Entity(IEntity, ContainerBase):
             # NOTE: allowed to change to None (not yet tested)
             self.bind_to = bind_to
 
-        if apply_settings_class:
-            if self.apply_settings_class:
-                raise EntitySetupError(owner=self, msg="settings already set, late binding not allowed.")
+        if apply_settings_class is not None:
+            # overwrite
+            # if self.apply_settings_class:
+            #     raise EntitySetupError(owner=self, msg="settings already set, late binding not allowed.")
             self.apply_settings_class = apply_settings_class
 
-        if settings:
+        if settings is not None:
             # overwrite
             self.settings = settings
-
-        self.init_clean()
-
-        # if do_setup:
-        #     self.setup()
 
         return self
 
@@ -882,7 +884,7 @@ class SubEntityBase(ContainerBase, ABC):
                                                                                    metadata = {"skip_setup": True})
 
     # cardinality:  ICardinalityValidation
-    contains:       List[IComponent] = field(repr=False)
+    contains:       List[IComponent] = field(repr=False, default_factory=list)
 
     accessor:       Optional[ValueAccessorInputType] = field(repr=False, default=None)
 
@@ -932,7 +934,7 @@ class SubEntityBase(ContainerBase, ABC):
     # Class attributes
     # namespace_only: ClassVar[Namespace] = ThisNS
 
-    def __post_init__(self):
+    def init(self):
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
         if isinstance(self.bind_to, DotExpression):
             # Clone it to be seure that is not used - if problem, then clone only if not built
@@ -947,7 +949,7 @@ class SubEntityBase(ContainerBase, ABC):
         if not self.name:
             self.name = get_name_from_bind(self.data_model.model_klass)
 
-        super().__post_init__()
+        super().init()
 
     def set_parent(self, parent: ContainerBase):
         super().set_parent(parent=parent)
@@ -993,15 +995,16 @@ class SubEntityBase(ContainerBase, ABC):
 
 @dataclass
 class SubEntityItems(SubEntityBase):
-    """ one to many relations - e.g. Person -> PersonAddresses """
-
-    def __post_init__(self):
+    """
+    one to many relations - e.g. Person -> PersonAddresses
+    """
+    def init(self):
         # TODO: ChildrenValidationBase, ChildrenEvaluationBase
         self._check_cleaners([ItemsValidationBase, ItemsEvaluationBase])
         # for cleaner in self.cleaners:
         #     if not isinstance(cleaner, (ItemsValidationBase, ChildrenValidationBase, ItemsEvaluationBase, ChildrenEvaluationBase)):
         #         raise EntitySetupTypeError(owner=self, msg=f"Cleaners should be instances of ItemsValidationBase, ChildrenValidationBase, ItemsEvaluationBase or ChildrenEvaluationBase, got: {type(cleaner)} / {cleaner}") 
-        super().__post_init__()
+        super().init()
 
     @staticmethod
     def is_subentity_items() -> bool:
@@ -1016,12 +1019,12 @@ class SubEntitySingle(SubEntityBase):
 
     cleaners: Optional[List[Union[SingleValidation, ChildrenValidationBase, ChildrenEvaluationBase]]] = field(repr=False, default_factory=list)
 
-    def __post_init__(self):
+    def init(self):
         self._check_cleaners([SingleValidation, ChildrenValidationBase, ChildrenEvaluationBase])
         # for cleaner in self.cleaners:
         #     if not isinstance(cleaner, (SingleValidation, ChildrenValidationBase, ChildrenEvaluationBase)):
         #         raise EntitySetupTypeError(owner=self, msg=f"Cleaners should be instances of SingleValidation, ChildrenValidationBase or ChildrenEvaluationBase, got: {type(cleaner)} / {cleaner}") 
-        super().__post_init__()
+        super().init()
 
     @staticmethod
     def is_subentity_single() -> bool:

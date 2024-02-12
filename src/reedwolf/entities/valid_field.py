@@ -93,10 +93,10 @@ class Required(FieldValidationBase):
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
     title:          Optional[TransMessageType] = field(repr=False, default=None)
 
-    def __post_init__(self):
+    def init(self):
         if not self.error:
             self.error = "The value is required"
-        super().__post_init__()
+        super().init()
 
     def validate(self, apply_result: IApplyResult) -> Optional[ValidationFailure]:
         component = apply_result.current_frame.component
@@ -125,13 +125,13 @@ class Readonly(FieldValidationBase):
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
     title:          Optional[TransMessageType] = field(repr=False, default=None)
 
-    def __post_init__(self):
+    def init(self):
         if not isinstance(self.value, (bool, DotExpression)):
             raise EntitySetupError(owner=self, msg=f"ensure must be DotExpression or bool, got: {type(self.value)} / {self.value}")
 
         if not self.error:
             self.error = "The value is readonly"
-        super().__post_init__()
+        super().init()
 
 
     def validate(self, apply_result: IApplyResult) -> Optional[ValidationFailure]:
@@ -179,13 +179,13 @@ class MinValue(FieldValidationBase):
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
     title:          Optional[TransMessageType] = field(repr=False, default=None)
 
-    def __post_init__(self):
+    def init(self):
         # TODO: allow DotExpression 
         if type(self.value) not in STANDARD_TYPE_LIST:
             raise EntitySetupError(owner=self, msg="Argument 'value' must be some standard type (TODO: DotExpression), got: {type(self.value)}: {self.value}")
         if not self.error:
             self.error = "The value it too big"
-        super().__post_init__()
+        super().init()
 
     def validate(self, apply_result: IApplyResult) -> Optional[ValidationFailure]:
         # TODO: evaluate self.value when DotExpression
@@ -209,11 +209,11 @@ class ExactLength(FieldValidationBase):
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
     title:          Optional[TransMessageType] = field(repr=False, default=None)
 
-    def __post_init__(self):
+    def init(self):
         self._check_dot_expression_or_positive_int("value", self.value)
         if not self.error:
             self.error = f"Provide value with length at most {self.value}"
-        super().__post_init__()
+        super().init()
 
     def validate(self, apply_result: IApplyResult) -> Optional[ValidationFailure]:
         # TODO: evaluate self.value when DotExpression
@@ -238,11 +238,11 @@ class MaxLength(FieldValidationBase):
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
     title:          Optional[TransMessageType] = field(repr=False, default=None)
 
-    def __post_init__(self):
+    def init(self):
         self._check_dot_expression_or_positive_int("value", self.value)
         if not self.error:
             self.error = f"Provide value with length at most {self.value}"
-        super().__post_init__()
+        super().init()
 
     def validate(self, apply_result: IApplyResult) -> Optional[ValidationFailure]:
         # TODO: evaluate self.value when DotExpression
@@ -267,12 +267,11 @@ class MinLength(FieldValidationBase):
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
     title:          Optional[TransMessageType] = field(repr=False, default=None)
 
-    def __post_init__(self):
+    def init(self):
         self._check_dot_expression_or_positive_int("value", self.value)
         if not self.error:
             self.error = f"Provide value with length at least {self.value}"
-
-        super().__post_init__()
+        super().init()
 
     def validate(self, apply_result: IApplyResult) -> Optional[ValidationFailure]:
         # TODO: evaluate self.value when DotExpression
@@ -298,7 +297,7 @@ class RangeLength(FieldValidationBase):
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
     title:          Optional[TransMessageType] = field(repr=False, default=None)
 
-    def __post_init__(self):
+    def init(self):
         if self.min is None and self.max is None:
             raise EntitySetupError(owner=self, msg="Please provide min and/or max")
         if self.min is not None:
@@ -318,7 +317,7 @@ class RangeLength(FieldValidationBase):
             else:
                 assert False
 
-        super().__post_init__()
+        super().init()
 
     # value: Any, component: "IComponent",
     def validate(self, apply_result: IApplyResult) -> Optional[ValidationFailure]:

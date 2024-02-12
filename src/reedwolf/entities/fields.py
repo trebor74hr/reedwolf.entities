@@ -22,7 +22,7 @@ from typing import (
     Optional,
     Any,
     ClassVar,
-    Dict,
+    Dict, Type,
 )
 from dataclasses import (
     dataclass,
@@ -76,7 +76,7 @@ from .base import (
     IApplyResult,
     ValidationFailure,
     SetupStackFrame,
-    IComponent,
+    IComponent, IValidation, IEvaluation, VALIDATION_OR_EVALUATION_TYPE,
 )
 from .expressions import (
     DotExpression,
@@ -195,6 +195,8 @@ class FieldBase(IField, ABC):
     python_type:     Union[type, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
     type_info:       Optional[TypeInfo] = field(init=False, repr=False, default=UNDEFINED)
 
+    _allowed_cleaner_base_list: List[VALIDATION_OR_EVALUATION_TYPE] = field(init=False, repr=False, default=UNDEFINED)
+
     # will be set later
     # is_key:          bool = field(init=False, repr=False, default=False)
 
@@ -203,13 +205,12 @@ class FieldBase(IField, ABC):
     #   parent:         Union[Self, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
     #   parent_name:    Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
 
-    def __post_init__(self):
-        self._allowed_cleaner_base_list = [FieldValidationBase, FieldEvaluationBase]
-        self.init_clean()
-        super().__post_init__()
+    def init_allowed_cleaners(self) -> List[VALIDATION_OR_EVALUATION_TYPE]:
+        return [FieldValidationBase, FieldEvaluationBase]
 
+    def init(self):
+        self._allowed_cleaner_base_list = self.init_allowed_cleaners()
 
-    def init_clean(self):
         # TODO: check that value is M ns and is a simple M. value
         if not isinstance(self.bind_to, DotExpression):
             raise EntitySetupValueError(owner=self, msg=f"Argument 'bind_to' needs to be DotExpression (e.g. M.status), got: {to_repr(self.bind_to)}")
@@ -229,7 +230,8 @@ class FieldBase(IField, ABC):
 
         self._check_cleaners(self._allowed_cleaner_base_list)
 
-        self.init_clean_base()
+        super().init()
+
 
     def _set_bound_attr_node(self, setup_session: ISetupSession):
         self.bound_attr_node = setup_session.get_dexp_node_by_dexp(self.bind_to)
@@ -468,10 +470,15 @@ class BooleanField(FieldBase):
     #       matching like, samo nisam još našao zgodnu sintaksu.
     enables:        Optional[List[IComponent]] = field(repr=False, default=None)
 
-    def init_clean(self):
+    def init_allowed_cleaners(self) -> List[VALIDATION_OR_EVALUATION_TYPE]:
+        out = super().init_allowed_cleaners()
         if self.enables:
-            self._allowed_cleaner_base_list.extend([ChildrenValidationBase, ChildrenEvaluationBase])
-        super().init_clean()
+            out.extend([ChildrenValidationBase, ChildrenEvaluationBase])
+        return out
+
+    # def init(self):
+    #     super().init()
+
 
     @staticmethod
     def may_collect_my_children() -> bool:
@@ -493,10 +500,10 @@ class ChoiceOption:
     # NOTE: see available_old_logic
     # available:  Optional[Union[DotExpression,bool]] = True # Dexp returns bool
 
-    def __post_init__(self):
-        ...
-        # NOTE: see available_old_logic
-        #   clean_available(owner=self, attr_name="available", dexp_or_bool=self.available)
+    # def init(self):
+    #     # NOTE: see available_old_logic
+    #     #   clean_available(owner=self, attr_name="available", dexp_or_bool=self.available)
+    #     super().init()
 
 
 
@@ -531,8 +538,8 @@ class ChoiceField(FieldBase):
     #       matching like, samo nisam još našao zgodnu sintaksu.
     #   enables: Optional[List[IComponent]] = field(repr=False, default=None)
 
-    def __post_init__(self):
-        super().__post_init__()
+    def init(self):
+        super().init()
         if self.choices is None:
             # {self.name}: {self.__class__.__name__}: 
             raise EntitySetupValueError(owner=self, msg="argument 'choices' is required.")
@@ -806,9 +813,9 @@ class IntegerField(FieldBase):
 @dataclass
 class PositiveIntegerField(IntegerField):
     # TODO: add unit tests 
-    def __post_init__(self):
+    def init(self):
         self.cleaners.insert(0, MinValue(1))
-        super().__post_init__()
+        super().init()
 
 @dataclass
 class IdField(IntegerField):
@@ -866,11 +873,11 @@ class FieldGroup(IFieldGroup):
     # NOTE: see available_old_logic
     #   available:      Union[bool, DotExpression] = field(repr=False, default=True)
 
-    def __post_init__(self):
+    def init(self):
         # NOTE: see available_old_logic
         #   clean_available(owner=self, attr_name="available", dexp_or_bool=self.available)
         self._check_cleaners([ChildrenValidationBase, ChildrenEvaluationBase])
-        super().__post_init__()
+        super().init()
 
     @staticmethod
     def can_apply_partial() -> bool:

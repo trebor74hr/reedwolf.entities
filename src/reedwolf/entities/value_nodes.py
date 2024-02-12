@@ -128,7 +128,6 @@ class ValueNodeBase(IValueNode):
             assert self.parent_container_node.component.is_container(), self.parent_container_node
             assert self.parent_container_node and self.parent_container_node != self
 
-            # if self.parent_container_node == self.top_node: print("here33")
             if isinstance(self.parent_container_node, ValueNode):
                 # only for single containers are unique and can be fetched
                 self.parent_container_node.add_to_container_children(self)
