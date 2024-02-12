@@ -448,7 +448,7 @@ class LocalFieldsRegistry(RegistryBase):
             attr_dexp_node_w_value_path = attr_dexp_node_orig.copy(
                 traverse=False, # NOTE: hope this is not bad idea
                 as_class = AttrDexpNodeWithValuePath,
-                custom_kwargs=dict(attr_value_container_path=attr_value_container_path),
+                change=dict(attr_value_container_path=attr_value_container_path),
             )
             if full_dexp_node_name in self.store:
                 raise EntityInternalError(owner=self, msg=f"Value '{full_dexp_node_name}' already in the store: {self.store[full_dexp_node_name]}?")

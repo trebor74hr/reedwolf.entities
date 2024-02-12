@@ -52,7 +52,7 @@ from .exceptions import (
     EntitySetupValueError,
     EntitySetupNameNotFoundError,
     EntityApplyError,
-    EntityApplyValueError,
+    EntityApplyValueError, EntityInitError,
 )
 from .namespaces import (
     DynamicAttrsBase,
@@ -363,7 +363,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
         # when not set then will be later defined - see set_parent()
         if self._initialized:
-            raise EntityInternalError(owner=self, msg=f"Component already initialized.")
+            raise EntitySetupError(owner=self, msg=f"Component already initialized.")
         if self.name not in (None, "", UNDEFINED):
             if not self.name.isidentifier():
                 raise EntitySetupValueError(owner=self, msg="Attribute name needs to be valid python identifier name")
@@ -898,6 +898,18 @@ class IComponent(ReedwolfDataclassBase, ABC):
 
     # ------------------------------------------------------------
 
+    def _call_init(self):
+        if self._setup_phase_one_called:
+            if self.parent:
+                raise EntityInitError(owner=self, msg=f"Component '{self.name} : {self.__class__.__name__}' "
+                                                      f"is already embedded into '{self.parent.name}: {self.parent.__class__.__name__}' -> ... {self.entity}'. "
+                                                      "Use .copy() to embed the same component into other parent component.")
+            else:
+                raise EntityInternalError(owner=self, msg=f"Setup (phase one) for a component '{self.name} : {self.__class__.__name__}' already done.")
+        self.init()
+
+    # ------------------------------------------------------------
+
     def _setup_phase_one(self, components: Optional[Dict[str, Self]] = None) -> NoneType:
         """
         does following:
@@ -918,9 +930,6 @@ class IComponent(ReedwolfDataclassBase, ABC):
                     all sub-component sub-components (recursively)
         it sets parent of all sub-components recursively
         """
-        if self._setup_phase_one_called:
-            raise EntityInternalError(owner=self, msg="fill_components already called")
-
 
         # for children/contains attributes - parent is set here
         if not hasattr(self, "name"):
@@ -933,7 +942,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
             components = {}
 
             if self.is_entity():
-                self.init()
+                self._call_init()
                 self.settings._setup_all_custom_functions(self.apply_settings_class)
                 self.set_parent(None)
             else:
@@ -967,7 +976,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
                 #   - direct data models setup (Entity)
                 #   - some standard NS fields (e.g. Instance)
                 # This will call complete setup() for data_model-s
-                self.data_model.init()
+                self.data_model._call_init()
 
                 if not self.is_unbound():
                     self.data_model.set_parent(self)
@@ -990,7 +999,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
                 if isinstance(component, IComponent):
                     # for IDataModel init is done before, don't do it again.
                     if not isinstance(component, IDataModel):
-                        component.init()
+                        component._call_init()
 
                     component.set_parent(self)
                     # ALT: component.is_subentity()
@@ -1683,7 +1692,7 @@ class IDataModel(IComponent, ABC):
         models[name] = self
         if hasattr(self, "contains"):
             for dep_data_model in self.contains:
-                dep_data_model.init()
+                dep_data_model._call_init()
                 # recursion
                 dep_data_model.set_parent(parent=self)
                 dep_data_model.fill_models(models=models, parent=self)

@@ -1176,22 +1176,25 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
     #         or (type(other) == self.__class__ and super().__eq__(other)) \
     #         or False
 
-    def copy(self, traverse: bool = True, as_class: Optional[Type]=None, custom_kwargs: Optional[Dict]=None):
+    def copy(self, change: Optional[Dict]=None, traverse: bool = True, as_class: Optional[Type]=None):
         """
+        change - dictionary with list of attributes which need to be overridden/passed to constructor for new instance
         traverse - to copy deep every ReedwolfDataclassBase. TODO: not nice and clean solution :(
+
         TODO: pass additional arrguments to modify new instance - e.g. EntityChange(...)
         """
-        return self._copy(traverse=traverse, as_class=as_class, custom_kwargs=custom_kwargs)
+        return self._copy(traverse=traverse, as_class=as_class, change=change)
 
     def _copy(self,
               traverse: bool,
               depth=0,
               instances_copied=None,
+              change: Optional[Dict] = None,
               as_class: Optional[Type]=None,
-              custom_kwargs: Optional[Dict]=None):
-        if custom_kwargs:
+              ):
+        if change:
             rwf_kwargs = self.rwf_kwargs.copy()
-            rwf_kwargs.update(custom_kwargs)
+            rwf_kwargs.update(change)
         else:
             rwf_kwargs = self.rwf_kwargs
 
