@@ -42,6 +42,7 @@ from dataclasses import (
     field,
     fields as dc_fields,
     make_dataclass,
+    MISSING as DC_MISSING,
 )
 
 MAX_RECURSIONS: int = 30
@@ -81,7 +82,7 @@ from .utils import (
 )
 from .exceptions import (
     EntityTypeError,
-    EntityInternalError, EntityError, EntityInitError, EntityImmutableError,
+    EntityInternalError, EntityError, EntityInitError, EntityImmutableError, EntityNameNotFoundError,
 )
 from .namespaces import (
     DynamicAttrsBase,
@@ -1154,10 +1155,16 @@ class ReedwolfMetaclass(ABCMeta):
 
     def __call__(cls, *args, **kwargs):
         """
+        NOTE: this method is called for each instance creation, so it is crucial
+              not to add logic that will slow down the whole system.
+              Therefore a several cache vars are added to klass.
+
         Several uses:
            1) create instance and save initial arguments to instance._rwf_kwargs.
               args are matched to function arguments and converted to kwargs.
-              Will be used later in copy().
+              not passed init arguments with default_factory are also added to kwargs
+              to cover some cases.
+              ._rwf_kwargs are used later in copy().
            2) Fill klass._RWF_ARG_NAMES with __init__() argument names.
               Must do it in lazy-init fashion - on first instance creation.
               Class argument will be used in copy().
@@ -1165,6 +1172,8 @@ class ReedwolfMetaclass(ABCMeta):
               i.e. dataclass(new_class), and in that moment fields/__init__ are not created.
            3) fill klass._RWF_INIT_FUNC_ARGS - list of __init__ function arguments
               used internally for first 2 purposes.
+           3) fill klass._RWF_DC_FACTORY_ARGS - list of dataclass init fields
+              with default_factory
         """
         # extra_kwargs = {name: kwargs.pop(name)
         #                 for name in list(kwargs.keys())
@@ -1185,7 +1194,6 @@ class ReedwolfMetaclass(ABCMeta):
 
         # ------------------------------------------------------------
         instance._rwf_kwargs = kwargs
-        # ex. instance._rwf_args = args
 
         klass = instance.__class__
         if args:
@@ -1199,9 +1207,19 @@ class ReedwolfMetaclass(ABCMeta):
             same_params = set(kwargs_from_args.keys()).intersection(set(kwargs))
             if same_params:
                 raise EntityInternalError(owner=instance, msg=f"Params overlap: {same_params}")
-            # if args: print("here33", kwargs_from_args)
-            # ex. instance._rwf_kwargs = kwargs
             instance._rwf_kwargs.update(kwargs_from_args)
+
+        if is_dataclass(instance):
+            if not hasattr(klass, "_RWF_DC_FACTORY_ARGS"):
+                klass._RWF_DC_FACTORY_ARGS = tuple(fld for fld in dc_fields(instance)
+                                                   if fld.init and fld.default_factory != DC_MISSING)
+
+            # lists/dicts - if not passed take their instances to make from them later
+            #   cases to cover: entity.Entity(); entity.contains.append(StringField())
+            args_with_default_factory = {fld.name: getattr(instance, fld.name)
+                                         for fld in klass._RWF_DC_FACTORY_ARGS
+                                         if fld.name not in instance._rwf_kwargs}
+            instance._rwf_kwargs.update(args_with_default_factory)
 
         # ------------------------------------------------------------
         # fill klass._RWF_ARG_NAMES
@@ -1230,7 +1248,7 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
                                    msg="Instance is in immutable state, change is not allowed. "
                                        "You can .copy() and change the new instance.")
 
-    def _set_immutable(self):
+    def _make_immutable(self):
         """
         deny further attribute changes
         deny .change() method
@@ -1244,7 +1262,9 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
             self.__raise_immutable_error()
         unknown = set(kwargs.keys()) - set(self._RWF_ARG_NAMES)
         if unknown:
-            raise EntityInitError(owner=self, msg=f"Unknown arguments: {', '.join(unknown)}. Supported arguments: {', '.join(self._RWF_ARG_NAMES)}")
+            raise EntityNameNotFoundError(owner=self,
+                                          msg=f"Unknown arguments: {', '.join(sorted(unknown))}. "
+                                              f"Supported arguments: {', '.join(self._RWF_ARG_NAMES)}")
         self._rwf_kwargs.update(kwargs)
         for k,v in kwargs.items():
             setattr(self, k, v)

@@ -731,34 +731,35 @@ class Entity(IEntity, ContainerBase):
     def is_entity() -> bool:
         return True
 
-    def change(self,
-               bind_to:Union[UndefinedType, DataModel]=UNDEFINED,
-               settings: Optional[Settings]=None,
-               apply_settings_class: Optional[Type[ApplySettings]]=None,
-               # do_setup:bool = True,
-               ) -> Self:
-        """
-        Handy function that returns entity back -> allows dot-chaining.
-        Just sets/updates some attributes. No checks until setup() is called.
-        """
-        if self.is_finished():
-            raise EntityInternalError(owner=self, msg="Entity already marked as finished.")
+    # NOTE: replaced with generic change() method - see meta::ReedwolfMetaclass.change()
+    # def change(self,
+    #            bind_to:Union[UndefinedType, DataModel]=UNDEFINED,
+    #            settings: Optional[Settings]=None,
+    #            apply_settings_class: Optional[Type[ApplySettings]]=None,
+    #            # do_setup:bool = True,
+    #            ) -> Self:
+    #     """
+    #     Handy function that returns entity back -> allows dot-chaining.
+    #     Just sets/updates some attributes. No checks until setup() is called.
+    #     """
+    #     if self.is_finished():
+    #         raise EntityInternalError(owner=self, msg="Entity already marked as finished.")
 
-        if bind_to != UNDEFINED:
-            # NOTE: allowed to change to None (not yet tested)
-            self.bind_to = bind_to
+    #     if bind_to != UNDEFINED:
+    #         # NOTE: allowed to change to None (not yet tested)
+    #         self.bind_to = bind_to
 
-        if apply_settings_class is not None:
-            # overwrite
-            # if self.apply_settings_class:
-            #     raise EntitySetupError(owner=self, msg="settings already set, late binding not allowed.")
-            self.apply_settings_class = apply_settings_class
+    #     if apply_settings_class is not None:
+    #         # overwrite
+    #         # if self.apply_settings_class:
+    #         #     raise EntitySetupError(owner=self, msg="settings already set, late binding not allowed.")
+    #         self.apply_settings_class = apply_settings_class
 
-        if settings is not None:
-            # overwrite
-            self.settings = settings
+    #     if settings is not None:
+    #         # overwrite
+    #         self.settings = settings
 
-        return self
+    #     return self
 
     # ------------------------------------------------------------
     # apply - API entries
