@@ -371,21 +371,22 @@ class ContainerBase(IContainer, ABC):
     def _replace_modelsns_registry(self, setup_session: SetupSession):
         # subentity case?
         assert self.is_unbound()
-        # self.data_model.set_parent(self)
 
         is_unbound_data_model = isinstance(self.data_model, IUnboundDataModel)
         if is_unbound_data_model:
+            # top level - concrete class
             assert self.is_entity()
             # setup_session=None - dataclass should be already created
             fields_dataclass, _ = self.get_component_fields_dataclass(setup_session=None)
             self.data_model = DataModel(model_klass=fields_dataclass)
-
-        if self.data_model is None:
-            raise EntityInternalError(owner=self, msg=f"data_model not set")
+        else:
+            if self.data_model is None:
+                raise EntityInternalError(owner=self, msg=f"data_model not set")
 
         self.data_model.set_parent(self)
 
         if not is_unbound_data_model:
+            # not-top level - dot-expression
             assert not self.is_entity()
             # model_dexp_node: IDotExpressionNode
             if not isinstance(self.data_model.model_klass, DotExpression):

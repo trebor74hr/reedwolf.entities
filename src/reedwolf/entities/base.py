@@ -449,8 +449,6 @@ class IComponent(ReedwolfDataclassBase, ABC):
 
             name_id = container._get_new_id_by_parent_name(key)
             self.name = f"{key}__{name_id}"
-        if self.name == "company_entity__datamodel__1":
-            print("here33")
 
         return self.name
 
@@ -973,7 +971,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
 
                 if not self.is_unbound():
                     self.data_model.set_parent(self)
-                    data_models = self._register_model_attr_nodes()
+                    self._register_model_attr_nodes()
 
             # includes components, cleaners and all other complex objects
             for subcomponent in self._get_subcomponents_list():
