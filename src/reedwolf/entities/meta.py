@@ -1352,6 +1352,12 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
             klass = self.__class__
             if not hasattr(klass, "_RWF_DC_FIELDS"):
                 klass._RWF_DC_FIELDS = [fld for fld in dc_fields(self) if fld.init]
+
+            # Tried to optimize - no diff (a bit slower, though)
+            # rwf_kwargs = [(fld, getattr(self, fld.name, UNDEFINED)) for fld in klass._RWF_DC_FIELDS]
+            # rwf_kwargs = {fld.name: attr_val for fld, attr_val in rwf_kwargs
+            #               if hasattr(attr_val, "_is_dexp_or_ns") or (
+            #                 attr_val not in (UNDEFINED, DC_MISSING) and attr_val is not fld.default)}
             rwf_kwargs = {}
             for fld in klass._RWF_DC_FIELDS:
                 attr_name = fld.name
