@@ -66,6 +66,9 @@ class EntityValueError(EntityError):
 class EntityInstatiateError(EntityError):
     pass
 
+class EntityCopyError(EntityError):
+    pass
+
 # ------------------------------------------------------------
 # Entity Init phase - boot time - before setup()
 # ------------------------------------------------------------

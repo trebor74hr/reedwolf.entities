@@ -114,6 +114,7 @@ class IDotExpressionNode(ReedwolfDataclassBase, ABC):
     DENY_POST_INIT = False
 
     dexp_validate_type_info_func: Optional[Callable[[Self], None]] = field(repr=False, init=False, default=None)
+    _initialized: bool = field(repr=False, init=False, default=False)
 
     # def clone(self):
     #     # If already setup then copy it and reuse
@@ -135,7 +136,9 @@ class IDotExpressionNode(ReedwolfDataclassBase, ABC):
 
     def finish(self):
         if self.is_finished:
-            raise EntityInternalError(owner=self, msg="already finished") 
+            raise EntityInternalError(owner=self, msg="already finished")
+        self._getset_rwf_kwargs()
+        self._initialized = True
         self.is_finished = True
 
 # ------------------------------------------------------------

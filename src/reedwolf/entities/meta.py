@@ -82,7 +82,12 @@ from .utils import (
 )
 from .exceptions import (
     EntityTypeError,
-    EntityInternalError, EntityError, EntityInitError, EntityImmutableError, EntityNameNotFoundError,
+    EntityInternalError,
+    EntityError,
+    EntityInitError,
+    EntityImmutableError,
+    EntityNameNotFoundError,
+    EntityCopyError,
 )
 from .namespaces import (
     DynamicAttrsBase,
@@ -1193,46 +1198,46 @@ class ReedwolfMetaclass(ABCMeta):
         instance._immutable = False
 
         # ------------------------------------------------------------
-        instance._rwf_kwargs = kwargs
+        # instance._rwf_kwargs = kwargs
 
-        klass = instance.__class__
-        if args:
-            # NOTE: presuming order is preserved
-            if not hasattr(klass, "_RWF_INIT_FUNC_ARGS"):
-                klass._RWF_INIT_FUNC_ARGS = get_func_arguments(instance.__init__)
+        # klass = instance.__class__
+        # if args:
+        #     # NOTE: presuming order is preserved
+        #     if not hasattr(klass, "_RWF_INIT_FUNC_ARGS"):
+        #         klass._RWF_INIT_FUNC_ARGS = get_func_arguments(instance.__init__)
 
-            # ------------------------------------------------------------
-            # merge: args + kwargs => self._rwf_kwargs
-            kwargs_from_args = {param_name: arg_value  for param_name, arg_value in zip(klass._RWF_INIT_FUNC_ARGS, args)}
-            same_params = set(kwargs_from_args.keys()).intersection(set(kwargs))
-            if same_params:
-                raise EntityInternalError(owner=instance, msg=f"Params overlap: {same_params}")
-            instance._rwf_kwargs.update(kwargs_from_args)
+        #     # ------------------------------------------------------------
+        #     # merge: args + kwargs => self._rwf_kwargs
+        #     kwargs_from_args = {param_name: arg_value  for param_name, arg_value in zip(klass._RWF_INIT_FUNC_ARGS, args)}
+        #     same_params = set(kwargs_from_args.keys()).intersection(set(kwargs))
+        #     if same_params:
+        #         raise EntityInternalError(owner=instance, msg=f"Params overlap: {same_params}")
+        #     instance._rwf_kwargs.update(kwargs_from_args)
 
-        if is_dataclass(instance):
-            if not hasattr(klass, "_RWF_DC_FACTORY_ARGS"):
-                klass._RWF_DC_FACTORY_ARGS = tuple(fld for fld in dc_fields(instance)
-                                                   if fld.init and fld.default_factory != DC_MISSING)
+        # if is_dataclass(instance):
+        #     if not hasattr(klass, "_RWF_DC_FACTORY_ARGS"):
+        #         klass._RWF_DC_FACTORY_ARGS = tuple(fld for fld in dc_fields(instance)
+        #                                            if fld.init and fld.default_factory != DC_MISSING)
 
-            # lists/dicts - if not passed take their instances to make from them later
-            #   cases to cover: entity.Entity(); entity.contains.append(StringField())
-            args_with_default_factory = {fld.name: getattr(instance, fld.name)
-                                         for fld in klass._RWF_DC_FACTORY_ARGS
-                                         if fld.name not in instance._rwf_kwargs}
-            instance._rwf_kwargs.update(args_with_default_factory)
+        #     # lists/dicts - if not passed take their instances to make from them later
+        #     #   cases to cover: entity.Entity(); entity.contains.append(StringField())
+        #     args_with_default_factory = {fld.name: getattr(instance, fld.name)
+        #                                  for fld in klass._RWF_DC_FACTORY_ARGS
+        #                                  if fld.name not in instance._rwf_kwargs}
+        #     instance._rwf_kwargs.update(args_with_default_factory)
 
-        # ------------------------------------------------------------
-        # fill klass._RWF_ARG_NAMES
-        if not hasattr(instance.__class__, "_RWF_ARG_NAMES"):
-            # code duplication for speed optimization
-            if not hasattr(klass, "_RWF_INIT_FUNC_ARGS"):
-                klass._RWF_INIT_FUNC_ARGS = get_func_arguments(instance.__init__)
+        # # ------------------------------------------------------------
+        # # fill klass._RWF_ARG_NAMES
+        # if not hasattr(instance.__class__, "_RWF_ARG_NAMES"):
+        #     # code duplication for speed optimization
+        #     if not hasattr(klass, "_RWF_INIT_FUNC_ARGS"):
+        #         klass._RWF_INIT_FUNC_ARGS = get_func_arguments(instance.__init__)
 
-            # Should produce the same result as __init__ params parsing
-            # if is_dataclass(instance):
-            #     arg_names = [fld.name for fld in dc_fields(instance) if fld.init]
-            klass._RWF_ARG_NAMES = tuple(klass._RWF_INIT_FUNC_ARGS.keys()) \
-                    if hasattr(klass, "__init__") else ()
+        #     # Should produce the same result as __init__ params parsing
+        #     # if is_dataclass(instance):
+        #     #     arg_names = [fld.name for fld in dc_fields(instance) if fld.init]
+        #     klass._RWF_ARG_NAMES = tuple(klass._RWF_INIT_FUNC_ARGS.keys()) \
+        #             if hasattr(klass, "__init__") else ()
 
         return instance
 
@@ -1284,14 +1289,27 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
     def change(self, **kwargs) -> Self:
         if self._immutable:
             self.__raise_immutable_error()
-        unknown = set(kwargs.keys()) - set(self._RWF_ARG_NAMES)
+
+        # ------------------------------------------------------------
+        # lazy init klass._RWF_ARG_NAMES
+        klass = self.__class__
+        if not hasattr(klass, "_RWF_ARG_NAMES"):
+            rwf_init_func_args = get_func_arguments(self.__init__)
+
+            # Should be the same as klass._RWF_DC_FIELD_NAMES
+            klass._RWF_ARG_NAMES = tuple(rwf_init_func_args.keys()) \
+                    if hasattr(klass, "__init__") else ()
+
+        unknown = set(kwargs.keys()) - set(klass._RWF_ARG_NAMES)
         if unknown:
             raise EntityNameNotFoundError(owner=self,
                                           msg=f"Unknown arguments: {', '.join(sorted(unknown))}. "
-                                              f"Supported arguments: {', '.join(self._RWF_ARG_NAMES)}")
-        self._rwf_kwargs.update(kwargs)
+                                              f"Supported arguments: {', '.join(klass._RWF_ARG_NAMES)}")
+
+        # old: self._rwf_kwargs.update(kwargs)
         for k,v in kwargs.items():
             setattr(self, k, v)
+
         return self
 
     def copy(self, change: Optional[Dict]=None, traverse: bool = True, as_class: Optional[Type]=None) -> Union[Self, Any]:
@@ -1302,7 +1320,54 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
 
         TODO: pass additional arrguments to modify new instance - e.g. EntityChange(...)
         """
+
         return self._copy(traverse=traverse, as_class=as_class, change=change)
+
+
+    def _getset_rwf_kwargs(self):
+        """
+        collects original values for this object and all dependent objects
+        recursive!
+        """
+        # return self._getset_rwf_kwargs_impl()
+        # def _getset_rwf_kwargs_impl(self, depth=0, instances_copied=None):
+        # if depth==0:
+        #     instances_copied = {}
+        # elif depth>MAX_RECURSIONS:
+        #     raise EntityInternalError(owner=self, msg=f"Too deep recursion: {depth}")
+
+        if not is_dataclass(self):
+            raise EntityCopyError(owner=self, msg=f"Only dataclass instances can be copied.")
+
+        if not hasattr(self, "_initialized"):
+            # currently only IComponent
+            raise EntityInternalError(owner=self, msg="Instance should have _initialized:bool dataclass field set in init() method.")
+
+        # self_id = id(self)
+        # if self_id not in instances_copied and \
+        if not self._initialized:
+            # TODO: resolve this properly
+            from .expressions import DotExpression
+
+            klass = self.__class__
+            if not hasattr(klass, "_RWF_DC_FIELDS"):
+                klass._RWF_DC_FIELDS = [fld for fld in dc_fields(self) if fld.init]
+            rwf_kwargs = {}
+            for fld in klass._RWF_DC_FIELDS:
+                attr_name = fld.name
+                attr_val = getattr(self, attr_name, UNDEFINED)
+                if isinstance(attr_val, DotExpression) or (attr_val not in (UNDEFINED, DC_MISSING) and attr_val is not fld.default):
+                    # if hasattr(attr_val, "_getset_rwf_kwargs"):
+                    #     # recursion: coollect for dependent objects too
+                    #     attr_val._getset_rwf_kwargs()
+                    # collects fld.default_factory != DC_MISSING
+                    rwf_kwargs[fld.name] = attr_val
+            self._rwf_kwargs = rwf_kwargs
+            # instances_copied[self_id] = True
+        else:
+            if not hasattr(self, "_rwf_kwargs"):
+                raise EntityInternalError(owner=self, msg="Internal attribute '_rwf_kwargs' not set. Did IComponent.init() has been called (super().init())?")
+        return self._rwf_kwargs
 
     def _copy(self,
               traverse: bool,
@@ -1311,11 +1376,14 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
               change: Optional[Dict] = None,
               as_class: Optional[Type]=None,
               ):
+
+        rwf_kwargs = self._getset_rwf_kwargs()
+
         if change:
-            rwf_kwargs = self._rwf_kwargs.copy()
+            rwf_kwargs = rwf_kwargs.copy()
             rwf_kwargs.update(change)
         else:
-            rwf_kwargs = self._rwf_kwargs
+            rwf_kwargs = rwf_kwargs
 
         if not as_class:
             as_class = self.__class__

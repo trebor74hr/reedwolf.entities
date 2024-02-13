@@ -367,7 +367,10 @@ class IComponent(ReedwolfDataclassBase, ABC):
         if self.name not in (None, "", UNDEFINED):
             if not self.name.isidentifier():
                 raise EntitySetupValueError(owner=self, msg="Attribute name needs to be valid python identifier name")
+
+        # freeze all set dc_field values which won't be changed any more. Used for copy()
         self._initialized = True
+
 
     def set_parent(self, parent: Optional["IComponent"]):
         if self.parent is not UNDEFINED:
@@ -899,6 +902,8 @@ class IComponent(ReedwolfDataclassBase, ABC):
     # ------------------------------------------------------------
 
     def _call_init(self):
+        self._getset_rwf_kwargs()
+
         if self._setup_phase_one_called:
             if self.parent:
                 raise EntityInitError(owner=self, msg=f"Component '{self.name} : {self.__class__.__name__}' "
