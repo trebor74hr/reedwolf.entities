@@ -353,9 +353,16 @@ class IComponent(ReedwolfDataclassBase, ABC):
     child_field_list: Optional[List[ChildField]] = field(init=False, repr=False, default=None)
     _component_fields_dataclass: Optional[Type[IComponentFields]] = field(init=False, repr=False, default=None)
     _this_registry: Union[IThisRegistry, NoneType, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
-    _setup_phase_one_called: bool = field(init=False, repr=False, default=False)
-    _initialized: bool = field(init=False, repr=False, default=False)
-    _immutable: bool = field(init=False, repr=False, default=False)
+
+    #  TODO: Currently 4 statuses - mutually exclusive - maybe one Enum would be better:
+    #           draft
+    #           did_init
+    #           did_phase_one
+    #           finished (== immutable == did_setup == did_phase_two)
+    _did_init: bool      = field(init=False, repr=False, default=False)
+    _did_phase_one: bool = field(init=False, repr=False, default=False)
+    _finished: bool      = field(init=False, repr=False, default=False)
+    _immutable: bool     = field(init=False, repr=False, default=False)
 
     # def __post_init__(self):
     #     self.init_base()
@@ -363,14 +370,14 @@ class IComponent(ReedwolfDataclassBase, ABC):
     def init(self):
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
         # when not set then will be later defined - see set_parent()
-        if self._initialized:
+        if self._did_init:
             raise EntitySetupError(owner=self, msg=f"Component already initialized.")
         if self.name not in (None, "", UNDEFINED):
             if not self.name.isidentifier():
                 raise EntitySetupValueError(owner=self, msg="Attribute name needs to be valid python identifier name")
 
         # freeze all set dc_field values which won't be changed any more. Used for copy()
-        self._initialized = True
+        self._did_init = True
 
 
     def set_parent(self, parent: Optional["IComponent"]):
@@ -910,7 +917,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
     def _call_init(self):
         self._getset_rwf_kwargs()
 
-        if self._setup_phase_one_called:
+        if self._did_phase_one:
             if self.parent:
                 raise EntityInitError(owner=self, msg=f"Component '{self.name} : {self.__class__.__name__}' "
                                                       f"is already embedded into '{self.parent.name}: {self.parent.__class__.__name__}' -> ... {self.entity}'. "
@@ -1082,7 +1089,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
                 if self.is_unbound():
                     self._replace_modelsns_registry(setup_session)
 
-        self._setup_phase_one_called = True
+        self._did_phase_one = True
 
         return None
 
@@ -1227,7 +1234,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
                     # set only if available, otherwise use existing
                     setup_session.current_frame.set_this_registry(this_registry, force=True)
 
-            if not self.is_finished():
+            if not self._finished:
                 ret = self._setup_phase_two(setup_session=setup_session)
             else:
                 if not self.is_data_model():
@@ -1428,14 +1435,14 @@ class IComponent(ReedwolfDataclassBase, ABC):
         if self.parent is UNDEFINED:
             raise EntityInternalError(owner=self, msg="Parent not set")
 
-        if self.is_finished():
+        if self._finished:
             raise EntityInternalError(owner=self, msg="Setup already called")
 
         for subcomponent in self._get_subcomponents_list():
             component = subcomponent.component
             if isinstance(component, IComponent) \
               and (component.is_data_model() or component.is_subentity()) \
-              and component.is_finished():
+              and component._finished:
                 # raise EntityInternalError(owner=self, msg=f"DataModel.setup() should have been called before ({component})")
                 continue
 
@@ -1452,7 +1459,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
                     # called = True
             elif isinstance(component, IComponent):
                 assert "Entity(" not in repr(component)
-                assert not component.is_finished()
+                assert not component._finished
                 component.setup(setup_session=setup_session)  # , parent=self)
                 # NOTE: in some rare cases .finish() is not called - so there is an additional .finish() call later.
                 component.finish()
@@ -1475,17 +1482,10 @@ class IComponent(ReedwolfDataclassBase, ABC):
         """
         Mark component as finished / setup - no change allowed later.
         """
-        if self.is_finished():
+        if self._finished:
             raise EntitySetupError(owner=self, msg="finish() should be called only once.")
         self._finished = True
         self._make_immutable()
-
-    # ------------------------------------------------------------
-
-    def is_finished(self):
-        return getattr(self, "_finished", False)
-
-
 
     # ------------------------------------------------------------
 
@@ -1661,10 +1661,9 @@ class IEntity(IContainer, ABC):
 class IDataModel(IComponent, ABC):
 
     model_klass: ModelKlassType = field(init=False, repr=False)
-    _finished: bool = field(init=False, repr=False, default=False)
 
     def setup(self, setup_session:ISetupSession):
-        if self.is_finished():
+        if self._finished:
             raise EntityInternalError(owner=self, msg="Setup already called")
         super().setup(setup_session=setup_session)
 

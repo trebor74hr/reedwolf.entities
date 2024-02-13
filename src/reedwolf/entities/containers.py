@@ -173,7 +173,7 @@ class ContainerBase(IContainer, ABC):
         return self.setup_session.functions_factory_registry.get(name, strict=strict)
 
     def add_fieldgroup(self, fieldgroup:FieldGroup):
-        if self.is_finished():
+        if self._finished:
             raise EntitySetupError(owner=self, msg="FieldGroup can not be added after setup() is called.")
         found = [sec for sec in self.contains if sec.name==fieldgroup.name]
         if found:
@@ -415,7 +415,7 @@ class ContainerBase(IContainer, ABC):
 
     def setup(self) -> Self:
         # components are flat list, no recursion/hierarchy browsing needed
-        if self.is_finished():
+        if self._finished:
             raise EntitySetupError(owner=self, msg="setup() should be called only once")
 
         if not self.contains:
@@ -474,7 +474,7 @@ class ContainerBase(IContainer, ABC):
             #       when finish() is not called. This complex term is consequence of having
             #       subentity* components in two containers: their owner and themselves.
             if not isinstance(component, UnboundModel) \
-              and not component.is_finished() \
+              and not component._finished \
               and (component is not self or component.is_entity()):
                 component.finish()
                 # raise EntityInternalError(owner=self, msg=f"{component} not finished. Is in overriden setup()/Setup() parent method super().setup()/Setup() been called (which sets parent and marks finished)?")
@@ -752,7 +752,7 @@ class Entity(IEntity, ContainerBase):
     #     Handy function that returns entity back -> allows dot-chaining.
     #     Just sets/updates some attributes. No checks until setup() is called.
     #     """
-    #     if self.is_finished():
+    #     if self._finished:
     #         raise EntityInternalError(owner=self, msg="Entity already marked as finished.")
 
     #     if bind_to != UNDEFINED:

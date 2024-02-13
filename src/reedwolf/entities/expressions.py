@@ -114,7 +114,7 @@ class IDotExpressionNode(ReedwolfDataclassBase, ABC):
     DENY_POST_INIT = False
 
     dexp_validate_type_info_func: Optional[Callable[[Self], None]] = field(repr=False, init=False, default=None)
-    _initialized: bool = field(repr=False, init=False, default=False)
+    _did_init: bool = field(repr=False, init=False, default=False)
     _immutable: bool = field(init=False, repr=False, default=False)
 
     # def clone(self):
