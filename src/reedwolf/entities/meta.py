@@ -27,7 +27,7 @@ from typing import (
     Sequence as SequenceType,
     Iterable,
 )
-from enum import Enum
+from enum import Enum, IntEnum
 from decimal import Decimal
 from datetime import (
     date,
@@ -161,6 +161,14 @@ ContainerId = TypeVar("ContainerId", bound=str)
 # ------------------------------------------------------------
 ValueArgValidatorPyFuncType = Callable[..., NoneType]
 ValueArgValidatorPyFuncDictType = Dict[str, Union[ValueArgValidatorPyFuncType, List[ValueArgValidatorPyFuncType]]]
+
+class ComponentStatus(IntEnum):
+    draft = 0
+    did_init = 1
+    did_phase_one = 2
+    finished = 3
+    immutable = 4
+
 
 # ------------------------------------------------------------
 

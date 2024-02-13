@@ -33,7 +33,7 @@ from .global_settings import GLOBAL_SETTINGS
 from .meta import (
     MAX_RECURSIONS,
     SELF_ARG_NAME,
-    Self,
+    Self, ComponentStatus,
 )
 
 
@@ -266,13 +266,14 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
         if not is_dataclass(self):
             raise EntityCopyError(owner=self, msg=f"Only dataclass instances can be copied.")
 
-        if not hasattr(self, "_did_init"):
+        if not hasattr(self, "_status"):
             # currently only IComponent
-            raise EntityInternalError(owner=self, msg="Instance should have _did_init:bool dataclass field set in init() method.")
+            raise EntityInternalError(owner=self, msg="Instance should have _status:ComponentStatus dataclass field set in init() method.")
 
         # self_id = id(self)
         # if self_id not in instances_copied and \
-        if not self._did_init:
+        # if not self._did_init:
+        if self._status == ComponentStatus.draft:
             # TODO: resolve this properly
             # from .expressions import DotExpression
 

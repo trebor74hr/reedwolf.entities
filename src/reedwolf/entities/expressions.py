@@ -55,7 +55,10 @@ from .meta import (
     IFuncArgHint,
     AttrValue,
     IExecuteFuncArgHint,
-    NoneType, KlassMember, )
+    NoneType,
+    KlassMember,
+    ComponentStatus,
+)
 from .meta_dataclass import ReedwolfDataclassBase
 
 
@@ -114,7 +117,8 @@ class IDotExpressionNode(ReedwolfDataclassBase, ABC):
     DENY_POST_INIT = False
 
     dexp_validate_type_info_func: Optional[Callable[[Self], None]] = field(repr=False, init=False, default=None)
-    _did_init: bool = field(repr=False, init=False, default=False)
+    # _did_init: bool = field(repr=False, init=False, default=False)
+    _status: ComponentStatus = field(repr=False, init=False, default=ComponentStatus.draft)
     _immutable: bool = field(init=False, repr=False, default=False)
 
     # def clone(self):
@@ -139,7 +143,8 @@ class IDotExpressionNode(ReedwolfDataclassBase, ABC):
         if self.is_finished:
             raise EntityInternalError(owner=self, msg="already finished")
         self._getset_rwf_kwargs()
-        self._initialized = True
+        # self._initialized = True
+        self._status = ComponentStatus.finished
         self.is_finished = True
 
 # ------------------------------------------------------------
@@ -367,7 +372,8 @@ class DotExpression(DynamicAttrsBase):
     ):
         " NOTE: when adding new params, add to Clone() too "
         # SAFE OPERATIONS
-        self._status: DExpStatusEnum = DExpStatusEnum.INITIALIZED
+        # self._status: DExpStatusEnum = DExpStatusEnum.INITIALIZED
+        self._status: ComponentStatus = ComponentStatus.draft
         self._namespace = namespace
         self._node = node
         self._is_top = Path is None
@@ -445,7 +451,8 @@ class DotExpression(DynamicAttrsBase):
                 )
 
     def IsFinished(self):
-        return self._status!=DExpStatusEnum.INITIALIZED
+        # return self._status!=DExpStatusEnum.INITIALIZED
+        return self._status != ComponentStatus.draft
 
     def _SetDexpValidator(self, dexp_validator: DexpValidator):
         if self._dexp_validator:
@@ -455,7 +462,8 @@ class DotExpression(DynamicAttrsBase):
         self._dexp_validator = dexp_validator
 
     def _EnsureNotFinished(self):
-        if self._status != DExpStatusEnum.INITIALIZED:
+        # if self._status != DExpStatusEnum.INITIALIZED:
+        if self._status != ComponentStatus.draft:
             raise EntitySetupError(owner=self, msg=f"Method Setup() already called, further DotExpression building/operator-building is not possible (status={self._status}).")
 
     def Setup(self, setup_session:ISetupSession,
@@ -629,7 +637,8 @@ class DotExpression(DynamicAttrsBase):
         dexp_evaluator.finish()
 
         if dexp_evaluator.is_all_ok():
-            self._status = DExpStatusEnum.BUILT
+            # self._status = DExpStatusEnum.BUILT
+            self._status = ComponentStatus.finished
             self._all_ok = True
             self._evaluator = dexp_evaluator
             self._dexp_node = dexp_evaluator.last_node()
@@ -887,11 +896,11 @@ class LiteralDexpNode(IDotExpressionNode):
 
 # ------------------------------------------------------------
 
-class DExpStatusEnum(str, Enum):
-    INITIALIZED      = "INIT"
-    ERR_NOT_FOUND    = "ERR_NOT_FOUND"
-    ERR_TO_IMPLEMENT = "ERR_TO_IMPLEMENT"
-    BUILT            = "BUILT" # OK
+# class DExpStatusEnum(str, Enum):
+#     INITIALIZED      = "INIT"
+#     # ERR_NOT_FOUND    = "ERR_NOT_FOUND"
+#     # ERR_TO_IMPLEMENT = "ERR_TO_IMPLEMENT"
+#     BUILT            = "BUILT" # OK
 
 # ------------------------------------------------------------
 # Operations
@@ -1014,7 +1023,8 @@ class OperationDexpNode(IDotExpressionNode):
     # later evaluated
     op_function: Callable = field(repr=False, init=False)
     operation:  Operation = field(repr=False, init=False)
-    _status:    DExpStatusEnum = field(repr=False, init=False, default=DExpStatusEnum.INITIALIZED)
+    # _status:    DExpStatusEnum = field(repr=False, init=False, default=DExpStatusEnum.INITIALIZED)
+    _status:    ComponentStatus = field(repr=False, init=False, default=ComponentStatus.draft)
     _all_ok:    Optional[bool] = field(repr=False, init=False, default=None)
 
     _first_dexp_node:  Optional[IDotExpressionNode] = field(repr=False, init=False, default=None)
@@ -1026,7 +1036,8 @@ class OperationDexpNode(IDotExpressionNode):
         self.operation = self._get_operation(self.op)
         self.op_function = self.operation.apply_function
 
-        self._status: DExpStatusEnum = DExpStatusEnum.INITIALIZED
+        # self._status: DExpStatusEnum = DExpStatusEnum.INITIALIZED
+        self._status: ComponentStatus = ComponentStatus.draft
         self._all_ok: Optional[bool] = None
         self._output_type_info: Union[TypeInfo, UNDEFINED] = UNDEFINED 
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
@@ -1083,7 +1094,8 @@ class OperationDexpNode(IDotExpressionNode):
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(self)
 
         # TODO: move this to common method: self._EnsureNotFinished()
-        if not self._status==DExpStatusEnum.INITIALIZED:
+        # if not self._status == DExpStatusEnum.INITIALIZED:
+        if not self._status == ComponentStatus.draft:
             raise EntitySetupError(owner=setup_session, item=self, msg=f"AttrDexpNode not in INIT state, got {self._status}")
 
         # just to check if all ok
@@ -1100,7 +1112,8 @@ class OperationDexpNode(IDotExpressionNode):
                                                            dexp_validator=dexp_validator)
             setup_session.register_dexp_node(self._second_dexp_node)
 
-        self._status=DExpStatusEnum.BUILT
+        # self._status=DExpStatusEnum.BUILT
+        # self._status=ComponentStatus.finished
 
         return self
 

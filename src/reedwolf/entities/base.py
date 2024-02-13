@@ -85,7 +85,7 @@ from .meta import (
     Index0Type,
     KeyType,
     ModelInstanceType,
-    ContainerId,
+    ContainerId, ComponentStatus,
 )
 from .meta_dataclass import ReedwolfDataclassBase
 from .expressions import (
@@ -359,10 +359,12 @@ class IComponent(ReedwolfDataclassBase, ABC):
     #           did_init
     #           did_phase_one
     #           finished (== immutable == did_setup == did_phase_two)
-    _did_init: bool      = field(init=False, repr=False, default=False)
+    # _did_init: bool      = field(init=False, repr=False, default=False)
     _did_phase_one: bool = field(init=False, repr=False, default=False)
     _finished: bool      = field(init=False, repr=False, default=False)
     _immutable: bool     = field(init=False, repr=False, default=False)
+
+    _status: ComponentStatus = field(init=False, repr=False, default=ComponentStatus.draft)
 
     # def __post_init__(self):
     #     self.init_base()
@@ -370,14 +372,16 @@ class IComponent(ReedwolfDataclassBase, ABC):
     def init(self):
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
         # when not set then will be later defined - see set_parent()
-        if self._did_init:
-            raise EntitySetupError(owner=self, msg=f"Component already initialized.")
+        # if self._did_init:
+        if self._status != ComponentStatus.draft:
+            raise EntitySetupError(owner=self, msg=f"Component not in draft state: {self._status}")
         if self.name not in (None, "", UNDEFINED):
             if not self.name.isidentifier():
                 raise EntitySetupValueError(owner=self, msg="Attribute name needs to be valid python identifier name")
 
         # freeze all set dc_field values which won't be changed any more. Used for copy()
-        self._did_init = True
+        # self._did_init = True
+        self._status = ComponentStatus.did_init
 
 
     def set_parent(self, parent: Optional["IComponent"]):

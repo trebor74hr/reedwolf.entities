@@ -66,7 +66,7 @@ from .meta import (
     get_enum_member_py_type,
     EmptyFunctionArguments,
     STANDARD_TYPE_LIST,
-    Self,
+    Self, ComponentStatus,
 )
 from .base import (
     get_name_from_bind,
@@ -80,7 +80,6 @@ from .base import (
 )
 from .expressions import (
     DotExpression,
-    DExpStatusEnum,
     IFunctionDexpNode,
     ISetupSession,
     IThisRegistry,
@@ -703,7 +702,8 @@ class ChoiceField(FieldBase):
             raise EntitySetupValueError(owner=self, msg=f"Argument '{aname}' is not set or has wrong type - should be DotExpression in This. namespace. Got: {dexp} / {type(dexp)}")
 
         attr_node = dexp.Setup(setup_session=setup_session, owner=self)
-        if dexp._status != DExpStatusEnum.BUILT:
+        # if dexp._status != DExpStatusEnum.BUILT:
+        if dexp._status != ComponentStatus.finished:
             raise EntityInternalError(owner=self, msg=f"Setup failed for Dexp: {dexp} -> {dexp._status}")
 
         return attr_node
