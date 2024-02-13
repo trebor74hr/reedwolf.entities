@@ -115,6 +115,7 @@ class IDotExpressionNode(ReedwolfDataclassBase, ABC):
 
     dexp_validate_type_info_func: Optional[Callable[[Self], None]] = field(repr=False, init=False, default=None)
     _initialized: bool = field(repr=False, init=False, default=False)
+    _immutable: bool = field(init=False, repr=False, default=False)
 
     # def clone(self):
     #     # If already setup then copy it and reuse

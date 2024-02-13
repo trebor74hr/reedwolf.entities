@@ -493,7 +493,7 @@ class LocalFieldsRegistry(RegistryBase):
             # ------------------------------------------------------------
             # GO DOWN
             # ------------------------------------------------------------
-            path_down = attr_dexp_node.attr_value_container_path.path_down[:]
+            path_down = list(attr_dexp_node.attr_value_container_path.path_down)
 
             # Fetching attribute from container node will be done later
             while True:

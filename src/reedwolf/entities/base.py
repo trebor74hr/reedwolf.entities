@@ -355,6 +355,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
     _this_registry: Union[IThisRegistry, NoneType, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
     _setup_phase_one_called: bool = field(init=False, repr=False, default=False)
     _initialized: bool = field(init=False, repr=False, default=False)
+    _immutable: bool = field(init=False, repr=False, default=False)
 
     # def __post_init__(self):
     #     self.init_base()
@@ -842,7 +843,10 @@ class IComponent(ReedwolfDataclassBase, ABC):
               and callable(attr_field.default_factory):
                 # e.g. dict, list => initiate and compare later
                 attr_default = attr_field.default_factory()
-
+                # in immutable state - all lists are converted to tuples
+                # therefore convert default value ([]) to tuple.
+                if isinstance(attr_default, list) and isinstance(attr_value, tuple):
+                    attr_default = tuple(attr_default)
 
             # -- is value supplied i.e. is it different from default
             if isinstance(attr_value, (IComponent, DotExpression)) \
@@ -1573,10 +1577,12 @@ class IFieldGroup(IComponent, ABC):
 # ------------------------------------------------------------
 
 class IContainer(IComponent, ABC):
+    # TODO: this is not dataclass - makes some problems
 
     bind_to:        Optional[Union["IDataModel", ModelKlassType, DotExpression]] = field(repr=False, default=None)
     settings:       Optional[Settings] = field(repr=False, default=None)
     contains:       List[IComponent] = field(repr=False, init=False, default_factory=list)
+    meta:           Optional[Dict[str, Any]] = field(repr=False, default=None)
 
     # evaluated later
     # Components contain container: itself AND all other attributes - single or lists which are of type component

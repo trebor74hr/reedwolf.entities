@@ -32,7 +32,9 @@ from .exceptions import (
     EntityNameNotFoundError,
     EntitySetupNameNotFoundError,
     EntityApplyNameNotFoundError,
-    EntityValidationError, EntityTypeError, EntityValueError,
+    EntityValidationError,
+    EntityTypeError,
+    EntityValueError,
 )
 from .namespaces import (
     ModelsNS,
@@ -50,7 +52,7 @@ from .meta import (
     Index0Type,
     KeyType,
     KeyPairs,
-    ModelInstanceType, ContainerId,
+    ModelInstanceType,
 )
 from .base import (
     get_name_from_bind,
@@ -652,6 +654,9 @@ class Entity(IEntity, ContainerBase):
     # --- validators and evaluators
     cleaners:           Optional[List[Union[ChildrenValidationBase, ChildrenEvaluationBase]]] = field(repr=False, default_factory=list)
 
+    # custom metadata
+    meta:               Optional[Dict[str, Any]] = field(repr=False, default=None)
+
     # ------------------------------------------------------------
     # --- Evaluated later
     # ------------------------------------------------------------
@@ -904,6 +909,9 @@ class SubEntityBase(ContainerBase, ABC):
     keys:           Optional[KeysBase] = field(repr=False, default=None)
     # --- validators and evaluators
     cleaners:       Optional[List[Union[ValidationBase, EvaluationBase]]] = field(repr=False, default_factory=list)
+
+    # custom metadata
+    meta:               Optional[Dict[str, Any]] = field(repr=False, default=None)
 
     # ------------------------------------------------------------
     # --- Evaluated later
