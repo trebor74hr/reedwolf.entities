@@ -435,7 +435,7 @@ class DataModel(BoundDataModelBase):
 
         # self._register_nested_models(setup_session)
 
-        self._finished = True
+        assert self._finished # = True
 
 
 

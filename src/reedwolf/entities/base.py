@@ -1434,14 +1434,16 @@ class IComponent(ReedwolfDataclassBase, ABC):
                 # namespace = dexp._namespace
                 if dexp.IsFinished():
                     # Setup() was called in container.setup() before or in some other dependency
-                    called = False
+                    # called = False
+                    pass
                 else:
                     dexp.Setup(setup_session=setup_session, owner=self)
-                    called = True
+                    # called = True
             elif isinstance(component, IComponent):
                 assert "Entity(" not in repr(component)
+                assert not component.is_finished()
                 component.setup(setup_session=setup_session)  # , parent=self)
-                called = True
+                # called = True
             elif isinstance(component, (dict, list, tuple)):
                 raise EntitySetupValueError(owner=self, msg=f"components should not be dictionaries, lists or tuples, got: {type(component)} / {component}")
             else:
@@ -1461,6 +1463,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
         if self.is_finished():
             raise EntitySetupError(owner=self, msg="finish() should be called only once.")
         self._finished = True
+        self._make_immutable()
 
     # ------------------------------------------------------------
 

@@ -1253,9 +1253,33 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
         deny further attribute changes
         deny .change() method
         """
-        assert not self._immutable
+        assert not self._immutable, self
         self._immutable = True
-        self.__setattr__ = self.__raise_immutable_error
+        # this works - but changes for the class :(
+        #   self.__class__.__setattr__ = self.__raise_immutable_error
+        # this does not work - method is not called:
+        #   self.__setattr__ = self.__raise_immutable_error
+        # make all attributes attributes with getter with @property
+        #   does not work correctly
+        # for fld in dc_fields(self):
+        #     if self.__class__.__name__=="Entity" and fld.name == "name":
+        #         print("here33")
+        #     # only for dataclass / list / dicts - for others... hm...
+        #     attr_name, attr_val = fld.name, getattr(self, fld.name, UNDEFINED)
+        #     if attr_val is UNDEFINED:
+        #         continue
+        #     setattr(self, attr_name, property(lambda self: attr_val))
+        # so the only solution is to have standard __setattr__
+        # which denies change when ._immutable
+
+    # def __setattr__(self, key, value):
+    #     """
+    #     Having __setattr__ function defined for all attr access adds 5-8% performance penalty.
+    #     so add this function only in development env.
+    #     """
+    #     if getattr(self, "_immutable", False):
+    #         self.__raise_immutable_error()
+    #     super().__setattr__(key, value)
 
     def change(self, **kwargs) -> Self:
         if self._immutable:
