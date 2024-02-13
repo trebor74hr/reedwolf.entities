@@ -86,8 +86,8 @@ from .meta import (
     KeyType,
     ModelInstanceType,
     ContainerId,
-    ReedwolfDataclassBase,
 )
+from .meta_dataclass import ReedwolfDataclassBase
 from .expressions import (
     DotExpression,
     ExecResult,
@@ -713,76 +713,78 @@ class IComponent(ReedwolfDataclassBase, ABC):
 
     # ------------------------------------------------------------
 
-    def get_children_dict(self) -> Dict[ComponentNameType, Self]:
-        """
-        only direct children in flat dict
-        """
-        if not hasattr(self, "_children_dict"):
-            self._children_dict = {comp.name: comp for comp in self.get_children()}
-        return self._children_dict
+    # def _get_children_dict(self) -> Dict[ComponentNameType, Self]:
+    #     """
+    #     only direct children in flat dict
+    #     ONLY_UNIT_TESTS
+    #     """
+    #     # if not hasattr(self, "_children_dict"):
+    #     #     self._children_dict = {comp.name: comp for comp in self.get_children()}
+    #     # return self._children_dict
+    #     return {comp.name: comp for comp in self.get_children()}
 
     # ------------------------------------------------------------
 
-    def get_children_tree_flatten_dict(self, depth:int=0) -> Dict[ComponentNameType, Self]:
-        """
-        will go recursively through every children and
-        fetch their "children" and collect to output structure:
-        selects not-subentity_itemss, put in flat dict (i.e. children with
-        model same level fields), excludes self 
-        """
-        key = "_children_tree_flatten_dict"
-        if not hasattr(self, key):
-            if depth > MAX_RECURSIONS:
-                raise EntityInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
+    # def get_children_tree_flatten_dict(self, depth: int=0) -> Dict[ComponentNameType, Self]:
+    #     """
+    #     will go recursively through every children and
+    #     fetch their "children" and collect to output structure:
+    #     selects not-subentity_itemss, put in flat dict (i.e. children with
+    #     model same level fields), excludes self
+    #     """
+    #     key = "_children_tree_flatten_dict"
+    #     if not hasattr(self, key):
+    #         if depth > MAX_RECURSIONS:
+    #             raise EntityInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
 
-            children_dict_traversed = {}
+    #         children_dict_traversed = {}
 
-            for comp in self.get_children():
-                if not comp.is_subentity_items():
-                    # recursion
-                    comp_chidren_dict = comp.get_children_tree_flatten_dict(depth=depth+1)
-                    children_dict_traversed.update(comp_chidren_dict)
+    #         for comp in self.get_children():
+    #             if not comp.is_subentity_items():
+    #                 # recursion
+    #                 comp_chidren_dict = comp.get_children_tree_flatten_dict(depth=depth+1)
+    #                 children_dict_traversed.update(comp_chidren_dict)
 
-                # closer children are overriding further ones
-                # (although this will not happen - names should be unique)
-                children_dict_traversed[comp.name] = comp
+    #             # closer children are overriding further ones
+    #             # (although this will not happen - names should be unique)
+    #             children_dict_traversed[comp.name] = comp
 
-            setattr(self, key, children_dict_traversed)
+    #         setattr(self, key, children_dict_traversed)
 
-        return getattr(self, key)
+    #     return getattr(self, key)
 
     # ------------------------------------------------------------
 
-    def get_children_tree(self) -> ComponentTreeType:
-        """
-        will go recursively through every children and
-        fetch their "children" and collect to output structure.
-        selects all nodes, put in tree, includes self
-        """
-        return self._get_children_tree(key="_children_tree")
+    # def get_children_tree(self) -> ComponentTreeType:
+    #     """
+    #     will go recursively through every children and
+    #     fetch their "children" and collect to output structure.
+    #     selects all nodes, put in tree, includes self
+    #     """
+    #     return self._get_children_tree(key="_children_tree")
 
 
-    def _get_children_tree(self, key: str, depth:int=0) -> ComponentTreeType:
-        # Dict[ComponentNameType, Self] = Dict[ComponentNameType, TreeNode])
-        if not hasattr(self, key):
-            if depth > MAX_RECURSIONS:
-                raise EntityInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
+    # def _get_children_tree(self, key: str, depth:int=0) -> ComponentTreeType:
+    #     # Dict[ComponentNameType, Self] = Dict[ComponentNameType, TreeNode])
+    #     if not hasattr(self, key):
+    #         if depth > MAX_RECURSIONS:
+    #             raise EntityInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
 
-            children_dict_traversed = {}
-            children_dict_traversed["name"] = self.name
-            children_dict_traversed["component"] = self
-            children_dict_traversed["children"] = []
+    #         children_dict_traversed = {}
+    #         children_dict_traversed["name"] = self.name
+    #         children_dict_traversed["component"] = self
+    #         children_dict_traversed["children"] = []
 
 
-            for comp in self.get_children():
-                # recursion
-                comp_chidren_dict = comp._get_children_tree(key=key, depth=depth+1)
-                children_dict_traversed["children"].append(comp_chidren_dict)
+    #         for comp in self.get_children():
+    #             # recursion
+    #             comp_chidren_dict = comp._get_children_tree(key=key, depth=depth+1)
+    #             children_dict_traversed["children"].append(comp_chidren_dict)
 
-            setattr(self, key, children_dict_traversed)
-        else:
-            children_dict_traversed = getattr(self, key)
-        return children_dict_traversed
+    #         setattr(self, key, children_dict_traversed)
+    #     else:
+    #         children_dict_traversed = getattr(self, key)
+    #     return children_dict_traversed
 
     # ------------------------------------------------------------
 
@@ -1448,6 +1450,8 @@ class IComponent(ReedwolfDataclassBase, ABC):
                 assert "Entity(" not in repr(component)
                 assert not component.is_finished()
                 component.setup(setup_session=setup_session)  # , parent=self)
+                # NOTE: in some rare cases .finish() is not called - so there is an additional .finish() call later.
+                component.finish()
                 # called = True
             elif isinstance(component, (dict, list, tuple)):
                 raise EntitySetupValueError(owner=self, msg=f"components should not be dictionaries, lists or tuples, got: {type(component)} / {component}")
@@ -1457,14 +1461,16 @@ class IComponent(ReedwolfDataclassBase, ABC):
                 if hasattr(component, "setup"):
                     raise EntityInternalError(owner=self, msg=f"{self.name}.{component_name} has attribute that is not Component: {type(component)}")
 
-        # if not self.is_finished():
-        self.finish()
+        # self.finish()
 
         return self
 
     # ------------------------------------------------------------
 
     def finish(self):
+        """
+        Mark component as finished / setup - no change allowed later.
+        """
         if self.is_finished():
             raise EntitySetupError(owner=self, msg="finish() should be called only once.")
         self._finished = True
@@ -1652,7 +1658,7 @@ class IDataModel(IComponent, ABC):
     _finished: bool = field(init=False, repr=False, default=False)
 
     def setup(self, setup_session:ISetupSession):
-        if self._finished:
+        if self.is_finished():
             raise EntityInternalError(owner=self, msg="Setup already called")
         super().setup(setup_session=setup_session)
 
@@ -2624,28 +2630,28 @@ class IApplyResult(IStackOwnerSession):
         # TODO: mark invalid all children and this component
 
 
-    def get_upward_components_dict(self, component: IComponent) \
-            -> Dict[ComponentNameType, IComponent]:
-        # CACHE
-        if component.name not in self._component_children_upward_dict:
-            components_tree = []
-            curr_comp = component
-            while curr_comp is not None:
-                if curr_comp in components_tree:
-                    raise EntityInternalError(owner=component, msg=f"Issue with hierarchy tree - duplicate node: {curr_comp.name}")
-                components_tree.append(curr_comp)
-                curr_comp = curr_comp.parent
+    # def get_upward_components_dict(self, component: IComponent) \
+    #         -> Dict[ComponentNameType, IComponent]:
+    #     # CACHE
+    #     if component.name not in self._component_children_upward_dict:
+    #         components_tree = []
+    #         curr_comp = component
+    #         while curr_comp is not None:
+    #             if curr_comp in components_tree:
+    #                 raise EntityInternalError(owner=component, msg=f"Issue with hierarchy tree - duplicate node: {curr_comp.name}")
+    #             components_tree.append(curr_comp)
+    #             curr_comp = curr_comp.parent
 
-            children_dict = {}
-            # Although no name clash could happen, reverse to have local scopes
-            # overwrite parent's scopes.
-            for curr_comp in reversed(components_tree):
-                comp_children_dict = curr_comp.get_children_tree_flatten_dict()
-                children_dict.update(comp_children_dict)
+    #         children_dict = {}
+    #         # Although no name clash could happen, reverse to have local scopes
+    #         # overwrite parent's scopes.
+    #         for curr_comp in reversed(components_tree):
+    #             comp_children_dict = curr_comp.get_children_tree_flatten_dict()
+    #             children_dict.update(comp_children_dict)
 
-            self._component_children_upward_dict[component.name] = children_dict
+    #         self._component_children_upward_dict[component.name] = children_dict
 
-        return self._component_children_upward_dict[component.name]
+    #     return self._component_children_upward_dict[component.name]
 
     def get_changes_as_list_dict(self) -> List[Dict[str, Any]]:
         """

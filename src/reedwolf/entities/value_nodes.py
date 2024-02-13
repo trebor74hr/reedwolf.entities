@@ -289,7 +289,6 @@ class ValueNodeBase(IValueNode):
 
     def get_value(self, strict:bool) -> AttrValue:
         if strict and not self.finished:
-            # print("TODO: riješi ovu iznimku")
             raise EntityInternalError(owner=self, msg=f"Current value is not finished, last value: {self._value}")
         return self._value
 

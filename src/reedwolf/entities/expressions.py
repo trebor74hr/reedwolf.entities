@@ -55,8 +55,8 @@ from .meta import (
     IFuncArgHint,
     AttrValue,
     IExecuteFuncArgHint,
-    NoneType, KlassMember, ReedwolfDataclassBase,
-)
+    NoneType, KlassMember, )
+from .meta_dataclass import ReedwolfDataclassBase
 
 
 # ------------------------------------------------------------

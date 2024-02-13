@@ -423,3 +423,25 @@ def fix_print(line: str) -> str:
         line = line.replace(" print ", " print(").rstrip() + ")"
     return line
 
+
+def to_bool(value: Any, default: Any=None, strict: bool=True) -> Optional[bool]:
+    """
+    if value is not recognized.
+        in strict mode -> will raise error
+        in non-strict mode -> will return default (None)
+    """
+    if value in (True, False):
+        return value
+    if isinstance(value, str):
+        if value.lower() in ("", "null", "none", "false", "f", "0", "ne", "n", "no"):
+            return False
+        elif value.lower() in ("true", "t", "1", "da", "d", "yes", "y"):
+            return True
+    if isinstance(value, (int, float)):
+        if value in (0,):
+            return False
+        elif value in (1,):
+            return True
+    if strict:
+        raise ValueError("to_bool: Invalid bool value: %r" % value)
+    return default

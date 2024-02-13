@@ -468,9 +468,14 @@ class ContainerBase(IContainer, ABC):
 
         # check all ok?
         for component_name, component in self.components.items():
-            # TODO: maybe bound Field.bind_to -> Model attr_node?
-            if not isinstance(component, UnboundModel) and not component.is_finished():
-                raise EntityInternalError(owner=self, msg=f"{component} not finished. Is in overriden setup()/Setup() parent method super().setup()/Setup() been called (which sets parent and marks finished)?")
+            # NOTE: normally .finish() is called within _setup_phase_two(). This call covers rare cases
+            #       when finish() is not called. This complex term is consequence of having
+            #       subentity* components in two containers: their owner and themselves.
+            if not isinstance(component, UnboundModel) \
+              and not component.is_finished() \
+              and (component is not self or component.is_entity()):
+                component.finish()
+                # raise EntityInternalError(owner=self, msg=f"{component} not finished. Is in overriden setup()/Setup() parent method super().setup()/Setup() been called (which sets parent and marks finished)?")
 
         self.setup_session.finish()
 
