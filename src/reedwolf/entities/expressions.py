@@ -347,9 +347,11 @@ class DotExpression(DynamicAttrsBase):
                            "_node", "_namespace", "_name", "_func_args", "_is_top", "_status",
                            "_is_literal", "_is_internal_use",
                            "_EnsureFinished", "IsFinished",
-                           "_SetDexpValidator"
-                           "_dexp_validator"
-                           # "_is_reserved_function",
+                           "_SetDexpValidator",
+                           "_dexp_validator",
+                           "_is_dexp_or_ns",
+                           "_is_dexp",
+    # "_is_reserved_function",
                            } # "_read_functions",  "_dexp_node_name"
     # RESERVED_FUNCTION_NAMES = ("Value",)
     # "First", "Second",
@@ -372,6 +374,14 @@ class DotExpression(DynamicAttrsBase):
         self._is_literal = is_literal
         self._is_internal_use = is_internal_use
         self._dexp_validator = None
+        # used only for detection if instance is dotexpression where class is not available:
+        #   isinstance(self, DotExpression)
+        #   ->
+        #   hasattr(self, "_is_dexp_or_ns")
+        #   OR
+        #   hasattr(self, "_is_dexp")
+        self._is_dexp_or_ns = True
+        self._is_dexp = True
 
         # init Path => to make __str__ works
         self.Path = None 

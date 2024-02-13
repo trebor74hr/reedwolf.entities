@@ -1347,7 +1347,7 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
         # if self_id not in instances_copied and \
         if not self._initialized:
             # TODO: resolve this properly
-            from .expressions import DotExpression
+            # from .expressions import DotExpression
 
             klass = self.__class__
             if not hasattr(klass, "_RWF_DC_FIELDS"):
@@ -1356,7 +1356,8 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
             for fld in klass._RWF_DC_FIELDS:
                 attr_name = fld.name
                 attr_val = getattr(self, attr_name, UNDEFINED)
-                if isinstance(attr_val, DotExpression) or (attr_val not in (UNDEFINED, DC_MISSING) and attr_val is not fld.default):
+                # if isinstance(attr_val, DotExpression) or Namespace
+                if hasattr(attr_val, "_is_dexp_or_ns") or (attr_val not in (UNDEFINED, DC_MISSING) and attr_val is not fld.default):
                     # if hasattr(attr_val, "_getset_rwf_kwargs"):
                     #     # recursion: coollect for dependent objects too
                     #     attr_val._getset_rwf_kwargs()
@@ -1415,11 +1416,11 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
 
     @classmethod
     def _try_call_copy(cls, traverse:bool, aval: Any, depth: int, instances_copied: Dict) -> Any:
-        # TODO: resolve this properly
-        from .expressions import DotExpression
+        # from .expressions import DotExpression
 
-        if isinstance(aval, DotExpression): # must be first
+        # if isinstance(aval, DotExpression): # must be first
         # if hasattr(aval, "Clone"): # DotExpression - must be first
+        if getattr(aval, "_is_dexp", None):
             aval_new = aval.Clone()
         elif isinstance(aval, (tuple, list)):
             aval_new = [cls._try_call_copy(traverse=traverse, aval=aval_item, depth=depth+1, instances_copied=instances_copied)
@@ -1432,6 +1433,7 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
             aval_new = aval._copy(traverse=traverse, depth=depth + 1, instances_copied=instances_copied)
         else:
             # TODO: if not primitive type - use copy.deepcopy() instead?
+            # Namespace case
             aval_new = aval
         return aval_new
 

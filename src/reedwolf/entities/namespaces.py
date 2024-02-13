@@ -23,7 +23,7 @@ class DynamicAttrsBase(ABC):
 
 class Namespace(DynamicAttrsBase):
 
-    RESERVED_ATTR_NAMES = {"_name", "_is_for_internal_use_only", "_alias", "_GetNameWithAlias"}
+    RESERVED_ATTR_NAMES = {"_name", "_is_for_internal_use_only", "_alias", "_GetNameWithAlias", "_is_dexp_or_ns", "_is_dexp"}
     
     # manual_setup: bool = False, 
     def __init__(self, name: str, alias: Optional[str] = None, is_for_internal_use_only: bool = False):
@@ -32,6 +32,8 @@ class Namespace(DynamicAttrsBase):
         self._is_for_internal_use_only: bool = is_for_internal_use_only
         # alias, e.g. for Models. -> M.
         self._alias: Optional[str] = alias
+        self._is_dexp_or_ns = True
+        self._is_dexp = False
 
     def __str__(self):
         return f"{self._name}"
