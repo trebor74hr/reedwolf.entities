@@ -354,19 +354,15 @@ class IComponent(ReedwolfDataclassBase, ABC):
     _component_fields_dataclass: Optional[Type[IComponentFields]] = field(init=False, repr=False, default=None)
     _this_registry: Union[IThisRegistry, NoneType, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
 
-    #  TODO: Currently 4 statuses - mutually exclusive - maybe one Enum would be better:
-    #           draft
-    #           did_init
-    #           did_phase_one
-    #           finished (== immutable == did_setup == did_phase_two)
-    # _did_init: bool      = field(init=False, repr=False, default=False)
-    # _did_phase_one: bool = field(init=False, repr=False, default=False)
-    _immutable: bool     = field(init=False, repr=False, default=False)
-
+    #  NOTE: had 4 statuses - mutually exclusive and replaced with single Enum:
+    #   _did_init: bool      = field(init=False, repr=False, default=False)
+    #   _did_phase_one: bool = field(init=False, repr=False, default=False)
+    #   _immutable: bool     = field(init=False, repr=False, default=False)
     _status: ComponentStatus = field(init=False, repr=False, default=ComponentStatus.draft)
 
     @property
     def is_finished(self) -> bool:
+        # TODO: for speed perf consider having inline logic instead of this property
         return self._status == ComponentStatus.finished
 
     # def __post_init__(self):
@@ -1493,8 +1489,8 @@ class IComponent(ReedwolfDataclassBase, ABC):
         if self.is_finished:
             raise EntitySetupError(owner=self, msg="finish() should be called only once.")
         # self.is_finished = True
-        self._status = ComponentStatus.finished
-        self._make_immutable()
+        # self._status = ComponentStatus.finished
+        self._make_immutable_and_finish()
 
     # ------------------------------------------------------------
 

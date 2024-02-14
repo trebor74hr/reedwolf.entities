@@ -155,7 +155,7 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
     # def __raise_immutable_error(self, key=None, value=None):
     #     raise EntityImmutableError(owner=self, msg=ERROR_MSG_IMMUTABLE)
 
-    def _make_immutable(self):
+    def _make_immutable_and_finish(self):
         """
         Deny change of object attributes.
         This is limited implementation, covers:
@@ -167,11 +167,12 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
               is set with ._setup_setattr_immutable_guard() when RWF_IS_UNIT_TEST env var is set.
         """
         # assert not getattr(self, "_immutable", None), self
-        assert not self._immutable, self
+        # assert not self._immutable, self
+        assert self._status != ComponentStatus.finished, self
 
         klass = self.__class__
-        if not hasattr(klass, "_RWF_DC_FIELDS"):
-            raise EntityInternalError(owner=self, msg="_RWF_DC_FIELDS is not yet set.")
+        if not hasattr(klass, "_RWF_DC_CACHE_FIELD_NAMES"):
+            raise EntityInternalError(owner=self, msg="_RWF_DC_CACHE_FIELD_NAMES is not yet set.")
 
         # ALT: only arguments from __init__
         # for arg_name in self.__get_rwf_arg_names():
@@ -187,7 +188,8 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
                 # NOTE: x:dict == MappingProxyType(x)
                 setattr(self, arg_name, MappingProxyType(arg_val))
 
-        self._immutable = True
+        # self._immutable = True
+        self._status = ComponentStatus.finished
 
 
     def __setattr_implementation(self, key, value):
@@ -198,7 +200,10 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
         So this function is included only in unit test mode - special env var RWF_IS_UNIT_TEST.
         """
         # if getattr(self, "_immutable", None):
-        if self._immutable:
+        # if self._immutable:
+        if self._status == ComponentStatus.finished \
+          and not (getattr(self, key, UNDEFINED) == UNDEFINED and key in self._RWF_DC_CACHE_FIELD_NAMES):
+            # cache values are allowed to be set only once (not existing or initialized to UNDEFINED)
             raise EntityImmutableError(owner=self, msg=ERROR_MSG_IMMUTABLE)
         super().__setattr__(key, value)
 
@@ -223,7 +228,8 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
 
     def change(self, **kwargs) -> Self:
         # if getattr(self, "_immutable", False):
-        if self._immutable:
+        # if self._immutable:
+        if self._status == ComponentStatus.finished:
             raise EntityImmutableError(owner=self, msg=ERROR_MSG_IMMUTABLE)
 
         rwf_arg_names = self.__get_rwf_arg_names()
@@ -279,7 +285,9 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
 
             klass = self.__class__
             if not hasattr(klass, "_RWF_DC_FIELDS"):
-                klass._RWF_DC_FIELDS = [fld for fld in dc_fields(self) if fld.init]
+                dc_field_set = dc_fields(self)
+                klass._RWF_DC_FIELDS = [fld for fld in dc_field_set if fld.init]
+                klass._RWF_DC_CACHE_FIELD_NAMES = [fld.name for fld in dc_field_set if fld.metadata.get("cache", False)]
 
             # Tried to optimize - no diff (a bit slower, though)
             # rwf_kwargs = [(fld, getattr(self, fld.name, UNDEFINED)) for fld in klass._RWF_DC_FIELDS]

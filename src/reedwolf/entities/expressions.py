@@ -118,7 +118,7 @@ class IDotExpressionNode(ReedwolfDataclassBase, ABC):
     dexp_validate_type_info_func: Optional[Callable[[Self], None]] = field(repr=False, init=False, default=None)
     # _did_init: bool = field(repr=False, init=False, default=False)
     _status: ComponentStatus = field(repr=False, init=False, default=ComponentStatus.draft)
-    _immutable: bool = field(init=False, repr=False, default=False)
+    # _immutable: bool = field(init=False, repr=False, default=False)
 
     # def clone(self):
     #     # If already setup then copy it and reuse
@@ -1031,6 +1031,7 @@ class OperationDexpNode(IDotExpressionNode):
     _second_dexp_node: Optional[IDotExpressionNode] = field(repr=False, init=False, default=None)
 
     # is_finished: bool = field(init=False, repr=False, default=False)
+    _output_type_info: Union[TypeInfo, UndefinedType] = field(repr=False, init=False, default=UNDEFINED, metadata={"cache": True})
 
     def __post_init__(self):
         self.operation = self._get_operation(self.op)
@@ -1039,7 +1040,7 @@ class OperationDexpNode(IDotExpressionNode):
         # self._status: DExpStatusEnum = DExpStatusEnum.INITIALIZED
         self._status: ComponentStatus = ComponentStatus.draft
         self._all_ok: Optional[bool] = None
-        self._output_type_info: Union[TypeInfo, UNDEFINED] = UNDEFINED 
+        # self._output_type_info: Union[TypeInfo, UNDEFINED] = UNDEFINED
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
 
 
