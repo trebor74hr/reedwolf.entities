@@ -167,7 +167,6 @@ class ComponentStatus(IntEnum):
     did_init = 1
     did_phase_one = 2
     finished = 3
-    immutable = 4
 
 
 # ------------------------------------------------------------
