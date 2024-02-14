@@ -351,7 +351,7 @@ class DataModelWithHandlers(BoundDataModelBase):
                 raise EntitySetupValueError(owner=self, msg=f"DataModel* nesting (attribute 'contains') is not supported for '{type(container)}'")
 
         # self._register_nested_models(setup_session)
-        # self._finished = True
+        # self.is_finished = True
 
 
     def get_type_info(self) -> TypeInfo:
@@ -434,7 +434,7 @@ class DataModel(BoundDataModelBase):
             self._set_type_info()
 
         # self._register_nested_models(setup_session)
-        # assert self._finished # = True
+        # assert self.is_finished # = True
 
 
 

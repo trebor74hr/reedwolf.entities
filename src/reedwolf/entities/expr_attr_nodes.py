@@ -40,7 +40,7 @@ from .meta import (
     AttrValue,
     NoneType,
     KlassMember,
-    ContainerId,
+    ContainerId, ComponentStatus,
 )
 from .custom_attributes import (
     Attribute,
@@ -216,7 +216,8 @@ class AttrDexpNode(IDotExpressionNode):
                      prev_node_type_info: Optional[TypeInfo],
                      ) -> ExecResult:
 
-        if is_last and not self.is_finished:
+        # if is_last and not self.is_finished:
+        if is_last and not self._status == ComponentStatus.finished:
             raise EntityInternalError(owner=self, msg="Last dexp node is not finished.") 
 
         # TODO: not nicest way - string split

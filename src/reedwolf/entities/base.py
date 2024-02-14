@@ -360,11 +360,14 @@ class IComponent(ReedwolfDataclassBase, ABC):
     #           did_phase_one
     #           finished (== immutable == did_setup == did_phase_two)
     # _did_init: bool      = field(init=False, repr=False, default=False)
-    _did_phase_one: bool = field(init=False, repr=False, default=False)
-    _finished: bool      = field(init=False, repr=False, default=False)
+    # _did_phase_one: bool = field(init=False, repr=False, default=False)
     _immutable: bool     = field(init=False, repr=False, default=False)
 
     _status: ComponentStatus = field(init=False, repr=False, default=ComponentStatus.draft)
+
+    @property
+    def is_finished(self) -> bool:
+        return self._status == ComponentStatus.finished
 
     # def __post_init__(self):
     #     self.init_base()
@@ -920,8 +923,8 @@ class IComponent(ReedwolfDataclassBase, ABC):
 
     def _call_init(self):
         self._getset_rwf_kwargs()
-
-        if self._did_phase_one:
+        # if self._did_phase_one:
+        if self._status >= ComponentStatus.did_phase_one:
             if self.parent:
                 raise EntityInitError(owner=self, msg=f"Component '{self.name} : {self.__class__.__name__}' "
                                                       f"is already embedded into '{self.parent.name}: {self.parent.__class__.__name__}' -> ... {self.entity}'. "
@@ -1093,7 +1096,8 @@ class IComponent(ReedwolfDataclassBase, ABC):
                 if self.is_unbound():
                     self._replace_modelsns_registry(setup_session)
 
-        self._did_phase_one = True
+        # self._did_phase_one = True
+        self._status = ComponentStatus.did_phase_one
 
         return None
 
@@ -1238,7 +1242,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
                     # set only if available, otherwise use existing
                     setup_session.current_frame.set_this_registry(this_registry, force=True)
 
-            if not self._finished:
+            if not self.is_finished:
                 ret = self._setup_phase_two(setup_session=setup_session)
             else:
                 if not self.is_data_model():
@@ -1439,14 +1443,14 @@ class IComponent(ReedwolfDataclassBase, ABC):
         if self.parent is UNDEFINED:
             raise EntityInternalError(owner=self, msg="Parent not set")
 
-        if self._finished:
+        if self.is_finished:
             raise EntityInternalError(owner=self, msg="Setup already called")
 
         for subcomponent in self._get_subcomponents_list():
             component = subcomponent.component
             if isinstance(component, IComponent) \
               and (component.is_data_model() or component.is_subentity()) \
-              and component._finished:
+              and component.is_finished:
                 # raise EntityInternalError(owner=self, msg=f"DataModel.setup() should have been called before ({component})")
                 continue
 
@@ -1463,7 +1467,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
                     # called = True
             elif isinstance(component, IComponent):
                 assert "Entity(" not in repr(component)
-                assert not component._finished
+                assert not component.is_finished
                 component.setup(setup_session=setup_session)  # , parent=self)
                 # NOTE: in some rare cases .finish() is not called - so there is an additional .finish() call later.
                 component.finish()
@@ -1486,9 +1490,10 @@ class IComponent(ReedwolfDataclassBase, ABC):
         """
         Mark component as finished / setup - no change allowed later.
         """
-        if self._finished:
+        if self.is_finished:
             raise EntitySetupError(owner=self, msg="finish() should be called only once.")
-        self._finished = True
+        # self.is_finished = True
+        self._status = ComponentStatus.finished
         self._make_immutable()
 
     # ------------------------------------------------------------
@@ -1667,7 +1672,7 @@ class IDataModel(IComponent, ABC):
     model_klass: ModelKlassType = field(init=False, repr=False)
 
     def setup(self, setup_session:ISetupSession):
-        if self._finished:
+        if self.is_finished:
             raise EntityInternalError(owner=self, msg="Setup already called")
         super().setup(setup_session=setup_session)
 

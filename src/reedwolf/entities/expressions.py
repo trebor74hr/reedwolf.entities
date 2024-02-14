@@ -7,7 +7,6 @@ import ast
 from dataclasses import (
     dataclass,
     field,
-    replace as dataclasses_replace,
     )
 from enum import (
     Enum
@@ -140,12 +139,13 @@ class IDotExpressionNode(ReedwolfDataclassBase, ABC):
         ...
 
     def finish(self):
-        if self.is_finished:
+        if self._status == ComponentStatus.finished:
+        # if self.is_finished:
             raise EntityInternalError(owner=self, msg="already finished")
         self._getset_rwf_kwargs()
         # self._initialized = True
         self._status = ComponentStatus.finished
-        self.is_finished = True
+        # self.is_finished = True
 
 # ------------------------------------------------------------
 
@@ -871,7 +871,7 @@ class LiteralDexpNode(IDotExpressionNode):
     type_info: TypeInfo = field(repr=False, init=False)
 
     # later evaluated
-    is_finished: bool = field(init=False, repr=False, default=False)
+    # is_finished: bool = field(init=False, repr=False, default=False)
     full_name: str = field(init=False, repr=False, default=None)
 
     def __post_init__(self):
@@ -1030,7 +1030,7 @@ class OperationDexpNode(IDotExpressionNode):
     _first_dexp_node:  Optional[IDotExpressionNode] = field(repr=False, init=False, default=None)
     _second_dexp_node: Optional[IDotExpressionNode] = field(repr=False, init=False, default=None)
 
-    is_finished: bool = field(init=False, repr=False, default=False)
+    # is_finished: bool = field(init=False, repr=False, default=False)
 
     def __post_init__(self):
         self.operation = self._get_operation(self.op)
@@ -1134,8 +1134,8 @@ class OperationDexpNode(IDotExpressionNode):
                  prev_node_type_info: Optional[TypeInfo],
                  ) -> ExecResult:
 
-        if is_last and not self.is_finished:
-            raise EntityInternalError(owner=self, msg="Last dexp node is not finished.") 
+        if is_last and not self._status == ComponentStatus.finished:
+            raise EntityInternalError(owner=self, msg="Last dexp node is not finished.")
 
         if dexp_result:
             raise NotImplementedError("TODO:")

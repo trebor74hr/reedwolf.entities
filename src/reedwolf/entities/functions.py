@@ -67,7 +67,7 @@ from .meta import (
     LiteralType,
     ValueArgValidatorPyFuncDictType,
     AttrName,
-    is_instancemethod_by_name, SELF_ARG_NAME, get_function_non_empty_arguments, SettingsType,
+    is_instancemethod_by_name, SELF_ARG_NAME, get_function_non_empty_arguments, SettingsType, ComponentStatus,
 )
 from .expressions import (
     DotExpression,
@@ -494,7 +494,7 @@ class IFunction(IFunctionDexpNode, ABC):
         #       check first / dexp_result argument that matches self.value_arg_type_info
         #       check output type that matches output_type_info
         """
-        if is_last and not self.is_finished:
+        if is_last and not self._status == ComponentStatus.finished:
             raise EntityInternalError(owner=self, msg="Last dexp-node is not finished")  # , {id(self)} / {type(self)}
 
         args = []

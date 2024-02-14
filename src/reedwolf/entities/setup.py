@@ -47,7 +47,7 @@ from .meta import (
     TypeInfo,
     HookOnFinishedAllCallable,
     get_model_fields,
-    AttrName, ModelInstanceType,
+    AttrName, ModelInstanceType, ComponentStatus,
 )
 from .base import (
     IComponentFields,
@@ -731,10 +731,11 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
             registry.finish()
 
         for dexp_node in self.dexp_node_dict.values():
-            if not dexp_node.is_finished:
+            if not dexp_node._status == ComponentStatus.finished:
                 dexp_node.finish()
-            if not dexp_node.is_finished:
-                raise EntityInternalError(owner=self, msg=f"DexpNode {dexp_node} still not finished, finish() moethod did not set is_finished")  
+            # if not dexp_node.is_finished:
+            if not dexp_node._status == ComponentStatus.finished:
+                raise EntityInternalError(owner=self, msg=f"DexpNode {dexp_node} still not finished, finish() method did not set status to finished")
 
         self.finished = True
 
