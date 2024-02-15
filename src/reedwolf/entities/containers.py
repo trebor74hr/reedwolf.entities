@@ -52,7 +52,7 @@ from .meta import (
     Index0Type,
     KeyType,
     KeyPairs,
-    ModelInstanceType, ERR_MSG_ATTR_REQUIRED,
+    ModelInstanceType, ERR_MSG_ATTR_REQUIRED, ComponentStatus,
 )
 from .base import (
     get_name_from_bind,
@@ -187,6 +187,8 @@ class ContainerBase(IContainer, ABC):
         return True
 
     def __getitem__(self, name) -> IComponent:
+        if self._status != ComponentStatus.finished:
+            raise EntitySetupError(owner=self, msg=f"Not allowed, call .setup() first (current status={self._status})")
         if name not in self.components:
             vars_avail = get_available_names_example(name, list(self.components.keys()))
             raise KeyError(f"{self.name}: Component name '{name}' not found, available: {vars_avail}")
@@ -897,7 +899,7 @@ class SubEntityBase(ContainerBase, ABC):
     """
     # DotExpression based model -> can be dumped, obligatory
     bind_to:        Union[DataModel, DataModelWithHandlers, DotExpression, str] \
-                        = field(repr=False, metadata = {"skip_setup": True}, default=UNDEFINED)
+                        = field(repr=True, metadata = {"skip_setup": True}, default=UNDEFINED)
 
     # cardinality:  ICardinalityValidation
     contains:       List[IComponent] = field(repr=False, default_factory=list)

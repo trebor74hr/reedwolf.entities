@@ -675,8 +675,10 @@ class IComponent(ReedwolfDataclassBase, ABC):
 
     # ------------------------------------------------------------
 
-    def get_children(self, deep_collect: bool=False) -> List[Self]:
+    def get_children(self, deep_collect: bool = False, cache: bool = True, traverse_all: bool = False) -> List[Self]:
         """
+        TODO: check if traverse_all is needed - maybe child.may_collect_my_children should not be checked?
+
         in deep_collect mode:
             CACHED
             will collect children
@@ -698,27 +700,33 @@ class IComponent(ReedwolfDataclassBase, ABC):
         """
         # TODO: cached - be careful not to add new components aferwards
         if deep_collect:
-            if not hasattr(self, "_children_deep"):
+            if not cache or not hasattr(self, "_children_deep"):
                 children = []
                 # RECURSION - 1 level
-                for child in self.get_children():
+                for child in self.get_children(deep_collect=False, cache=cache):
                     children.append(child)
-                    if child.may_collect_my_children():
+                    if traverse_all or child.may_collect_my_children():
                         # RECURSION
-                        child_children = child.get_children(deep_collect=True)
+                        child_children = child.get_children(deep_collect=True, traverse_all=traverse_all, cache=cache)
                         if child_children:
                             children.extend(child_children)
-                self._children_deep = children
-            out = self._children_deep
+                out = children
+                if cache:
+                    self._children_deep = children
+            else:
+                out = self._children_deep
         else:
-            if not hasattr(self, "_children"):
+            if not cache or not hasattr(self, "_children"):
                 children = getattr(self, "contains", None)
                 if not children:
                     children = getattr(self, "enables", None)
                 else:
                     assert not hasattr(self, "enables"), self
-                self._children = children if children else []
-            out = self._children
+                out = children if children else []
+                if cache:
+                    self._children = out
+            else:
+                out = self._children
         return out
 
 
@@ -1273,7 +1281,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
               check if this is true and if so, implement.
         """
 
-        # caching
+        # TODO: do caching only in-setup or after setup, while in draft mode - is not ok
         if hasattr(self, "_subcomponent_list"):
             return self._subcomponent_list
 
