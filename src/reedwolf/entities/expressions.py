@@ -1357,6 +1357,16 @@ def clean_dexp_bool_term(owner: Any, attr_name: str, dexp: Union[NoneType, DotEx
                                         msg=f"Argument '{attr_name}' needs to DotExpression (e.g. F.name != ''), got: {to_repr(dexp)}")
 
 
+def create_dexp_by_attr_name(namespace: Namespace, attr_name: str) -> DotExpression:
+    """
+    create_dexp_by_attr_name(ModelsNS, "street") equals to M.street
+
+    currently supports only one level expressions
+        e.g. "name" -> M.name,
+        but this fails: "access.is_allowed" -> M.access.is_allowed
+    """
+    return DotExpression(node=attr_name, namespace=namespace)
+
 # ============================================================
 # OBSOLETE
 # ===========================================================-

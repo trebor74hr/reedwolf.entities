@@ -376,7 +376,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
             raise EntitySetupError(owner=self, msg=f"Component not in draft state: {self._status}")
         if self.name not in (None, "", UNDEFINED):
             if not self.name.isidentifier():
-                raise EntitySetupValueError(owner=self, msg="Attribute name needs to be valid python identifier name")
+                raise EntitySetupValueError(owner=self, msg=f"Attribute name needs to be valid python identifier name, got: {self.name}")
 
         # freeze all set dc_field values which won't be changed any more. Used for copy()
         # self._did_init = True

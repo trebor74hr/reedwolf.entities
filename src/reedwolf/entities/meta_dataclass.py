@@ -23,17 +23,19 @@ from .exceptions import (
     EntityImmutableError,
     EntityCopyError,
     EntityInternalError,
-    EntityError,
     EntityNameNotFoundError,
 )
 from .utils import (
     UNDEFINED,
 )
-from .global_settings import GLOBAL_SETTINGS
+from .global_settings import (
+    GLOBAL_SETTINGS,
+)
 from .meta import (
     MAX_RECURSIONS,
     SELF_ARG_NAME,
     Self, ComponentStatus,
+    ERR_MSG_IMMUTABLE,
 )
 
 
@@ -147,13 +149,11 @@ class ReedwolfMetaclass(ABCMeta):
 # ------------------------------------------------------------
 # ReedwolfDataclassBase
 # ------------------------------------------------------------
-ERROR_MSG_IMMUTABLE = ("Change is not allowed. Instance is setup and is in immutable state. " 
-                      "You can .copy() and change the new instance before .setup() is called.")
 
 class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
 
     # def __raise_immutable_error(self, key=None, value=None):
-    #     raise EntityImmutableError(owner=self, msg=ERROR_MSG_IMMUTABLE)
+    #     raise EntityImmutableError(owner=self, msg=ERR_MSG_IMMUTABLE)
 
     def _make_immutable_and_finish(self):
         """
@@ -204,7 +204,7 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
         if self._status == ComponentStatus.finished \
           and not (getattr(self, key, UNDEFINED) == UNDEFINED and key in self._RWF_DC_CACHE_FIELD_NAMES):
             # cache values are allowed to be set only once (not existing or initialized to UNDEFINED)
-            raise EntityImmutableError(owner=self, msg=ERROR_MSG_IMMUTABLE)
+            raise EntityImmutableError(owner=self, msg=ERR_MSG_IMMUTABLE)
         super().__setattr__(key, value)
 
     @classmethod
@@ -230,7 +230,7 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
         # if getattr(self, "_immutable", False):
         # if self._immutable:
         if self._status == ComponentStatus.finished:
-            raise EntityImmutableError(owner=self, msg=ERROR_MSG_IMMUTABLE)
+            raise EntityImmutableError(owner=self, msg=ERR_MSG_IMMUTABLE)
 
         rwf_arg_names = self.__get_rwf_arg_names()
         unknown = set(kwargs.keys()) - set(rwf_arg_names)

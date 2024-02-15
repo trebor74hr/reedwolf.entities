@@ -34,7 +34,7 @@ from .exceptions import (
     EntityApplyNameNotFoundError,
     EntityValidationError,
     EntityTypeError,
-    EntityValueError,
+    EntityValueError, EntityInitError,
 )
 from .namespaces import (
     ModelsNS,
@@ -52,7 +52,7 @@ from .meta import (
     Index0Type,
     KeyType,
     KeyPairs,
-    ModelInstanceType,
+    ModelInstanceType, ERR_MSG_ATTR_REQUIRED,
 )
 from .base import (
     get_name_from_bind,
@@ -67,6 +67,7 @@ from .base import (
 )
 from .expressions import (
     DotExpression,
+    create_dexp_by_attr_name,
 )
 from .data_models import (
     DataModel,
@@ -418,8 +419,8 @@ class ContainerBase(IContainer, ABC):
         if self.is_finished:
             raise EntitySetupError(owner=self, msg="setup() should be called only once")
 
-        if not self.contains:
-            raise EntitySetupError(owner=self, msg="'contains' attribute is required with list of components")
+        # if not self.contains:
+        #     raise EntitySetupError(owner=self, msg="'contains' attribute is required with list of components")
 
         if self.is_entity():
             # ----------------------------------------
@@ -677,6 +678,9 @@ class Entity(IEntity, ContainerBase):
 
 
     def init(self):
+        if not (self.contains and isinstance(self.contains, (tuple, list))):
+            raise EntityInitError(owner=self, msg=f"Attribute 'contains' is required and needs to be a list of components (got: {self.contains})")
+
         if not self.settings:
             # default setup
             self.settings = Settings()
@@ -892,8 +896,8 @@ class SubEntityBase(ContainerBase, ABC):
     SubEntityItems or top Entity
     """
     # DotExpression based model -> can be dumped, obligatory
-    bind_to:        Union[DataModel, DataModelWithHandlers, DotExpression] = field(repr=False,
-                                                                                   metadata = {"skip_setup": True})
+    bind_to:        Union[DataModel, DataModelWithHandlers, DotExpression, str] \
+                        = field(repr=False, metadata = {"skip_setup": True}, default=UNDEFINED)
 
     # cardinality:  ICardinalityValidation
     contains:       List[IComponent] = field(repr=False, default_factory=list)
@@ -951,15 +955,27 @@ class SubEntityBase(ContainerBase, ABC):
 
     def init(self):
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.register(self)
+
+        if not self.bind_to:
+            raise EntityInitError(owner=self, msg=ERR_MSG_ATTR_REQUIRED.format("bind_to"))
+
+        if not (self.contains and isinstance(self.contains, (tuple, list))):
+            raise EntityInitError(owner=self, msg=f"Attribute 'contains' is required and needs to be a list of components (got: {self.contains})")
+
+        if isinstance(self.bind_to, str):
+            self.bind_to = create_dexp_by_attr_name(ModelsNS, self.bind_to)
+
         if isinstance(self.bind_to, DotExpression):
-            # Clone it to be seure that is not used - if problem, then clone only if not built
+            # Clone it to be sure that is not used - if problem, then clone only if not built
             model_klass_dexp = self.bind_to.Clone()
             self.data_model = DataModel(model_klass=model_klass_dexp)
         else:
             self.data_model = self.bind_to
 
         if not (isinstance(self.data_model, IDataModel) and isinstance(self.data_model.model_klass, DotExpression)):
-            raise EntityInternalError(owner=self, msg=f"Attribute data_model needs to be DotExpression OR DataModel with DotExpression '.model', got::'{self.data_model}'")
+            raise EntityInternalError(owner=self, msg=f"Attribute data_model needs to be DotExpression "
+                                                      f"OR DataModel with DotExpression '.model', "
+                                                      f"got: '{self.data_model}' : {type(self.data_model)}")
 
         if not self.name:
             self.name = get_name_from_bind(self.data_model.model_klass)

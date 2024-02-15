@@ -1,4 +1,5 @@
 from abc import ABC
+from dataclasses import is_dataclass
 from typing import (
     Optional,
     Dict,
@@ -18,7 +19,7 @@ from .namespaces import (
 class EntityError(Exception, ABC):
     # TODO: validate that every call is marked for translations, check in constructor or using mypy
     def __init__(self, msg: str, owner: Optional['IComponent'] = None, item: Optional['Item'] = None):  # noqa: F821
-        self.parent, self.item = owner, item
+        self.owner, self.item = owner, item
         self.set_msg(msg)
 
     def set_msg(self, msg: str):
@@ -29,14 +30,16 @@ class EntityError(Exception, ABC):
         # TODO: fix: ApplyResult('ApplyResult()')
         out = []
 
-        if self.parent and isinstance(self.parent, str):
-            out.append(f"{self.parent} -> ")
-        elif self.parent is not None:
-            out.append(f"{self.parent.__class__.__name__}")
-            if not isinstance(self.parent, DynamicAttrsBase) and getattr(self.parent, "name", None):
-                out.append(f"('{self.parent.name}') -> ")
+        if self.owner and isinstance(self.owner, str):
+            out.append(f"{self.owner} -> ")
+        elif self.owner is not None:
+            if not isinstance(self.owner, DynamicAttrsBase) and getattr(self.owner, "name", None):
+                out.append(f"{self.owner.__class__.__name__}('{self.owner.name}')")
+            elif is_dataclass(self.owner):
+                out.append(f"{str(self.owner)}")
             else:
-                out.append(f"('{str(self.parent)}') -> ")
+                out.append(f"{self.owner.__class__.__name__}('{str(self.owner)}')")
+            out.append(f" -> ")
         out.append(f"{self.msg}")
         return "".join(out)
 

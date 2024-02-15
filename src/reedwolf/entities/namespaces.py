@@ -44,7 +44,7 @@ class Namespace(DynamicAttrsBase):
     def _GetNameWithAlias(self):
         return f"{self._name}{ f' / {self._alias}' if self._alias else ''}"
 
-    def __getattr__(self, attr_name):
+    def __getattr__(self, attr_name) -> "DotExpression":
         if attr_name in self.RESERVED_ATTR_NAMES:  # , "%r -> %s" % (self._node, attr_name):
             from .exceptions import EntitySetupNameError
             raise EntitySetupNameError(owner=self, msg=f"Namespace attribute {attr_name} is reserved, "
@@ -52,6 +52,7 @@ class Namespace(DynamicAttrsBase):
 
         from .expressions import DotExpression
         return DotExpression(node=attr_name, namespace=self)
+
 
 
 # NOTE: dropped, ContextNS / Ctx. should be used instead.
@@ -64,6 +65,7 @@ OperationsNS = Namespace("Op", is_for_internal_use_only=True)
 
 # managed models
 ModelsNS = Namespace("Models", alias="M")
+
 
 # # Data/D - can be list, primitive type, object, Option etc.
 # #   evaluated from functions or Expressions

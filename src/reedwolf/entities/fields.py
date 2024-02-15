@@ -50,7 +50,7 @@ from .exceptions import (
     EntityInternalError,
     EntitySetupError,
     EntitySetupTypeError,
-    EntitySetupNameError,
+    EntitySetupNameError, EntityInitError,
 )
 from .namespaces import (
     ModelsNS,
@@ -66,7 +66,9 @@ from .meta import (
     get_enum_member_py_type,
     EmptyFunctionArguments,
     STANDARD_TYPE_LIST,
-    Self, ComponentStatus,
+    Self,
+    ComponentStatus,
+    ERR_MSG_ATTR_REQUIRED,
 )
 from .base import (
     get_name_from_bind,
@@ -84,6 +86,7 @@ from .expressions import (
     ISetupSession,
     IThisRegistry,
     DEXP_VALIDATOR_FOR_BIND,
+    create_dexp_by_attr_name,
 )
 from .expr_attr_nodes import (
     AttrDexpNode
@@ -148,7 +151,7 @@ class FieldBase(IField, ABC):
     REQUIRED_VALIDATIONS:ClassVar[Optional[RequiredValidationsType]] = None
 
     # to Model attribute
-    bind_to:           DotExpression
+    bind_to:        Union[DotExpression, str] = field(default=UNDEFINED)
     title:          Optional[TransMessageType] = field(repr=False, default=None)
 
     # NOTE: required - is also Validation, i.e. Required() - just commonly used
@@ -209,6 +212,12 @@ class FieldBase(IField, ABC):
 
     def init(self):
         self._allowed_cleaner_base_list = self.init_allowed_cleaners()
+
+        if not self.bind_to:
+            raise EntityInitError(owner=self, msg=ERR_MSG_ATTR_REQUIRED.format("bind_to"))
+
+        if isinstance(self.bind_to, str):
+            self.bind_to = create_dexp_by_attr_name(ModelsNS, self.bind_to)
 
         # TODO: check that value is M ns and is a simple M. value
         if not isinstance(self.bind_to, DotExpression):

@@ -144,7 +144,7 @@ NumberType              = Union[int, float, Decimal]
 # TODO: consider maybe to replace this with AttrValue.
 LiteralType             = TypeVar("LiteralType", bound=Any)
 
-ERR_MSG_SUPPORTED = "Supporting custom and standard python types, and typing: Optional, Union[..., NoneType] and Sequence/List[ py-types | Union[py-types, NoneType]]."
+
 
 # -- Following are used just to have type declaration for names
 AttrName = TypeVar("AttrName", bound=str)
@@ -161,6 +161,18 @@ ContainerId = TypeVar("ContainerId", bound=str)
 # ------------------------------------------------------------
 ValueArgValidatorPyFuncType = Callable[..., NoneType]
 ValueArgValidatorPyFuncDictType = Dict[str, Union[ValueArgValidatorPyFuncType, List[ValueArgValidatorPyFuncType]]]
+
+# ------------------------------------------------------------
+# common messages
+# ------------------------------------------------------------
+ERR_MSG_ATTR_REQUIRED = "Attribute '{}' is required."
+
+ERR_MSG_SUPPORTED = ("Supporting custom and standard python types, and typing: Optional, Union[..., NoneType] "
+                    "and Sequence/List[ py-types | Union[py-types, NoneType]].")
+ERR_MSG_IMMUTABLE = ("Change is not allowed. Instance is setup and is in immutable state. "
+                       "You can .copy() and change the new instance before .setup() is called.")
+
+# ------------------------------------------------------------
 
 class ComponentStatus(IntEnum):
     draft = 0
