@@ -188,7 +188,7 @@ class ReservedAttributeNames(str, Enum):
     # Applies to model instance's attributes, e.g. This.Value <= Company().name
     VALUE_ATTR_NAME = "Value" 
 
-    # Containers (Entity/SubEntitySingle) + FieldGroup + Field with children (BooleanField)
+    # Containers (Entity/SubEntity) + FieldGroup + Field with children (BooleanField)
     # -------------------------------------------------------------------------------------
     # Applies to components which have children (list of components, e.g. in
     # contiains)
@@ -650,11 +650,11 @@ class IComponent(ReedwolfDataclassBase, ABC):
         return False
 
     @staticmethod
-    def is_subentity_single() -> bool:
+    def is_subentity() -> bool:
         return False
 
-    def is_subentity(self) -> bool:
-        return self.is_subentity_items() or self.is_subentity_single()
+    def is_subentity_any(self) -> bool:
+        return self.is_subentity_items() or self.is_subentity()
 
     @staticmethod
     def is_fieldgroup() -> bool:
@@ -686,7 +686,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
                 may_collect_my_children
                 Examples:
                     - FieldGroup
-                    - SubEntitySingle
+                    - SubEntity
 
         in normal mode:
             CACHED
@@ -975,8 +975,8 @@ class IComponent(ReedwolfDataclassBase, ABC):
                 self.settings._setup_all_custom_functions(self.apply_settings_class)
                 self.set_parent(None)
             else:
-                # SubEntityItems() / SubEntitySingle()
-                assert self.is_subentity()
+                # SubEntityItems() / SubEntity()
+                assert self.is_subentity_any()
 
             assert not self.setup_session
             # TODO: explain when is not set
@@ -1032,7 +1032,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
 
                     component.set_parent(self)
                     # ALT: component.is_subentity()
-                    if component.is_subentity():
+                    if component.is_subentity_any():
                         # component.set_parent(parent=self)
                         # for subentity_items container don't go deeper into tree (call _fill_components)
                         # it will be called later in container.setup() method
@@ -1157,7 +1157,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
                 attr_node = child.bind_to._dexp_node
                 child_type_info = attr_node.get_type_info()
 
-            elif child.is_subentity() or child.is_fieldgroup():
+            elif child.is_subentity_any() or child.is_fieldgroup():
                 # ------------------------------------------------------------
                 # NOTE: this is a bit complex chain of setup() actions: 
                 #           entity -> this -> subentity -> subentity ...
@@ -1237,7 +1237,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
                 )):
             # setup this_registry objects must be inside of stack_frame due
             # premature component.bind_to setup in some ThisRegistryFor* classes.
-            if not self.is_subentity():
+            if not self.is_subentity_any():
                 # NOTE: for SubEntity* - this registry must be and is already
                 #       created in ContainerBase.setup()
                 # this_registry = container.try_create_this_registry(component=self, setup_session=setup_session)
@@ -1453,7 +1453,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
         for subcomponent in self._get_subcomponents_list():
             component = subcomponent.component
             if isinstance(component, IComponent) \
-              and (component.is_data_model() or component.is_subentity()) \
+              and (component.is_data_model() or component.is_subentity_any()) \
               and component.is_finished:
                 # raise EntityInternalError(owner=self, msg=f"DataModel.setup() should have been called before ({component})")
                 continue
@@ -1470,7 +1470,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
                     dexp.Setup(setup_session=setup_session, owner=self)
                     # called = True
             elif isinstance(component, IComponent):
-                assert "Entity(" not in repr(component)
+                assert not component.is_entity()
                 assert not component.is_finished
                 component.setup(setup_session=setup_session)  # , parent=self)
                 # NOTE: in some rare cases .finish() is not called - so there is an additional .finish() call later.

@@ -101,7 +101,7 @@ from .settings import (
 from .containers import (  # noqa: F401
     KeyFields,
     SubEntityItems,
-    SubEntitySingle,
+    SubEntity,
     Entity,
     )
 from .functions import (
@@ -211,7 +211,7 @@ __all__ = [
     "KeyFields",
 
     # containers
-    "SubEntitySingle",
+    "SubEntity",
     "SubEntityItems",
     # top container
     "Entity",

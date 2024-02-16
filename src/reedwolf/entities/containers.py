@@ -281,14 +281,14 @@ class ContainerBase(IContainer, ABC):
             raise EntityInternalError(owner=self, msg=f"Expecting model is DotExpression instance, got: {model_klass}")
 
         is_main_model = (data_model==self.data_model)
-        is_subentity_main_model = (self.is_subentity() and is_main_model)
+        is_subentity_main_model = (self.is_subentity_any() and is_main_model)
         if is_subentity_main_model:
             if not isinstance(model_klass, DotExpression):
-                raise EntitySetupError(owner=self, msg=f"{data_model.name}: For SubEntityItems/SubEntitySingle main data_model needs to be DotExpression: {data_model.model_klass}")
+                raise EntitySetupError(owner=self, msg=f"{data_model.name}: For SubEntityItems/SubEntity main data_model needs to be DotExpression: {data_model.model_klass}")
 
         # TODO: for functions value expressions need to be stored
         #       with all parameters (func_args)
-        if not (self.is_subentity() or not is_main_model):
+        if not (self.is_subentity_any() or not is_main_model):
             raise EntitySetupTypeError(owner=self, msg=f"{data_model.name}: DotExpression should be used only in SubEntity containers and nested /DataModelDataModels")
 
         model_klass._SetDexpValidator(DEXP_VALIDATOR_FOR_BIND)
@@ -348,15 +348,15 @@ class ContainerBase(IContainer, ABC):
             is_list = attr_node.data.is_list
             py_type_hint = attr_node.data.py_type_hint
 
-            if self.is_subentity_single() and is_list:
-                raise EntitySetupTypeError(owner=self, msg=f"{data_model.name}: For SubEntitySingle did not expect List model type, got: {py_type_hint}")
+            if self.is_subentity() and is_list:
+                raise EntitySetupTypeError(owner=self, msg=f"{data_model.name}: For SubEntity did not expect List model type, got: {py_type_hint}")
             elif self.is_subentity_items() and not is_list:
                 raise EntitySetupTypeError(owner=self, msg=f"{data_model.name}: For SubEntityItems expected List model type, got: {py_type_hint}")
 
             # TODO: check data_model cases - list, not list, etc.
             # elif self.is_entity_model() and ...
         else:
-            if self.is_subentity():
+            if self.is_subentity_any():
                 raise EntitySetupTypeError(owner=self, msg=f"{data_model.name}: For SubEntity use DotExpression as model, got: {model_klass}")
             # TODO: maybe check model type_info is_list ...
 
@@ -1047,7 +1047,7 @@ class SubEntityItems(SubEntityBase):
 # ------------------------------------------------------------
 
 @dataclass
-class SubEntitySingle(SubEntityBase):
+class SubEntity(SubEntityBase):
     """ one to one relations - e.g. Person -> PersonAccess """
 
     cleaners: Optional[List[Union[SingleValidation, ChildrenValidationBase, ChildrenEvaluationBase]]] = field(repr=False, default_factory=list)
@@ -1060,7 +1060,7 @@ class SubEntitySingle(SubEntityBase):
         super().init()
 
     @staticmethod
-    def is_subentity_single() -> bool:
+    def is_subentity() -> bool:
         return True
 
     # @staticmethod

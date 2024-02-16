@@ -517,7 +517,7 @@ class ApplyResult(IApplyResult):
             in_component_only_tree = self.current_frame.in_component_only_tree 
 
             # check if instance model is ok
-            if not component.is_subentity():
+            if not component.is_subentity_any():
                 if self.defaults_mode:
                     if self.current_frame.instance is not NA_DEFAULTS_MODE:
                         raise EntityInternalError(owner=self, msg=f"Defaults mode - current frame's instance's model must be NA_DEFAULTS_MODE, got: {type(self.instance)}")
@@ -830,14 +830,14 @@ class ApplyResult(IApplyResult):
                 in_component_only_tree=in_component_only_tree,
             )
 
-        elif not mode_subentity_items and component.is_subentity():
+        elif not mode_subentity_items and component.is_subentity_any():
 
             # ---- SubEntityItems case -> process single or iterate all items -----
             instance, current_instance_new = self._get_subentity_model_instances(
                 component, in_component_only_tree)
 
-            # ---- SubEntitySingle case
-            if not component.is_subentity_single():
+            # ---- SubEntity case
+            if not component.is_subentity():
                 raise EntityApplyValueError(owner=component, msg=f"Did not expect single instance: {to_repr(instance)}")
 
             # ========================================
@@ -1569,8 +1569,8 @@ class ApplyResult(IApplyResult):
                 key_string = GlobalConfig.ID_NAME_SEPARATOR.join([parent_key_string, key_string])
             else:
                 container_parent = component.get_first_parent_container(consider_self=True)
-                if container_parent.is_subentity():
-                    raise EntityInternalError(owner=component, msg=f"Parent container {container_parent.name} is an SubEntitySingle/SubEntityItems and parent_instance is empty") 
+                if container_parent.is_subentity_any():
+                    raise EntityInternalError(owner=component, msg=f"Parent container {container_parent.name} is an SubEntity/SubEntityItems and parent_instance is empty")
 
 
             self.key_string_container_cache[instance_id] = key_string

@@ -584,7 +584,7 @@ class ItemsValueNode(ValueNodeBase):
 
     def __post_init__(self):
         super().__post_init__()
-        assert self.component.is_subentity()
+        assert self.component.is_subentity_any()
         self.items = []
 
     def is_list(self) -> bool:

@@ -232,7 +232,7 @@ class Unique: # namespace holder
 
 @dataclass
 class SingleValidation(ValidationBase):
-    " Cardinality validation for for SubEntitySingle case, does not really belong to this module "
+    " Cardinality validation for for SubEntity case, does not really belong to this module "
     allow_none: Union[bool, DotExpression] = True
     available: Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
 

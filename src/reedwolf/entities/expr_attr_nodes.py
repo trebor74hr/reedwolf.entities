@@ -232,8 +232,8 @@ class AttrDexpNode(IDotExpressionNode):
             frame = apply_result.current_frame
 
             if not len(names)==1:
-                if frame.container.is_subentity() or frame.on_component_only:
-                    raise EntityInternalError(owner=self, msg=f"Attribute node - execution initial step for SubEntityItems/SubEntitySingle failed, expected single name members (e.g. M), got: {self.name}\n  == Compoonent: {frame.container}")
+                if frame.container.is_subentity_any() or frame.on_component_only:
+                    raise EntityInternalError(owner=self, msg=f"Attribute node - execution initial step for SubEntityItems/SubEntity failed, expected single name members (e.g. M), got: {self.name}\n  == Compoonent: {frame.container}")
                 else:
                     raise EntityInternalError(owner=self, msg=f"Initial evaluation step for non-subentity_items failed, expected single name member (e.g. M), got: {self.name}\n  == Compoonent: {frame.container}")
 
