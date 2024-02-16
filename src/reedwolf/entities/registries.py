@@ -377,6 +377,7 @@ class LocalFieldsRegistry(RegistryBase):
         containers_dict = self.container.entity.containers_dict
         my_containers_id_path = self.container.containers_id_path
         assert my_containers_id_path
+        my_containers_id = my_containers_id_path[-1]
         candidates: List[Tuple[AttrDexpNode, AttrValueContainerPath]] = []
 
         for container_attr_dexp_node_pair in container_attr_dexp_node_pair_list:
@@ -389,13 +390,22 @@ class LocalFieldsRegistry(RegistryBase):
             path_up: List[ContainerId] = None
             path_down: List[ContainerId] = None
 
-            for idx, ho_container_id_bit in enumerate(holder_container.containers_id_path, 0):
-                if not (idx < len(my_containers_id_path) and ho_container_id_bit == my_containers_id_path[idx]):
+            # orig: for idx, ho_container_id_bit in enumerate(holder_container.containers_id_path, 0):
+            # orig:     if not (idx < len(my_containers_id_path) and ho_container_id_bit == my_containers_id_path[idx]):
+            len_my = len(my_containers_id_path)
+            len_ho = len(holder_container.containers_id_path)
+            max_len = max([len_my, len_ho])
+            for idx in range(max_len):
+                ho_container_id_bit = holder_container.containers_id_path[idx] if idx < len_ho else UNDEFINED
+                my_container_id_bit = my_containers_id_path[idx] if idx < len_my else UNDEFINED
+                assert not (ho_container_id_bit is UNDEFINED and my_container_id_bit is UNDEFINED), "should not happen"
+                if ho_container_id_bit != my_container_id_bit:
+                    # break on first different node - this is junction of two paths
                     if idx==0:
                         raise EntityInternalError(owner=self,
                                 msg=f"First node must match (entity) - Entity references itself? LocalFieldsRegistry should have done this")
-                    path_up = list(reversed(my_containers_id_path[idx-1:]))
-                    path_down = holder_container.containers_id_path[idx:]
+                    path_up = list(reversed(my_containers_id_path[idx-1:])) if my_container_id_bit is not UNDEFINED else [my_containers_id]
+                    path_down = holder_container.containers_id_path[idx:] if ho_container_id_bit is not UNDEFINED else []
                     break
 
             if path_up is None:
@@ -429,7 +439,7 @@ class LocalFieldsRegistry(RegistryBase):
 
 
             # TODO: if settings.debug:
-            #   print(f"Container {self.container.container_id} refs {full_dexp_node_name} -> testing {ho_container_id} - found: up={path_up} + down={path_down}, items={subentity_items_in_path_down}, ok={ok}")
+            # print(f"Container {self.container.container_id} refs {full_dexp_node_name} -> testing {ho_container_id} - found: up={path_up} + down={path_down}, items={subentity_items_in_path_down}, ok={ok}")
 
         if len(candidates) > 1:
             custom_msg_bits = ["{}{}{}".format("^".join(cand[1].path_up),
