@@ -408,13 +408,15 @@ class LocalFieldsRegistry(RegistryBase):
                     path_down = holder_container.containers_id_path[idx:] if ho_container_id_bit is not UNDEFINED else []
                     break
 
-            if path_up is None:
-                # TODO: this and similar cases could be done easier -> detect direct parent. do it before for loop:
-                #       if hoder_container_id is in my_container_id_path: then ...
-                # holder is entity, everybody can reach it
-                assert path_down is None
-                path_up = list(reversed(my_containers_id_path))
-                path_down = []
+            assert path_up
+
+            # if path_up is None:
+            #     # TODO: this and similar cases could be done easier -> detect direct parent. do it before for loop:
+            #     #       if hoder_container_id is in my_container_id_path: then ...
+            #     # holder is entity, everybody can reach it
+            #     assert path_down is None
+            #     path_up = list(reversed(my_containers_id_path))
+            #     path_down = []
 
             if path_down:
                 # in path down - skip this if you find any SubEntityItems in the path
