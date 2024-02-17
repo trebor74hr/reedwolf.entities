@@ -439,6 +439,14 @@ class LocalFieldsRegistry(RegistryBase):
                 subentity_items_in_path_down = [
                     container_id_in_path for container_id_in_path in path_down
                     if containers_dict[container_id_in_path].is_subentity_items()]
+
+                # but if Container is to be found and there is only single subitems container
+                # and there is no other after -> it is visible since it is unique.
+                # first operator after must operate with list.
+                if len(subentity_items_in_path_down) == 1 \
+                  and path_down[-1] == subentity_items_in_path_down[-1] \
+                    and full_dexp_node_name == subentity_items_in_path_down[-1]:
+                        subentity_items_in_path_down = None
             else:
                 subentity_items_in_path_down = None
 
