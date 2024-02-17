@@ -674,7 +674,7 @@ class TypeInfo:
     is_inject_func_arg: bool = field(init=False, repr=False, default=UNDEFINED)
 
     # list of python type underneath - e.g. int, str, list, dict, Person, or list of accepted types
-    types:          List[Type] = field(init=False, default=UNDEFINED)
+    types:          List[Type] = field(init=False, default=UNDEFINED, repr=False)
     # first one - get rid of this one or leave?
     # ex. Union[type, List[type]]
     type_:          Type = field(init=False, repr=False, default=UNDEFINED)
