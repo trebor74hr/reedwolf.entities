@@ -376,6 +376,21 @@ def is_model_instance(instance: ModelInstanceType) -> bool:
 def is_enum(maybe_enum: Any) -> bool:
     return isinstance(maybe_enum, type) and issubclass(maybe_enum, Enum)
 
+def is_list_instance_or_type(maybe_list: Any) -> bool:
+    if isinstance(maybe_list, TypeInfo):
+        is_list = maybe_list.is_list
+    elif isinstance(maybe_list, IDexpValueSource):
+        # ValueNode cases, check if ItemsValueNode
+        is_list = maybe_list.component.get_type_info().is_list
+    elif hasattr(maybe_list, "get_type_info"):
+        is_list = maybe_list.get_type_info()
+    elif hasattr(maybe_list, "type_info"):
+        is_list = maybe_list.type_info
+    else:
+        is_list = isinstance(maybe_list, (list, tuple))
+    return is_list
+
+
 def get_enum_member_py_type(enum_kls) -> type:
     " teke first member value and return its type "
     assert is_enum(enum_kls)
@@ -647,6 +662,8 @@ class TypeInfo:
     is_optional:    bool = field(init=False, repr=False, default=UNDEFINED)
     is_enum:        bool = field(init=False, repr=False, default=UNDEFINED)
     is_union:       bool = field(init=False, repr=False, default=UNDEFINED)
+    # e.g. can have Length()
+    is_sized:       bool = field(init=False, repr=False, default=UNDEFINED)
 
     # NOTE: custom type hints - see classes that inherit IFuncArgHint.
     #       This enables custom properties and methods embedded in type-hint object instances.
@@ -732,7 +749,7 @@ class TypeInfo:
 
         is_list = False
         is_dict = False
-        inner_type = UNDEFINED
+        # inner_type = UNDEFINED
 
         if origin_type in (list, Sequence, Iterable):
             # List[some_type]
@@ -753,6 +770,7 @@ class TypeInfo:
         else:
             inner_type = py_type_hint
 
+
         if func_arg_hint:
             # assert inner_type == py_type_hint, "inner_type shouldn't be changed from original py_type_hint"
             fah_inner_type = func_arg_hint.get_inner_type()
@@ -769,6 +787,7 @@ class TypeInfo:
 
         # normalize
         self.is_list = is_list
+        self.is_sized = bool(self.is_list or hasattr(inner_type, "__len__"))
         self.is_dict = is_dict
         self.is_optional = is_optional
 
@@ -806,7 +825,8 @@ class TypeInfo:
         if self.is_dict!=other.is_dict:
             return "expecting a dict compatible type"
 
-        if not ignore_list_check and self.is_list!=other.is_list:
+        if not ignore_list_check and self.is_list!=other.is_list \
+          and Sized not in self.types:
             if self.is_list:
                 err_msg = "expecting a list compatible type"
             else:
@@ -829,7 +849,7 @@ class TypeInfo:
         for type_ in self.types:
             if (type_ in (ItemType, Any) 
                     or other.type_ in (ItemType, Any)
-                    or (type_ == Sized and hasattr(other.type_, "__len__"))
+                    or (type_ == Sized and other.is_sized)
                     or type_ in other_underlying_types):
                 found = True
                 break
@@ -1195,3 +1215,14 @@ FunctionNoArgs = Callable[[], Any]
 #     FuncArgDotExprBoolType: bool,
 # }
 
+class IDexpValueSource:
+    """
+    Used in IValueNode
+    """
+    @abstractmethod
+    def get_value(self, strict:bool) -> AttrValue:
+        ...
+
+    @abstractmethod
+    def is_list(self) -> bool:
+        ...

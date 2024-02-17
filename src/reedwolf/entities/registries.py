@@ -304,11 +304,14 @@ class LocalFieldsRegistry(RegistryBase):
         # A.3. COMPONENTS - collect attr_nodes - previously flattened (recursive function fill_components)
         # container_id = self.container.container_id
         for component_name, component in self.container.components.items():
+            if component is self.container:
+                continue
             self.register(component)
         return
 
     def register(self, component:IComponent) -> AttrDexpNode:
-        attr_node = self.create_attr_node(component)
+        # allow direct SubEntityItems to be accessible
+        attr_node = self.create_attr_node(component, allow_containers=True)
         self.register_attr_node(attr_node) # , is_list=False))
         return attr_node
 
@@ -332,6 +335,7 @@ class LocalFieldsRegistry(RegistryBase):
             type_info = component.type_info # Can be None
         # F.<container-name> is allowed - see TopFieldsRegistry
         elif allow_containers and isinstance(component, IContainer):
+            # assert component is not self.container
             denied = False
             deny_reason = ""
             # will be computed from get_type_info() in dexp_node.finish()
@@ -646,6 +650,7 @@ class ContextRegistry(RegistryBase):
                     dexp_node_name: str,
                     owner_dexp_node: IDotExpressionNode,
                     owner: IComponent,
+                    is_1st_node: bool,
                     ) -> IDotExpressionNode:
 
         if not isinstance(owner, IComponent):
@@ -654,6 +659,7 @@ class ContextRegistry(RegistryBase):
         return super().create_node(
             dexp_node_name=dexp_node_name,
             owner_dexp_node=owner_dexp_node,
+            is_1st_node=is_1st_node,
             owner=owner,
         )
 

@@ -236,7 +236,9 @@ class BoundDataModelBase(IBoundDataModel):
                                     apply_result=apply_result, 
                                     dexp_result=ExecResult(),
                                     prev_node_type_info=None,
-                                    is_last=True)
+                                    is_1st_node=True, # TODO: is this correct? used?
+                                    is_last_node=True,
+                )
 
                 child_instances = rh_dexp_result.value
 

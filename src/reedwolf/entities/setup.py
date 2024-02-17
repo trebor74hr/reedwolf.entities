@@ -47,7 +47,9 @@ from .meta import (
     TypeInfo,
     HookOnFinishedAllCallable,
     get_model_fields,
-    AttrName, ModelInstanceType, ComponentStatus,
+    AttrName,
+    ComponentStatus,
+    is_list_instance_or_type,
 )
 from .base import (
     IComponentFields,
@@ -62,7 +64,6 @@ from .base import (
     ReservedAttributeNames,
     SetupStackFrame,
     UseStackFrameCtxManagerBase,
-    IValueNode
 )
 from .functions import (
     FunctionsFactoryRegistry,
@@ -430,6 +431,7 @@ class RegistryBase(IRegistry):
                     dexp_node_name: str,
                     owner_dexp_node: IDotExpressionNode,
                     owner: IComponent,
+                    is_1st_node: bool,
                     ) -> IDotExpressionNode:
         """
         Will create a new attr_node when missing, even in the case when the var
@@ -512,24 +514,27 @@ class RegistryBase(IRegistry):
                     inspect_object = owner_dexp_node.type_info
 
             try:
-                # , func_node
                 type_info, th_field = extract_type_info(
                             attr_node_name=dexp_node_name,
-                            inspect_object=inspect_object, 
+                            inspect_object=inspect_object,
                             )
             except EntitySetupNameNotFoundError as ex:
                 ex.set_msg(f"{owner} / {self.NAMESPACE}-NS: {ex.msg}")
-                raise 
+                raise
             except EntityError as ex:
                 ex.set_msg(f"'{owner} / {self.NAMESPACE}-NS: {owner_dexp_node.full_name} -> '.{dexp_node_name}' metadata / type-hints read problem: {ex}")
-                raise 
+                raise
 
             assert type_info
+
+            # if this is a list and not in a direct
+            if not is_1st_node and is_list_instance_or_type(inspect_object):
+                # TODO: too complex error message
+                raise EntitySetupValueError(owner=self, msg=f"'{owner} / {self.NAMESPACE}-NS: {owner_dexp_node.full_name} -> '.{dexp_node_name}' can not be read from list, got: {inspect_object}. Use list accessor functions.")
 
             # --------------------------------------------------
             # Create()
             # --------------------------------------------------
-            # attributes / functions / operations
             dexp_node = AttrDexpNode(
                             name=full_dexp_node_name,
                             data=type_info,
@@ -796,7 +801,7 @@ class TopSetupSession(SetupSessionBase):
 #
 #         component = children_dict[attr_name]
 #
-#         # OLD: if is_last:
+#         # OLD: if is_last_node:
 #         if not isinstance(component, IField):
 #             # ALT: not hasattr(component, "bind_to")
 #             raise EntityApplyNameError(owner=self.component,

@@ -125,13 +125,14 @@ class IDotExpressionNode(ReedwolfDataclassBase, ABC):
     #     return dataclasses_replace(self)
 
     @abstractmethod
-    def execute_node(self, 
-                 apply_result: "IApplyResult", # noqa: F821
-                 # previous - can be undefined too
-                 dexp_result: Union[ExecResult, UndefinedType],
-                 is_last: bool,
-                 prev_node_type_info: Optional[TypeInfo],
-                 ) -> ExecResult:
+    def execute_node(self,
+                     apply_result: "IApplyResult",  # noqa: F821
+                     # previous - can be undefined too
+                     dexp_result: Union[ExecResult, UndefinedType],
+                     is_1st_node: bool,
+                     is_last_node: bool,
+                     prev_node_type_info: Optional[TypeInfo],
+                     ) -> ExecResult:
         ...
 
     @abstractmethod
@@ -222,6 +223,15 @@ class IRegistry:
         ...
 
     @abstractmethod
+    def create_node(self,
+                    dexp_node_name: str,
+                    owner_dexp_node: IDotExpressionNode,
+                    owner: "IComponent",
+                    is_1st_node: bool,
+                    ) -> IDotExpressionNode:
+        ...
+
+    @abstractmethod
     def register(self, component:"IComponent") -> "AttrDexpNode":
         ...
 
@@ -253,21 +263,6 @@ class IRegistry:
         Common logic and caller to this is in apply_to_get_root_value()
         """
         ...
-
-# ------------------------------------------------------------
-
-class IDexpValueSource:
-    """
-    Used in IValueNode
-    """
-    @abstractmethod
-    def get_value(self, strict:bool) -> AttrValue:
-        ...
-
-    @abstractmethod
-    def is_list(self) -> bool:
-        ...
-
 
 # ------------------------------------------------------------
 
@@ -607,6 +602,7 @@ class DotExpression(DynamicAttrsBase):
                             dexp_node_name=dexp_node_name,
                             owner_dexp_node=last_dexp_node,
                             owner=owner,
+                            is_1st_node=(bnr == 1),
                             )
 
             if self._dexp_validator:
@@ -615,7 +611,7 @@ class DotExpression(DynamicAttrsBase):
             # add node to evaluator
             dexp_evaluator.add(current_dexp_node)
 
-            # if is_last and copy_to_setup_session:
+            # if is_last_node and copy_to_setup_session:
             #     current_dexp_node.add_bound_dexp_node(BoundVar(setup_session.name, copy_to_setup_session.dexp_node_name))
             #     setup_session.add(current_dexp_node, alt_dexp_node_name=copy_to_setup_session.dexp_node_name)
 
@@ -885,12 +881,13 @@ class LiteralDexpNode(IDotExpressionNode):
     def get_type_info(self) -> TypeInfo:
         return self.type_info
 
-    def execute_node(self, 
-                 apply_result: "IApplyResult", # noqa: F821
-                 dexp_result: ExecResult,
-                 is_last: bool,
-                 prev_node_type_info: Optional[TypeInfo],
-                 ) -> ExecResult:
+    def execute_node(self,
+                     apply_result: "IApplyResult",  # noqa: F821
+                     dexp_result: ExecResult,
+                     is_1st_node: bool,
+                     is_last_node: bool,
+                     prev_node_type_info: Optional[TypeInfo],
+                     ) -> ExecResult:
         assert not dexp_result
         return self.dexp_result
 
@@ -1128,14 +1125,15 @@ class OperationDexpNode(IDotExpressionNode):
         return f"Op{self}"
 
 
-    def execute_node(self, 
-                 apply_result: "IApplyResult", # noqa: F821
-                 dexp_result: ExecResult,
-                 is_last: bool,
-                 prev_node_type_info: Optional[TypeInfo],
-                 ) -> ExecResult:
+    def execute_node(self,
+                     apply_result: "IApplyResult",  # noqa: F821
+                     dexp_result: ExecResult,
+                     is_1st_node: bool,
+                     is_last_node: bool,
+                     prev_node_type_info: Optional[TypeInfo],
+                     ) -> ExecResult:
 
-        if is_last and not self._status == ComponentStatus.finished:
+        if is_last_node and not self._status == ComponentStatus.finished:
             raise EntityInternalError(owner=self, msg="Last dexp node is not finished.")
 
         if dexp_result:
@@ -1235,7 +1233,8 @@ def execute_dexp_or_node(
                             apply_result=apply_result, 
                             dexp_result=dexp_result,
                             prev_node_type_info=prev_node_type_info,
-                            is_last=True,
+                            is_1st_node=True, # correct or not?
+                            is_last_node=True,
                             )
     else:
         raise EntityInternalError(
@@ -1385,7 +1384,7 @@ def create_dexp_by_attr_name(namespace: Namespace, attr_name: str) -> DotExpress
 #     @abstractmethod
 #     def get_attribute(self, apply_result: 'IApplyResult', attr_name:str) -> Self: # noqa: F821
 #         """
-#         is_last -> True - need to get final literal value from object
+#         is_last_node -> True - need to get final literal value from object
 #         (usually primitive type like int/str/date ...)
 #         """
 #         ...

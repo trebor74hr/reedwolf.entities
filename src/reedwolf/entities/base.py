@@ -85,7 +85,9 @@ from .meta import (
     Index0Type,
     KeyType,
     ModelInstanceType,
-    ContainerId, ComponentStatus,
+    ContainerId,
+    ComponentStatus,
+    IDexpValueSource,
 )
 from .meta_dataclass import ReedwolfDataclassBase
 from .expressions import (
@@ -94,8 +96,7 @@ from .expressions import (
     IDotExpressionNode,
     ISetupSession,
     IThisRegistry,
-    DexpValidator, IDexpValueSource,
-)
+    DexpValidator, )
 from .settings import (
     Settings, ApplySettings,
 )

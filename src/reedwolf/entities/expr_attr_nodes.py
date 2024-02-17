@@ -29,7 +29,6 @@ from .expressions import (
     DotExpression,
     IDotExpressionNode,
     RegistryRootValue,
-    IDexpValueSource,
 )
 from .meta import (
     TypeInfo,
@@ -40,7 +39,9 @@ from .meta import (
     AttrValue,
     NoneType,
     KlassMember,
-    ContainerId, ComponentStatus,
+    ContainerId,
+    ComponentStatus,
+    is_list_instance_or_type, IDexpValueSource,
 )
 from .custom_attributes import (
     Attribute,
@@ -216,12 +217,13 @@ class AttrDexpNode(IDotExpressionNode):
                      apply_result: IApplyResult,
                      # previous - can be undefined too
                      dexp_result: Union[ExecResult, UndefinedType],
-                     is_last: bool,
+                     is_1st_node: bool,
+                     is_last_node: bool,
                      prev_node_type_info: Optional[TypeInfo],
                      ) -> ExecResult:
 
-        # if is_last and not self.is_finished:
-        if is_last and not self._status == ComponentStatus.finished:
+        # if is_last_node and not self.is_finished:
+        if is_last_node and not self._status == ComponentStatus.finished:
             raise EntityInternalError(owner=self, msg="Last dexp node is not finished.") 
 
         # TODO: not nicest way - string split
@@ -279,9 +281,8 @@ class AttrDexpNode(IDotExpressionNode):
             do_fetch_by_name = True
 
         if do_fetch_by_name:
-            # TODO: check ValueNode and Items/list cases - is type_info needed?
-            if isinstance(value_prev, (list, tuple)):
-                raise EntityInternalError(owner=self, msg=f"Expected standard object, got list: {type(value_prev)}: {to_repr(value_prev)}")
+            if not is_1st_node and is_list_instance_or_type(value_prev):
+                raise EntityApplyValueError(owner=self, msg=f"Expected standard object, got list compatible type: {type(value_prev)}: {to_repr(value_prev)}")
 
             if prev_node_type_info and prev_node_type_info.is_list:
                 raise EntityApplyNameError(owner=self, msg=f"Fetching attribute '{attr_name}' expected list and got: '{to_repr(value_prev)}': '{type(value_prev)}'")
@@ -324,7 +325,7 @@ class AttrDexpNode(IDotExpressionNode):
         # TODO: hm, changer_name is equal to attr_name, any problem / check / fix ...
 
         # ValueNode case
-        if is_last and isinstance(value_new, IDexpValueSource):
+        if is_last_node and isinstance(value_new, IDexpValueSource):
             # fetch unfinished value
             value_new = value_new.get_value(strict=False)
 

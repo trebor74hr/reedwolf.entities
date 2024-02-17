@@ -68,6 +68,7 @@ from .meta import (
     ValueArgValidatorPyFuncDictType,
     AttrName,
     is_instancemethod_by_name, SELF_ARG_NAME, get_function_non_empty_arguments, SettingsType, ComponentStatus,
+    IDexpValueSource,
 )
 from .expressions import (
     DotExpression,
@@ -78,8 +79,7 @@ from .expressions import (
     IThisRegistry,
     JustDotexprFuncArgHint,
     DotexprFuncArgHint,
-    IFunctionFactory, IDexpValueSource,
-)
+    IFunctionFactory, )
 from .func_args import (
     FunctionArguments,
     create_function_arguments,
@@ -460,7 +460,8 @@ class IFunction(IFunctionDexpNode, ABC):
     def execute_node(self,
                      apply_result: "IApplyResult",  # noqa: F821
                      dexp_result: ExecResult,
-                     is_last:bool,
+                     is_1st_node: bool,
+                     is_last_node: bool,
                      prev_node_type_info: Optional[TypeInfo],
                      ) -> Any:
         instance = apply_result.current_frame.instance
@@ -472,19 +473,20 @@ class IFunction(IFunctionDexpNode, ABC):
                     instance = instance,
                     this_registry=self.this_registry,
                 )):
+            # is_1st_node is not used ...
             result = self._execute_node(
                       apply_result=apply_result,
                       dexp_result=dexp_result,
-                      is_last=is_last,
+                      is_last_node=is_last_node,
                       prev_node_type_info=prev_node_type_info)
         return result
 
     def _execute_node(self,
-                     apply_result: "IApplyResult",  # noqa: F821
-                     dexp_result: ExecResult,
-                     is_last:bool,
-                     prev_node_type_info: Optional[TypeInfo],
-                     ) -> Any:
+                      apply_result: "IApplyResult",  # noqa: F821
+                      dexp_result: ExecResult,
+                      is_last_node: bool,
+                      prev_node_type_info: Optional[TypeInfo],
+                      ) -> Any:
         """
         will be called when actual function logic needs to be executed. Input
         is/are function argument(s).
@@ -494,7 +496,7 @@ class IFunction(IFunctionDexpNode, ABC):
         #       check first / dexp_result argument that matches self.value_arg_type_info
         #       check output type that matches output_type_info
         """
-        if is_last and not self._status == ComponentStatus.finished:
+        if is_last_node and not self._status == ComponentStatus.finished:
             raise EntityInternalError(owner=self, msg="Last dexp-node is not finished")  # , {id(self)} / {type(self)}
 
         args = []
