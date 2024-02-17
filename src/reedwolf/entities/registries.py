@@ -302,7 +302,7 @@ class LocalFieldsRegistry(RegistryBase):
         #       cache in TopFieldsRegistry and reuse here.
         """
         # A.3. COMPONENTS - collect attr_nodes - previously flattened (recursive function fill_components)
-        container_id = self.container.container_id
+        # container_id = self.container.container_id
         for component_name, component in self.container.components.items():
             self.register(component)
         return
@@ -313,7 +313,7 @@ class LocalFieldsRegistry(RegistryBase):
         return attr_node
 
     @classmethod
-    def create_attr_node(cls, component:IComponent):
+    def create_attr_node(cls, component:IComponent, allow_containers: bool = False):
         # TODO: put class in container and remove these local imports
         # ------------------------------------------------------------
         # A.3. COMPONENTS - collect attr_nodes - previously flattened (recursive function fill_components)
@@ -324,11 +324,18 @@ class LocalFieldsRegistry(RegistryBase):
         component_name = component.name
 
         # TODO: to have standard types in some global list in fields.py
-        #           containers, validations, evaluations, 
+        #           containers, validations, evaluations,
         if isinstance(component, cls.ALLOWED_BASE_TYPES):
             denied = False
             deny_reason = ""
-            type_info = component.type_info if component.type_info else None
+            # containers don't have
+            type_info = component.type_info # Can be None
+        # F.<container-name> is allowed - see TopFieldsRegistry
+        elif allow_containers and isinstance(component, IContainer):
+            denied = False
+            deny_reason = ""
+            # will be computed from get_type_info() in dexp_node.finish()
+            type_info = None
         # elif isinstance(component, (ISubentityBase, )):
         #     denied = False
         #     deny_reason = ""
@@ -433,6 +440,7 @@ class LocalFieldsRegistry(RegistryBase):
                     attr_name=full_dexp_node_name,
                     container_id_from=self.container.container_id,
                     container_id_to=ho_container_id,
+                    container_node_mode=(ho_container_id == full_dexp_node_name),
                     path_up=path_up,
                     path_down=path_down,
                 )
@@ -519,12 +527,15 @@ class LocalFieldsRegistry(RegistryBase):
                 if not value_node_temp:
                     raise EntityInternalError(owner=self, msg=f"{value_node_name} not found, available for container {container_value_node_curr.name} are: {', '.join(container_value_node_curr.children.keys())}")
                 container_value_node_curr = value_node_temp
+            # fetch by name only if not container
+            do_fetch_by_name = not attr_dexp_node.attr_value_container_path.container_node_mode
         else:
             # simple case - from current value_node -> the searched attribute should be in the same container
             assert isinstance(attr_dexp_node, AttrDexpNode), attr_dexp_node
             container_value_node_curr = value_node.parent_container_node
+            do_fetch_by_name = True
 
-        return RegistryRootValue(value_root=container_value_node_curr, attr_name_new=None, do_fetch_by_name=True)
+        return RegistryRootValue(value_root=container_value_node_curr, attr_name_new=None, do_fetch_by_name=do_fetch_by_name)
 
 # -------------------------------------------------------------
 
@@ -559,7 +570,12 @@ class TopFieldsRegistry(RegistryBase):
         for component_name, component in container.components.items():
             # TODO: same content attr_dexp_node will be created here and in LocalFieldsRegistry.register_all()
             #       Cache this one and reuse.
-            attr_dexp_node = LocalFieldsRegistry.create_attr_node(component)
+            if isinstance(component, IContainer) and component is not container:
+                # container is in list of parent's components and in its own list.
+                # only last will be added.
+                continue
+
+            attr_dexp_node = LocalFieldsRegistry.create_attr_node(component, allow_containers=True)
             if not attr_dexp_node.denied:
                 self.store.setdefault(attr_dexp_node.name, []).append(
                     ContainerAttrDexpNodePair(container_id, attr_dexp_node)

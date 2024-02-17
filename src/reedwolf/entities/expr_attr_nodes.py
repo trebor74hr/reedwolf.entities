@@ -102,6 +102,7 @@ class AttrDexpNode(IDotExpressionNode):
         # ---------------------------------------------
         # CASES: COMPONENTS
         # ---------------------------------------------
+        # TODO: antipattern - split to diff class implementations (inherit and make diff classes)
         if self.data is None:
             raise EntityInternalError(owner=self, msg=f"Data is not set for {self}")
 
@@ -175,7 +176,6 @@ class AttrDexpNode(IDotExpressionNode):
         if self.type_info is None:
 
             if self.attr_node_type == AttrDexpNodeTypeEnum.FIELD:
-
                 type_info = self.data
                 if not type_info.bound_attr_node:
                     raise EntityInternalError(owner=self, msg=f"AttrDexpNode {self.data} .bound_attr_node not set.")
@@ -189,6 +189,10 @@ class AttrDexpNode(IDotExpressionNode):
 
             elif self.attr_node_type == AttrDexpNodeTypeEnum.DATA:
                 self.type_info = self.data.type_info
+
+            elif not self.denied and self.attr_node_type == AttrDexpNodeTypeEnum.CONTAINER:
+                self.type_info = self.data.get_type_info()
+
             elif self.attr_node_type not in (
                     AttrDexpNodeTypeEnum.CONTAINER,
                     AttrDexpNodeTypeEnum.COMPONENT,
@@ -445,6 +449,7 @@ class AttrValueContainerPath:
     attr_name: AttrName
     container_id_from: ContainerId = field(repr=False)
     container_id_to: ContainerId = field(repr=False)
+    container_node_mode: bool = field(repr=False)
     path_up: List[ContainerId]
     path_down: List[ContainerId]
 

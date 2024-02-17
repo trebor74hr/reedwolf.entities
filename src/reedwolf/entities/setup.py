@@ -492,7 +492,7 @@ class RegistryBase(IRegistry):
             # ---------------------------------------------------------------
             if owner.is_unbound() and self.NAMESPACE == ModelsNS:
                 # search base.py:: if len(self.bind_to.Path) > 1:
-                raise EntitySetupError(owner=self, msg=f"Should not happen, more than 1 level DotExpressions are not supported, got: {owner_dexp_node}")
+                raise EntitySetupError(owner=self, msg=f"ModelsNS multi level DotExpressions (e.g. M.a.b) currently not supported, got: {owner_dexp_node} . {dexp_node_name}")
 
             if isinstance(owner_dexp_node, IFunctionDexpNode):
                 inspect_object = owner_dexp_node.get_type_info()
@@ -504,6 +504,9 @@ class RegistryBase(IRegistry):
                 elif is_model_klass(owner_dexp_node.data):
                     # @dataclass, Pydantic etc.
                     inspect_object = owner_dexp_node.data
+                elif isinstance(owner_dexp_node.data, IContainer):
+                    # Container does not have owner_dexp_node.type_info set in the moment of creation
+                    inspect_object = owner_dexp_node.data.get_type_info()
                 else:
                     # take TypeInfo
                     inspect_object = owner_dexp_node.type_info

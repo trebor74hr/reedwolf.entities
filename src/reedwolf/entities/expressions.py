@@ -1365,7 +1365,15 @@ def create_dexp_by_attr_name(namespace: Namespace, attr_name: str) -> DotExpress
         e.g. "name" -> M.name,
         but this fails: "access.is_allowed" -> M.access.is_allowed
     """
-    return DotExpression(node=attr_name, namespace=namespace)
+    assert isinstance(attr_name, str)
+    attr_name = attr_name.strip()
+    if not attr_name:
+        raise EntitySetupValueError(f"{namespace}: Attribute name is empty.")
+    bits = attr_name.split(".")
+    dexp = DotExpression(node=bits[0], namespace=namespace)
+    for bit in bits[1:]:
+        dexp = getattr(dexp, bit)
+    return dexp
 
 # ============================================================
 # OBSOLETE
