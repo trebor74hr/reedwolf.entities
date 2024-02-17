@@ -22,7 +22,7 @@ from .exceptions import (
     EntitySetupValueError,
     EntityInternalError,
     EntitySetupTypeError,
-    EntityApplyNameError,
+    EntityApplyNameError, EntitySetupNameError,
 )
 from .namespaces import (
     Namespace,
@@ -381,6 +381,11 @@ class LocalFieldsRegistry(RegistryBase):
             - UNDEFINED if does not find or is not visible
             - otherwise return AttrDexpNode.
         """
+
+        if full_dexp_node_name == self.container.container_id:
+            raise EntitySetupNameError(owner=owner,
+                    msg=f"Namespace '{self.NAMESPACE}': Attribute name '{full_dexp_node_name}' mathches current container name. Use F.{full_dexp_node_name} instead.")
+
         container_attr_dexp_node_pair_list: Optional[List[ContainerAttrDexpNodePair]] = self.top_fields_registry.store.get(full_dexp_node_name, None)
         if container_attr_dexp_node_pair_list is None:
             return UNDEFINED
