@@ -513,16 +513,17 @@ class RegistryBase(IRegistry):
                     # take TypeInfo
                     inspect_object = owner_dexp_node.type_info
 
+            err_msg_prefix = f"'{owner.name} -> {owner_dexp_node.full_name} . {dexp_node_name}'"
             try:
                 type_info, th_field = extract_type_info(
                             attr_node_name=dexp_node_name,
                             inspect_object=inspect_object,
                             )
             except EntitySetupNameNotFoundError as ex:
-                ex.set_msg(f"{owner} / {self.NAMESPACE}-NS: {ex.msg}")
+                ex.set_msg(f"{err_msg_prefix}: {ex.msg}")
                 raise
             except EntityError as ex:
-                ex.set_msg(f"'{owner} / {self.NAMESPACE}-NS: {owner_dexp_node.full_name} -> '.{dexp_node_name}' metadata / type-hints read problem: {ex}")
+                ex.set_msg(f"{err_msg_prefix}: metadata / type-hints read problem: {ex}")
                 raise
 
             assert type_info
@@ -530,7 +531,7 @@ class RegistryBase(IRegistry):
             # if this is a list and not in a direct
             if not is_1st_node and is_list_instance_or_type(inspect_object):
                 # TODO: too complex error message
-                raise EntitySetupValueError(owner=self, msg=f"'{owner} / {self.NAMESPACE}-NS: {owner_dexp_node.full_name} -> '.{dexp_node_name}' can not be read from list, got: {inspect_object}. Use list accessor functions.")
+                raise EntitySetupValueError(owner=owner, msg=f"{err_msg_prefix} can not be read from list, got: {inspect_object}. Use list accessor functions.")
 
             # --------------------------------------------------
             # Create()
