@@ -2704,7 +2704,7 @@ def extract_type_info(
         parent_type_info = inspect_object.get_type_info()
         parent_object = parent_type_info.type_
     elif is_function(inspect_object):
-        raise Exception("should not happen, use Function/Factory-ies")
+        raise EntityInternalError(msg=f"Got native python function, use Function() objects instead. Got: {inspect_object}")
     else:
         # normal object - hopefully with with type hinting
         parent_object = inspect_object

@@ -99,7 +99,7 @@ from .base import (
     IApplyResult,
     IComponent,
     SetupStackFrame,
-    ApplyStackFrame,
+    ApplyStackFrame, IValueNode,
 )
 
 ValueOrDexp = Union[DotExpression, IDotExpressionNode, Any]
@@ -222,8 +222,15 @@ class IFunction(IFunctionDexpNode, ABC):
         # chain_arg_type_info
         # self.value_arg_type_info = self.get_value_arg_type_info()
 
-        # TODO: dry this - same cade in FunctionFactoryBase
+        # if self.name in ("Map", "First"): print("here33")
         self._output_type_info = TypeInfo.extract_function_return_type_info(self.py_function)
+
+        # TODO: should check recursively
+        if ItemType in self._output_type_info.types:
+            # TODO: if self._output_type_info.has_item_type:
+            assert hasattr(self.caller, "get_type_info")
+            real_item_type_info = self.caller.get_type_info()
+            self._output_type_info = TypeInfo.replace_item_type(self._output_type_info, real_item_type_info)
 
         if not self.function_arguments:
             self.function_arguments = create_function_arguments(self.py_function)
@@ -512,7 +519,7 @@ class IFunction(IFunctionDexpNode, ABC):
                 raise EntityInternalError(owner=self, msg=f"dexp_result is not ExecResult, got: {dexp_result}") 
 
             if dexp_result.value is not UNDEFINED:
-                input_value = dexp_result.value
+                input_value = dexp_result.get_real_value()
                 if self.value_arg_name:
                     kwargs[self.value_arg_name] = input_value
                 else:
@@ -669,7 +676,10 @@ class FunctionFactoryBase(IFunctionFactory):
             self.name = self.py_function.__name__
         if self.fixed_args is None:
             self.fixed_args = FunctionArgumentsType((), {})
-        # TODO: dry this - same cade in IFunction
+
+        # TODO: remove self._output_type_info and get_type_info()
+        #       -> create and use: Function().get_type_info()
+        #       used only in: self.type_info = self.read_handler.get_type_info() # factory
         self._output_type_info = TypeInfo.extract_function_return_type_info(self.py_function)
 
         if self.FUNCTION_CLASS is UNDEFINED:
@@ -680,9 +690,8 @@ class FunctionFactoryBase(IFunctionFactory):
             if not self.value_arg_name:
                 raise EntityInternalError(owner=self, msg="value_arg_name is not set")
 
-    # def get_type_info(self) -> TypeInfo: return self._output_type_info
 
-    def create_function(self, 
+    def create_function(self,
                 func_args: FunctionArgumentsType,
                 setup_session: ISetupSession, # noqa: F821
                 value_arg_type_info: Optional[TypeInfo] = None,
@@ -697,13 +706,16 @@ class FunctionFactoryBase(IFunctionFactory):
                 value_arg_name      = self.value_arg_name,  # noqa: E251
                 name                = name if name else self.name, # noqa: E251
                 caller              = caller,               # noqa: E251
-                setup_session          = setup_session,           # noqa: E251
+                setup_session       = setup_session,        # noqa: E251
                 arg_validators      = self.arg_validators,  # noqa: E251
                 data                = self.data,
                 )
         return custom_function
 
     def get_type_info(self) -> TypeInfo:
+        # TODO: remove self._output_type_info and get_type_info()
+        #       -> create and use: Function().get_type_info()
+        #       used only in: self.type_info = self.read_handler.get_type_info() # factory
         return self._output_type_info
 
 
@@ -1060,6 +1072,8 @@ def try_create_function(
     registry_ids = set()
 
     while True:
+        # search for function name in all upper session's function's factories
+        # if found - get this functino factory - it will be used for function creation
         if id(setup_session_current) in registry_ids:
             # prevent infinitive loop
             raise EntityInternalError("Registry already processed")
@@ -1076,9 +1090,9 @@ def try_create_function(
                                 first_custom=first_custom))
         names_avail_all.append(names_avail)
 
-        if not setup_session.container.parent:
+        if not setup_session_current.container.parent:
             break
-        setup_session_current = setup_session.container.parent.setup_session
+        setup_session_current = setup_session_current.container.parent.setup_session
 
     func_node = None
     if function_factory:

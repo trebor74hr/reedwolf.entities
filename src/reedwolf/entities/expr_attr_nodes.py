@@ -173,43 +173,49 @@ class AttrDexpNode(IDotExpressionNode):
 
     def finish(self):
         """ fill type_info, must be available for all nodes - with exceptions those with .denied don't have it """
-
         if self.type_info is None:
-
-            if self.attr_node_type == AttrDexpNodeTypeEnum.FIELD:
-                type_info = self.data
-                if not type_info.bound_attr_node:
-                    raise EntityInternalError(owner=self, msg=f"AttrDexpNode {self.data} .bound_attr_node not set.")
-
-                bound_type_info = type_info.bound_attr_node.get_type_info()
-                if not bound_type_info:
-                    raise EntityInternalError(owner=self, msg=f"AttrDexpNode data.bound_attr_node={self.data} -> {self.data.bound_attr_node} .type_info not set.")
-
-                # transfer type_info from type_info.bound attr_node
-                self.type_info = bound_type_info
-
-            elif self.attr_node_type == AttrDexpNodeTypeEnum.DATA:
-                self.type_info = self.data.type_info
-
-            elif not self.denied and self.attr_node_type == AttrDexpNodeTypeEnum.CONTAINER:
-                self.type_info = self.data.get_type_info()
-
-            elif self.attr_node_type not in (
-                    AttrDexpNodeTypeEnum.CONTAINER,
-                    AttrDexpNodeTypeEnum.COMPONENT,
-                    ):
-                # all other require type_info
-                raise EntityInternalError(owner=self, msg=f"For attr_node {self.attr_node_type} .type_info not set (type={type(self.data)}).")
-
-            if not self.denied and not self.type_info:
-                raise EntityInternalError(owner=self, msg=f"For attr_node {self.attr_node_type} .type_info could not not set (type={type(self.data)}).")
-
+            self._fill_type_info()
         super().finish()
+
+    def _fill_type_info(self):
+        """ fill type_info, must be available for all nodes - with exceptions those with .denied don't have it """
+        if self.attr_node_type == AttrDexpNodeTypeEnum.FIELD:
+            type_info = self.data
+            if not type_info.bound_attr_node:
+                raise EntityInternalError(owner=self, msg=f"AttrDexpNode {self.data} .bound_attr_node not set.")
+
+            bound_type_info = type_info.bound_attr_node.get_type_info()
+            if not bound_type_info:
+                raise EntityInternalError(owner=self, msg=f"AttrDexpNode data.bound_attr_node={self.data} -> {self.data.bound_attr_node} .type_info not set.")
+
+            # transfer type_info from type_info.bound attr_node
+            self.type_info = bound_type_info
+
+        elif self.attr_node_type == AttrDexpNodeTypeEnum.DATA:
+            self.type_info = self.data.type_info
+
+        elif not self.denied and self.attr_node_type == AttrDexpNodeTypeEnum.CONTAINER:
+            self.type_info = self.data.get_type_info()
+
+        elif self.attr_node_type not in (
+                AttrDexpNodeTypeEnum.CONTAINER,
+                AttrDexpNodeTypeEnum.COMPONENT,
+                ):
+            # all other require type_info
+            raise EntityInternalError(owner=self, msg=f"For attr_node {self.attr_node_type} .type_info not set (type={type(self.data)}).")
+
+        if not self.denied and not self.type_info:
+            raise EntityInternalError(owner=self, msg=f"For attr_node {self.attr_node_type} .type_info could not not set (type={type(self.data)}).")
+
 
 
     def get_type_info(self) -> TypeInfo:
         # if strict and self.type_info is None:
         #     raise EntityInternalError(owner=self, msg=f"Finish was not called, type_info is not set")
+        # if self.name == "H": print("here38")
+        if self.type_info is None:
+            self._fill_type_info()
+        assert self.type_info
         return self.type_info
 
 
@@ -379,6 +385,7 @@ class AttrDexpNode(IDotExpressionNode):
                         # TODO: list which fields are available
                         # if all types match - could be internal problem?
                         raise EntityApplyNameError(owner=self, msg=f"Attribute '{attr_name}' not found in '{to_repr(value_prev)}': '{type(value_prev)}'")
+
                     value_new = getattr(value_prev, attr_name)
                     if callable(value_new):
                         try:

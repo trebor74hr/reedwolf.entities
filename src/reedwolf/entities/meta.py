@@ -981,9 +981,8 @@ class TypeInfo:
 
     # ------------------------------------------------------------
 
-    @staticmethod
-    def extract_function_args_type_info_dict(
-            py_function: Callable[..., Any]) -> Dict[str, Self]:
+    @classmethod
+    def extract_function_args_type_info_dict(cls, py_function: Callable[..., Any]) -> Dict[str, Self]:
         """
         From annotations, but argument defaults could be fetched from
         inspect.getfullargspec(), see: extract_function_arguments_default_dict
@@ -1007,6 +1006,52 @@ class TypeInfo:
                                     caller=msg_prefix,
                                     )
         return output
+
+    @classmethod
+    def replace_item_type(cls, original_type_info: Self, real_item_type_info: Self) -> Self:
+        """
+        Search ItemType in input type and replaces with real_item_type_info inner type(s)
+        If ItemType is found, returns a new TypeInfo on this new Type.
+        Otherwise returns original type info.
+        Internally RECURSIVE / RECURSION
+        """
+        assert isinstance(real_item_type_info, TypeInfo), f"'real_item_type' should be TypeInfo, got: {real_item_type_info}"
+
+        def _replace(py_type: Type, real_item_type: Type, replaced: bool = False, depth: int = 0) -> Tuple[Type, bool]:
+            if hasattr(py_type, "__origin__") and ItemType in py_type.__args__:
+                args = []
+                for type_arg in py_type.__args__:
+                    if type_arg==ItemType:
+                        replaced = True
+                        type_arg = real_item_type
+                    elif hasattr(type_arg, "__origin__"):
+                        # TODO: in normal case this should not happen. If this is so, replace the logic with a guard.
+                        # recursion
+                        type_arg, new_replaced = _replace(type_arg, real_item_type, replaced=replaced, depth=depth+1)
+                        if new_replaced:
+                            replaced = new_replaced
+                    args.append(type_arg)
+                # using undocumented python function
+                out = py_type.copy_with(tuple(args))
+            else:
+                out = py_type
+            return out, replaced
+
+        # simplify the problem by ignoring: is_list, is_optional, is_union etc ...,
+        # just take inner types
+        real_item_py_hint = real_item_type_info.types
+        if len(real_item_py_hint)>1:
+            real_item_py_hint = Union.copy_with(real_item_py_hint)
+        else:
+            real_item_py_hint = real_item_py_hint[0]
+
+        py_type_hint = original_type_info.py_type_hint
+        out, replaced = _replace(py_type_hint, real_item_py_hint)
+        if replaced:
+            out_type_info = cls.get_or_create_by_type(out)
+        else:
+            out_type_info = original_type_info
+        return out_type_info
 
 
 def get_dataclass_field_type_info(dc_model: DataclassType, field_name: str) -> Optional[TypeInfo]:

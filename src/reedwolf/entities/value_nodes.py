@@ -288,6 +288,7 @@ class ValueNodeBase(IValueNode):
         return  #  instance_attr_value: Optional[InstanceAttrValue]
 
     def get_value(self, strict:bool) -> AttrValue:
+        # Items has its own
         if strict and not self.finished:
             raise EntityInternalError(owner=self, msg=f"Current value is not finished, last value: {self._value}")
         return self._value
@@ -609,3 +610,8 @@ class ItemsValueNode(ValueNodeBase):
             add_lines = item_node.dump_to_strlist(depth+1)
             lines.extend(add_lines)
 
+    def get_value(self, strict:bool) -> AttrValue:
+        value_list = [value_node.get_value(strict=strict) for value_node in self.items]
+        if strict and not self.finished:
+            raise EntityInternalError(owner=self, msg=f"Current value is not finished, last value: {self._value}")
+        return value_list

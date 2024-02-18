@@ -57,6 +57,7 @@ from .meta import (
     NoneType,
     KlassMember,
     ComponentStatus,
+    IDexpValueSource,
 )
 from .meta_dataclass import ReedwolfDataclassBase
 
@@ -76,7 +77,8 @@ class DexpValue:
 @dataclass
 class ExecResult:
     # last value, mutable
-    value: AttrValue  = field(init=False, default=UNDEFINED)
+    # TODO: for reading final value use .get_real_value()
+    value: Union[AttrValue, IDexpValueSource] = field(init=False, default=UNDEFINED)
 
     # Every DotExpression member (e.g. Ctx.name.Fun().member) will get one DexpValue.
     # TODO: consider adding set compoenent (owner) that triggerred value change
@@ -94,6 +96,10 @@ class ExecResult:
                 DexpValue(value=value, attr_name=attr_name, changer_name=changer_name)
                 )
         self.value = value
+
+    def get_real_value(self) -> AttrValue:
+        # TODO: instead of reading .value using for final value use .get_real_value()
+        return self.value.get_value(strict=False) if isinstance(self.value, IDexpValueSource) else self.value
 
     def is_not_available(self) -> bool:
         return isinstance(self, NotAvailableExecResult)
@@ -524,6 +530,8 @@ class DotExpression(DynamicAttrsBase):
 
         for bnr, bit in enumerate(self.Path, 1):
             # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(bit)
+
+            # if bit._node in ("H", "Map", "First"): print("here35")
 
             assert bit._namespace==self._namespace
             # TODO: if self._func_args:

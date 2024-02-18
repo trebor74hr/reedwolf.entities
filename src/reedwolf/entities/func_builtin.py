@@ -28,12 +28,12 @@ from .expressions import (
 from .functions import (
     create_builtin_function_factory,
     create_builtin_items_function_factory,
-    BuiltinFunctionFactory,
     CustomFunctionFactory,
     FunctionArgumentsType,
     InjectComponentTreeValuesFuncArgHint,
     DotexprExecuteOnItemFactoryFuncArgHint,
 )
+
 
 # ------------------------------------------------------------
 # Builtin function factories
@@ -258,11 +258,9 @@ Min = create_builtin_items_function_factory(
 #     raise TypeError(f"Argument expected to be callable or string (fieldname), got: {callable_or_fieldname} -> {type(callable_or_fieldname)}")
 
 # def first(item_list: Sequence[ItemType], callable_or_fieldname: Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
-def first(item_list: Sequence[ItemType], dot_expr: DotexprFuncArgHint(inner_type=Any)) -> Optional[Any]:
-    raise NotImplementedError()
-    # if not item_list:
-    #     return UNDEFINED
-    # return _process_item(item_list[0])
+# def first(item_list: Sequence[ItemType], dot_expr: DotexprFuncArgHint(inner_type=Any)) -> Optional[Any]:
+def first(item_list: Sequence[ItemType]) -> Optional[ItemType]:
+    return item_list[0] if item_list else None
 
 First = create_builtin_items_function_factory(
             items_value_arg_name="item_list",

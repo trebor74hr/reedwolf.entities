@@ -276,7 +276,7 @@ class UnboundModel(IUnboundDataModel):
     # parent_name: Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
     # type_info: Optional[TypeInfo] = field(init=False, default=None, repr=False)
 
-    def get_type_info(self):
+    def get_type_info(self) -> TypeInfo:
         raise EntityInternalError(owner=self, msg="Method should not be called")
 
     def create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:

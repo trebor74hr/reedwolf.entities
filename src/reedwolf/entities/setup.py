@@ -497,6 +497,7 @@ class RegistryBase(IRegistry):
                 raise EntitySetupError(owner=self, msg=f"ModelsNS multi level DotExpressions (e.g. M.a.b) currently not supported, got: {owner_dexp_node} . {dexp_node_name}")
 
             if isinstance(owner_dexp_node, IFunctionDexpNode):
+                # if owner_dexp_node.name in ("Map", "First"): print("here34")
                 inspect_object = owner_dexp_node.get_type_info()
             else:
                 assert isinstance(owner_dexp_node, AttrDexpNode)
