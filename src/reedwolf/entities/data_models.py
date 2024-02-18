@@ -343,8 +343,8 @@ class DataModelWithHandlers(BoundDataModelBase):
         #           raise EntitySetupValueError(owner=self, msg=f"read_handler={self.read_handler} has arguments '{read_params_found}' and expected '{read_params_expected}'. Check function declaration or inject_params.")
 
 
-    def setup(self, setup_session:ISetupSession):
-        super().setup(setup_session=setup_session)
+    def _setup(self, setup_session:ISetupSession):
+        super()._setup(setup_session=setup_session)
 
         if self.contains:
             container =self.get_first_parent_container(consider_self=False)
@@ -430,13 +430,13 @@ class DataModel(BoundDataModelBase):
                                     caller=self,
                                     )
 
-    def setup(self, setup_session:ISetupSession):
-        super().setup(setup_session=setup_session)
-        if not self.type_info:
-            self._set_type_info()
-
-        # self._register_nested_models(setup_session)
-        # assert self.is_finished # = True
+    # NOTE: seems not needed, all tests pass
+    # def _setup(self, setup_session:ISetupSession):
+    #     super()._setup(setup_session=setup_session)
+    #     if not self.type_info:
+    #         self._set_type_info()
+    #     # self._register_nested_models(setup_session)
+    #     # assert self.is_finished # = True
 
 
 

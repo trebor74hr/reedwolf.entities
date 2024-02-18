@@ -473,6 +473,7 @@ class LocalFieldsRegistry(RegistryBase):
                                                "->" if cand[1].path_up and cand[1].path_down else "",
                                                ".".join(cand[1].path_down))
                                for cand in candidates]
+            # TODO: napomena kad je više candidates da proba s Container.<field> ...
             custom_msg = f"Field name '{full_dexp_node_name}' is ambiguous, can not use it directly. " \
                          f"Found {len(custom_msg_bits)} candidates: {', '.join(custom_msg_bits)}."
             raise self.create_exception_name_not_found_error(owner=owner, full_dexp_node_name=full_dexp_node_name, custom_msg=custom_msg)

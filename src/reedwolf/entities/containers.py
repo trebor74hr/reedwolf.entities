@@ -416,22 +416,13 @@ class ContainerBase(IContainer, ABC):
 
     # ------------------------------------------------------------
 
-    def setup(self) -> Self:
+    def _setup(self, setup_session: SetupSession):
         # components are flat list, no recursion/hierarchy browsing needed
         if self.is_finished:
             raise EntitySetupError(owner=self, msg="setup() should be called only once")
 
         # if not self.contains:
         #     raise EntitySetupError(owner=self, msg="'contains' attribute is required with list of components")
-
-        if self.is_entity():
-            # ----------------------------------------
-            # SETUP PHASE one (recursive)
-            # ----------------------------------------
-            # Traverse all subcomponents and call the same method for each (recursion)
-            # NOTE: Will setup all data_model and bind_to and ModelsNS.
-            #       In phase two will setup all other components and FieldsNS, ThisNS and FunctionsNS.
-            self._setup_phase_one()
 
         with self.setup_session.use_stack_frame(
                 SetupStackFrame(
@@ -487,11 +478,6 @@ class ContainerBase(IContainer, ABC):
         if self.keys:
             # Inner DataModel can have self.data_model.model_klass = DotExpression
             self.keys.validate(self.data_model.get_type_info().type_)
-
-        if self.is_top_parent():
-            self.setup_session.call_hooks_on_finished_all()
-
-        return self
 
     # ------------------------------------------------------------
 
@@ -778,6 +764,26 @@ class Entity(IEntity, ContainerBase):
     #     return self
 
     # ------------------------------------------------------------
+    # setup
+    # ------------------------------------------------------------
+    def setup(self) -> Self:
+        # ----------------------------------------
+        # SETUP PHASE one (recursive)
+        # ----------------------------------------
+        # Traverse all subcomponents and call the same method for each (recursion)
+        # NOTE: Will setup all data_model and bind_to and ModelsNS.
+        #       In phase two will setup all other components and FieldsNS, ThisNS and FunctionsNS.
+        self._setup_phase_one()
+        super()._setup(setup_session=self.setup_session)
+        # if self.is_top_parent():
+        if self.is_entity():
+            self.setup_session.call_hooks_on_finished_all()
+        return self
+
+
+
+
+    # ------------------------------------------------------------
     # apply - API entries
     # ------------------------------------------------------------
 
@@ -1016,12 +1022,12 @@ class SubEntityBase(ContainerBase, ABC):
         # self._accessor = self.settings.get_accessor(self._accessor) if self._accessor is not None else non_self_parent_container._accessor
 
 
-    def setup(self, setup_session:SetupSession):
-        # NOTE: setup_session is not used, can be reached with parent.setup_session(). left param
-        #       for same function signature as for components.
-        super().setup()
-        # self.cardinality.validate_setup()
-        return self
+    # def setup(self, setup_session:SetupSession):
+    #     # NOTE: setup_session is not used, can be reached with parent.setup_session(). left param
+    #     #       for same function signature as for components.
+    #     super().setup()
+    #     # self.cardinality.validate_setup()
+    #     return self
 
 
 # ------------------------------------------------------------

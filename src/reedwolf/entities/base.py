@@ -1226,8 +1226,10 @@ class IComponent(ReedwolfDataclassBase, ABC):
 
     # ------------------------------------------------------------
 
-    def setup(self, setup_session: ISetupSession):  # noqa: F821
+    def _setup(self, setup_session: ISetupSession):  # noqa: F821
         # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(self)
+        if self.is_finished:
+            raise EntityInternalError(owner=self, msg="Setup already called")
 
         container = self.get_first_parent_container(consider_self=True)
 
@@ -1248,13 +1250,10 @@ class IComponent(ReedwolfDataclassBase, ABC):
                     setup_session.current_frame.set_this_registry(this_registry, force=True)
 
             if not self.is_finished:
-                ret = self._setup_phase_two(setup_session=setup_session)
+                self._setup_phase_two(setup_session=setup_session)
             else:
                 if not self.is_data_model():
                     raise EntityInternalError(owner=self, msg=f"_setup_phase_two() is skipped only for data models, got: {type(self)}")
-                ret = self
-
-        return ret
 
     # ------------------------------------------------------------
     def _get_subcomponents_list(self) -> List[Subcomponent]:
@@ -1473,7 +1472,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
             elif isinstance(component, IComponent):
                 assert not component.is_entity()
                 assert not component.is_finished
-                component.setup(setup_session=setup_session)  # , parent=self)
+                component._setup(setup_session=setup_session)  # , parent=self)
                 # NOTE: in some rare cases .finish() is not called - so there is an additional .finish() call later.
                 component.finish()
                 # called = True
@@ -1639,7 +1638,7 @@ class IContainer(IComponent, ABC):
         ...
 
     @abstractmethod
-    def setup(self, setup_session: ISetupSession) -> Self:
+    def _setup(self, setup_session: ISetupSession):
         ...
 
     @abstractmethod
@@ -1676,10 +1675,10 @@ class IDataModel(IComponent, ABC):
 
     model_klass: ModelKlassType = field(init=False, repr=False)
 
-    def setup(self, setup_session:ISetupSession):
-        if self.is_finished:
-            raise EntityInternalError(owner=self, msg="Setup already called")
-        super().setup(setup_session=setup_session)
+    # def _setup(self, setup_session:ISetupSession):
+    #     if self.is_finished:
+    #         raise EntityInternalError(owner=self, msg="Setup already called")
+    #     super()._setup(setup_session=setup_session)
 
     @abstractmethod
     def create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:

@@ -256,9 +256,9 @@ class FieldBase(IField, ABC):
 
     # ------------------------------------------------------------
 
-    def setup(self, setup_session:ISetupSession):
+    def _setup(self, setup_session:ISetupSession):
 
-        super().setup(setup_session=setup_session)
+        super()._setup(setup_session=setup_session)
 
         if self.bind_to:
             self.attr_node = setup_session.get_registry(FieldsNS).get(self.name)
@@ -292,8 +292,6 @@ class FieldBase(IField, ABC):
             if missing_names:
                 missing_names = " and ".join(missing_names)
                 raise EntitySetupError(owner=self, msg=f"'{self.__class__.__name__}' requires following Validations (cleaners attribute): {missing_names}")
-
-        return self
 
     # ------------------------------------------------------------
 
@@ -686,16 +684,16 @@ class ChoiceField(FieldBase):
 
     # ------------------------------------------------------------
 
-    def setup(self, setup_session: ISetupSession):
-        # NOTE: must be done after to avoid calling Setup() for choice_value
-        #       and choice_title. For these two default This namespace is not
-        #       appliable, need special one, This.Instance + This.<model-attrs>
-        super().setup(setup_session=setup_session)
+    # def _setup(self, setup_session: ISetupSession):
+    #     # NOTE: must be done after to avoid calling Setup() for choice_value
+    #     #       and choice_title. For these two default This namespace is not
+    #     #       appliable, need special one, This.Instance + This.<model-attrs>
+    #     super()._setup(setup_session=setup_session)
 
-        # TODO: on usage normalize concrete all available choices to Enum[ChoiceOption], and define:
-        #       https://stackoverflow.com/questions/33690064/dynamically-create-an-enum-with-custom-values-in-python
+    #     # TODO: on usage normalize concrete all available choices to Enum[ChoiceOption], and define:
+    #     #       https://stackoverflow.com/questions/33690064/dynamically-create-an-enum-with-custom-values-in-python
 
-        return self
+    #     return self
 
     # ------------------------------------------------------------
 
@@ -795,12 +793,9 @@ class EnumField(FieldBase):
     # TODO: možda složiti da radi i za Choice/Enum -> structural pattern
     #       matching like, samo nisam još našao zgodnu sintaksu.
     #   enables: Optional[List[IComponent]] = field(repr=False, default=None)
-    def setup(self, setup_session: ISetupSession):
-
-        super().setup(setup_session=setup_session)
-
-
-        return self
+    # def _setup(self, setup_session: ISetupSession):
+    #     super()._setup(setup_session=setup_session)
+    #     return self
 
 
 # ------------------------------------------------------------
