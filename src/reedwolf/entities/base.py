@@ -2162,6 +2162,10 @@ class IValueNode(IDexpValueSource):
         ...
 
     @abstractmethod
+    def set_value(self, value: AttrValue, dexp_result: Optional[ExecResult], value_set_phase: ValueSetPhase) -> NoneType:
+        ...
+
+    @abstractmethod
     def set_instance_attr_to_value(self):
         ...
 

@@ -610,8 +610,8 @@ class ItemsValueNode(ValueNodeBase):
             add_lines = item_node.dump_to_strlist(depth+1)
             lines.extend(add_lines)
 
-    def get_value(self, strict:bool) -> AttrValue:
-        value_list = [value_node.get_value(strict=strict) for value_node in self.items]
+    def get_value(self, strict:bool) -> List[Self]:
         if strict and not self.finished:
-            raise EntityInternalError(owner=self, msg=f"Current value is not finished, last value: {self._value}")
-        return value_list
+            raise EntityInternalError(owner=self, msg=f"Current value is not finished (items): {self.items}")
+        # value_list = [value_node.get_value(strict=strict) for value_node in self.items]
+        return self.items

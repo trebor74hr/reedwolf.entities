@@ -212,7 +212,6 @@ class AttrDexpNode(IDotExpressionNode):
     def get_type_info(self) -> TypeInfo:
         # if strict and self.type_info is None:
         #     raise EntityInternalError(owner=self, msg=f"Finish was not called, type_info is not set")
-        # if self.name == "H": print("here38")
         if self.type_info is None:
             self._fill_type_info()
         assert self.type_info

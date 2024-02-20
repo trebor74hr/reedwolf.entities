@@ -1086,7 +1086,7 @@ class ApplyResult(IApplyResult):
                         index0=index0,
                         key=key,
                         change_op=instance_item.change_op,
-                    ).setup(apply_result=self)
+                ).setup(apply_result=self)
 
                 value_node.add_item(item_value_node)
 
