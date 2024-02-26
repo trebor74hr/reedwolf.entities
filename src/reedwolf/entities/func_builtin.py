@@ -17,7 +17,9 @@ from .meta import (
     ItemType,
     NumberType,
     is_enum,
-    get_enum_members, ListItemType, ChildField, ListChildField,
+    get_enum_members,
+    ListItemType,
+    ListChildField,
 )
 from .func_arg_hints import (
     DotexprExecuteOnItemFactoryFuncArgHint,
