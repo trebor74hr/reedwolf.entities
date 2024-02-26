@@ -25,7 +25,7 @@ from typing import (
     get_type_hints,
     TypeVar,
     Sequence as SequenceType,
-    Iterable,
+    Iterable, Type as TypingType,
 )
 from enum import Enum, IntEnum
 from decimal import Decimal
@@ -243,6 +243,34 @@ class IInjectFuncArgHint(IFuncArgHint):
     def get_apply_inject_value(self, apply_result: "IApplyResult", prep_arg: "PrepArg") -> AttrValue:
         ...
 
+@dataclass
+class ChildField:
+    """
+    Will be used and exposed in ChildrenValidation - where ListChildField
+    will be put available to dot-chain and validation functions.
+    Following fields will be available to these functions using This.
+    namespacee:
+        - Name - model class attribute name
+        - Type - model class attribute python type
+        -- Value - current model instance attribute value
+    """
+    Name: AttrName
+    _type_info: "TypeInfo" = field(repr=False)
+    Type: TypingType = field(init=False)
+    # Value: AttrValue = field(init=False, default=UNDEFINED)
+
+    def __post_init__(self):
+        self.Type = self._type_info.type_
+
+    # def get_value(self, apply_result: "IApplyResult") -> Any:
+    #     ...
+
+    # def set_value(self, value: AttrValue):
+    #     if self.Value != UNDEFINED:
+    #         raise EntityApplyValueError(owner=self, msg=f"Value already set to '{self.Value}', got: '{value}'")
+    #     self.Value = value
+
+
 
 # e.g. list, int, dict, Person, List, Dict[str, Optional[Union[str, float]]
 PyTypeHint                 = TypeVar("PyTypeHint", bound=Union[Type, IFuncArgHint])
@@ -267,8 +295,19 @@ InstanceId = NewType("InstanceId", int)
 
 KeyString = NewType("KeyString", str)
 
-# used for matching rows types, e.g. std_types map, filter etc.
+# ------------------------------------------------------------
+# Builtin or Custom function argument predefined special types
+# ------------------------------------------------------------
+
 ItemType = TypeVar("ItemType", bound=Any)
+
+# also used for .Items
+ListItemType = List[ItemType]
+
+# also used for .Children
+ListChildField = List[ChildField]
+
+# ------------------------------------------------------------
 
 # TODO: consider using this for detection of .Items / .Children
 #   ItemSetType = TypeVar("ItemSetType", bound=SequenceType[ItemType])
@@ -325,7 +364,7 @@ class FunctionArgumentsType:
         return self.args, self.kwargs
 
 
-EmptyFunctionArguments  = FunctionArgumentsType([], {})
+EmptyFunctionArguments = FunctionArgumentsType((), {})
 
 
 # NOTE: when custom type with DotExpression alias are defined, then
@@ -662,8 +701,15 @@ class TypeInfo:
     is_optional:    bool = field(init=False, repr=False, default=UNDEFINED)
     is_enum:        bool = field(init=False, repr=False, default=UNDEFINED)
     is_union:       bool = field(init=False, repr=False, default=UNDEFINED)
-    # e.g. can have Length()
+    # has __len__
     is_sized:       bool = field(init=False, repr=False, default=UNDEFINED)
+
+    # ItemType or ListItemType
+    is_item_type:         bool = field(init=False, repr=False, default=UNDEFINED)
+    # ItemType
+    is_item_type_single:  bool = field(init=False, repr=False, default=UNDEFINED)
+    # ListItemType
+    is_item_type_list:    bool = field(init=False, repr=False, default=UNDEFINED)
 
     # NOTE: custom type hints - see classes that inherit IFuncArgHint.
     #       This enables custom properties and methods embedded in type-hint object instances.
@@ -798,6 +844,12 @@ class TypeInfo:
         self.types = [inner_type] if not isinstance(inner_type, (list, tuple)) else inner_type
         self.type_ = self.types[0]
         self.is_union = (len(self.types)!=1)
+
+        self.is_item_type = (self.type_ == ItemType)
+        self.is_item_type_single = (self.is_item_type and not self.is_list)
+        self.is_item_type_list   = (self.is_item_type and self.is_list)
+        if self.is_item_type and self.is_union:
+            raise EntityTypeError(owner=self, msg=f"ItemType/ListItemType must not be Union-s, got: {self.py_type_hint}")
 
         if not self.is_union:
             # only when single type
@@ -1265,9 +1317,25 @@ class IDexpValueSource:
     Used in IValueNode
     """
     @abstractmethod
-    def get_value(self, strict:bool) -> AttrValue:
+    def is_list(self) -> bool:
+        ...
+
+    # @abstractmethod
+    # def get_items(self, strict: bool) -> List[Self]:
+    #     # appliable only if is_list(), otherwise raises Exception
+    #     ...
+
+    @abstractmethod
+    def get_self_or_items(self) -> Union[Self, List[Self]]:
+        """
+        if list/items -> returns items
+        else     -> raises Error
+        """
+        # appliable only if is_list(), otherwise raises Exception
         ...
 
     @abstractmethod
-    def is_list(self) -> bool:
+    def get_value(self, strict: bool) -> AttrValue:
         ...
+
+

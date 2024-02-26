@@ -67,7 +67,7 @@ from .base import (
 )
 from .expressions import (
     DotExpression,
-    create_dexp_by_attr_name,
+    create_dexp_by_attr_name, IThisRegistry,
 )
 from .data_models import (
     DataModel,
@@ -89,7 +89,7 @@ from .registries import (
     LocalFieldsRegistry,
     OperationsRegistry,
     ContextRegistry,
-    UnboundModelsRegistry, TopFieldsRegistry,
+    UnboundModelsRegistry, TopFieldsRegistry, ThisRegistry,
 )
 from .valid_children import (
     ChildrenValidationBase,
@@ -148,6 +148,9 @@ class ContainerBase(IContainer, ABC):
     def can_have_children() -> bool:
         return True
 
+    def get_this_registry_for_item(self) -> IThisRegistry:
+        raise EntityInternalError(owner=self, msg=f"Function should be called only for SubEntityItems.")
+
     # def is_subentity(self):
     #     # TODO: not sure if this is good way to do it. Maybe: isinstance(ISubEntity) would be safer?
     #     # TODO: if self.parent is not None could be used as the term, put validation somewhere
@@ -173,13 +176,13 @@ class ContainerBase(IContainer, ABC):
             raise KeyError(f"{self.name}: Function '{name}' not found, no functions available.")
         return self.setup_session.functions_factory_registry.get(name, strict=strict)
 
-    def add_fieldgroup(self, fieldgroup:FieldGroup):
-        if self.is_finished:
-            raise EntitySetupError(owner=self, msg="FieldGroup can not be added after setup() is called.")
-        found = [sec for sec in self.contains if sec.name==fieldgroup.name]
-        if found:
-            raise EntitySetupError(owner=self, msg=f"FieldGroup {fieldgroup.name} is already added.")
-        self.contains.append(fieldgroup)
+    # def add_fieldgroup(self, fieldgroup:FieldGroup):
+    #     if self.is_finished:
+    #         raise EntitySetupError(owner=self, msg="FieldGroup can not be added after setup() is called.")
+    #     found = [sec for sec in self.contains if sec.name==fieldgroup.name]
+    #     if found:
+    #         raise EntitySetupError(owner=self, msg=f"FieldGroup {fieldgroup.name} is already added.")
+    #     self.contains.append(fieldgroup)
 
 
     @staticmethod
@@ -450,7 +453,6 @@ class ContainerBase(IContainer, ABC):
 
             # NOTE: setup this_registry objects must be inside of stack_frame due
             #       premature component.bind_to setup in some ThisRegistryFor* classes.
-            # this_registry = self.create_this_registry(component=self, setup_session=self.setup_session)
             this_registry = self.get_or_create_this_registry(setup_session=self.setup_session)
             self.setup_session.current_frame.set_this_registry(this_registry)
 
@@ -478,6 +480,23 @@ class ContainerBase(IContainer, ABC):
         if self.keys:
             # Inner DataModel can have self.data_model.model_klass = DotExpression
             self.keys.validate(self.data_model.get_type_info().type_)
+
+    # ------------------------------------------------------------
+
+    def create_this_registry(self, setup_session: SetupSession) -> Optional[IThisRegistry]:
+        """
+        This.<field>
+        This.Children
+        """
+        if self.is_data_model():
+            raise EntityInternalError(owner=self, msg=f"For DataModel create_this_registry() needs to be overridden.")
+
+        has_children = bool(self.get_children())
+        if not has_children:
+            raise EntityInternalError(owner=self, msg="Non-fields should have children")
+
+        this_registry = ThisRegistry(component=self)
+        return this_registry
 
     # ------------------------------------------------------------
 
@@ -1037,6 +1056,11 @@ class SubEntityItems(SubEntityBase):
     """
     one to many relations - e.g. Person -> PersonAddresses
     """
+
+    # _this_registry          - will be used from List[Item] perspective, i.e. for This.Items
+    # _this_registry_for_item - will be used from Item perspective (insde of an Item from List), i.e. This.<field-name>
+    _this_registry_for_item: Union[IThisRegistry, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
+
     def init(self):
         # TODO: ChildrenValidationBase, ChildrenEvaluationBase
         self._check_cleaners([ItemsValidationBase, ItemsEvaluationBase])
@@ -1048,6 +1072,25 @@ class SubEntityItems(SubEntityBase):
     @staticmethod
     def is_subentity_items() -> bool:
         return True
+
+    def get_this_registry_for_item(self) -> IThisRegistry:
+        if not self._this_registry_for_item:
+            raise EntityInternalError(owner=self, msg="self._this_registry_for_item not initialized")
+        return self._this_registry_for_item
+
+    def create_this_registry(self, setup_session: SetupSession) -> Optional[IThisRegistry]:
+        this_registry = super().create_this_registry(setup_session)
+        assert self._this_registry_for_item is UNDEFINED
+        # model_klass = type_info.py_type_hint
+        this_registry_for_item = ThisRegistry(
+                                        is_items_for_each_mode=True,
+                                        component=self)
+        # do setup() immediately. For self._this_registry it is done in self.get_or_create_this_registry()
+        this_registry_for_item.setup(setup_session=setup_session)
+        this_registry_for_item.finish()
+        self._this_registry_for_item = this_registry_for_item
+
+        return this_registry
 
 
 # ------------------------------------------------------------

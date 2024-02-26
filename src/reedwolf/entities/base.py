@@ -14,7 +14,6 @@ from typing import (
     ClassVar,
     Callable,
     # TODO: rename must be done - some test is failing
-    Type as TypingType,
     Type,
 )
 from dataclasses import (
@@ -52,7 +51,7 @@ from .exceptions import (
     EntitySetupValueError,
     EntitySetupNameNotFoundError,
     EntityApplyError,
-    EntityApplyValueError, EntityInitError,
+    EntityInitError,
 )
 from .namespaces import (
     DynamicAttrsBase,
@@ -62,7 +61,6 @@ from .meta import (
     Self,
     MetaTree,
     ComponentNameType,
-    ComponentTreeType,
     ComponentTreeWValuesType,
     NoneType,
     ModelField,
@@ -87,7 +85,7 @@ from .meta import (
     ModelInstanceType,
     ContainerId,
     ComponentStatus,
-    IDexpValueSource,
+    IDexpValueSource, ChildField, ListChildField,
 )
 from .meta_dataclass import ReedwolfDataclassBase
 from .expressions import (
@@ -267,31 +265,6 @@ class Subcomponent:
 # IComponentFields
 # ------------------------------------------------------------
 
-@dataclass
-class ChildField:
-    """ 
-    Will be used and exposed in ChildrenValidation - where List[ChildField]
-    will be put available to dot-chain and validation functions.
-    Following fields will be available to these functions using This.
-    namespacee:
-        - Name - model class attribute name
-        - Value - current model instance attribute value
-        - Type - model class attribute python type
-    """
-    Name: AttrName
-    _type_info: TypeInfo = field(repr=False)
-    Type: TypingType = field(init=False)
-    Value: AttrValue = field(init=False, default=UNDEFINED)
-
-    def __post_init__(self):
-        self.Type = self._type_info.type_
-
-    def set_value(self, value: AttrValue):
-        if self.Value != UNDEFINED:
-            raise EntityApplyValueError(owner=self, msg=f"Value already set to '{self.Value}', got: '{value}'")
-        self.Value = value
-
-
 class IComponentFields:
     """
     Used only for dynamically created dataclass classes that holds only fields from owner component's.
@@ -300,9 +273,9 @@ class IComponentFields:
     ...
 
 
-def make_component_fields_dataclass(class_name: str, child_field_list: List[ChildField]) -> Type[IComponentFields]:
+def make_component_fields_dataclass(class_name: str, child_field_list: ListChildField) -> Type[IComponentFields]:
     """ 
-    Dynamically create Dataclass from List[ChildField] based on origin model.
+    Dynamically create Dataclass from ListChildField based on origin model.
     It is basedd for SubentitySingle and FieldGroup to create TypeInfo instance
     based only on the fields for which there are Field
     """
@@ -351,8 +324,13 @@ class IComponent(ReedwolfDataclassBase, ABC):
     # ------------------------------------------------------------
 
     # lazy init - done in Setup phase
-    child_field_list: Optional[List[ChildField]] = field(init=False, repr=False, default=None)
+    child_field_list: Optional[ListChildField] = field(init=False, repr=False, default=None)
     _component_fields_dataclass: Optional[Type[IComponentFields]] = field(init=False, repr=False, default=None)
+
+    # ThisRegistry used when inside of component, lazy set in setup process() by calling
+    # get_or_create_this_registry / create_and_setup_this_registry. Set for Field*/Container* objects, and is None
+    # for others. For SubEntityItems holds .Items :: List[Item], and a special _this_registry_for_item :: Item
+    # is used when inside of an item.
     _this_registry: Union[IThisRegistry, NoneType, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
 
     #  NOTE: had 4 statuses - mutually exclusive and replaced with single Enum:
@@ -520,38 +498,29 @@ class IComponent(ReedwolfDataclassBase, ABC):
                 if not isinstance(cleaner, allowed_cleaner_base_list):
                     raise EntitySetupTypeError(owner=self, msg=f"Cleaners should be instances of {cl_names}, got: {type(cleaner)} / {cleaner}") 
 
-    def create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:
-        """
-        default implementation
-        """
-        # TODO: resolve circular dependency by moving this function logic to
-        #       .registries.py/.setup.py or somewhere else
-        from .registries import (
-            ThisRegistry,
-        )
-        if self.is_data_model():
-            raise EntityInternalError(owner=self, msg=f"For DataModel create_this_registry() needs to be overridden.")
+    # def create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:
+    #     """
+    #     default implementation
+    #     """
+    #     # TODO: resolve circular dependency by moving this function logic to
+    #     #       .registries.py/.setup.py or somewhere else
+    #     from .registries import ThisRegistry
 
-        has_children = bool(self.get_children())
+    #     if self.is_data_model():
+    #         raise EntityInternalError(owner=self, msg=f"For DataModel create_this_registry() needs to be overridden.")
 
-        if not has_children:
-            raise EntityInternalError(owner=self, msg="Non-fields should have children")
+    #     has_children = bool(self.get_children())
+    #     if not has_children:
+    #         raise EntityInternalError(owner=self, msg="Non-fields should have children")
 
-        this_registry = ThisRegistry(component=self)
-        # # and not self.is_entity_model()
-        # if self.is_subentity_items():
-        #     # Items -> This.Items
-        #     this_registry = ThisRegistry(component=self)
+    #     this_registry = ThisRegistry(component=self)
+    #     # consider:
+    #     # self.is_subentity_items()  => Items -> This.Items
+    #     # self.is_subentity_single() => Children -> This.Children + This.<all-attributes> + This.Instance
+    #     # else:                      => Children -> This.Children + This.<all-attributes>
+    #     # test repr: print(f"this_registry={this_registry}")
 
-        # # TODO: add .Instance ==> DataModel instance
-        # # elif self.is_subentity_single():
-        # #     # Children -> This.Children + This.<all-attributes> + This.Instance
-        # #     this_registry = ThisRegistryForInstanceAndChildren(owner=self) # , setup_session=setup_session)
-        # else:
-        #     # Children -> This.Children + This.<all-attributes>
-        #     this_registry = ThisRegistry(component=self) # , setup_session=setup_session
-
-        return this_registry
+    #     return this_registry
 
 
     @staticmethod
@@ -1109,7 +1078,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
     # ------------------------------------------------------------
 
     def get_component_fields_dataclass(self, setup_session: Optional[ISetupSession]) \
-            -> Tuple[Type[IComponentFields], List[ChildField]]:
+            -> Tuple[Type[IComponentFields], ListChildField]:
         # TODO: not happy with this
         """
         CACHED
@@ -1138,7 +1107,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
         if not setup_session.current_frame.component == self:
             raise EntityInternalError(owner=self, msg=f"setup_session.current_frame.component={setup_session.current_frame.component} <> component={self}")
 
-        child_field_list: List[ChildField] = []
+        child_field_list: ListChildField = []
 
         for nr, child in enumerate(children, 1):
 
@@ -1193,16 +1162,13 @@ class IComponent(ReedwolfDataclassBase, ABC):
                     #   if child.is_subentity():
                     #       child.setup(setup_session=setup_session) # recursive
 
-                    # RECURSION:
+                    # RECURSION: setup_session is used to extract name from Field/Container.bind_to ...
                     child_component_fields_dataclass, _ = child.get_component_fields_dataclass(setup_session=setup_session)
 
                 if child.is_subentity_items():
                     child_component_fields_dataclass = List[child_component_fields_dataclass]
                 child_type_info = TypeInfo.get_or_create_by_type(child_component_fields_dataclass)
 
-            # elif child.is_fieldgroup():
-            #     # TODO: currently not supported, need custom type_info
-            #     continue
             else:
                 raise EntityInternalError(owner=child, msg=f"child_type_info could not be extracted, unsuppoerted component's type, got: {type(child)}") 
 
@@ -1526,9 +1492,12 @@ class IComponent(ReedwolfDataclassBase, ABC):
             raise EntityInternalError(owner=self, msg=f"_this_registry not setup, seems that get_or_create_this_registry() was not called before")
         return self._this_registry
 
+    @abstractmethod
+    def create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:
+        ...
 
     def get_or_create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:
-        # TODO: maybe DRY is needed - similar logic found in functions:: create_this_registry
+        # TODO: maybe DRY is needed - similar logic found in functions:: setup_this_registry
         if not self._this_registry is not UNDEFINED:
             this_registry = self.create_this_registry(setup_session=setup_session)
             if this_registry:
@@ -1622,12 +1591,20 @@ class IContainer(IComponent, ABC):
         ...
 
     @abstractmethod
-    def get_type_info(self) -> TypeInfo:
+    def get_this_registry_for_item(self) -> IThisRegistry:
+        """
+        The same as get_this_registry() except for SubEntityItems which returns inner ThisRegistry
+        that should be used for individual Item (is_items_for_each_mode).
+        """
         ...
 
     @abstractmethod
-    def add_fieldgroup(self, fieldgroup:IFieldGroup):  # noqa: F821
+    def get_type_info(self) -> TypeInfo:
         ...
+
+    # @abstractmethod
+    # def add_fieldgroup(self, fieldgroup:IFieldGroup):  # noqa: F821
+    #     ...
 
     @abstractmethod
     def __getitem__(self, name: str) -> IComponent:
@@ -1680,9 +1657,6 @@ class IDataModel(IComponent, ABC):
     #         raise EntityInternalError(owner=self, msg="Setup already called")
     #     super()._setup(setup_session=setup_session)
 
-    @abstractmethod
-    def create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:
-        ...
 
     @abstractmethod
     def get_type_info(self) -> TypeInfo:
@@ -2156,10 +2130,6 @@ class IValueNode(IDexpValueSource):
 
     # used on locating F.<field-value-node> from other containers
     parent_container_node: Union[Self, UndefinedType] = field(init=False, repr=False, compare=False, default=UNDEFINED)
-
-    @abstractmethod
-    def get_value(self, strict:bool) -> AttrValue:
-        ...
 
     @abstractmethod
     def set_value(self, value: AttrValue, dexp_result: Optional[ExecResult], value_set_phase: ValueSetPhase) -> NoneType:

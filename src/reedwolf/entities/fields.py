@@ -321,36 +321,23 @@ class FieldBase(IField, ABC):
     # ------------------------------------------------------------
 
     def create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:
-        # ==== similar logic in apply.py :: _apply() ====
-        # TODO: this is 2nd place to call '.Setup()'. Explain!
-        assert not self.is_container()
+        """
+        This.Value
+        if BooleanField.enables -> add .Children + This.<fields>
+        """
         assert getattr(self, "bind_to", None)
-
-        # # if not isinstance(self, (ValidationBase, EvaluationBase)):
-        # if self.is_container():
-        #     raise EntityInternalError(owner=self, msg="Container should have local_session created")
-        # this_registry = None
-
-        has_children = bool(self.get_children())
-
-        # Field -> This.Value == This.<all-attributes>
         if not self.bind_to.IsFinished():
+            # TODO: this is 2nd place to call '.Setup()'. Explain!
             # only place where container is used ...
             container = self.get_first_parent_container(consider_self=True)
-            attr_node = self.bind_to.Setup(setup_session=setup_session, owner=container)
-        else:
-            attr_node = self.bind_to._dexp_node
+            self.bind_to.Setup(setup_session=setup_session, owner=container)
 
+        attr_node = self.bind_to._dexp_node
         if not attr_node:
             raise EntitySetupNameError(owner=self, msg=f"{attr_node.name}.bind_to='{self.bind_to}' could not be evaluated")
 
-        if has_children:
-            # Field with children (e.g. BooleanField.enables)
-            # Children -> This..Children + This.<all-attributes>
-            # model_klass = self.get_type_info().type_
-            this_registry = ThisRegistry(attr_node=attr_node, component=self)
-        else:
-            this_registry = ThisRegistry(attr_node=attr_node)
+        component = self if self.get_children() else None
+        this_registry = ThisRegistry(attr_node=attr_node, component=component)
 
         return this_registry
 
@@ -636,15 +623,10 @@ class ChoiceField(FieldBase):
                     # TODO: explain, give example
                     raise EntityInternalError(owner=self, msg="Choices is a a list of model instances, expecting single instance.")
 
-            #  exception to the rule - ChoiceFileld value and title from This.
+            #  exception to the rule - ChoiceField value and title from This.
             this_registry = ThisRegistry.create_for_model_klass(
-                 setup_session=setup_session,
-                 model_klass=model_klass)
-
-            # this_registry = setup_session.container.create_this_registry_for_model_class(
-            #     setup_session=setup_session,
-            #     model_klass=model_klass,
-            # )
+                                             setup_session=setup_session,
+                                             model_klass=model_klass)
 
             with setup_session.use_stack_frame(
                     SetupStackFrame(
@@ -898,5 +880,12 @@ class FieldGroup(IFieldGroup):
     @staticmethod
     def is_fieldgroup() -> bool:
         return True
+
+    def create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:
+        assert self.get_children(), self
+        this_registry = ThisRegistry(component=self)
+        return this_registry
+
+
 
 

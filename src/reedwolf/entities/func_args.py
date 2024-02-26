@@ -221,45 +221,27 @@ class FunctionArguments:
             if not setup_session:
                 raise EntityInternalError(owner=self, msg=f"{parent_name}: SetupSession is required for DotExpression() function argument case")
 
-            # if not caller:
-            #     # NOTE: Namespace top level like: Ctx.Length(This.name)
-            #     #       DataModelWithHandlers with read_handlers case
-            #     model_klass = setup_session.current_frame.data_model.model
-            # else:
-            #     # TODO: drop this case - change to 'setup_session.current_frame' case
-            #     model_klass = caller.type_info.type_
+            if setup_session.current_frame.this_registry.is_items_mode:
+                # TODO: resolve local import somehow
+                from reedwolf.entities.base import SetupStackFrame
 
-            # assert model_klass
-
-            # if is_model_klass(model_klass):
-            #     # pydantic / dataclasses
-            #     assert setup_session
-            #     # NOTE: ThisRegistryForInstance not available so low, using path:
-            #     #       session -> container -> ...
-            #     this_registry = setup_session.container.create_this_registry_for_model_class(
-            #         setup_session=setup_session,
-            #         model_klass=model_klass,
-            #     )
-            #     # local_setup_session = setup_session.create_local_setup_session_for_this_instance(
-            #     #                                             model_klass=model_klass,
-            #     #                                             )
-            # elif model_klass in STANDARD_TYPE_LIST:
-            #     this_registry = None
-            # else:
-            #     raise EntitySetupValueError(owner=self, msg=f"{parent_name}: Unsupported type: {caller} / {model_klass}")
-
-            # with setup_session.use_stack_frame(
-            #         SetupStackFrame(
-            #             container = setup_session.current_frame.container,
-            #             component = setup_session.current_frame.component,
-            #             this_registry = this_registry,
-            #         )):
-            dexp_node = dexp.Setup(setup_session=setup_session, owner=setup_session.current_frame.component)
+                assert setup_session.container.is_subentity_items()
+                this_registry = setup_session.container.get_this_registry_for_item()
+                with setup_session.use_stack_frame(
+                        SetupStackFrame(
+                            container = setup_session.current_frame.container,
+                            component = setup_session.current_frame.component,
+                            this_registry = this_registry,
+                        )):
+                    dexp_node = dexp.Setup(setup_session=setup_session, owner=setup_session.current_frame.component)
+            else:
+                dexp_node = dexp.Setup(setup_session=setup_session, owner=setup_session.current_frame.component)
 
             # NOTE: pass callable since type_info for some Dexp-s are not avaialble (e.g. FieldsNS, F.name)
             type_info_or_callable = dexp_node.get_type_info()
             if not type_info_or_callable:
-                # if type_info is not provided then set callable which will start to return values after finish is completed
+                # if type_info is not provided then set callable which will start to return values after
+                # finish is completed
                 type_info_or_callable = dexp_node.get_type_info
             value_or_dexp = dexp
 

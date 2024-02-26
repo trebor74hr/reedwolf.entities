@@ -97,9 +97,9 @@ class ExecResult:
                 )
         self.value = value
 
-    def get_real_value(self) -> AttrValue:
-        # TODO: instead of reading .value using for final value use .get_real_value()
-        return self.value.get_value(strict=False) if isinstance(self.value, IDexpValueSource) else self.value
+    # def get_real_value(self) -> AttrValue:
+    #     # TODO: instead of reading .value using for final value use .get_real_value()
+    #     return self.value.get_self_or_items() if isinstance(self.value, IDexpValueSource) else self.value
 
     def is_not_available(self) -> bool:
         return isinstance(self, NotAvailableExecResult)
@@ -276,7 +276,10 @@ class IRegistry:
 class ISetupSession(ABC):
 
     # TODO: typing.Protocol
-    current_frame: Optional["ApplyStackFrame"] = field(repr=False, init=False, default=None)
+    # current_frame: Optional["ApplyStackFrame"] = field(repr=False, init=False, default=None)
+    current_frame: Optional["SetupStackFrame"] = field(repr=False, init=False, default=None)
+
+    # TODO: container: "IContainer"
 
     @abstractmethod
     def use_stack_frame(self, frame: "IStackFrame") -> "UseStackFrameCtxManagerBase":
@@ -500,7 +503,6 @@ class DotExpression(DynamicAttrsBase):
 
         # this_registry = setup_session.current_frame.this_registry if setup_session.current_frame else None
         if self._namespace == ThisNS:
-            # TODO: DRY this - identical logic in expressions.py :: Setup()
             if not setup_session.current_frame.this_registry:
                 raise EntitySetupNameError(owner=self, msg=f"Namespace 'This.' is not available in this settings, got: {self._name}")
             registry = setup_session.current_frame.this_registry
@@ -1234,9 +1236,7 @@ def execute_dexp_or_node(
                             apply_result=apply_result,
                             )
     # AttrDexpNode, OperationDexpNode, IFunctionDexpNode, LiteralDexpNode,
-    elif isinstance(dexp_node, (
-            IDotExpressionNode,
-            )):
+    elif isinstance(dexp_node, IDotExpressionNode):
         dexp_result = dexp_node.execute_node(
                             apply_result=apply_result, 
                             dexp_result=dexp_result,

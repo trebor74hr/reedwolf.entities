@@ -75,10 +75,7 @@ class BoundDataModelBase(IBoundDataModel):
         model_klass = self.model_klass
         if isinstance(self.model_klass, DotExpression):
             if not self.model_klass.IsFinished():
-                # container = self.get_first_parent_container(consider_self=True)
-                # model_dexp_node: IDotExpressionNode = model.Setup(setup_session=setup_session, owner=container)
                 raise EntityInternalError(owner=self, msg=f"{self.model_klass} dot-expression is not finished")
-
             model_dexp_node = self.model_klass._dexp_node
             model_klass = model_dexp_node.get_type_info().type_
 

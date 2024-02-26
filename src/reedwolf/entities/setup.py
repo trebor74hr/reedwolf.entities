@@ -49,11 +49,10 @@ from .meta import (
     get_model_fields,
     AttrName,
     ComponentStatus,
-    is_list_instance_or_type,
+    is_list_instance_or_type, ChildField, ListChildField,
 )
 from .base import (
     IComponentFields,
-    ChildField,
     IField,
     IStackOwnerSession,
     IComponent,
@@ -131,6 +130,11 @@ class RegistryBase(IRegistry):
         """ default implementation """
         return False
 
+    def setup(self, setup_session: ISetupSession):
+        if self.setup_session:
+            raise EntityInternalError(owner=self, msg=f"setup_session already set: {self.setup_session}")
+        self.setup_session = setup_session
+
     def dexp_not_found_fallback(self, owner: IComponent, full_dexp_node_name: AttrName) -> Union[AttrDexpNode, UndefinedType]:
         """
         method is called when CALL_DEXP_NOT_FOUND_FALLBACK is set to True
@@ -158,15 +162,11 @@ class RegistryBase(IRegistry):
                                                        + (f" Caller: {caller}" if caller else ""))
 
         attr_dexp_node: AttrDexpNode = self.store[attr_name]
-        root_value: RegistryRootValue = self._apply_to_get_root_value(apply_result=apply_result,
-                                                                      attr_name=attr_name)
+        # root_value: RegistryRootValue = self._apply_to_get_root_value(apply_result=apply_result, attr_name=attr_name)
+        root_value: RegistryRootValue = self._apply_to_get_root_value(apply_result=apply_result, attr_name=attr_name)
+
         root_value.set_attr_dexp_node(attr_dexp_node)
         return root_value
-
-    def setup(self, setup_session: ISetupSession):
-        if self.setup_session:
-            raise EntityInternalError(owner=self, msg=f"setup_session already set: {self.setup_session}") 
-        self.setup_session = setup_session
 
     def finish(self):
         if self.finished:
@@ -230,12 +230,8 @@ class RegistryBase(IRegistry):
                             )
             self.register_attr_node(attr_node)
 
-        owner_model_class = List[ChildField]
-        type_info = TypeInfo.get_or_create_by_type(owner_model_class)
-
-        # owner_model_class = List[component_fields_dataclass]
+        type_info = TypeInfo.get_or_create_by_type(ListChildField)
         children_attr_node = self._register_special_attr_node(
-                        # model_klass = owner_model_class,
                         type_info=type_info,
                         attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME.value,
                         attr_name_prefix = attr_name_prefix,

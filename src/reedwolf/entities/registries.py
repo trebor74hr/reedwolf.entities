@@ -22,7 +22,7 @@ from .exceptions import (
     EntitySetupValueError,
     EntityInternalError,
     EntitySetupTypeError,
-    EntityApplyNameError, EntitySetupNameError,
+    EntityApplyNameError, EntitySetupNameError, EntityApplyTypeError,
 )
 from .namespaces import (
     Namespace,
@@ -712,7 +712,7 @@ class ThisRegistry(IThisRegistry, RegistryBase):
     b) This.Value                               yes     yes      -        -          -          -                   yes- if std.
     c) This.Instance     - jel mi treba???      -       -        -        yes        -- (*2)    yes(Self)           yes- if Item?
     d) This.Items: List[Item]                   -       -        -        -          yes        - (vidi g)          -
-    e) This.Children: List[ChildField]          -       yes      yes      yes        yes (*1)   -                   -
+    e) This.Children: ListChildField            -       yes      yes      yes        yes (*1)   -                   -
 
     f) This.Item.<field-name>                   -       -        -        -          -          yes(*3)             -
     g) This.Item.Children                       -       -        -        -          -          yes(*3)             -
@@ -740,7 +740,7 @@ class ThisRegistry(IThisRegistry, RegistryBase):
     def create_for_model_klass(cls,
                                setup_session: ISetupSession,
                                model_klass: ModelKlassType,
-                               is_items_for_each_mode: bool = False,
+                               # is_items_for_each_mode: bool = False,
                                ) -> Self:
         # NOTE: must be here since:
         #   - expressions.py don't see ThisRegistry
@@ -753,7 +753,7 @@ class ThisRegistry(IThisRegistry, RegistryBase):
         - .Instance + <attr-names> is used only in manual setup cases,
           e.g. ChoiceField()
         """
-        this_registry = ThisRegistry(model_klass=model_klass, is_items_for_each_mode=is_items_for_each_mode)
+        this_registry = ThisRegistry(model_klass=model_klass) #, is_items_for_each_mode=is_items_for_each_mode)
         this_registry.setup(setup_session=setup_session)
         this_registry.finish()
 
@@ -793,6 +793,8 @@ class ThisRegistry(IThisRegistry, RegistryBase):
                 )
 
         if self.model_klass:
+            if inspect.isclass(self.model_klass) and issubclass(self.model_klass, IValueNode):
+                raise EntityInternalError(owner=self, msg=f"Got ValueNode klass: {self.model_klass}")
             if not self.is_items_for_each_mode and self.is_items_mode:
                 # This.Items
                 self._register_special_attr_node(
@@ -825,7 +827,7 @@ class ThisRegistry(IThisRegistry, RegistryBase):
                 )
             else:
                 # NOTE: Includes self.is_items_for_each_mode too
-                # This.<all-attribute> + This.Children: List[ChildField]
+                # This.<all-attribute> + This.Children: ListChildField
                 self._register_all_children(
                     setup_session=setup_session,
                     attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME,
@@ -862,26 +864,36 @@ class ThisRegistry(IThisRegistry, RegistryBase):
         if self.component:
             if root_value:
                 raise EntityInternalError(owner=self, msg=f"component mode and some other mode clash, root_value already set: {root_value}")
+
+            value_node = apply_result.current_frame.value_node
+
             # TODO: root_value could be already defined, should I put "elif ..." instead?
             if self.is_items_mode:
                 # multiple items case
                 if attr_name == ReservedAttributeNames.ITEMS_ATTR_NAME.value:
-                    if not isinstance(apply_result.current_frame.instance, (list, tuple)):
-                        raise EntityInternalError(f"Items expected, got: {apply_result.current_frame.instance}")
+                    if not value_node.is_list():
+                        raise EntityApplyTypeError(f"Items expected, got: {value_node}")
 
-                    root_value = RegistryRootValue(
-                        value_root=apply_result.current_frame.instance,
-                        attr_name_new=None,
-                        do_fetch_by_name=False)
+                    # assert isinstance(value_node, list), value_node
+                    # value_node = apply_result.current_frame.value_node.get_self_or_items()
+
+                    root_value = RegistryRootValue(value_root=value_node, attr_name_new=None, do_fetch_by_name=False)
+
+                    # if not isinstance(apply_result.current_frame.instance, (list, tuple)):
+                    #     raise EntityInternalError(f"Items expected, got: {apply_result.current_frame.instance}")
+                    # root_value = RegistryRootValue(
+                    #     value_root=apply_result.current_frame.instance,
+                    #     attr_name_new=None,
+                    #     do_fetch_by_name=False)
+
                 elif attr_name == ReservedAttributeNames.CHILDREN_ATTR_NAME.value:
-                    if  isinstance(apply_result.current_frame.instance, (list, tuple)):
+                    if isinstance(apply_result.current_frame.instance, (list, tuple)):
                         raise EntityInternalError(f"Single item expected, got: {apply_result.current_frame.instance}")
 
                     if not isinstance(apply_result.current_frame.component.child_field_list, (list, tuple)):
                         raise EntityInternalError(owner=apply_result.current_frame.component,
-                                                  msg=f"_child_field_list not a list, got: {apply_result.current_frame.component.child_field_list}")
+                                                  msg=f"child_field_list not a list, got: {apply_result.current_frame.component.child_field_list}")
                     # TODO: .Children?
-                    # raise NotImplementedError()
                     root_value = RegistryRootValue(
                         value_root=apply_result.current_frame.component.child_field_list,
                         attr_name_new=None,
@@ -891,9 +903,11 @@ class ThisRegistry(IThisRegistry, RegistryBase):
                     raise EntityInternalError(owner=self, msg=f"Expected attribute name: {ReservedAttributeNames.ITEMS_ATTR_NAME.value} or {ReservedAttributeNames.CHILDREN_ATTR_NAME.value} , got: {attr_name}")
             else:
                 # single item component
-                if not isinstance(apply_result.current_frame.instance, self.model_klass):
-                    raise EntityInternalError(owner=self,
-                                              msg=f"Type of apply session's instance expected to be '{self.model_klass}, got: {apply_result.current_frame.instance}")
+                # if not isinstance(apply_result.current_frame.instance, self.model_klass):
+                #     raise EntityInternalError(owner=self, msg=f"Type of apply session's instance expected to be '{self.model_klass}, got: {apply_result.current_frame.instance}")
+
+                if value_node.is_list():
+                    raise EntityApplyTypeError(f"Expected single item, got list instead, got: {value_node}")
 
                 if attr_name == ReservedAttributeNames.CHILDREN_ATTR_NAME:
                     # with 2nd param == None -> do not fetch further
@@ -902,8 +916,9 @@ class ThisRegistry(IThisRegistry, RegistryBase):
                 else:
                     # with 2nd param like this -> fetch further by attr_name
                     atrr_name_to_fetch = attr_name
-                root_value = RegistryRootValue(value_root=apply_result.current_frame.instance,
-                                               attr_name_new=atrr_name_to_fetch)
+
+                root_value = RegistryRootValue(value_root=value_node, attr_name_new=atrr_name_to_fetch)
+                # root_value = RegistryRootValue(value_root=apply_result.current_frame.instance, attr_name_new=atrr_name_to_fetch)
 
         if not root_value:
             raise EntityInternalError(owner=self, msg="Invalid case")

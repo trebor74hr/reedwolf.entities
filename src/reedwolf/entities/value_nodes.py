@@ -242,57 +242,6 @@ class ValueNodeBase(IValueNode):
         return self._value!=self.init_value
 
 
-    def set_value(self, value: AttrValue, dexp_result: Optional[ExecResult], value_set_phase: ValueSetPhase) -> NoneType:
-        """
-        - when setting initial value dexp_result is stored into init_dexp_result
-        - dexp_result can be None too - in NA_* some undefined values
-        - fills value_history objects only in "trace" mode - only in the case when value is not of type UndefinedType
-        """
-        if self.finished:
-            raise EntityInternalError(owner=self, msg=f"Current value already finished, last value: {self._value}")
-
-        if dexp_result is not None and self.init_dexp_result is UNDEFINED:
-            assert value_set_phase == ValueSetPhase.INIT_BY_BIND, value_set_phase
-            if not self._value in (NA_IN_PROGRESS, UNDEFINED):
-                raise EntityInternalError(owner=self, msg=f"self._value already set to: {self._value}")
-            self.init_dexp_result = dexp_result
-        else:
-            assert value_set_phase != ValueSetPhase.INIT_BY_BIND, value_set_phase
-
-        if not self.initialized and not value_set_phase.startswith("INIT_"):
-            raise EntityInternalError(owner=self, msg=f"Setting value in init phase '{value_set_phase}' can be done before marking 'initialized'. Last_value: {self._value}")
-        elif self.initialized and not value_set_phase.startswith("EVAL_"):
-            raise EntityInternalError(owner=self, msg=f"Setting value in eval phase '{value_set_phase}' can be done after marking 'initialized'. Last_value: {self._value}")
-
-        # TODO: if settings.trace - then update values_history
-
-        self._value = value
-        # if self._value is NA_DEFAULTS_MODE:
-        #     # TODO: check if finish immediatelly
-        #     self.mark_finished()
-
-        # --- value_history - add new value
-        # TODO: pass input arg value_parent_name - component.name does not have any purpose
-
-        if self.trace_value_history and value is not NA_IN_PROGRESS \
-          and value is not NOT_APPLIABLE and value is not NA_DEFAULTS_MODE:
-            instance_attr_value = InstanceAttrValue(
-                value_parent_name=self.component.name,
-                value=value,
-                dexp_result=dexp_result,
-                value_set_phase=value_set_phase
-                # TODO: source of change ...
-            )
-            self.value_history.append(instance_attr_value)
-        # else: instance_attr_value = None
-        return  #  instance_attr_value: Optional[InstanceAttrValue]
-
-    def get_value(self, strict:bool) -> AttrValue:
-        # Items has its own
-        if strict and not self.finished:
-            raise EntityInternalError(owner=self, msg=f"Current value is not finished, last value: {self._value}")
-        return self._value
-
     # ------------------------------------------------------------
 
     def set_instance_attr_to_value(self):
@@ -515,9 +464,6 @@ class ValueNode(ValueNodeBase):
     # TODO: # TODO: When name clashes (e.g. SubentitySingle), then ...
     # TODO: fields_dict:   Union[UndefinedType, Dict[AttrName, Self]] = field(repr=False, init=False, default=UNDEFINED)
 
-    def is_list(self) -> bool:
-        return False
-
     def __post_init__(self):
         # self.component can be SubEntityItems - the node with Children
         super().__post_init__()
@@ -526,6 +472,67 @@ class ValueNode(ValueNodeBase):
             # TODO: with py 3.7 {} has ordered items as default behaviour,
             #       so std {} could be used instead
             self.children = OrderedDict()
+
+    def is_list(self) -> bool:
+        return False
+
+    # def get_items(self) -> List[Self]:
+    #     raise EntityInternalError(owner=self, msg=f"get_items() available only on ItemsValueNode() instances")
+
+    def get_self_or_items(self) -> Union[Self, List[Self]]:
+        return self
+
+    def set_value(self, value: AttrValue, dexp_result: Optional[ExecResult], value_set_phase: ValueSetPhase) -> NoneType:
+        """
+        - when setting initial value dexp_result is stored into init_dexp_result
+        - dexp_result can be None too - in NA_* some undefined values
+        - fills value_history objects only in "trace" mode - only in the case when value is not of type UndefinedType
+        """
+        if self.finished:
+            raise EntityInternalError(owner=self, msg=f"Current value already finished, last value: {self._value}")
+
+        if dexp_result is not None and self.init_dexp_result is UNDEFINED:
+            assert value_set_phase == ValueSetPhase.INIT_BY_BIND, value_set_phase
+            if not self._value in (NA_IN_PROGRESS, UNDEFINED):
+                raise EntityInternalError(owner=self, msg=f"self._value already set to: {self._value}")
+            self.init_dexp_result = dexp_result
+        else:
+            assert value_set_phase != ValueSetPhase.INIT_BY_BIND, value_set_phase
+
+        if not self.initialized and not value_set_phase.startswith("INIT_"):
+            raise EntityInternalError(owner=self, msg=f"Setting value in init phase '{value_set_phase}' can be done before marking 'initialized'. Last_value: {self._value}")
+        elif self.initialized and not value_set_phase.startswith("EVAL_"):
+            raise EntityInternalError(owner=self, msg=f"Setting value in eval phase '{value_set_phase}' can be done after marking 'initialized'. Last_value: {self._value}")
+
+        # TODO: if settings.trace - then update values_history
+
+        self._value = value
+        # if self._value is NA_DEFAULTS_MODE:
+        #     # TODO: check if finish immediatelly
+        #     self.mark_finished()
+
+        # --- value_history - add new value
+        # TODO: pass input arg value_parent_name - component.name does not have any purpose
+
+        if self.trace_value_history and value is not NA_IN_PROGRESS \
+                and value is not NOT_APPLIABLE and value is not NA_DEFAULTS_MODE:
+            instance_attr_value = InstanceAttrValue(
+                value_parent_name=self.component.name,
+                value=value,
+                dexp_result=dexp_result,
+                value_set_phase=value_set_phase
+                # TODO: source of change ...
+            )
+            self.value_history.append(instance_attr_value)
+        # else: instance_attr_value = None
+        return  #  instance_attr_value: Optional[InstanceAttrValue]
+
+    def get_value(self, strict:bool) -> AttrValue:
+        # Items has its own
+        if strict and not self.finished:
+            raise EntityInternalError(owner=self, msg=f"Current value is not finished, last value: {self._value}")
+        return self._value
+
 
     def add_to_container_children(self, child: Self):
         if child.name in self.container_children:
@@ -591,6 +598,22 @@ class ItemsValueNode(ValueNodeBase):
     def is_list(self) -> bool:
         return True
 
+    # def get_items(self) -> List[Self]:
+    #     return self.items
+
+    def get_self_or_items(self) -> Union[Self, List[Self]]:
+        return self.items
+
+    def get_value(self, strict: bool) -> List[Self]:
+        # raise EntityInternalError(owner=self, msg=f"get_value() not available on ItemsValueNode() instances")
+        if strict and not self.finished:
+            raise EntityInternalError(owner=self, msg=f"Current value is not finished, last value: {self._value}")
+        if self.finished:
+            # contains internal status ... UNDEFINED, NA_... and similar, real value is in "items"
+            # i.e. it is not possible to convert/extract simply.
+            raise EntityInternalError(owner=self, msg=f"Current value is not possible in ItemsValueNode after finished, last value: {self._value}")
+        return self._value
+
     def add_item(self, value_node: Self):
         # TODO: assert value_node is not self
         # TODO: assert value_node.parent_node is not self
@@ -610,8 +633,3 @@ class ItemsValueNode(ValueNodeBase):
             add_lines = item_node.dump_to_strlist(depth+1)
             lines.extend(add_lines)
 
-    def get_value(self, strict:bool) -> List[Self]:
-        if strict and not self.finished:
-            raise EntityInternalError(owner=self, msg=f"Current value is not finished (items): {self.items}")
-        # value_list = [value_node.get_value(strict=strict) for value_node in self.items]
-        return self.items

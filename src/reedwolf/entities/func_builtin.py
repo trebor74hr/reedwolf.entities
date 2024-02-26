@@ -6,11 +6,9 @@ from typing import (
     Dict,
     Optional,
     List,
-    Sequence,
     Any,
 )
 
-from .base import ChildField
 from .exceptions import (
     EntityApplyValueError,
     EntitySetupValueError,
@@ -19,7 +17,7 @@ from .meta import (
     ItemType,
     NumberType,
     is_enum,
-    get_enum_members,
+    get_enum_members, ListItemType, ChildField, ListChildField,
 )
 from .expressions import (
     DotexprFuncArgHint,
@@ -30,7 +28,6 @@ from .functions import (
     create_builtin_items_function_factory,
     CustomFunctionFactory,
     FunctionArgumentsType,
-    InjectComponentTreeValuesFuncArgHint,
     DotexprExecuteOnItemFactoryFuncArgHint,
 )
 
@@ -72,15 +69,19 @@ def EnumMembers(
 
 T = TypeVar("T", bound=Any)
 
-# def children(value: Any, inject_component_tree: ComponentTreeWValuesType) -> List[ChildField]:
+# def children(value: Any, inject_component_tree: ComponentTreeWValuesType) -> ListChildField:
 #     return inject_component_tree["contains"]
 
-def children(value: Any, component_tree: InjectComponentTreeValuesFuncArgHint()) -> List[ChildField]:
+
+# def children(value: Any, component_tree: InjectComponentTreeValuesFuncArgHint()) -> ListChildField:
+#   return component_tree["contains"]
+def children(item: ItemType) -> ListChildField:
     """
     Component's list of children
-    TODO: ex. was List[ItemType] - should convert "contains" to child_list
     """
-    return component_tree["contains"]
+    from reedwolf.entities.value_nodes import ValueNode
+    assert isinstance(item, ValueNode)
+    return list(item.children.values()) if item.children else []
 
 Children = create_builtin_function_factory(  # noqa: E305
             children, name="Children", 
@@ -88,11 +89,12 @@ Children = create_builtin_function_factory(  # noqa: E305
             )
 
 
-def single_bool_selected(children_list: List[ItemType]) -> int:
+# OLD: def single_bool_selected(children_list: List[ItemType]) -> int:
+# def single_bool_selected(children_list: ListChildField) -> bool:
+def single_bool_selected(item_list: ListItemType) -> bool:
     """ for objects from datastores - e.g. rows, iterables """
-    return len(
-        [child for child in children_list if child["value_instance"] is True]
-    ) == 1
+    return len([1 for item in item_list if item.get_value(strict=False) is True]) == 1
+    # return len([child for child in children_list if child["value_instance"] is True]) == 1
     # ORIG2: child["value_instance"].get_value(strict=False)...
 
 SingleBoolSelected = create_builtin_function_factory(  # noqa: E305
@@ -114,6 +116,7 @@ def upper(str_value: str) -> str:
     return str.upper(str_value)
 Upper = create_builtin_function_factory(upper, name="Upper") # noqa: E305
 
+
 def lower(str_value: str) -> str:
     return str.lower(str_value)
 Lower = create_builtin_function_factory(lower, name="Lower") # noqa: E305
@@ -122,6 +125,7 @@ Lower = create_builtin_function_factory(lower, name="Lower") # noqa: E305
 def substring(str_value: str, start:Optional[int], end:Optional[int]=None) -> str:
     return str_value[start:end]
 Substring = create_builtin_function_factory(substring, name="Substring") # noqa: E305
+
 
 def startswith(str_value: str, prefix:str) -> bool:
     return str_value.startswith(prefix)
@@ -134,7 +138,7 @@ Startswith = create_builtin_function_factory(startswith, name="Startswith") # no
 #       functionality).  Could be generated and eval("...").
 # ------------------------------------------------------------
 
-def count(item_list: Sequence[ItemType]) -> int:
+def count(item_list: ListItemType) -> int:
     """ for objects from datastores - e.g. rows, iterables """
     return len(item_list)
 
@@ -145,7 +149,7 @@ Count = create_builtin_items_function_factory(  # noqa: E305
         )
 
 
-def sum_(item_list: Sequence[ItemType], field_name: AttrnameFuncArgHint(NumberType)) -> NumberType:
+def sum_(item_list: ListItemType, field_name: AttrnameFuncArgHint(NumberType)) -> NumberType:
     """
     NOTE: underlying type must be matched dynamically
     """
@@ -154,6 +158,7 @@ def sum_(item_list: Sequence[ItemType], field_name: AttrnameFuncArgHint(NumberTy
     # else:
     return sum([getattr(item, field_name, 0) for item in item_list])
 
+
 Sum = create_builtin_items_function_factory(
             items_value_arg_name="item_list",
             py_function=sum_, name="Sum",
@@ -161,8 +166,8 @@ Sum = create_builtin_items_function_factory(
         )
 
 
-# def map_(item_list: Sequence[ItemType], callable_or_fieldname: Union[Callable[[Any], Any], str]) -> Sequence[ItemType]:
-def map_(item_list: Sequence[ItemType], dot_expr: DotexprFuncArgHint(inner_type=Any)) -> Sequence[ItemType]:
+# def map_(item_list: ListItemType, callable_or_fieldname: Union[Callable[[Any], Any], str]) -> ListItemType:
+def map_(item_list: ListItemType, dot_expr: DotexprFuncArgHint(inner_type=Any)) -> ListItemType:
     for item in item_list:
         yield dot_expr._evaluator.evaluate(item.value)
     raise NotImplementedError()
@@ -180,10 +185,10 @@ Map = create_builtin_items_function_factory(
         )
 
 
-# def filter_(item_list: Sequence[ItemType], bool_dot_expr: FuncArgDotExprBoolType) -> Sequence[ItemType]:
-def filter_(item_list: Sequence[ItemType],
+# def filter_(item_list: ListItemType, bool_dot_expr: FuncArgDotExprBoolType) -> ListItemType:
+def filter_(item_list: ListItemType,
             dot_expr_execute_on_item_function: DotexprExecuteOnItemFactoryFuncArgHint(),
-            term_dot_expr: JustDotexprFuncArgHint(inner_type=bool)) -> Sequence[ItemType]:
+            term_dot_expr: JustDotexprFuncArgHint(inner_type=bool)) -> ListItemType:
     """
     TODO: can become iterator/generator
     """
@@ -209,8 +214,8 @@ Filter = create_builtin_items_function_factory(
 
 # ------------------------------------------------------------
 
-# def max_(item_list: Sequence[ItemType], callable_or_fieldname: Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
-def max_(item_list: Sequence[ItemType], dot_expr: DotexprFuncArgHint(inner_type=Any)) -> Optional[Any]:
+# def max_(item_list: ListItemType, callable_or_fieldname: Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
+def max_(item_list: ListItemType, dot_expr: DotexprFuncArgHint(inner_type=Any)) -> Optional[Any]:
     for item in item_list:
         yield dot_expr._evaluator.evaluate(item.value)
     raise NotImplementedError
@@ -231,8 +236,8 @@ Max = create_builtin_items_function_factory(
 
 # ------------------------------------------------------------
 
-# def min_(item_list: Sequence[ItemType], callable_or_fieldname: Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
-def min_(item_list: Sequence[ItemType], dot_expr: DotexprFuncArgHint(inner_type=Any)) -> Optional[Any]:
+# def min_(item_list: ListItemType, callable_or_fieldname: Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
+def min_(item_list: ListItemType, dot_expr: DotexprFuncArgHint(inner_type=Any)) -> Optional[Any]:
     raise NotImplementedError()
     # if not callable_or_fieldname:
     #     return min([item for item in item_list])
@@ -257,9 +262,9 @@ Min = create_builtin_items_function_factory(
 #         return callable_or_fieldname(item)
 #     raise TypeError(f"Argument expected to be callable or string (fieldname), got: {callable_or_fieldname} -> {type(callable_or_fieldname)}")
 
-# def first(item_list: Sequence[ItemType], callable_or_fieldname: Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
-# def first(item_list: Sequence[ItemType], dot_expr: DotexprFuncArgHint(inner_type=Any)) -> Optional[Any]:
-def first(item_list: Sequence[ItemType]) -> Optional[ItemType]:
+# def first(item_list: ListItemType, callable_or_fieldname: Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
+# def first(item_list: ListItemType, dot_expr: DotexprFuncArgHint(inner_type=Any)) -> Optional[Any]:
+def first(item_list: ListItemType) -> Optional[ItemType]:
     return item_list[0] if item_list else None
 
 First = create_builtin_items_function_factory(
@@ -268,12 +273,8 @@ First = create_builtin_items_function_factory(
             # arg_validators=[ensure_is_list],
         )
 
-# def last(item_list: Sequence[ItemType], callable_or_fieldname: Optional[Union[Callable[[Any], Any], str]] = None) -> ItemType:
-def last(item_list: Sequence[ItemType], dot_expr: DotexprFuncArgHint(inner_type=Any)) -> Optional[Any]:
-    raise NotImplementedError()
-    # if not item_list:
-    #     return UNDEFINED
-    # return _process_item(item_list[-1])
+def last(item_list: ListItemType, dot_expr: DotexprFuncArgHint(inner_type=Any)) -> Optional[ItemType]:
+    return item_list[-1] if item_list else None
 
 Last = create_builtin_items_function_factory(
             items_value_arg_name="item_list",

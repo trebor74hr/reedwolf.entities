@@ -225,9 +225,7 @@ class IFunction(IFunctionDexpNode, ABC):
         # if self.name in ("Map", "First"): print("here33")
         self._output_type_info = TypeInfo.extract_function_return_type_info(self.py_function)
 
-        # TODO: should check recursively
-        if ItemType in self._output_type_info.types:
-            # TODO: if self._output_type_info.has_item_type:
+        if self._output_type_info.is_item_type:
             assert hasattr(self.caller, "get_type_info")
             real_item_type_info = self.caller.get_type_info()
             self._output_type_info = TypeInfo.replace_item_type(self._output_type_info, real_item_type_info)
@@ -341,33 +339,31 @@ class IFunction(IFunctionDexpNode, ABC):
         if model_class is None:
             # direct function creation - currently only unit test uses it
             this_registry = None
-
-        elif self.items_func_arg or is_model_klass(model_class) or type_info.is_list:
+        elif is_model_klass(model_class):
             # complex structs: pydantic / dataclasses / List[Any] / ...
-            if self.items_func_arg and not type_info.is_list:
+            # can be List[<Container>__Fields]
+            # if type_info.is_list:
+            #     raise EntityInternalError(owner=self, msg="should not happen")
+            this_registry = ThisRegistry.create_for_model_klass(
+                                setup_session=self.setup_session,
+                                model_klass=type_info.py_type_hint)
+        elif self.items_func_arg:
+            if not type_info.is_list:
                 raise EntitySetupTypeError(owner=self, msg=f"For 'Items' functions only list types are supported, got: {type_info.py_type_hint}")
 
-            this_registry = ThisRegistry.create_for_model_klass(
-                is_items_for_each_mode = (self.items_func_arg is not None),
-                setup_session=self.setup_session,
-                model_klass=type_info.py_type_hint)
+            this_registry = self.setup_session.current_frame.container.get_this_registry_for_item(self.setup_session)
+            # this_registry = self.setup_session.current_frame.container.get_or_create_this_registry(self.setup_session)
 
+            if not this_registry:
+                raise EntityInternalError(owner=self, msg="this_registry not set")
+            # if this_registry.is_items_for_each_mode: print("here33")
             if self.items_func_arg and not this_registry.is_items_for_each_mode:
                 raise EntityInternalError(owner=self, msg=f"Failed to setup this_registry for Items in 'for-each' mode: {this_registry}")
 
         elif model_class in STANDARD_TYPE_LIST:
             this_registry = None
-        # elif type_info and type_info.is_list:
-        #     # NOTE: u ovaj slučaj nikad se ne ulazi
-        #     model_klass = type_info.type_
-        #     this_registry = ThisRegistry.create_for_model_class(
-        #         setup_session=self.setup_session,
-        #         model_klass=model_klass)
-        #     # this_registry = self.setup_session.container.create_this_registry_for_model_class(
-        #     #     setup_session=self.setup_session,
-        #     #     model_klass=model_klass,
-        #     # )
         else:
+            assert not type_info.is_list
             raise EntitySetupValueError(owner=self, msg=f"Can not set registry for This. namespace, unsupported type: {model_class} / {type_info}. Caller: {self.caller}")
 
         self.this_registry = this_registry
@@ -442,15 +438,40 @@ class IFunction(IFunctionDexpNode, ABC):
             ) -> Any:
 
         execute_func_arg_hint: Optional[IExecuteFuncArgHint] = None
+
         if isinstance(exp_arg.type_info.py_type_hint, JustDotexprFuncArgHint):
+            # arg_value is left as is, no further processing
             execute_func_arg_hint = None
         elif isinstance(exp_arg.type_info.py_type_hint, IExecuteFuncArgHint):
-            execute_func_arg_hint: DotexprFuncArgHint = exp_arg.type_info.py_type_hint
+            # must execute callable in exp_arg.type_info.py_type_hint
+            execute_func_arg_hint = exp_arg.type_info.py_type_hint
+        elif exp_arg.type_info.is_item_type:
+            # ListItemType -> input is ValueNode or ItemsValueNode -> return self or .items
+            if exp_arg.type_info.is_item_type_list:
+                if isinstance(arg_value, list):
+                    # check each list item and leave arg_value as is
+                    for idx, item in enumerate(arg_value,0):
+                        if not isinstance(item, IDexpValueSource):
+                            raise EntityApplyTypeError(owner=exp_arg, msg=f"Expected List[IDexpValueSource] (i.e. ValueNode), got: [{idx}] = {item} / {type(item)}")
+                else:
+                    # check type and fetch .items
+                    if not (isinstance(arg_value, IDexpValueSource) and arg_value.is_list()):
+                        raise EntityApplyTypeError(owner=exp_arg,
+                                                   msg=f"Expected IDexpValueSource instance (i.e. ValueNode), got: {arg_value} / {type(arg_value)}")
+                    # will retrieve ItemsValueNode.items
+                    arg_value = arg_value.get_self_or_items()
+            else:
+                # check type and leave value as is - ValueNode
+                assert exp_arg.type_info.is_item_type_single
+                assert not arg_value.is_list()
+
         elif isinstance(arg_value, IDexpValueSource):
+            # ValueNode -> get real value
+            assert not arg_value.is_list(), "TODO: check this case: ItemsValueNode -> need to get_value() i.e. real value"
             arg_value = arg_value.get_value(strict=False)
         elif isinstance(arg_value, (DotExpression, IDotExpressionNode)):
-            # TODO: Explain when this happens!!
-            # NOTE: currently no inner type is passed
+            # argument is DotExpression which needs to be executed (evaluated), e.g. This.Instance
+            # TODO: currently no inner type is passed, hope for the best
             execute_func_arg_hint = DotexprFuncArgHint()
         elif isinstance(arg_value, InjectFuncArgValueByCallable):
             arg_value = arg_value.get_apply_value()
@@ -510,31 +531,34 @@ class IFunction(IFunctionDexpNode, ABC):
         kwargs = {}
 
         if dexp_result is UNDEFINED:
-            # top_level_call = True
             # namespace toplevel call, e.g. Ctx.Length()
             dexp_result = ExecResult()
         else:
-            # top_level_call = False
             if not isinstance(dexp_result, ExecResult):
                 raise EntityInternalError(owner=self, msg=f"dexp_result is not ExecResult, got: {dexp_result}") 
 
             if dexp_result.value is not UNDEFINED:
-                input_value = dexp_result.get_real_value()
+                # input_value = dexp_result.get_real_value()
+                input_value = dexp_result.get_self_or_items() \
+                              if isinstance(dexp_result, IDexpValueSource) else \
+                              dexp_result.value
                 if self.value_arg_name:
                     kwargs[self.value_arg_name] = input_value
                 else:
                     args.insert(0, input_value)
 
             for exp_arg in self.function_arguments.func_arg_list:
-                # if inspect.isclass(prep_arg.type_info.type_) and issubclass(prep_arg.type_info.type_, IInjectFuncArgHint):
-                if exp_arg.type_info.is_inject_func_arg:
-                    prep_arg = self.prepared_args.get(exp_arg.name)
-                    assert prep_arg
-                    # TODO: check that prep_arg is not filled
-                    self._process_inject_prepared_args(prep_arg=prep_arg,
-                                                       exp_arg=exp_arg,
-                                                       apply_result=apply_result,
-                                                       kwargs=kwargs)
+                if not exp_arg.type_info.is_inject_func_arg:
+                    continue
+                prep_arg = self.prepared_args.get(exp_arg.name)
+                assert prep_arg
+                if not isinstance(exp_arg.type_info.py_type_hint, IInjectFuncArgHint):
+                    raise EntityApplyTypeError(owner=self,
+                                               msg=f"Expecting IInjectFuncArgHint for {exp_arg} argument type, got: {exp_arg.type_info}")
+                func_arg_hint: IInjectFuncArgHint = exp_arg.type_info.py_type_hint
+                attr_value = func_arg_hint.get_apply_inject_value(apply_result=apply_result, prep_arg=prep_arg)
+                assert prep_arg.name not in kwargs
+                kwargs[prep_arg.name] = attr_value
 
         if self.func_args:
             # TODO: copy all arguments or not?
@@ -544,7 +568,6 @@ class IFunction(IFunctionDexpNode, ABC):
                 kwargs.update(self.func_args.kwargs)
 
         if self.fixed_args:
-            # TODO: copy or not?
             if self.fixed_args.args:
                 args.extend(self.fixed_args.args)
             if self.fixed_args.kwargs:
@@ -563,14 +586,14 @@ class IFunction(IFunctionDexpNode, ABC):
                                              arg_value=arg_value,
                                              exp_arg=self.function_arguments.func_arg_dict[arg_name],
                                              prev_node_type_info=prev_node_type_info)
-                  for arg_name, arg_value in kwargs.items()}
+                              for arg_name, arg_value in kwargs.items()}
 
         overlaps = list(set(kwargs_from_kwargs.keys()).intersection(set(kwargs_from_args.keys())))
         if overlaps:
             # TODO: this should have been checked before - in setup / check type phase. reuse that code - DRY.
             raise EntityApplyError(owner=self, msg=f"Overlapping positional and keyword arguments: {overlaps}")
 
-        kwargs_all =  kwargs_from_kwargs.copy()
+        kwargs_all = kwargs_from_kwargs.copy()
         kwargs_all.update(kwargs_from_args)
 
         try:
@@ -586,21 +609,19 @@ class IFunction(IFunctionDexpNode, ABC):
 
     # ------------------------------------------------------------
 
-    def _process_inject_prepared_args(self,
-                                      exp_arg: PrepArg,
-                                      prep_arg: PrepArg,
-                                      apply_result: IApplyResult,
-                                      kwargs: Dict[str, ValueOrDexp]):
-        # exp_arg has good type-hint, prep_arg has caller
-        if not isinstance(exp_arg.type_info.py_type_hint, IInjectFuncArgHint):
-            raise EntityApplyTypeError(owner=self, msg=f"Expecting IInjectFuncArgHint for {exp_arg} argument type, got: {exp_arg.type_info}")
+    # def _process_inject_prepared_args(self,
+    #                                   exp_arg: PrepArg,
+    #                                   prep_arg: PrepArg,
+    #                                   apply_result: IApplyResult,
+    #                                   ) -> AttrValue:
+    #     # exp_arg has good type-hint, prep_arg has caller
+    #     if not isinstance(exp_arg.type_info.py_type_hint, IInjectFuncArgHint):
+    #         raise EntityApplyTypeError(owner=self, msg=f"Expecting IInjectFuncArgHint for {exp_arg} argument type, got: {exp_arg.type_info}")
 
-        func_arg_hint: IInjectFuncArgHint = exp_arg.type_info.py_type_hint
+    #     func_arg_hint: IInjectFuncArgHint = exp_arg.type_info.py_type_hint
 
-        output = func_arg_hint.get_apply_inject_value(apply_result=apply_result, prep_arg=prep_arg)
-
-        assert prep_arg.name not in kwargs
-        kwargs[prep_arg.name] = output
+    #     attr_value = func_arg_hint.get_apply_inject_value(apply_result=apply_result, prep_arg=prep_arg)
+    #     return attr_value
 
 
 # ------------------------------------------------------------
@@ -1117,44 +1138,6 @@ def try_create_function(
 #       class DotexprFuncArgHint(IExecuteFuncArgHint):
 #       class JustDotexprFuncArgHint(IFuncArgHint):
 
-@dataclass
-class InjectComponentTreeValuesFuncArgHint(IInjectFuncArgHint):
-
-    def setup_check(self, setup_session: ISetupSession, caller: Optional[IDotExpressionNode], func_arg: FuncArg):
-        if not (isinstance(caller, AttrDexpNode)
-                and caller.namespace == FieldsNS):
-            raise EntityInternalError(owner=self, msg=f"Expected F.<fieldname>, got: {caller}")
-
-    def get_type(self) -> Type:
-        return self.__class__
-
-    def get_inner_type(self) -> Optional[Type]:
-        return ComponentTreeWValuesType
-
-    def get_apply_inject_value(self, apply_result: IApplyResult, prep_arg: PrepArg) -> AttrValue:
-        # maybe belongs to implementation
-        if not isinstance(prep_arg.caller, IDotExpressionNode):
-            raise EntityInternalError(owner=self, msg=f"Expected IDotExpressionNode, got: {type(prep_arg.caller)} / {prep_arg.caller}")
-
-        dexp_node: IDotExpressionNode = prep_arg.caller
-
-        if not (dexp_node.attr_node_type == AttrDexpNodeTypeEnum.FIELD
-                and dexp_node.namespace == FieldsNS
-                and isinstance(dexp_node.data, IField)):
-            raise EntityInternalError(owner=self, msg=f"Inject function argument value:: PrepArg '{prep_arg.name}' expected DExp(F.<field>) -> Field(),  got: '{dexp_node}' -> '{dexp_node.data}' ")
-
-        component: IComponent = dexp_node.data
-        assert component == apply_result.current_frame.component
-
-        key_string = apply_result.get_key_string(component)
-
-        # get complete tree with values
-        output = apply_result.get_values_tree(key_string=key_string)
-        return output
-
-    def __hash__(self):
-        return hash((self.__class__.__name__))
-
 # ------------------------------------------------------------
 
 @dataclass
@@ -1192,20 +1175,27 @@ class DotexprExecuteOnItemFactoryFuncArgHint(IInjectFuncArgHint):
 
         def execute_dot_expr_w_this_registry_of_item(
                 dot_expr:  DotExpression,
-                item: ModelKlassType,
+                item: Union[ModelKlassType, IValueNode],
         ) -> AttrValue:
             # TODO: if this becommes heavy - instead of new frame, reuse existing and change instance only
             #       this_registry should be the same for same session (same type items)
             setup_session = apply_result.current_frame.component.setup_session
-            this_registry = ThisRegistry.create_for_model_klass(
-                setup_session=setup_session,
-                model_klass=type(item),
-            )
+            if not isinstance(item, IValueNode):
+                raise EntityInternalError(owner=self, msg=f"Expecting ValueNode, got: {item}")
+            if item.component.is_subentity_items():
+                # TODO: put in method
+                this_registry = item.component._this_registry_for_item
+            else:
+                this_registry = item.component.get_this_registry()
+
+            value_node, instance = (item, item.instance) if isinstance(item, IValueNode) else (None, item)
+
             with apply_result.use_stack_frame(
                     ApplyStackFrame(
                         container = apply_result.current_frame.container,
                         component = apply_result.current_frame.component,
-                        instance=item,
+                        instance=instance,
+                        value_node=value_node,
                         this_registry = this_registry,
                     )):
                 dexp_result = dot_expr._evaluator.execute_dexp(
@@ -1229,4 +1219,47 @@ class InjectFuncArgValueByCallable:
 
     def get_apply_value(self) -> AttrValue:
         return self.py_function()
+
+
+# ------------------------------------------------------------
+# OBSOLETE
+# ------------------------------------------------------------
+
+# @dataclass
+# class InjectComponentTreeValuesFuncArgHint(IInjectFuncArgHint):
+#
+#     def setup_check(self, setup_session: ISetupSession, caller: Optional[IDotExpressionNode], func_arg: FuncArg):
+#         if not (isinstance(caller, AttrDexpNode)
+#                 and caller.namespace == FieldsNS):
+#             raise EntityInternalError(owner=self, msg=f"Expected F.<fieldname>, got: {caller}")
+#
+#     def get_type(self) -> Type:
+#         return self.__class__
+#
+#     def get_inner_type(self) -> Optional[Type]:
+#         return ComponentTreeWValuesType
+#
+#     def get_apply_inject_value(self, apply_result: IApplyResult, prep_arg: PrepArg) -> AttrValue:
+#         # maybe belongs to implementation
+#         if not isinstance(prep_arg.caller, IDotExpressionNode):
+#             raise EntityInternalError(owner=self, msg=f"Expected IDotExpressionNode, got: {type(prep_arg.caller)} / {prep_arg.caller}")
+#
+#         dexp_node: IDotExpressionNode = prep_arg.caller
+#
+#         if not (dexp_node.attr_node_type == AttrDexpNodeTypeEnum.FIELD
+#                 and dexp_node.namespace == FieldsNS
+#                 and isinstance(dexp_node.data, IField)):
+#             raise EntityInternalError(owner=self, msg=f"Inject function argument value:: PrepArg '{prep_arg.name}' expected DExp(F.<field>) -> Field(),  got: '{dexp_node}' -> '{dexp_node.data}' ")
+#
+#         component: IComponent = dexp_node.data
+#         assert component == apply_result.current_frame.component
+#
+#         key_string = apply_result.get_key_string(component)
+#
+#         # get complete tree with values
+#         output = apply_result.get_values_tree(key_string=key_string)
+#         return output
+#
+#     def __hash__(self):
+#         return hash((self.__class__.__name__))
 
