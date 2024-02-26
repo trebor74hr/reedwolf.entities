@@ -33,7 +33,6 @@ from typing import (
     Tuple,
 )
 
-from .expr_attr_nodes import AttrDexpNode
 from .utils import (
     UNDEFINED,
     get_available_names_example, UndefinedType,
@@ -45,11 +44,7 @@ from .exceptions import (
     EntityInternalError,
     EntitySetupTypeError,
     EntitySetupError,
-    EntityApplyError, EntityApplyTypeError, EntityTypeError,
-)
-from .namespaces import (
-    FieldsNS,
-)
+    EntityApplyError, EntityApplyTypeError, )
 from .meta import (
     FunctionArgumentsType,
     TypeInfo,
@@ -59,8 +54,6 @@ from .meta import (
     STANDARD_TYPE_LIST,
     is_model_klass,
     ItemType,
-    ModelKlassType,
-    ComponentTreeWValuesType,
     IInjectFuncArgHint,
     AttrValue,
     IExecuteFuncArgHint,
@@ -77,15 +70,16 @@ from .expressions import (
     ExecResult,
     ISetupSession,
     IThisRegistry,
-    JustDotexprFuncArgHint,
-    DotexprFuncArgHint,
     IFunctionFactory, )
 from .func_args import (
     FunctionArguments,
     create_function_arguments,
     PreparedArguments,
     FuncArg,
-    PrepArg,
+)
+from .func_arg_hints import (
+    JustDotexprFuncArgHint,
+    DotexprFuncArgHint,
 )
 from .settings import (
     Settings,
@@ -94,13 +88,9 @@ from .settings import (
     CustomFunctionFactoryList,
 )
 from .base import (
-    AttrDexpNodeTypeEnum,
-    IField,
     IApplyResult,
-    IComponent,
     SetupStackFrame,
-    ApplyStackFrame, IValueNode,
-)
+    ApplyStackFrame, )
 
 ValueOrDexp = Union[DotExpression, IDotExpressionNode, Any]
 
@@ -122,6 +112,23 @@ class PythonFunctionEngine(FunctionEngineBase):
 
 
 DEFAULT_ENGINE = PythonFunctionEngine()
+
+# ------------------------------------------------------------
+# InjectFuncArgValueByCallable
+# ------------------------------------------------------------
+
+@dataclass
+class InjectFuncArgValueByCallable:
+    py_function: Callable
+
+    def __post_init__(self):
+        non_empty_params = get_function_non_empty_arguments(self.py_function)
+        if len(non_empty_params) != 0:
+            raise EntitySetupNameError(owner=self,
+                                       msg=f"Function '{self.py_function}' must not have arguments without defaults. Found unfilled arguments: {', '.join(non_empty_params)} ")
+
+    def get_apply_value(self) -> AttrValue:
+        return self.py_function()
 
 
 # ------------------------------------------------------------
@@ -1129,96 +1136,6 @@ def try_create_function(
         raise EntitySetupNameNotFoundError(f"Function name '{attr_node_name}' not found. Valid are: {names_avail_all}")
 
     return func_node
-
-# ---------------------------------------------------------------------
-# Special function arguments helpers - custom type hints or wrappers
-# ---------------------------------------------------------------------
-# TODO: other are in expressions.py - move all to the same place:
-#       class AttrnameFuncArgHint(IExecuteFuncArgHint):
-#       class DotexprFuncArgHint(IExecuteFuncArgHint):
-#       class JustDotexprFuncArgHint(IFuncArgHint):
-
-# ------------------------------------------------------------
-
-@dataclass
-class DotexprExecuteOnItemFactoryFuncArgHint(IInjectFuncArgHint):
-    """
-    TODO: name is too long and unreadable.
-    """
-    inner_type: Optional[Type] = field(repr=True, default=Any)
-    type: Type = field(init=False, default=DotExpression)
-
-    def setup_check(self, setup_session: "ISetupSession", caller: Optional["IDotExpressionNode"], func_arg: "FuncArg"):
-        exp_type_info = TypeInfo.get_or_create_by_type(self.type)
-        err_msg = exp_type_info.check_compatible(func_arg.type_info)
-        if err_msg:
-            raise EntityTypeError(owner=self, msg=f"Function argument {func_arg} type not compatible: {err_msg}")
-
-
-    def get_type(self) -> Type:
-        return self.type
-
-    def get_inner_type(self) -> Optional[Type]:
-        return self.inner_type
-
-    def __hash__(self):
-        return hash((self.__class__.__name__, self.type, self.inner_type))
-
-    def get_apply_inject_value(self, apply_result: "IApplyResult", prep_arg: "PrepArg"
-                               ) -> Callable[[DotExpression, ModelKlassType], AttrValue]:
-        """
-        create this registry function that retriieves settings processor
-        which will crearte this factory for providded item
-        """
-        # TODO: 2nd) resolve again ThisRegistry dependency
-        from .registries import ThisRegistry
-
-        def execute_dot_expr_w_this_registry_of_item(
-                dot_expr:  DotExpression,
-                item: Union[ModelKlassType, IValueNode],
-        ) -> AttrValue:
-            # TODO: if this becommes heavy - instead of new frame, reuse existing and change instance only
-            #       this_registry should be the same for same session (same type items)
-            setup_session = apply_result.current_frame.component.setup_session
-            if not isinstance(item, IValueNode):
-                raise EntityInternalError(owner=self, msg=f"Expecting ValueNode, got: {item}")
-            if item.component.is_subentity_items():
-                # TODO: put in method
-                this_registry = item.component._this_registry_for_item
-            else:
-                this_registry = item.component.get_this_registry()
-
-            value_node, instance = (item, item.instance) if isinstance(item, IValueNode) else (None, item)
-
-            with apply_result.use_stack_frame(
-                    ApplyStackFrame(
-                        container = apply_result.current_frame.container,
-                        component = apply_result.current_frame.component,
-                        instance=instance,
-                        value_node=value_node,
-                        this_registry = this_registry,
-                    )):
-                dexp_result = dot_expr._evaluator.execute_dexp(
-                    apply_result=apply_result,
-                )
-            return dexp_result.value
-
-        return execute_dot_expr_w_this_registry_of_item
-
-# ------------------------------------------------------------
-
-@dataclass
-class InjectFuncArgValueByCallable:
-    py_function: Callable
-
-    def __post_init__(self):
-        non_empty_params = get_function_non_empty_arguments(self.py_function)
-        if len(non_empty_params) != 0:
-            raise EntitySetupNameError(owner=self,
-                                       msg=f"Function '{self.py_function}' must not have arguments without defaults. Found unfilled arguments: {', '.join(non_empty_params)} ")
-
-    def get_apply_value(self) -> AttrValue:
-        return self.py_function()
 
 
 # ------------------------------------------------------------

@@ -32,7 +32,8 @@ from .meta import (
     extract_function_args_default_dict,
     is_function,
     NoneType,
-    IFuncArgHint, SELF_ARG_NAME,
+    IFuncArgHint,
+    SELF_ARG_NAME,
 )
 from .expressions import (
     DotExpression,

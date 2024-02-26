@@ -19,16 +19,17 @@ from .meta import (
     is_enum,
     get_enum_members, ListItemType, ChildField, ListChildField,
 )
-from .expressions import (
+from .func_arg_hints import (
+    DotexprExecuteOnItemFactoryFuncArgHint,
+    AttrnameFuncArgHint,
+    JustDotexprFuncArgHint,
     DotexprFuncArgHint,
-    AttrnameFuncArgHint, JustDotexprFuncArgHint,
 )
 from .functions import (
     create_builtin_function_factory,
     create_builtin_items_function_factory,
     CustomFunctionFactory,
     FunctionArgumentsType,
-    DotexprExecuteOnItemFactoryFuncArgHint,
 )
 
 

@@ -17,7 +17,6 @@ from typing import (
     Union,
     Any,
     Callable,
-    Type,
     Dict,
     ClassVar,
 )
@@ -51,9 +50,7 @@ from .meta import (
     LiteralType,
     AttrName,
     Self,
-    IFuncArgHint,
     AttrValue,
-    IExecuteFuncArgHint,
     NoneType,
     KlassMember,
     ComponentStatus,
@@ -1250,76 +1247,6 @@ def execute_dexp_or_node(
 
     return dexp_result
 
-
-@dataclass
-class AttrnameFuncArgHint(IExecuteFuncArgHint):
-    inner_type: Optional[Type] = field(repr=True, default=Any)
-    type: Type = field(init=False, default=DotExpression)
-
-    def get_type(self) -> Type:
-        return self.type
-
-    def get_inner_type(self) -> Optional[Type]:
-        return self.inner_type
-
-    def __hash__(self):
-        return hash((self.__class__.__name__, self.type, self.inner_type))
-
-    def get_apply_value(self, apply_result: "IApplyResult",
-                        exp_arg: "PrepArg",
-                        arg_value: AttrValue,
-                        prev_node_type_info: TypeInfo,
-                        ) -> AttrValue:
-        # TODO: check that dot expression (arg_value) is in Models/Fields namespace
-        #       do not evaluate, just use ._name or GetName()
-        raise NotImplementedError()
-
-
-@dataclass
-class DotexprFuncArgHint(IExecuteFuncArgHint):
-    inner_type: Optional[Type] = field(repr=True, default=Any)
-    type: Type = field(init=False, default=DotExpression)
-
-    def get_type(self) -> Type:
-        return self.type
-
-    def get_inner_type(self) -> Optional[Type]:
-        return self.inner_type
-
-    def __hash__(self):
-        return hash((self.__class__.__name__, self.type, self.inner_type))
-
-    def get_apply_value(self, apply_result: "IApplyResult",
-                        exp_arg: "PrepArg",
-                        arg_value: AttrValue,
-                        prev_node_type_info: TypeInfo,
-                        ) -> AttrValue:
-        dexp_result = execute_dexp_or_node(
-            dexp_or_value=arg_value,
-            dexp_node=arg_value,
-            dexp_result=UNDEFINED,
-            prev_node_type_info=prev_node_type_info,
-            apply_result=apply_result)
-        arg_value = dexp_result.value
-        return arg_value
-
-
-@dataclass
-class JustDotexprFuncArgHint(IFuncArgHint):
-    """
-    will not execute dot expression - will leave the job to function
-    """
-    inner_type: Optional[Type] = field(repr=True, default=Any)
-    type: Type = field(init=False, default=DotExpression)
-
-    def get_type(self) -> Type:
-        return self.type
-
-    def get_inner_type(self) -> Optional[Type]:
-        return self.inner_type
-
-    def __hash__(self):
-        return hash((self.__class__.__name__, self.type, self.inner_type))
 
 # ------------------------------------------------------------
 # Common DexpValidator-s and validation functions
