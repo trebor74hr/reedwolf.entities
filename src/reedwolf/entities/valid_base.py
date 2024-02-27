@@ -90,12 +90,14 @@ class ValidationBase(IValidation, ABC):
             # TODO: log ...
             return None
 
-        component = apply_result.current_frame.component
         dexp_result: ExecResult = self.ensure._evaluator.execute_dexp(apply_result)
         if not bool(dexp_result.value):
             error = self.error if self.error else "Validation failed"
+            key_str = apply_result.current_frame.value_node.key_string
+            # component = apply_result.current_frame.component
+            # key_str = apply_result.get_key_string(component)
             return ValidationFailure(
-                            component_key_string = apply_result.get_key_string(component),
+                            component_key_string = key_str,
                             error=error, 
                             validation_name=self.name,
                             validation_title=self.title,

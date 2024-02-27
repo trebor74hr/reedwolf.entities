@@ -1316,8 +1316,9 @@ class IDexpValueSource:
     """
     Used in IValueNode
     """
+    @staticmethod
     @abstractmethod
-    def is_list(self) -> bool:
+    def is_list() -> bool:
         ...
 
     # @abstractmethod
@@ -1339,3 +1340,18 @@ class IDexpValueSource:
         ...
 
 
+# ------------------------------------------------------------
+# Message functions
+# ------------------------------------------------------------
+
+# TODO: add type hint: TransMessageType -> TranslatedMessageType
+# TODO: accept "{dot_node}" - can be a security issue, attr_nodes() should not make any logic
+#       use .format() ... (not f"", btw. should not be possible anyway)
+
+def _(message: str) -> TransMessageType:
+    return TransMessageType(message)
+
+
+def msg(message: Union[str, TransMessageType]) -> Union[str, TransMessageType]:
+    # TODO: should fill arguments {} and {name}
+    return message

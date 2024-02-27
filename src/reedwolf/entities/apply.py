@@ -355,14 +355,18 @@ class ApplyResult(IApplyResult):
         TODO: remove some checks
         """
         assert component == self.current_frame.component
-        assert component == self.current_frame.value_node.component
 
         value_node = self.current_frame.value_node
+        assert component == value_node.component
 
         if new_value is UNDEFINED:
             raise EntityInternalError(owner=component, msg="New value should not be UNDEFINED, fix the caller")
 
-        key_str = self.get_key_string(component)
+        # used only in self._value_history_dict
+        key_str = value_node.key_string
+        # alt_key_str = self.get_key_string(component)
+        # if key_str != alt_key_str:
+        #     raise EntityInternalError(owner=self, msg=f"{key_str}!={alt_key_str}")
         current_value = value_node.get_value(strict=False)
 
         if value_set_phase == ValueSetPhase.INIT_BY_BIND or \
@@ -660,9 +664,6 @@ class ApplyResult(IApplyResult):
             # ------------------------------------------------------------
             # NOTE: used only for test if all Dexp values could evaluate ...
             #       self.__check_component_all_dexps(component)
-
-            # TODO: consider: recursive=True - currently causes lot of issues
-            self._fill_values_dict(filler="_apply", is_init=(depth==0), process_further=process_further) 
 
             if process_further:
                 # ------------------------------------------------------------
@@ -1066,9 +1067,6 @@ class ApplyResult(IApplyResult):
 
         # Apply for all items
         if instances_by_key:
-
-            # -- fill values dict
-            self._fill_values_dict(filler="subentity_items", component=subentity_items, is_init=False, process_further=True, subentity_items_mode=True)
             # value_node_w_items = self.current_frame.value_node
             for key, instance_item in instances_by_key.items():
                 instance, index0, item_instance_new = \
@@ -1173,9 +1171,9 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def get_instance_by_key_string(self, key_string: KeyString) -> ModelInstanceType:
-        " must exist in cache - see previous method which sets self.get_key_string_by_instance(container) "
-        return self.instance_by_key_string_cache[key_string]
+    # def get_instance_by_key_string(self, key_string: KeyString) -> ModelInstanceType:
+    #     " must exist in cache - see previous method which sets self.get_key_string_by_instance(container) "
+    #     return self.instance_by_key_string_cache[key_string]
 
     # ------------------------------------------------------------
 
@@ -1460,128 +1458,135 @@ class ApplyResult(IApplyResult):
         return bind_dexp_result, updated
 
     # ------------------------------------------------------------
+    # def get_key_string(self, component: IComponent) -> KeyString:
+    def get_key_string(self) -> KeyString:
+        # if not component is self.current_frame.component:
+        #     raise EntityInternalError(owner=self, msg=f"{component} != {self.current_frame.component}")
+        key_str = self.current_frame.value_node.key_string
+        assert key_str
+        return key_str
 
-    def get_key_string(self, component: IComponent, depth:int=0, force:bool=False) -> KeyString:
-        """
-        Recursion one of:
-            component -> container -> container -> ...
-            container -> container -> ...
+    # def _OLD_get_key_string(self, component: IComponent, depth:int=0, force:bool=False) -> KeyString:
+    #     """
+    #     Recursion one of:
+    #         component -> container -> container -> ...
+    #         container -> container -> ...
 
-        CACHING is on containers only - by id(indstance)
-        for other components only attach name to it.
-        Container - when not found then gets intances and index0 
-        from current frame
-        """
-        if depth > MAX_RECURSIONS:
-            raise EntityInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
+    #     CACHING is on containers only - by id(indstance)
+    #     for other components only attach name to it.
+    #     Container - when not found then gets intances and index0
+    #     from current frame
+    #     """
+    #     if depth > MAX_RECURSIONS:
+    #         raise EntityInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
 
-        # Started to process subentity_items, but not yet positioned on any subentity_items instance item 
-        # the key will have no subentity_items::<instance_id>, just parent_key_string::parent_key_string::subentity_items_name
-        subentity_items_no_instance_case = (component.get_first_parent_container(consider_self=True) 
-                                      != 
-                                      self.current_frame.component.get_first_parent_container(consider_self=True))
+    #     # Started to process subentity_items, but not yet positioned on any subentity_items instance item
+    #     # the key will have no subentity_items::<instance_id>, just parent_key_string::parent_key_string::subentity_items_name
+    #     subentity_items_no_instance_case = (component.get_first_parent_container(consider_self=True)
+    #                                   !=
+    #                                   self.current_frame.component.get_first_parent_container(consider_self=True))
 
-        # NOTE: this could be different 
-        #       component == self.current_frame.component
+    #     # NOTE: this could be different
+    #     #       component == self.current_frame.component
 
-        if component.is_container() and not subentity_items_no_instance_case:
-            instance = self.current_frame.instance
-            parent_instance = self.current_frame.parent_instance
-            index0 = self.current_frame.index0
+    #     if component.is_container() and not subentity_items_no_instance_case:
+    #         instance = self.current_frame.instance
+    #         parent_instance = self.current_frame.parent_instance
+    #         index0 = self.current_frame.index0
 
-            key_string = self.get_key_string_by_instance(
-                            component = component,
-                            instance = instance, 
-                            parent_instance=parent_instance,
-                            index0 = index0,
-                            force=force,
-                            )
-        else:
-            consider_self = False if subentity_items_no_instance_case else True
-            container = component.get_first_parent_container(consider_self=consider_self)
+    #         key_string = self.get_key_string_by_instance(
+    #                         component=component,
+    #                         instance=instance,
+    #                         parent_instance=parent_instance,
+    #                         index0=index0,
+    #                         force=force,
+    #                         )
+    #     else:
+    #         consider_self = False if subentity_items_no_instance_case else True
+    #         container = component.get_first_parent_container(consider_self=consider_self)
 
-            # ---- RECURSION ----- only containers
-            container_key_string = self.get_key_string(container, depth=depth + 1)
+    #         # ---- RECURSION ----- only containers
+    #         container_key_string = self.get_key_string(container, depth=depth + 1)
 
-            # construct
-            key_string = GlobalConfig.ID_NAME_SEPARATOR.join(
-                    [container_key_string, component.name] 
-                    )
+    #         # construct
+    #         key_string = GlobalConfig.ID_NAME_SEPARATOR.join(
+    #                 [container_key_string, component.name]
+    #                 )
 
-        return key_string
+    #     return key_string
 
     # ------------------------------------------------------------
 
-    def get_key_string_by_instance(self, component: IComponent, instance: ModelInstanceType, parent_instance: ModelInstanceType,
-                                   index0: Optional[Index0Type], force:bool=False) -> KeyString:
-        # apply_result:IApplyResult,  -> self
-        """
-        Two cases - component has .keys or not:
+    # def get_key_string_by_instance(self, component: IComponent, instance: ModelInstanceType, parent_instance: ModelInstanceType,
+    #                                index0: Optional[Index0Type], force:bool=False) -> KeyString:
+    #     # apply_result:IApplyResult,  -> self
+    #     """
+    #     Two cases - component has .keys or not:
 
-        a) with keys:
-            For containers which have keys defined, it is assumed that one key is
-            globally unique within SubEntityItems components, so no need to prefix key
-            with parent key_string. Example:
+    #     a) with keys:
+    #         For containers which have keys defined, it is assumed that one key is
+    #         globally unique within SubEntityItems components, so no need to prefix key
+    #         with parent key_string. Example:
 
-                 address_set_ext[id2=1]
+    #              address_set_ext[id2=1]
 
-        b) without keys - index0 based:
-            In other cases item index in list is used (index0), and then this is
-            only locally within one instance of parent, therefore parent
-            key_string is required. Example:
+    #     b) without keys - index0 based:
+    #         In other cases item index in list is used (index0), and then this is
+    #         only locally within one instance of parent, therefore parent
+    #         key_string is required. Example:
 
-                 company_entity::address_set_ext[0]
+    #              company_entity::address_set_ext[0]
 
-        """
-        if not component.is_container():
-            raise EntityInternalError(owner=component, msg=f"Expecting container, got: {component}") 
+    #     """
+    #     if not component.is_container():
+    #         raise EntityInternalError(owner=component, msg=f"Expecting container, got: {component}")
 
-        instance_id = id(instance)
-        key_string = self.key_string_container_cache.get(instance_id, None)
-        if key_string is None or force:
+    #     instance_id = id(instance)
+    #     key_string = self.key_string_container_cache.get(instance_id, None)
+    #     if key_string is None or force:
 
-            if component.keys:
-                assert component.is_container()
-                key_pairs = component.get_key_pairs(instance, apply_result=self)
-                assert key_pairs
-                key_string = "{}[{}]".format(
-                                component.name, 
-                                GlobalConfig.ID_NAME_SEPARATOR.join(
-                                    [f"{name}={value}" for name, value in key_pairs]
-                                ))
-            elif index0 is not None:
-                key_string = f"{component.name}[{index0}]"
-            else:
-                key_string = component.name
+    #         if component.keys:
+    #             assert component.is_container()
+    #             key_pairs = component.get_key_pairs(instance, apply_result=self)
+    #             assert key_pairs
+    #             key_string = "{}[{}]".format(
+    #                             component.name,
+    #                             GlobalConfig.ID_NAME_SEPARATOR.join(
+    #                                 [f"{name}={value}" for name, value in key_pairs]
+    #                             ))
+    #         elif index0 is not None:
+    #             key_string = f"{component.name}[{index0}]"
+    #         else:
+    #             key_string = component.name
 
-            if parent_instance:
-                # prepend parent key_string(s)
+    #         if parent_instance:
+    #             # prepend parent key_string(s)
 
-                # parent_instance = self.current_frame.parent_instance
-                parent_id = id(parent_instance)
-                # if parent_id not in self.key_string_container_cache:
-                #     # must_be_in_cache
-                #     if not self.component_name_only:
-                #         raise EntityInternalError(owner=component, msg=f"Parent instance's key not found in cache, got: {parent_instance}")
-                #     parent_key_string = f"__PARTIAL__{self.component_name_only}"
-                # else:
-                parent_key_string = self.key_string_container_cache[parent_id]
-                key_string = GlobalConfig.ID_NAME_SEPARATOR.join([parent_key_string, key_string])
-            else:
-                container_parent = component.get_first_parent_container(consider_self=True)
-                if container_parent.is_subentity_any():
-                    raise EntityInternalError(owner=component, msg=f"Parent container {container_parent.name} is an SubEntity/SubEntityItems and parent_instance is empty")
+    #             # parent_instance = self.current_frame.parent_instance
+    #             parent_id = id(parent_instance)
+    #             # if parent_id not in self.key_string_container_cache:
+    #             #     # must_be_in_cache
+    #             #     if not self.component_name_only:
+    #             #         raise EntityInternalError(owner=component, msg=f"Parent instance's key not found in cache, got: {parent_instance}")
+    #             #     parent_key_string = f"__PARTIAL__{self.component_name_only}"
+    #             # else:
+    #             parent_key_string = self.key_string_container_cache[parent_id]
+    #             key_string = GlobalConfig.ID_NAME_SEPARATOR.join([parent_key_string, key_string])
+    #         else:
+    #             container_parent = component.get_first_parent_container(consider_self=True)
+    #             if container_parent.is_subentity_any():
+    #                 raise EntityInternalError(owner=component, msg=f"Parent container {container_parent.name} is an SubEntity/SubEntityItems and parent_instance is empty")
 
 
-            self.key_string_container_cache[instance_id] = key_string
-            self.instance_by_key_string_cache[key_string] = instance
-        #     from_cache = "new"
-        # else:
-        #     from_cache = "cache"
+    #         self.key_string_container_cache[instance_id] = key_string
+    #         self.instance_by_key_string_cache[key_string] = instance
+    #     #     from_cache = "new"
+    #     # else:
+    #     #     from_cache = "cache"
 
-        # TODO: self.settings.logger.debug("cont:", component.name, key_string, f"[{from_cache}]")
+    #     # TODO: self.settings.logger.debug("cont:", component.name, key_string, f"[{from_cache}]")
 
-        return KeyString(key_string)
+    #     return KeyString(key_string)
 
     # ------------------------------------------------------------
 
@@ -1645,145 +1650,17 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def get_values_tree(self, key_string: Optional[KeyString] = None) -> ComponentTreeWValuesType:
+    def get_values_tree(self, force: bool = False) -> ComponentTreeWValuesType:
         """
-        will go recursively through every children and
-        fetch their "children" and collect to output structure.
+        will go recursively through every value_node
+        fetch their "children"  and "items" and collect to output structure.
         selects all nodes, put in tree, includes self
-        for every node bind_to (M.<field>) is evaluated
         """
-        if self.values_tree is None:
-            raise EntityInternalError(owner=self, msg="_get_values_tree() did not filled _values_tree cache") 
+        if self._values_tree is None or force:
+            tree = self.top_value_node.dump_to_dict()
+            self._values_tree = tree
 
-        if key_string is None:
-            # component = self.entity
-            tree = self.values_tree
-        else:
-            if key_string not in self.values_tree_by_key_string.keys():
-                # -- fill values dict
-                assert not (self.current_frame.component==self.entity)
-                # NOTE: can trigger recursion 
-                # subentity_items_mode = False, component = component,
-                self._fill_values_dict(filler="get_values_tree", is_init=False, recursive=True)
-
-            tree = self.values_tree_by_key_string[key_string]
-
-        return tree
-
-    # ------------------------------------------------------------
-
-    def _fill_values_dict(self,
-                          filler:str,
-                          is_init:bool,
-                          process_further:bool=True,
-                          subentity_items_mode: bool = False,
-                          component: Optional[IComponent] = None,
-                          recursive: bool = False,
-                          depth: int=0,
-                          ) -> ComponentTreeWValuesType:
-        " recursive - see unit test for example - test_dump.py "
-        if depth > MAX_RECURSIONS:
-            raise EntityInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
-
-        if not component:
-            component = self.current_frame.component
-        # else:
-        #     # fetching values not allowed since stack is maybe not set up correctly
-        #     assert not getattr(component, "bind_to", None), component
-
-        # process_further currently not used
-        if is_init:
-            assert not subentity_items_mode
-            assert self.values_tree_by_key_string is None
-            self.values_tree_by_key_string = {}
-        else:
-            assert self.values_tree_by_key_string is not None
-
-        # -- fill cache by key_string 
-        key_string = self.get_key_string(component)
-
-        if key_string in self.values_tree_by_key_string:
-            # already in cache
-            values_dict = self.values_tree_by_key_string[key_string] 
-            return values_dict
-
-        # -- create a values_dict for this component
-        filler = filler + ("+RECURSIVE" if recursive else "") + (f"+{depth}" if depth or recursive else "") 
-
-        values_dict = {}
-
-        # set immediatelly - to avoid duplicate calls in 
-        self.values_tree_by_key_string[key_string] = values_dict
-
-        values_dict["name"] = component.name
-        # DEBUG: values_dict["filler"] = filler
-        # ORIG2: current_value = None
-        current_value = UNDEFINED
-
-        if isinstance(component, IField):
-            assert getattr(component, "bind_to", None)
-            # can trigger recursion - filling tree 
-            current_value = self.get_current_value_instance(component=component, init_when_missing=True)
-            # ORIG2: if current_value in not NOT_APPLIABLE:
-            if current_value not in (NOT_APPLIABLE, NA_DEFAULTS_MODE):
-                if current_value is UNDEFINED:
-                    raise EntityInternalError(owner=component, msg="Not expected to have undefined current instance value") 
-            else:
-                current_value = None
-
-        if current_value is not UNDEFINED:
-            values_dict["value_instance"] = current_value
-
-        # -- add to parent object or call recursion and fill the tree completely
-
-        if subentity_items_mode:
-            self.current_frame.parent_values_subtree.append(values_dict)
-            values_dict["subentity_items"] = []
-            self.current_frame.set_parent_values_subtree(values_dict["subentity_items"])
-            if recursive:
-                raise EntityInternalError(owner=component, msg="Did not implement this case - subentity_items + recursive") 
-        else:
-            if is_init:
-                assert not recursive, "did not consider this case"
-                # only first object is a dict
-                parent_values_subtree = values_dict
-                assert self.values_tree is None
-                self.values_tree = parent_values_subtree
-            else:
-                parent_values_subtree = self.current_frame.parent_values_subtree
-                # all next objects are lists
-                if not isinstance(parent_values_subtree, list):
-                    raise EntityInternalError(owner=self, msg=f"Expected list, got: {parent_values_subtree}") 
-
-                # TODO: explain. For now: don't ask ... some special case
-                #       needed to be skipped - otherwise duplicate and
-                #       mislocated items
-                if not (recursive and depth>0):
-                    parent_values_subtree.append(values_dict)
-
-            children = component.get_children()
-            if children: 
-                if recursive:
-                    values_dict["contains"] = []
-                    for child_component in component.get_children():
-                        # recursion
-                        child_values_dict = self._fill_values_dict(
-                                filler=filler,
-                                is_init=False,
-                                component=child_component, 
-                                process_further=process_further,
-                                recursive=recursive,
-                                depth=depth+1)
-                        values_dict["contains"].append(child_values_dict)
-                    # set to None to prevent further filling 
-                    self.current_frame.set_parent_values_subtree(None) # parent_values_subtree)
-                else:
-                    # recursion on the caller, setup target, caller will fill everything
-                    values_dict["contains"] = []
-                    self.current_frame.set_parent_values_subtree(values_dict["contains"])
-
-
-        return values_dict
+        return self._values_tree
 
     # ------------------------------------------------------------
 

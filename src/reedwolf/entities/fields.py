@@ -78,8 +78,8 @@ from .base import (
     IApplyResult,
     ValidationFailure,
     SetupStackFrame,
-    IComponent, IValidation, IEvaluation, VALIDATION_OR_EVALUATION_TYPE,
-)
+    IComponent, IValidation, IEvaluation, VALIDATION_OR_EVALUATION_TYPE, )
+from . import _
 from .expressions import (
     DotExpression,
     IFunctionDexpNode,
@@ -395,7 +395,6 @@ class FieldBase(IField, ABC):
         returns None if all ok, otherwise ValidationFailure()
         """
         component = apply_result.current_frame.component
-
         if component is not self:
             raise EntityInternalError(owner=self, msg=f"Current frame component should match current objects (self), got:\n  {component}\n  !=\n  {self}") 
 
@@ -408,10 +407,10 @@ class FieldBase(IField, ABC):
                 and value is not None \
                 and value is not NA_DEFAULTS_MODE \
                 and not isinstance(value, self.PYTHON_TYPE):
-            error = f"Value type '{type(value)}' is not compoatible with '{self.PYTHON_TYPE}' " \
-                    f"(value is '{message_truncate(value)}')"
+            error = _(f"Value type '{type(value)}' is not compoatible with '{self.PYTHON_TYPE}' " \
+                    f"(value is '{message_truncate(value)}')")
             return ValidationFailure(
-                            component_key_string = apply_result.get_key_string(component),
+                            component_key_string = apply_result.get_key_string(),
                             error=error, 
                             validation_name=self.name,
                             validation_title="Type validation",

@@ -31,7 +31,7 @@ from .meta import (
     AttrName,
     ModelKlassType,
     get_dataclass_field_type_info,
-    make_dataclass_with_optional_fields, ModelInstanceType,
+    make_dataclass_with_optional_fields, ModelInstanceType, ComponentTreeWValuesType, MAX_RECURSIONS,
 )
 from .expressions import (
     ExecResult,
@@ -44,7 +44,7 @@ from .base import (
     InstanceAttrValue,
     GlobalConfig,
     ValueSetPhase,
-    IValueNode,
+    IValueNode, IField,
 )
 from .value_accessors import (
     IValueAccessor,
@@ -446,6 +446,50 @@ class ValueNodeBase(IValueNode):
         lines.extend(lines_ex)
         return lines
 
+    def dump_to_dict(self, depth: int=0) -> ComponentTreeWValuesType:
+        """
+        RECURSIVE - see unit test for example - test_dump.py
+        """
+        if depth > MAX_RECURSIONS:
+            raise EntityInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
+
+        # is_init = (depth == 0)
+        component = self.component
+
+        # -- create a values_dict for this component
+        values_dict = {}
+        values_dict["name"] = component.name
+        current_value = UNDEFINED
+        if isinstance(component, IField):
+            current_value = self.get_value(strict=True)
+            if current_value not in (NOT_APPLIABLE, NA_DEFAULTS_MODE):
+                if current_value is UNDEFINED:
+                    raise EntityInternalError(owner=component, msg="Not expected to have undefined current instance value")
+            else:
+                current_value = None
+
+        if current_value is not UNDEFINED:
+            values_dict["value_instance"] = current_value
+
+        if isinstance(self, ItemsValueNode):
+            # TODO: antipattern -> put in ItemsValueNode
+            values_dict["subentity_items"] = []
+            for item_value_node in self.items:
+                # RECURSION
+                child_values_dict = item_value_node.dump_to_dict(depth=depth + 1)
+                values_dict["subentity_items"].append(child_values_dict)
+        elif self.children is not UNDEFINED:
+            # TODO: antipattern -> put in ValueNode
+            children = self.children.values()
+            if children:
+                values_dict["contains"] = []
+                for child_value_node in children:
+                    # RECURSION
+                    child_values_dict = child_value_node.dump_to_dict(depth=depth+1)
+                    values_dict["contains"].append(child_values_dict)
+
+        return values_dict
+
 
 @dataclass
 class ValueNode(ValueNodeBase):
@@ -473,7 +517,8 @@ class ValueNode(ValueNodeBase):
             #       so std {} could be used instead
             self.children = OrderedDict()
 
-    def is_list(self) -> bool:
+    @staticmethod
+    def is_list() -> bool:
         return False
 
     # def get_items(self) -> List[Self]:
@@ -593,9 +638,11 @@ class ItemsValueNode(ValueNodeBase):
     def __post_init__(self):
         super().__post_init__()
         assert self.component.is_subentity_any()
+        # TODO: items collide with dict.items(). maybe a rename to _items + get_items() would be better?
         self.items = []
 
-    def is_list(self) -> bool:
+    @staticmethod
+    def is_list() -> bool:
         return True
 
     # def get_items(self) -> List[Self]:

@@ -215,26 +215,6 @@ class ReservedAttributeNames(str, Enum):
 #     ...
 
 # ------------------------------------------------------------
-# Message functions
-# ------------------------------------------------------------
-
-def _(message: str) -> TransMessageType:
-    return TransMessageType(message)
-
-# TODO: add type hint: TransMessageType -> TranslatedMessageType
-# TODO: accept "{dot_node}" - can be a security issue, attr_nodes() should not make any logic
-#       use .format() ... (not f"", btw. should not be possible anyway)
-
-def msg(message: Union[str, TransMessageType]) -> Union[str, TransMessageType]:
-    # TODO: should fill arguments {} and {name}
-    return message
-
-
-# ------------------------------------------------------------
-# IBaseComponent
-# ------------------------------------------------------------
-
-# ------------------------------------------------------------
 # Subcomponent
 # ------------------------------------------------------------
 @dataclass
@@ -1020,10 +1000,6 @@ class IComponent(ReedwolfDataclassBase, ABC):
                             #       to register non-model attributes
                             data_model._register_nested_models(setup_session)
 
-                # elif isinstance(component, IBaseComponent):
-                #     component.set_parent(parent=self)
-                #     self._add_component(component=component, components=components)
-                #     # e.g. DataModel.model_klass - can be any custom Class(dataclass/pydantic)
                 else:
                     if component.__class__.__name__ not in ("ChoiceOption", "CustomFunctionFactory", "int", "str"):
                         raise EntityInternalError(owner=component, msg=f"Strange type of component, check or add to list of ignored types for _setup_phase_one() ")
@@ -1235,8 +1211,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
               the logic behind is to collect all attributes (recurseively) that
               are:
                 1. component (IComponent)
-                2. have parent set (IBaseComponent)
-                3. DotExpression
+                2. DotExpression
 
               all of them have some setup method:
                 setup() # case 1. and 2.
@@ -2121,6 +2096,7 @@ class IValueNode(IDexpValueSource):
     # set only when item of parent.items (parent is SubentityItems)
     index0: Optional[Index0Type] = field(repr=False, default=None)
     key: Optional[KeyType] = field(repr=False, default=None)
+    key_string: KeyString = field(init=False, repr=True, default=UNDEFINED)
 
     # ------------------------------------------------------------
     # AUTOCOMPUTED
@@ -2151,6 +2127,9 @@ class IValueNode(IDexpValueSource):
     def clean(self):
         ...
 
+    @abstractmethod
+    def dump_to_dict(self, depth: int=0) -> ComponentTreeWValuesType:
+        ...
 
 # ------------------------------------------------------------
 
@@ -2194,7 +2173,7 @@ class ApplyStackFrame(IStackFrame):
     depth: Optional[int] = field(repr=False, default = None)
 
     # used for cache only - holds current subtree
-    parent_values_subtree: Optional[ComponentTreeWValuesType] = field(init=False, repr=False, default=None)
+    # parent_values_subtree: Optional[ComponentTreeWValuesType] = field(init=False, repr=False, default=None)
 
     # TODO: this is ugly 
     # set only in single case: partial mode, in_component_only_tree, component=component_only, instance_new
@@ -2222,7 +2201,7 @@ class ApplyStackFrame(IStackFrame):
     # -- autocomputed
     # --------------------
     # internal - filled in __post_init__
-    key_string: Optional[str] = field(init=False, repr=False, default=None)
+    # key_string: Optional[str] = field(init=False, repr=False, default=None)
 
     # used to check root value in models registry 
     data_model_root: Optional[IDataModel] = field(repr=False, init=False, default=None)
@@ -2251,8 +2230,8 @@ class ApplyStackFrame(IStackFrame):
                                             if_set_must_be_same=False)
         self._copy_attr_from_previous_frame(previous_frame, "depth",
                                             if_set_must_be_same=False)
-        self._copy_attr_from_previous_frame(previous_frame, "parent_values_subtree",
-                                            if_set_must_be_same=False)
+        # self._copy_attr_from_previous_frame(previous_frame, "parent_values_subtree",
+        #                                     if_set_must_be_same=False)
         self._copy_attr_from_previous_frame(previous_frame, "value_node",
                                             if_set_must_be_same=False)
 
@@ -2272,7 +2251,7 @@ class ApplyStackFrame(IStackFrame):
             # do not use ==, compare by instance (ALT: use id(instance) )
             if self.component is previous_frame.component:
                 self._copy_attr_from_previous_frame(previous_frame, "on_component_only", may_be_copied=False)
-                self._copy_attr_from_previous_frame(previous_frame, "key_string", may_be_copied=False)
+                # self._copy_attr_from_previous_frame(previous_frame, "key_string", may_be_copied=False)
 
                 # NOTE: not this for now:
                 self._copy_attr_from_previous_frame(previous_frame, "this_registry",
@@ -2338,13 +2317,13 @@ class ApplyStackFrame(IStackFrame):
         assert self.data_model_root
 
 
-    def set_parent_values_subtree(self, parent_values_subtree: Union[Dict, List]) -> Union[Dict, List]:
-        " returns original values "
-        # NOTE: didn't want to introduce a new stack frame layer for just changing one attribute
-        # part of ComponentTreeWValuesType]
-        parent_values_subtree_orig = self.parent_values_subtree
-        self.parent_values_subtree = parent_values_subtree
-        return parent_values_subtree_orig
+    # def set_parent_values_subtree(self, parent_values_subtree: Union[Dict, List]) -> Union[Dict, List]:
+    #     " returns original values "
+    #     # NOTE: didn't want to introduce a new stack frame layer for just changing one attribute
+    #     # part of ComponentTreeWValuesType]
+    #     parent_values_subtree_orig = self.parent_values_subtree
+    #     self.parent_values_subtree = parent_values_subtree
+    #     return parent_values_subtree_orig
 
 
     # def set_local_setup_session(self, local_setup_session: ISetupSession):
@@ -2473,12 +2452,12 @@ class IApplyResult(IStackOwnerSession):
 
     # I do not prefer attaching key_string to instance i.e. setattr(instance, key_string)
     # but having instance not expanded, but to store in a special structure
-    key_string_container_cache: Dict[InstanceId, KeyString] = \
-                            field(repr=False, init=False, default_factory=dict)
+    # key_string_container_cache: Dict[InstanceId, KeyString] = \
+    #                         field(repr=False, init=False, default_factory=dict)
 
     # used when when collecting list of instances/attributes which are updated
-    instance_by_key_string_cache: Dict[KeyString, ModelInstanceType] = \
-                            field(repr=False, init=False, default_factory=dict)
+    # instance_by_key_string_cache: Dict[KeyString, ModelInstanceType] = \
+    #                         field(repr=False, init=False, default_factory=dict)
 
     # TODO: consider this:
         # Instance can be dataclass, dictionary and so on.
@@ -2535,8 +2514,8 @@ class IApplyResult(IStackOwnerSession):
             ]= field(init=False, repr=False, default_factory=dict)
 
     # used for cache only - holds complete tree
-    values_tree: Optional[ComponentTreeWValuesType] = field(init=False, repr=False, default=None)
-    values_tree_by_key_string: Optional[Dict[KeyString, ComponentTreeWValuesType]] = field(init=False, repr=False, default=None)
+    _values_tree: Optional[ComponentTreeWValuesType] = field(init=False, repr=False, default=None)
+    # values_tree_by_key_string: Optional[Dict[KeyString, ComponentTreeWValuesType]] = field(init=False, repr=False, default=None)
 
     new_id_counter: int = field(init=False, repr=False, default=0)
 
@@ -2553,6 +2532,13 @@ class IApplyResult(IStackOwnerSession):
 
     @abstractmethod
     def get_current_value(self, strict: bool) -> LiteralType:
+        ...
+    @abstractmethod
+    def get_key_string(self) -> KeyString:
+        ...
+
+    @abstractmethod
+    def get_values_tree(self, key_string: Optional[KeyString] = None) -> ComponentTreeWValuesType:
         ...
 
     @abstractmethod

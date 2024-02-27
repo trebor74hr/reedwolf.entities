@@ -26,7 +26,9 @@ from .custom_attributes import (
     AttributeByMethod,
 )
 from .meta import (
-    CustomCtxAttributeList,
+    CustomCtxAttributeList, 
+    _, 
+    msg,
 )
 from .value_accessors import (
     AttributeValueAccessor,
@@ -40,8 +42,6 @@ from .data_models import (
 from .base import (  # noqa: F401
     # Not for __all__ case (from <> import *), just for direct import:
     #   from <> import _, msg
-    _,
-    msg,
     IApplyResult,
     )
 from .fields import (
