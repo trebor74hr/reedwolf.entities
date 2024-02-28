@@ -181,6 +181,23 @@ class ComponentStatus(IntEnum):
     finished = 3
 
 
+class AttrDexpNodeTypeEnum(str, Enum):
+    CONTAINER = "CONTAINER"
+    FIELD     = "FIELD"
+    FIELD_GROUP = "FIELD_GROUP"
+    DATA_MODEL = "DATA_MODEL"
+    TYPE_INFO  = "TYPE_INFO"
+    ATTRIBUTE = "ATTRIBUTE"
+    ATTR_BY_METHOD = "ATTR_BY_METHOD"
+
+    # DATA      = "DATA"
+    # FUNCTION  = "FUNCTION"
+    # DEXP      = "DEXP"
+    # DEXP_FUNC = "DEXP_FUNC"
+    # VALIDATOR = "VALIDATOR"
+    # EVALUATOR = "EVALUATOR"
+    # MODEL_CLASS = "MODEL_CLASS"
+
 # ------------------------------------------------------------
 
 # it is not dict since it must be immutable - default value for the class variable
@@ -423,9 +440,9 @@ def is_list_instance_or_type(maybe_list: Any) -> bool:
         # ValueNode case - located on a single ValueNode (even within items component) or on a ItemsValueNode
         is_list = maybe_list.is_list()
     elif hasattr(maybe_list, "get_type_info"):
-        is_list = maybe_list.get_type_info()
+        is_list = maybe_list.get_type_info().is_list
     elif hasattr(maybe_list, "type_info"):
-        is_list = maybe_list.type_info
+        is_list = maybe_list.type_info.is_list
     else:
         is_list = isinstance(maybe_list, (list, tuple))
     return is_list
@@ -1356,3 +1373,4 @@ def _(message: str) -> TransMessageType:
 def msg(message: Union[str, TransMessageType]) -> Union[str, TransMessageType]:
     # TODO: should fill arguments {} and {name}
     return message
+

@@ -29,6 +29,9 @@ from types import (
     MappingProxyType,
 )
 
+from .global_settings import (
+    GlobalSettings,
+)
 from .utils import (
     snake_case_to_camel,
     to_repr,
@@ -76,7 +79,6 @@ from .meta import (
     STANDARD_TYPE_LIST,
     TransMessageType,
     get_dataclass_fields,
-    InstanceId,
     KeyString,
     AttrName,
     AttrValue,
@@ -155,25 +157,6 @@ def get_name_from_bind(bind_to: DotExpression):
 
 
 # ------------------------------------------------------------
-
-class AttrDexpNodeTypeEnum(str, Enum):
-    CONTAINER = "CONTAINER"
-    FIELD     = "FIELD"
-    COMPONENT = "COMPONENT"
-    TYPE_INFO  = "TYPE_INFO"
-    ATTRIBUTE = "ATTRIBUTE"
-    ATTR_BY_METHOD = "ATTR_BY_METHOD"
-
-    # DATA      = "DATA"
-    # FUNCTION  = "FUNCTION"
-    # DEXP      = "DEXP"
-    # DEXP_FUNC = "DEXP_FUNC"
-    # VALIDATOR = "VALIDATOR"
-    # EVALUATOR = "EVALUATOR"
-    # MODEL_CLASS = "MODEL_CLASS"
-
-# ------------------------------------------------------------
-
 
 class ReservedAttributeNames(str, Enum):
 
@@ -583,6 +566,12 @@ class IComponent(ReedwolfDataclassBase, ABC):
             raise EntityInternalError(owner=self, msg="Parent is not yet set")
         return not bool(self.parent)
 
+
+    @staticmethod
+    @abstractmethod
+    def has_data() -> bool:
+        ...
+
     @staticmethod
     def is_entity() -> bool:
         """ different from is_top_parent since is based on type not on parent setup"""
@@ -629,6 +618,10 @@ class IComponent(ReedwolfDataclassBase, ABC):
     def get_children(self, deep_collect: bool = False, cache: bool = True, traverse_all: bool = False) -> List[Self]:
         """
         TODO: check if traverse_all is needed - maybe child.may_collect_my_children should not be checked?
+        Fills/uses undocumented attributes - internal:
+            _children       - direct children only
+            _children_dict  - direct children only
+            _children_deep  - whole children tree flattened
 
         in deep_collect mode:
             CACHED
@@ -676,22 +669,21 @@ class IComponent(ReedwolfDataclassBase, ABC):
                 out = children if children else []
                 if cache:
                     self._children = out
+                    self._children_dict = {comp.name: comp for comp in out}
             else:
                 out = self._children
+
         return out
 
 
     # ------------------------------------------------------------
 
-    # def _get_children_dict(self) -> Dict[ComponentNameType, Self]:
-    #     """
-    #     only direct children in flat dict
-    #     ONLY_UNIT_TESTS
-    #     """
-    #     # if not hasattr(self, "_children_dict"):
-    #     #     self._children_dict = {comp.name: comp for comp in self.get_children()}
-    #     # return self._children_dict
-    #     return {comp.name: comp for comp in self.get_children()}
+    def get_children_dict(self) -> Dict[ComponentNameType, Self]:
+        """
+        TODO: maybe not used?
+        only direct children in flat dict
+        """
+        return self._children_dict
 
     # ------------------------------------------------------------
 
@@ -1489,7 +1481,10 @@ class IComponent(ReedwolfDataclassBase, ABC):
 # ------------------------------------------------------------
 
 class ICleaner(IComponent, ABC):
-    ...
+
+    @staticmethod
+    def has_data() -> bool:
+        return False
 
 class IValidation(ICleaner, ABC):
     ensure:     DotExpression
@@ -1508,6 +1503,10 @@ VALIDATION_OR_EVALUATION_TYPE = Union[Type[IValidation], Type[IEvaluation]]
 class IField(IComponent, ABC):
     # to Model attribute
     bind_to: DotExpression
+
+    @staticmethod
+    def has_data() -> bool:
+        return True
 
     @abstractmethod
     def get_type_info(self) -> TypeInfo:
@@ -1533,7 +1532,10 @@ class IField(IComponent, ABC):
 # ------------------------------------------------------------
 
 class IFieldGroup(IComponent, ABC):
-    ...
+
+    @staticmethod
+    def has_data() -> bool:
+        return True
 
 # ------------------------------------------------------------
 # IContainer
@@ -1566,6 +1568,10 @@ class IContainer(IComponent, ABC):
     # path of container parents from Entity to this Containers. List of container_id, containing Entity and self.
     containers_id_path:   Union[List[ContainerId], UndefinedType] = field(init=False, default=UNDEFINED)
 
+
+    @staticmethod
+    def has_data() -> bool:
+        return True
 
     @abstractmethod
     def _register_model_attr_nodes(self) -> Dict[str, "IDataModel"]:
@@ -1639,6 +1645,9 @@ class IDataModel(IComponent, ABC):
     #         raise EntityInternalError(owner=self, msg="Setup already called")
     #     super()._setup(setup_session=setup_session)
 
+    @staticmethod
+    def has_data() -> bool:
+        return False
 
     @abstractmethod
     def get_type_info(self) -> TypeInfo:
@@ -2647,11 +2656,13 @@ class IApplyResult(IStackOwnerSession):
 # ------------------------------------------------------------
 
 def extract_type_info(
-        attr_node_name: str,
-        inspect_object: Any,
+        inspect_object: Union[IDataModel, IDotExpressionNode, DotExpression, TypeInfo, Callable, ModelKlassType],
+        attr_node_name: str
         ) -> Tuple[TypeInfo, Optional[ModelField]]:
     # Optional[IFunctionDexpNode]  # noqa: F821
     """
+    TODO: this function is a mess, do something
+
     Main logic for extraction from parent object (dataclass, py class, dexp
     instances) member by name 'attr_node_name' -> data (struct, plain value),
     or IFunctionDexpNode instances 

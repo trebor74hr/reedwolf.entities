@@ -349,9 +349,11 @@ class ContainerBase(IContainer, ABC):
         if isinstance(model_klass, DotExpression):
             attr_node = self._setup_data_model_dot_expression(data_model)
 
-            model_klass   = attr_node.data.type_
-            is_list = attr_node.data.is_list
-            py_type_hint = attr_node.data.py_type_hint
+            # model_klass   = attr_node.data.type_
+            type_info = attr_node.type_info
+            model_klass = type_info.type_
+            is_list = type_info.is_list
+            py_type_hint = type_info.py_type_hint
 
             if self.is_subentity() and is_list:
                 raise EntitySetupTypeError(owner=self, msg=f"{data_model.name}: For SubEntity did not expect List model type, got: {py_type_hint}")

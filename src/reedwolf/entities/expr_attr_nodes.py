@@ -41,7 +41,7 @@ from .meta import (
     KlassMember,
     ContainerId,
     ComponentStatus,
-    is_list_instance_or_type, IDexpValueSource,
+    is_list_instance_or_type, IDexpValueSource, IAttribute, AttrDexpNodeTypeEnum,
 )
 from .custom_attributes import (
     Attribute,
@@ -56,7 +56,7 @@ from .base import (
     IApplyResult,
     ExecResult,
     ReservedAttributeNames,
-    AttrDexpNodeTypeEnum,
+    IDataModel, IFieldGroup,
 )
 
 # ------------------------------------------------------------
@@ -73,7 +73,7 @@ class AttrDexpNode(IDotExpressionNode):
     name: str
 
     # TODO: rename to owner
-    data: Union[IComponent, TypeInfo, AttributeByMethod, Attribute]
+    data: Union[IComponent, TypeInfo, AttributeByMethod, IAttribute]
 
     # to which namespace it belongs
     namespace: Namespace
@@ -93,7 +93,7 @@ class AttrDexpNode(IDotExpressionNode):
 
     # ----- Later evaluated ------
     # could live without this attribute but ...
-    attr_node_type: Union[AttrDexpNodeTypeEnum] = field(init=False)
+    attr_node_type: AttrDexpNodeTypeEnum = field(init=False)
     is_finished: bool = field(init=False, repr=False, default=False)
 
     def __post_init__(self):
@@ -117,34 +117,24 @@ class AttrDexpNode(IDotExpressionNode):
             self.attr_node_type = AttrDexpNodeTypeEnum.FIELD
             self.data_supplier_name = f"{self.data.name}"
 
-        elif isinstance(self.data, IComponent):
-            self.attr_node_type = AttrDexpNodeTypeEnum.COMPONENT
+        elif isinstance(self.data, IDataModel):
+            self.attr_node_type = AttrDexpNodeTypeEnum.DATA_MODEL
             self.data_supplier_name = f"{self.data.name}"
 
-        # # ---------------------------------------------
-        # # CASE: Value expressions and FunctinoBase
-        # # ---------------------------------------------
-        # elif isinstance(self.data, DotExpression):
-        #     if self.data._func_args:
-        #         self.attr_node_type = AttrDexpNodeTypeEnum.DEXP_FUNC
-        #     else:
-        #         self.attr_node_type = AttrDexpNodeTypeEnum.DEXP
-        #     self.data_supplier_name = f"{self.data!r}"
-
-        # # ---------------------------------------------
-        # # CASE: Concrete type
-        # # ---------------------------------------------
-        # elif is_model_klass(self.data):
-        #     # ModelKlassType
-        #     assert type(self.data) == type, self.data
-        #     # ALT: inspect.isclass()
-        #     self.attr_node_type = AttrDexpNodeTypeEnum.MODEL_CLASS
-        #     self.data_supplier_name = f"{self.data.__name__}"
+        elif isinstance(self.data, IComponent):
+            if not self.data.has_data():
+                raise EntityInternalError(owner=self, msg=f"Expected component that has_data, got: {self.data}")
+            assert isinstance(self.data, IFieldGroup), self.data
+            self.attr_node_type = AttrDexpNodeTypeEnum.FIELD_GROUP
+            self.data_supplier_name = f"{self.data.name}"
 
         # ---------------------------------------------
         # CASE: Class Attribute or Function return type
         # ---------------------------------------------
         elif isinstance(self.data, TypeInfo):
+            assert self.type_info is None
+            self.type_info = self.data
+
             if self.type_object is UNDEFINED:
                 raise EntityInternalError(owner=self, msg=f"TypeInfo case - type_object should be set (ModelField), got: {self.type_object}")
             self.attr_node_type = AttrDexpNodeTypeEnum.TYPE_INFO
@@ -176,6 +166,14 @@ class AttrDexpNode(IDotExpressionNode):
 
         # NOTE: .type_info could be calculated later in finish() method
 
+    def get_component(self) -> Optional[IComponent]:
+        return self.data if self.attr_node_type in (
+                        AttrDexpNodeTypeEnum.CONTAINER,
+                        AttrDexpNodeTypeEnum.FIELD,
+                        AttrDexpNodeTypeEnum.DATA_MODEL,
+                        AttrDexpNodeTypeEnum.FIELD_GROUP,
+        ) else None
+
     def finish(self):
         """ fill type_info, must be available for all nodes - with exceptions those with .denied don't have it """
         if self.type_info is None:
@@ -184,27 +182,35 @@ class AttrDexpNode(IDotExpressionNode):
 
     def _fill_type_info(self):
         """ fill type_info, must be available for all nodes - with exceptions those with .denied don't have it """
-        if self.attr_node_type == AttrDexpNodeTypeEnum.FIELD:
-            type_info = self.data
-            if not type_info.bound_attr_node:
-                raise EntityInternalError(owner=self, msg=f"AttrDexpNode {self.data} .bound_attr_node not set.")
+        # if self.attr_node_type == AttrDexpNodeTypeEnum.FIELD:
+        #     type_info = self.data
+        #     if not type_info.bound_attr_node:
+        #         raise EntityInternalError(owner=self, msg=f"AttrDexpNode {self.data} .bound_attr_node not set.")
 
-            bound_type_info = type_info.bound_attr_node.get_type_info()
-            if not bound_type_info:
-                raise EntityInternalError(owner=self, msg=f"AttrDexpNode data.bound_attr_node={self.data} -> {self.data.bound_attr_node} .type_info not set.")
+        #     bound_type_info = type_info.bound_attr_node.get_type_info()
+        #     if not bound_type_info:
+        #         raise EntityInternalError(owner=self, msg=f"AttrDexpNode data.bound_attr_node={self.data} -> {self.data.bound_attr_node} .type_info not set.")
 
-            # transfer type_info from type_info.bound attr_node
-            self.type_info = bound_type_info
+        #     # transfer type_info from type_info.bound attr_node
+        #     self.type_info = bound_type_info
 
         # elif self.attr_node_type == AttrDexpNodeTypeEnum.DATA:
         #     self.type_info = self.data.type_info
 
-        elif not self.denied and self.attr_node_type == AttrDexpNodeTypeEnum.CONTAINER:
+        assert self.type_info is None
+
+        if not self.denied and self.attr_node_type in (
+                AttrDexpNodeTypeEnum.CONTAINER,
+                AttrDexpNodeTypeEnum.FIELD,
+                AttrDexpNodeTypeEnum.FIELD_GROUP,
+            ):
             self.type_info = self.data.get_type_info()
 
         elif self.attr_node_type not in (
                 AttrDexpNodeTypeEnum.CONTAINER,
-                AttrDexpNodeTypeEnum.COMPONENT,
+                AttrDexpNodeTypeEnum.FIELD,
+                AttrDexpNodeTypeEnum.DATA_MODEL,
+                AttrDexpNodeTypeEnum.FIELD_GROUP,
                 ):
             # all other require type_info
             raise EntityInternalError(owner=self, msg=f"For attr_node {self.attr_node_type} .type_info not set (type={type(self.data)}).")
@@ -215,8 +221,9 @@ class AttrDexpNode(IDotExpressionNode):
 
 
     def get_type_info(self) -> TypeInfo:
-        # if strict and self.type_info is None:
-        #     raise EntityInternalError(owner=self, msg=f"Finish was not called, type_info is not set")
+        """
+        lazy init - after components are setup()
+        """
         if self.type_info is None:
             self._fill_type_info()
         assert self.type_info

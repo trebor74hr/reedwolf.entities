@@ -11,6 +11,9 @@ from typing import (
     Dict,
 )
 
+from .global_settings import (
+    GlobalSettings,
+)
 from .utils import (
     get_available_names_example,
     UNDEFINED,
@@ -49,7 +52,7 @@ from .meta import (
     get_model_fields,
     AttrName,
     ComponentStatus,
-    is_list_instance_or_type, ChildField, ListChildField,
+    is_list_instance_or_type, ChildField, ListChildField, AttrDexpNodeTypeEnum,
 )
 from .base import (
     IComponentFields,
@@ -61,8 +64,7 @@ from .base import (
     IDataModel,
     ReservedAttributeNames,
     SetupStackFrame,
-    UseStackFrameCtxManagerBase,
-)
+    UseStackFrameCtxManagerBase, )
 from .functions import (
     FunctionsFactoryRegistry,
     try_create_function,
@@ -104,6 +106,17 @@ def get_dexp_node_name(owner_name: Optional[str],
 
     return dexp_node_name
 
+
+def create_exception_name_not_found_error(namespace: Namespace,
+                                          owner: IComponent,
+                                          valid_varnames_str: str,
+                                          full_dexp_node_name: str,
+                                          custom_msg: str = "") -> EntitySetupNameNotFoundError:
+    valid_names = f"Valid attributes: {valid_varnames_str}" if valid_varnames_str \
+             else "Namespace has no attributes at all."
+    if custom_msg:
+        valid_names = f"{custom_msg} {valid_names}"
+    return EntitySetupNameNotFoundError(owner=owner, msg=f"Namespace '{namespace}': Invalid attribute name '{full_dexp_node_name}'. {valid_names}")
 
 # ------------------------------------------------------------
 
@@ -270,7 +283,7 @@ class RegistryBase(IRegistry):
                         name=attr_name,
                         data=component if component else type_info,
                         namespace=self.NAMESPACE,
-                        type_info=type_info, 
+                        type_info=type_info if component else None,
                         type_object=th_field,
                         )
 
@@ -333,7 +346,6 @@ class RegistryBase(IRegistry):
                         name=attr_name,
                         data=type_info,
                         namespace=cls.NAMESPACE,
-                        type_info=type_info, 
                         type_object=th_field,
                         )
         return attr_node
@@ -414,15 +426,16 @@ class RegistryBase(IRegistry):
         valid_varnames_str = get_available_names_example(attr_name, list(valid_varnames_list), max_display=7)
         return valid_varnames_list, valid_varnames_str
 
-    def create_exception_name_not_found_error(self, owner: IComponent,
-                                              full_dexp_node_name: str, custom_msg: str = "") -> EntitySetupNameNotFoundError:
+    def create_exception_name_not_found_error(self,
+                                              owner: IComponent,
+                                              full_dexp_node_name: str,
+                                              custom_msg: str = "") -> EntitySetupNameNotFoundError:
         valid_varnames_list, valid_varnames_str = self.get_valid_varnames(full_dexp_node_name)
-        valid_names = f"Valid attributes: {valid_varnames_str}" if valid_varnames_list \
-                      else "Namespace has no attributes at all."
-        if custom_msg:
-            valid_names = f"{custom_msg} {valid_names}"
-        return EntitySetupNameNotFoundError(owner=owner,
-                                            msg=f"Namespace '{self.NAMESPACE}': Invalid attribute name '{full_dexp_node_name}'. {valid_names}")
+        return create_exception_name_not_found_error(owner=owner,
+                                                     namespace=self.NAMESPACE,
+                                                     valid_varnames_str=valid_varnames_str if valid_varnames_list else "",
+                                                     full_dexp_node_name=full_dexp_node_name,
+                                                     custom_msg=custom_msg)
 
     # ------------------------------------------------------------
     # create_node -> AttrDexpNode, Operation or IFunctionDexpNode
@@ -448,7 +461,7 @@ class RegistryBase(IRegistry):
         if dexp_node_name.startswith("_"):
             raise EntitySetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': AttrDexpNode '{dexp_node_name}' is invalid, should not start with _")
 
-        type_info = None
+        parent_type_info = None
         if owner_dexp_node:
             assert owner_dexp_node.name!=dexp_node_name
             if not isinstance(owner_dexp_node, IDotExpressionNode):
@@ -462,6 +475,8 @@ class RegistryBase(IRegistry):
                                     dexp_node_name=dexp_node_name,
                                     func_args=None
                                     )
+
+        found_component: Optional[IComponent] = None
 
         if owner_dexp_node is None:
             # --------------------------------------------------
@@ -501,35 +516,71 @@ class RegistryBase(IRegistry):
                 inspect_object = owner_dexp_node.get_type_info()
             else:
                 assert isinstance(owner_dexp_node, AttrDexpNode)
+                # if isinstance(owner_dexp_node.data, IDataModel):
+                # if False and owner_dexp_node.attr_node_type == AttrDexpNodeTypeEnum.DATA_MODEL:
+                #     inspect_object = owner_dexp_node.data.model_klass
+                # # elif is_model_klass(owner_dexp_node.data):
+                # #     # @dataclass, Pydantic etc.
+                # #     inspect_object = owner_dexp_node.data
+                # # elif isinstance(owner_dexp_node.data, IContainer):
+                # else:
+                #     # elif owner_dexp_node.attr_node_type in (AttrDexpNodeTypeEnum.CONTAINER,
+                #     #                                         AttrDexpNodeTypeEnum.FIELD,
+                #     #                                         AttrDexpNodeTypeEnum.FIELD_GROUP,
+                #     #                                         ):
+                #     # Container does not have owner_dexp_node.type_info set in the moment of creation
+                #     # if not owner_dexp_node.attr_node_type in (AttrDexpNodeTypeEnum.TYPE_INFO,
+                #     #                                           AttrDexpNodeTypeEnum.ATTRIBUTE,
+                #     #                                           AttrDexpNodeTypeEnum.ATTR_BY_METHOD):
+                #     #     raise EntityInternalError(owner=self, msg=f"Expected type_info, got: {owner_dexp_node} / {owner_dexp_node.attr_node_type}")
+                parent_component : Optional[IComponent] = owner_dexp_node.get_component()
+                parent_type_info = owner_dexp_node.get_type_info()
+                if GlobalSettings.is_unit_test and parent_component:
+                    assert parent_type_info is owner_dexp_node.data.get_type_info()
+                # for component this is custom created dataclass <Component>__Fields
+                inspect_object = parent_type_info
+                if parent_component:
+                    # if this is a component, then try to find child component by name in direct children
+                    children_dict = parent_component.get_children_dict()
+                    found_component = children_dict.get(dexp_node_name, UNDEFINED)
+                    if not found_component:
+                        # in this momemnt
+                        children_names = list(children_dict.keys())
+                        valid_varnames_str = get_available_names_example(dexp_node_name, children_names, max_display=7) if children_names else ""
+                        raise create_exception_name_not_found_error(owner=owner,
+                                                                    namespace=self.NAMESPACE,
+                                                                    valid_varnames_str=valid_varnames_str,
+                                                                    full_dexp_node_name=full_dexp_node_name)
 
-                if isinstance(owner_dexp_node.data, IDataModel):
-                    inspect_object = owner_dexp_node.data.model_klass
-                elif is_model_klass(owner_dexp_node.data):
-                    # @dataclass, Pydantic etc.
-                    inspect_object = owner_dexp_node.data
-                elif isinstance(owner_dexp_node.data, IContainer):
-                    # Container does not have owner_dexp_node.type_info set in the moment of creation
-                    inspect_object = owner_dexp_node.data.get_type_info()
-                else:
-                    # take TypeInfo
-                    inspect_object = owner_dexp_node.type_info
+                    if not found_component.has_data():
+                        raise EntitySetupNameError(owner=parent_component, msg=f"Found component '{dexp_node_name}' contains no data, choose data component. Got: {found_component}")
 
             err_msg_prefix = f"'{owner.name} -> {owner_dexp_node.full_name} . {dexp_node_name}'"
-            try:
-                type_info, th_field = extract_type_info(
-                            attr_node_name=dexp_node_name,
-                            inspect_object=inspect_object,
-                            )
-            except EntitySetupNameNotFoundError as ex:
-                ex.set_msg(f"{err_msg_prefix}: {ex.msg}")
-                raise
-            except EntityError as ex:
-                ex.set_msg(f"{err_msg_prefix}: metadata / type-hints read problem: {ex}")
-                raise
+
+            if found_component:
+                data = found_component
+                type_info = found_component.get_type_info()
+                type_object = type_info.type_
+            else:
+                # if this is a component, then try to find child component by name in direct children
+                try:
+                    type_info, th_field = extract_type_info(
+                                inspect_object=inspect_object,
+                                attr_node_name=dexp_node_name,
+                                )
+                    data = type_info
+                    type_object = th_field
+                except EntitySetupNameNotFoundError as ex:
+                    ex.set_msg(f"{err_msg_prefix}: {ex.msg}")
+                    raise
+                except EntityError as ex:
+                    ex.set_msg(f"{err_msg_prefix}: metadata / type-hints read problem: {ex}")
+                    raise
 
             assert type_info
 
             # if this is a list and not in a direct
+            # TODO: is there a better way?
             if not is_1st_node and is_list_instance_or_type(inspect_object):
                 # TODO: too complex error message
                 raise EntitySetupValueError(owner=owner, msg=f"{err_msg_prefix} can not be read from list, got: {inspect_object}. Use list accessor functions.")
@@ -539,10 +590,9 @@ class RegistryBase(IRegistry):
             # --------------------------------------------------
             dexp_node = AttrDexpNode(
                             name=full_dexp_node_name,
-                            data=type_info,
+                            data=data,
                             namespace=self.NAMESPACE,
-                            type_info=type_info, 
-                            type_object=th_field,
+                            type_object=type_object,
                             ) # function=function
 
         if not isinstance(dexp_node, IDotExpressionNode):

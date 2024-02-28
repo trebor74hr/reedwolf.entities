@@ -11,19 +11,24 @@ from typing import (
     Optional,
     ClassVar,
     Dict,
-    Type, Tuple,
+    Type,
+    Tuple,
 )
 
 from .utils import (
     UndefinedType,
-    to_repr, get_available_names_example, UNDEFINED,
+    to_repr,
+    get_available_names_example,
+    UNDEFINED,
 )
 from .exceptions import (
     EntitySetupError,
     EntitySetupValueError,
     EntityInternalError,
     EntitySetupTypeError,
-    EntityApplyNameError, EntitySetupNameError, EntityApplyTypeError,
+    EntityApplyNameError,
+    EntitySetupNameError,
+    EntityApplyTypeError,
 )
 from .namespaces import (
     Namespace,
@@ -48,7 +53,8 @@ from .meta import (
     KlassMember,
     SettingsType,
     IAttribute,
-    CustomCtxAttributeList, ContainerId,
+    CustomCtxAttributeList,
+    ContainerId,
 )
 from .base import (
     ReservedAttributeNames,
@@ -58,10 +64,14 @@ from .base import (
     IDataModel,
     IFieldGroup,
     ISetupSession,
-    IContainer, IEntity, IValueNode,
+    IContainer,
+    IEntity,
+    IValueNode,
 )
 from .expr_attr_nodes import (
-    AttrDexpNode, AttrValueContainerPath, AttrDexpNodeWithValuePath,
+    AttrDexpNode,
+    AttrValueContainerPath,
+    AttrDexpNodeWithValuePath,
 )
 from .valid_base import (
     ValidationBase,
@@ -70,12 +80,16 @@ from .eval_base import (
     EvaluationBase,
 )
 from .settings import (
-    Settings, ApplySettings, )
+    Settings,
+    ApplySettings,
+)
 from .setup import (
     RegistryBase,
     RegistryUseDenied,
 )
-from .value_nodes import ItemsValueNode
+from .value_nodes import (
+    ItemsValueNode,
+)
 
 
 # ------------------------------------------------------------
@@ -114,7 +128,6 @@ class UnboundModelsRegistry(IThisRegistry, RegistryBase):
             name=full_dexp_node_name,
             data=type_info, # must be like this
             namespace=self.NAMESPACE,
-            type_info=type_info,
             type_object=type_info.type_,
         )
         self.register_attr_node(attr_node, alt_attr_node_name=None)
@@ -305,7 +318,7 @@ class LocalFieldsRegistry(RegistryBase):
         # A.3. COMPONENTS - collect attr_nodes - previously flattened (recursive function fill_components)
         # container_id = self.container.container_id
         for component_name, component in self.container.components.items():
-            if component is self.container:
+            if component is self.container or not component.has_data():
                 continue
             self._register_component(component)
         return
@@ -589,9 +602,10 @@ class TopFieldsRegistry(RegistryBase):
         for component_name, component in container.components.items():
             # TODO: same content attr_dexp_node will be created here and in LocalFieldsRegistry.register_all()
             #       Cache this one and reuse.
-            if isinstance(component, IContainer) and component is not container:
-                # container is in list of parent's components and in its own list.
-                # only last will be added.
+            if ((isinstance(component, IContainer) and component is not container)
+              or not component.has_data()):
+                # 1) container is in list of parent's components and in its own list. only last will be added.
+                # 2) skip cleaners, data_models and similar - that holds no data
                 continue
 
             attr_dexp_node = LocalFieldsRegistry.create_attr_node(component, allow_containers=True)
@@ -641,7 +655,6 @@ class ContextRegistry(RegistryBase):
                     raise EntitySetupValueError(owner=self,
                                                 msg=f"Attribute {attr_name} expected FieldName or MethodName instance, got: {attr_getter} / {type(attr_getter)}")
                 type_info, settings_source = attr_getter.setup_dexp_attr_source(settings_source_list)
-                data = attr_getter
                 type_object = SettingsKlassMember(settings_type=settings_source.settings_type,
                                                   klass=settings_source.klass,
                                                   member_name=attr_getter)
@@ -653,7 +666,7 @@ class ContextRegistry(RegistryBase):
                     name=attr_name,
                     namespace=self.NAMESPACE,
                     type_info=type_info,
-                    data=data,
+                    data=attr_getter,
                     type_object=type_object,
                 )
 

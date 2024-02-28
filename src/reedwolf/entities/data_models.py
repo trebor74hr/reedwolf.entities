@@ -142,7 +142,6 @@ class BoundDataModelBase(IBoundDataModel):
                                             name=child_data_model.name,
                                             data=read_handler_type_info,
                                             namespace=models_registry.NAMESPACE,
-                                            type_info=read_handler_type_info, 
                                             type_object=None,
                                             )
 

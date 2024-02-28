@@ -346,7 +346,7 @@ class IFunction(IFunctionDexpNode, ABC):
             elif isinstance(self.caller, IDotExpressionNode):
                 # TODO: to drop this case or not? To change to 'setup_session.current_frame' case?
                 dexp_node: IDotExpressionNode = self.caller
-                component: IComponent = dexp_node.data if isinstance(dexp_node, AttrDexpNode) and isinstance(dexp_node.data, IComponent) else None
+                component: IComponent = dexp_node.get_component() if isinstance(dexp_node, AttrDexpNode) else None
                 if component:
                     # if DexpNode is attached to Component then create proper ThisRegistry immediately
                     this_registry = ThisRegistryForComponent.create(component=component, attr_node=dexp_node,
