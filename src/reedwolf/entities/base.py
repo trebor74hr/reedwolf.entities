@@ -160,16 +160,17 @@ class AttrDexpNodeTypeEnum(str, Enum):
     CONTAINER = "CONTAINER"
     FIELD     = "FIELD"
     COMPONENT = "COMPONENT"
-    DATA      = "DATA"
-    FUNCTION  = "FUNCTION"
+    TYPE_INFO  = "TYPE_INFO"
+    ATTRIBUTE = "ATTRIBUTE"
+    ATTR_BY_METHOD = "ATTR_BY_METHOD"
 
-    VEXP      = "VEXP"
-    VEXP_FUNC = "VEXP_FUNC"
+    # DATA      = "DATA"
+    # FUNCTION  = "FUNCTION"
+    # DEXP      = "DEXP"
+    # DEXP_FUNC = "DEXP_FUNC"
     # VALIDATOR = "VALIDATOR"
     # EVALUATOR = "EVALUATOR"
-    MODEL_CLASS = "MODEL_CLASS"
-    TH_FUNCTION = "TH_FUNCTION"
-    TH_FIELD  = "TH_FIELD"
+    # MODEL_CLASS = "MODEL_CLASS"
 
 # ------------------------------------------------------------
 

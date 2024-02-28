@@ -71,15 +71,17 @@ class AttrDexpNode(IDotExpressionNode):
     """
     # TODO: too many if-s - make subclassing instead?
     name: str
-    # TODO: data can be also - check each:
-    #   - some dataproviding function
-    # TODO: Union[TypeInfo, IFunctionDexpNode, DotExpression, 'Component', type]  #
-    #       noqa: F821
-    data: Any 
+
+    # TODO: rename to owner
+    data: Union[IComponent, TypeInfo, AttributeByMethod, Attribute]
+
+    # to which namespace it belongs
     namespace: Namespace
 
+    # TODO: I don't like this - overlaps with data/owner - remove this one?
     # based on attr_node_type - can contain Field() or class - used later to extract details
     type_object: Union[ModelField, KlassMember, NoneType] = field(repr=False, default=UNDEFINED)
+
     type_info: Optional[TypeInfo] = field(default=None)
     # TODO: rename to: func_node or function_node
     # function: Optional[Union[IFunctionDexpNode]] = field(repr=False, default=None)
@@ -103,39 +105,41 @@ class AttrDexpNode(IDotExpressionNode):
         # ---------------------------------------------
         # CASES: COMPONENTS
         # ---------------------------------------------
-        # TODO: antipattern - split to diff class implementations (inherit and make diff classes)
         if self.data is None:
             raise EntityInternalError(owner=self, msg=f"Data is not set for {self}")
 
+        # TODO: antipattern - split to diff class implementations (inherit and make diff classes)
         if isinstance(self.data, IContainer):
             self.attr_node_type = AttrDexpNodeTypeEnum.CONTAINER
             self.data_supplier_name = f"{self.data.name}"
+
         elif isinstance(self.data, IField):
             self.attr_node_type = AttrDexpNodeTypeEnum.FIELD
             self.data_supplier_name = f"{self.data.name}"
+
         elif isinstance(self.data, IComponent):
             self.attr_node_type = AttrDexpNodeTypeEnum.COMPONENT
             self.data_supplier_name = f"{self.data.name}"
 
-        # ---------------------------------------------
-        # CASE: Value expressions and FunctinoBase 
-        # ---------------------------------------------
-        elif isinstance(self.data, DotExpression):
-            if self.data._func_args:
-                self.attr_node_type = AttrDexpNodeTypeEnum.VEXP_FUNC
-            else:
-                self.attr_node_type = AttrDexpNodeTypeEnum.VEXP
-            self.data_supplier_name = f"{self.data!r}"
+        # # ---------------------------------------------
+        # # CASE: Value expressions and FunctinoBase
+        # # ---------------------------------------------
+        # elif isinstance(self.data, DotExpression):
+        #     if self.data._func_args:
+        #         self.attr_node_type = AttrDexpNodeTypeEnum.DEXP_FUNC
+        #     else:
+        #         self.attr_node_type = AttrDexpNodeTypeEnum.DEXP
+        #     self.data_supplier_name = f"{self.data!r}"
 
-        # ---------------------------------------------
-        # CASE: Concrete type
-        # ---------------------------------------------
-        elif is_model_klass(self.data):
-            # ModelKlassType
-            assert type(self.data) == type, self.data
-            # ALT: inspect.isclass()
-            self.attr_node_type = AttrDexpNodeTypeEnum.MODEL_CLASS
-            self.data_supplier_name = f"{self.data.__name__}"
+        # # ---------------------------------------------
+        # # CASE: Concrete type
+        # # ---------------------------------------------
+        # elif is_model_klass(self.data):
+        #     # ModelKlassType
+        #     assert type(self.data) == type, self.data
+        #     # ALT: inspect.isclass()
+        #     self.attr_node_type = AttrDexpNodeTypeEnum.MODEL_CLASS
+        #     self.data_supplier_name = f"{self.data.__name__}"
 
         # ---------------------------------------------
         # CASE: Class Attribute or Function return type
@@ -143,16 +147,17 @@ class AttrDexpNode(IDotExpressionNode):
         elif isinstance(self.data, TypeInfo):
             if self.type_object is UNDEFINED:
                 raise EntityInternalError(owner=self, msg=f"TypeInfo case - type_object should be set (ModelField), got: {self.type_object}")
-            self.attr_node_type = AttrDexpNodeTypeEnum.TH_FIELD
+            self.attr_node_type = AttrDexpNodeTypeEnum.TYPE_INFO
             # .type_ could be a class/type or NewType instance
             type_name = getattr(self.data.type_, "__name__", 
                                 getattr(self.data.type_, "_name", repr(self.data.type_)))
             self.data_supplier_name = f"TH[{type_name}]"
+
         elif isinstance(self.data, Attribute):
             # TODO: don't like this - too hackish
             if not isinstance(self.type_object, KlassMember) and self.type_object.name == self.data:
                 raise EntityInternalError(owner=self, msg=f"MethodName case - type_object must be instance of KlassMember, got: {self.type_object},")
-            self.attr_node_type = AttrDexpNodeTypeEnum.TH_FIELD
+            self.attr_node_type = AttrDexpNodeTypeEnum.ATTRIBUTE
             type_name = str(self.data)  # field name
             self.data_supplier_name = f"FN[{type_name}]"
 
@@ -160,7 +165,7 @@ class AttrDexpNode(IDotExpressionNode):
             # TODO: don't like this - too hackish
             if not isinstance(self.type_object, KlassMember) and self.type_object.name == self.data:
                 raise EntityInternalError(owner=self, msg=f"MethodName case - type_object must be instance of KlassMember, got: {self.type_object},")
-            self.attr_node_type = AttrDexpNodeTypeEnum.TH_FUNCTION
+            self.attr_node_type = AttrDexpNodeTypeEnum.ATTR_BY_METHOD
             type_name = str(self.data)  # method name
             self.data_supplier_name = f"MN[{type_name}]"
 
@@ -191,8 +196,8 @@ class AttrDexpNode(IDotExpressionNode):
             # transfer type_info from type_info.bound attr_node
             self.type_info = bound_type_info
 
-        elif self.attr_node_type == AttrDexpNodeTypeEnum.DATA:
-            self.type_info = self.data.type_info
+        # elif self.attr_node_type == AttrDexpNodeTypeEnum.DATA:
+        #     self.type_info = self.data.type_info
 
         elif not self.denied and self.attr_node_type == AttrDexpNodeTypeEnum.CONTAINER:
             self.type_info = self.data.get_type_info()
