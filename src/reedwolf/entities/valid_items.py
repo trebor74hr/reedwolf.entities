@@ -42,7 +42,7 @@ from .base import (
 )
 
 
-def _validate_setup_common(validation, allow_none:Optional[bool]=None) -> 'AttrDexpNode':  # noqa: F821
+def _validate_setup_common(validation, allow_none:Optional[bool]=None) -> 'IAttrDexpNode':  # noqa: F821
     model_attr_node = validation.parent.get_data_model_attr_node()
     if allow_none is not None:
         if allow_none and not model_attr_node.is_optional():

@@ -5,16 +5,16 @@ Process:
         dexp = M.value.expressions.and.Functions().results 
 
     dexp.Setup converts to
-        .value -> AttrDexpNode()
-        .expressions -> AttrDexpNode()
+        .value -> IAttrDexpNode()
+        .expressions -> IAttrDexpNode()
         .Functions() -> FunctionDexpNode()
-        .results -> AttrDexpNode()
+        .results -> IAttrDexpNode()
 
         # there is OperationDexpNode() e.g. M.x + M.y
 
     what is saved inside (last) value expression (and owner):
         dexp_evaluator = DotExpressionEvaluator()
-            [AttrDexpNode(), AttrDexpNode(), Function(), AttrDexpNode()]
+            [IAttrDexpNode(), IAttrDexpNode(), Function(), IAttrDexpNode()]
 
     and later could be evaluated/executed with concrete data objects/structure:
         dexp_evaluator.execute(struct) 

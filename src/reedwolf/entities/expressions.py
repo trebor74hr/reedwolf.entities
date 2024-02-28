@@ -213,7 +213,7 @@ class RegistryRootValue:
     do_fetch_by_name:   Union[bool, UndefinedType] = UNDEFINED
 
     # ---- later set ----
-    attr_dexp_node:     Optional["AttrDexpNode"] =  field(init=False, repr=False, default=None)
+    attr_dexp_node:     Optional["IAttrDexpNode"] =  field(init=False, repr=False, default=None)
 
     if GLOBAL_SETTINGS.is_unit_test:
         def __post_init__(self):
@@ -221,7 +221,7 @@ class RegistryRootValue:
             if self.attr_name_new and self.do_fetch_by_name is not UNDEFINED:
                 raise EntityInternalError(owner=self, msg=f"Invalid case: {self.attr_name_new} / {self.do_fetch_by_name}")
 
-    def set_attr_dexp_node(self, attr_dexp_node: "AttrDexpNode") -> Self:
+    def set_attr_dexp_node(self, attr_dexp_node: "IAttrDexpNode") -> Self:
         if self.attr_dexp_node is not None:
             raise EntityInternalError(owner=self, msg=f"attr_dexp_node already set to: {self.attr_dexp_node}, got: {attr_dexp_node}")
         self.attr_dexp_node = attr_dexp_node
@@ -249,7 +249,7 @@ class IRegistry:
         ...
 
     # @abstractmethod
-    # def register(self, component:"IComponent") -> "AttrDexpNode":
+    # def register(self, component:"IComponent") -> "IAttrDexpNode":
     #     ...
 
     @abstractmethod
@@ -1115,7 +1115,7 @@ class OperationDexpNode(IDotExpressionNode):
         # TODO: move this to common method: self._EnsureNotFinished()
         # if not self._status == DExpStatusEnum.INITIALIZED:
         if not self._status == ComponentStatus.draft:
-            raise EntitySetupError(owner=setup_session, item=self, msg=f"AttrDexpNode not in INIT state, got {self._status}")
+            raise EntitySetupError(owner=setup_session, item=self, msg=f"IAttrDexpNode not in INIT state, got {self._status}")
 
         # just to check if all ok
         self._first_dexp_node = self.create_dexp_node(self.first, title="First",
@@ -1246,7 +1246,7 @@ def execute_dexp_or_node(
         dexp_result = dexp_or_value._evaluator.execute_dexp(
                             apply_result=apply_result,
                             )
-    # AttrDexpNode, OperationDexpNode, IFunctionDexpNode, LiteralDexpNode,
+    # IAttrDexpNode, OperationDexpNode, IFunctionDexpNode, LiteralDexpNode,
     elif isinstance(dexp_node, IDotExpressionNode):
         dexp_result = dexp_node.execute_node(
                             apply_result=apply_result, 

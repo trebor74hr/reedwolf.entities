@@ -1,5 +1,4 @@
 import inspect
-from abc import ABC
 from collections import OrderedDict
 from dataclasses import (
     dataclass,
@@ -66,18 +65,16 @@ from .base import (
     ISetupSession,
     IContainer,
     IEntity,
-    IValueNode,
+    IValueNode, ICleaner,
 )
 from .expr_attr_nodes import (
-    AttrDexpNode,
+    IAttrDexpNode,
     AttrValueContainerPath,
     AttrDexpNodeWithValuePath,
-)
-from .valid_base import (
-    ValidationBase,
-)
-from .eval_base import (
-    EvaluationBase,
+    AttrDexpNodeForModelKlass,
+    AttrDexpNodeForDataModel,
+    AttrDexpNodeForComponent,
+    AttrDexpNodeForAttribute,
 )
 from .settings import (
     Settings,
@@ -102,14 +99,16 @@ from .value_nodes import (
 class OperationsRegistry(RegistryUseDenied):
     NAMESPACE: ClassVar[Namespace] = OperationsNS
 
-# ------------------------------------------------------------
+    def _apply_to_get_root_value(self, apply_result: "IApplyResult", attr_name: AttrName) -> RegistryRootValue:
+        raise EntityInternalError(owner=self, msg="Method should not be called")
+
 
 @dataclass
 class UnboundModelsRegistry(IThisRegistry, RegistryBase):
     """
     This is temporary registry used only in unbound mode.
-    It has not predefined registry entries, rather will acceept all new
-    fiedls and register them in a store.
+    It has not predefined registry entries, rather will accept all new
+    fields and register them in a store.
     Later this registry is replaced and this instance and store is rejected.
     """
     NAMESPACE: ClassVar[Namespace] = ModelsNS
@@ -118,15 +117,16 @@ class UnboundModelsRegistry(IThisRegistry, RegistryBase):
     def is_unbound_models_registry() -> bool:
         return True
 
-    def register_unbound_attr_node(self, component: Union[IField, IContainer], full_dexp_node_name: AttrName) -> AttrDexpNode:
+    def register_unbound_attr_node(self, component: Union[IField, IContainer], full_dexp_node_name: AttrName
+                                   ) -> AttrDexpNodeForModelKlass:
         type_info = component.get_type_info()
         # python_type = field.python_type
         # if not field.PYTHON_TYPE:
         #     raise EntityInternalError(owner=self, msg=f"Python type not yet set.")
         # type_info = TypeInfo.get_or_create_by_type(python_type)
-        attr_node = AttrDexpNode(
+        attr_node = AttrDexpNodeForModelKlass(
             name=full_dexp_node_name,
-            data=type_info, # must be like this
+            data=type_info,  # must be like this
             namespace=self.NAMESPACE,
             type_object=type_info.type_,
         )
@@ -138,12 +138,11 @@ class UnboundModelsRegistry(IThisRegistry, RegistryBase):
     def _apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RegistryRootValue:
         raise NotImplementedError()
 
-# ------------------------------------------------------------
 
 @dataclass
 class ModelsRegistry(RegistryBase):
     """
-    All models have full path from top container (for better readibility)
+    All models have full path from top container (for better readability)
     e.g. M.address_set.city.street so reading begins from root
     instance, instead of apply_result.current_frame.instance.
     See get_root_value() implementation.
@@ -153,9 +152,9 @@ class ModelsRegistry(RegistryBase):
     # # get_root_value()
     # ROOT_VALUE_NEEDS_FETCH_BY_NAME: ClassVar[bool] = False
 
-    root_attr_nodes: Optional[Dict[str, AttrDexpNode]] = field(repr=False, init=False, default_factory=dict)
+    root_attr_nodes: Dict[str, AttrDexpNodeForDataModel] = field(repr=False, init=False, default_factory=dict)
 
-    # Just to check not duplicate. Can have several, first is main model, other are submodels
+    # Just to check not duplicate. Can have several, first is main model, other are sub-models
     models_dict: Dict[str, ModelKlassType] = field(repr=True, init=False, default_factory=OrderedDict)
 
     NAMESPACE: ClassVar[Namespace] = ModelsNS
@@ -166,38 +165,41 @@ class ModelsRegistry(RegistryBase):
     # NOTE: no register() method due complex logic - see
     #       ContainerBase._register_data_model()
 
-    def _create_root_attr_node(self, data_model:IDataModel) -> AttrDexpNode:
-        " models specific method "
+    def _create_root_attr_node(self, data_model: IDataModel) -> AttrDexpNodeForDataModel:
+        """
+        Models specific method
+        """
         # standard DTO class attr_node
         # if not data_model.type_info:
         #     data_model.set_type_info()
         # assert data_model.type_info.type_==model
-        attr_node = AttrDexpNode(
+        attr_node = AttrDexpNodeForDataModel(
                         name=data_model.name,
                         data=data_model,
                         namespace=self.NAMESPACE,
                         type_info=data_model.get_type_info())
         return attr_node
 
-
-    # ------------------------------------------------------------
-
-    def register_all_nodes(self, root_attr_node: Optional[AttrDexpNode],
+    def register_all_nodes(self, root_attr_node: Optional[AttrDexpNodeForDataModel],
                            data_model: IDataModel,
                            model_klass: ModelKlassType,
                            unbound_mode: bool = False):
-        " models specific method "
+        """
+        Models specific method
+        """
         if not root_attr_node:
             root_attr_node = self._create_root_attr_node(data_model=data_model)
 
         if data_model.name in self.models_dict:
-            raise EntityInternalError(owner=self, msg=f"Model {data_model.name} already set {self.models_dict[data_model.name]}, got: {model_klass}")
+            raise EntityInternalError(owner=self,
+                    msg=f"Model {data_model.name} already set {self.models_dict[data_model.name]}, got: {model_klass}")
         self.models_dict[data_model.name] = model_klass
 
         name = data_model.get_full_name(init=unbound_mode)
-        is_root = "." not in name # TODO: hack
+        is_root = "." not in name  # TODO: hack
         if name in self.root_attr_nodes:
-            raise EntityInternalError(owner=self, msg=f"Duplicate {name} -> {self.root_attr_nodes[name]}, already set, failed to set: {root_attr_node}")
+            raise EntityInternalError(owner=self,
+                    msg=f"Duplicate {name} -> {self.root_attr_nodes[name]}, already set, failed to set: {root_attr_node}")
 
         self.root_attr_nodes[name] = root_attr_node
 
@@ -216,19 +218,21 @@ class ModelsRegistry(RegistryBase):
             raise EntityInternalError(owner=self, msg=f"Model type info inner type <> data_model's: {type_info} <> {type_info_from_model}")
 
         # Exception: allowed to access: .Instance -> apply_session.current_frame.instance
-        self._register_special_attr_node(attr_name = ReservedAttributeNames.INSTANCE_ATTR_NAME.value,
+        self._register_special_attr_node(attr_name=ReservedAttributeNames.INSTANCE_ATTR_NAME.value,
                                          component=None,
-                                         attr_name_prefix = None if is_root else f"{name_for_reg}__",
-                                         type_info = type_info)
+                                         attr_name_prefix=None if is_root else f"{name_for_reg}__",
+                                         type_info=type_info)
 
     # ------------------------------------------------------------
 
     def get_attr_node_by_data_model(self,
-                                    data_model:IDataModel,
+                                    data_model: IDataModel,
                                     # default:[None, UndefinedType]=UNDEFINED,
                                     # strict:bool=False
-                                    ) -> Union[AttrDexpNode, None, UndefinedType]:
-        " models specific method "
+                                    ) -> Union[IAttrDexpNode, None, UndefinedType]:
+        """
+        Models specific method
+        """
         # attr_node_name = data_model.name
         # == M.name mode
         name = data_model.get_full_name()
@@ -269,7 +273,7 @@ class ModelsRegistry(RegistryBase):
         else:
             if data_model_root.type_info.is_list and isinstance(instance, (list, tuple)):
                 # NOTE: can be list and only a single item
-                # TODO: only first is checked - maybe sholud test all
+                # TODO: only first is checked - maybe should test all
                 instance_to_test = instance[0] if instance else None
             else:
                 instance_to_test = instance
@@ -290,6 +294,7 @@ class ModelsRegistry(RegistryBase):
 
 # ------------------------------------------------------------
 
+
 @dataclass
 class LocalFieldsRegistry(RegistryBase):
     """
@@ -299,9 +304,9 @@ class LocalFieldsRegistry(RegistryBase):
     NAMESPACE: ClassVar[Namespace] = FieldsNS
     # fallback to check in TopFieldRegistry if attribute name is available
     CALL_DEXP_NOT_FOUND_FALLBACK: ClassVar[bool] = True
-    ALLOWED_BASE_TYPES: ClassVar[List[type]] = (IField,)
-    # TODO: zamijeni IContainer s; IFieldGroup, IEntityBase, a dodaj u Allowed: ISubentityBase
-    DENIED_BASE_TYPES: ClassVar[List[type]] = (IDataModel, ValidationBase, EvaluationBase, IContainer, IFieldGroup,)
+    ALLOWED_BASE_TYPES: ClassVar = (IField,)
+    # TODO: ClassVar[Iterable[Type]]] does not match types
+    DENIED_BASE_TYPES:  ClassVar = (IDataModel, ICleaner, IContainer, IFieldGroup,)
 
     container: IContainer = field(repr=False)
     top_fields_registry: "TopFieldsRegistry" = field(repr=False)
@@ -323,20 +328,20 @@ class LocalFieldsRegistry(RegistryBase):
             self._register_component(component)
         return
 
-    def _register_component(self, component:IComponent) -> AttrDexpNode:
+    def _register_component(self, component: IComponent) -> IAttrDexpNode:
         # allow direct SubEntityItems to be accessible
         attr_node = self.create_attr_node(component, allow_containers=True)
-        self.register_attr_node(attr_node) # , is_list=False))
+        self.register_attr_node(attr_node)  # , is_list=False))
         return attr_node
 
     @classmethod
-    def create_attr_node(cls, component:IComponent, allow_containers: bool = False):
+    def create_attr_node(cls, component: IComponent, allow_containers: bool = False):
         # TODO: put class in container and remove these local imports
         # ------------------------------------------------------------
         # A.3. COMPONENTS - collect attr_nodes - previously flattened (recursive function fill_components)
         # ------------------------------------------------------------
         if not isinstance(component, (IComponent,)):
-            raise EntitySetupError(owner=cls, msg=f"Register expexted ComponentBase, got {component} / {type(component)}.")
+            raise EntitySetupError(owner=cls, msg=f"Register expected ComponentBase, got {component} / {type(component)}.")
 
         component_name = component.name
 
@@ -346,7 +351,7 @@ class LocalFieldsRegistry(RegistryBase):
             denied = False
             deny_reason = ""
             # containers don't have
-            type_info = component.type_info # Can be None
+            type_info = component.get_type_info()  # Can be None
         # F.<container-name> is allowed - see TopFieldsRegistry
         elif allow_containers and isinstance(component, IContainer):
             # assert component is not self.container
@@ -362,23 +367,23 @@ class LocalFieldsRegistry(RegistryBase):
 
         # TODO: to have standard types in some global list in fields.py
         #           containers, validations, evaluations,
-        elif isinstance(component, cls.DENIED_BASE_TYPES): #
+        elif isinstance(component, cls.DENIED_BASE_TYPES):
             # stored - but should not be used
-            assert not isinstance(component, cls.ALLOWED_BASE_TYPES), component
+            # assert not isinstance(component, cls.ALLOWED_BASE_TYPES), component
             denied = True
             deny_reason = f"Component of type {component.__class__.__name__} can not be referenced in DotExpressions"
             if hasattr(component, "type_info"):
-                type_info=component.type_info
+                type_info = component.type_info
             else:
-                type_info=None
+                type_info = None
         else:
-            if isinstance(component, cls.ALLOWED_BASE_TYPES):
-                raise EntityInternalError(owner=cls, msg=f"Component is in ALLOWED_BASE_TYPES, and is not processed: {type(component)}. Add new if isinstance() here.")
+            # if isinstance(component, cls.ALLOWED_BASE_TYPES):
+            #     raise EntityInternalError(owner=cls, msg=f"Component is in ALLOWED_BASE_TYPES, and is not processed: {type(component)}. Add new if isinstance() here.")
             # TODO: this should be automatic, a new registry for field types
             valid_types = ', '.join([t.__name__ for t in cls.ALLOWED_BASE_TYPES])
             raise EntitySetupError(owner=cls, msg=f"Valid type of objects or objects inherited from: {valid_types}. Got: {type(component)} / {to_repr(component)}. ")
 
-        attr_node = AttrDexpNode(
+        attr_node = AttrDexpNodeForComponent(
                         name=component_name,
                         data=component,
                         namespace=FieldsNS,
@@ -387,18 +392,18 @@ class LocalFieldsRegistry(RegistryBase):
                         deny_reason=deny_reason)
         return attr_node
 
-    def dexp_not_found_fallback(self, owner: IComponent, full_dexp_node_name: AttrName) -> Union[AttrDexpNode, UndefinedType]:
+    def dexp_not_found_fallback(self, owner: IComponent, full_dexp_node_name: AttrName) -> Union[IAttrDexpNode, UndefinedType]:
         """
         when field name is not found in self.store (local store)
         tries to find if attribute is in TopFieldsRegistry store and is visible.
         returns:
             - UNDEFINED if does not find or is not visible
-            - otherwise return AttrDexpNode.
+            - otherwise return IAttrDexpNode.
         """
 
         if full_dexp_node_name == self.container.container_id:
             raise EntitySetupNameError(owner=owner,
-                    msg=f"Namespace '{self.NAMESPACE}': Attribute name '{full_dexp_node_name}' mathches current container name. Use F.{full_dexp_node_name} instead.")
+                    msg=f"Namespace '{self.NAMESPACE}': Attribute name '{full_dexp_node_name}' matches current container name. Use F.{full_dexp_node_name} instead.")
 
         container_attr_dexp_node_pair_list: Optional[List[ContainerAttrDexpNodePair]] = self.top_fields_registry.store.get(full_dexp_node_name, None)
         if container_attr_dexp_node_pair_list is None:
@@ -408,7 +413,7 @@ class LocalFieldsRegistry(RegistryBase):
         my_containers_id_path = self.container.containers_id_path
         assert my_containers_id_path
         my_containers_id = my_containers_id_path[-1]
-        candidates: List[Tuple[AttrDexpNode, AttrValueContainerPath]] = []
+        candidates: List[Tuple[IAttrDexpNode, AttrValueContainerPath]] = []
 
         for container_attr_dexp_node_pair in container_attr_dexp_node_pair_list:
             ho_container_id = container_attr_dexp_node_pair.container_id
@@ -417,8 +422,8 @@ class LocalFieldsRegistry(RegistryBase):
 
             # TODO: if this block will become problematic - put in plain utils function and make unit tests on it
             #       find path from one container to another
-            path_up: List[ContainerId] = None
-            path_down: List[ContainerId] = None
+            path_up: Optional[List[ContainerId]] = None
+            path_down: Optional[List[ContainerId]] = None
 
             # orig: for idx, ho_container_id_bit in enumerate(holder_container.containers_id_path, 0):
             # orig:     if not (idx < len(my_containers_id_path) and ho_container_id_bit == my_containers_id_path[idx]):
@@ -431,7 +436,7 @@ class LocalFieldsRegistry(RegistryBase):
                 assert not (ho_container_id_bit is UNDEFINED and my_container_id_bit is UNDEFINED), "should not happen"
                 if ho_container_id_bit != my_container_id_bit:
                     # break on first different node - this is junction of two paths
-                    if idx==0:
+                    if idx == 0:
                         raise EntityInternalError(owner=self,
                                 msg=f"First node must match (entity) - Entity references itself? LocalFieldsRegistry should have done this")
                     path_up = list(reversed(my_containers_id_path[idx-1:])) if my_container_id_bit is not UNDEFINED else [my_containers_id]
@@ -442,7 +447,7 @@ class LocalFieldsRegistry(RegistryBase):
 
             # if path_up is None:
             #     # TODO: this and similar cases could be done easier -> detect direct parent. do it before for loop:
-            #     #       if hoder_container_id is in my_container_id_path: then ...
+            #     #       if holder_container_id is in my_container_id_path: then ...
             #     # holder is entity, everybody can reach it
             #     assert path_down is None
             #     path_up = list(reversed(my_containers_id_path))
@@ -454,13 +459,13 @@ class LocalFieldsRegistry(RegistryBase):
                     container_id_in_path for container_id_in_path in path_down
                     if containers_dict[container_id_in_path].is_subentity_items()]
 
-                # but if Container is to be found and there is only single subitems container
+                # but if Container is to be found and there is only single sub-items container
                 # and there is no other after -> it is visible since it is unique.
                 # first operator after must operate with list.
                 if len(subentity_items_in_path_down) == 1 \
                   and path_down[-1] == subentity_items_in_path_down[-1] \
-                    and full_dexp_node_name == subentity_items_in_path_down[-1]:
-                        subentity_items_in_path_down = None
+                  and full_dexp_node_name == subentity_items_in_path_down[-1]:
+                    subentity_items_in_path_down = None
             else:
                 subentity_items_in_path_down = None
 
@@ -478,7 +483,6 @@ class LocalFieldsRegistry(RegistryBase):
                 candidates.append((container_attr_dexp_node_pair.attr_dexp_node,
                                    attr_value_container_path))
 
-
             # TODO: if settings.debug:
             # print(f"Container {self.container.container_id} refs {full_dexp_node_name} -> testing {ho_container_id} - found: up={path_up} + down={path_down}, items={subentity_items_in_path_down}, ok={ok}")
 
@@ -487,7 +491,7 @@ class LocalFieldsRegistry(RegistryBase):
                                                "->" if cand[1].path_up and cand[1].path_down else "",
                                                ".".join(cand[1].path_down))
                                for cand in candidates]
-            # TODO: napomena kad je više candidates da proba s Container.<field> ...
+            # TODO: when more candidates, try with Container.<field> ...
             custom_msg = f"Field name '{full_dexp_node_name}' is ambiguous, can not use it directly. " \
                          f"Found {len(custom_msg_bits)} candidates: {', '.join(custom_msg_bits)}."
             raise self.create_exception_name_not_found_error(owner=owner, full_dexp_node_name=full_dexp_node_name, custom_msg=custom_msg)
@@ -498,8 +502,8 @@ class LocalFieldsRegistry(RegistryBase):
             #   will be created with same input arguments + one extra (path info)
             attr_dexp_node_orig, attr_value_container_path = candidates[0]
             attr_dexp_node_w_value_path = attr_dexp_node_orig.copy(
-                traverse=False, # NOTE: hope this is not bad idea
-                as_class = AttrDexpNodeWithValuePath,
+                traverse=False,  # NOTE: hope this is not bad idea
+                as_class=AttrDexpNodeWithValuePath,
                 change=dict(attr_value_container_path=attr_value_container_path),
             )
             if full_dexp_node_name in self.store:
@@ -508,7 +512,6 @@ class LocalFieldsRegistry(RegistryBase):
             return attr_dexp_node_w_value_path
 
         return UNDEFINED
-
 
     def _apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RegistryRootValue:
         value_node = apply_result.current_frame.value_node
@@ -526,10 +529,10 @@ class LocalFieldsRegistry(RegistryBase):
             # GO UP
             # ------------------------------------------------------------
             path_up = attr_dexp_node.attr_value_container_path.path_up[:]
-            container_value_node_curr: IValueNode = None
+            container_value_node_curr: Optional[IValueNode] = None
             while True:
                 if not path_up:
-                    break # travel up ended
+                    break  # travel up ended
                 container_id = path_up.pop(0)
                 container_value_node_curr = (container_value_node_curr if container_value_node_curr else value_node).parent_container_node
                 if isinstance(container_value_node_curr, ItemsValueNode):
@@ -550,7 +553,7 @@ class LocalFieldsRegistry(RegistryBase):
             # Fetching attribute from container node will be done later
             while True:
                 if not path_down:
-                    break # travel up ended
+                    break  # travel up ended
                 value_node_name = path_down.pop(0)
                 if not hasattr(container_value_node_curr, "container_children"):
                     # ItemsValueNode does not have this property
@@ -563,7 +566,7 @@ class LocalFieldsRegistry(RegistryBase):
             do_fetch_by_name = not attr_dexp_node.attr_value_container_path.container_node_mode
         else:
             # simple case - from current value_node -> the searched attribute should be in the same container
-            assert isinstance(attr_dexp_node, AttrDexpNode), attr_dexp_node
+            assert isinstance(attr_dexp_node, IAttrDexpNode), attr_dexp_node
             container_value_node_curr = value_node.parent_container_node
             do_fetch_by_name = True
 
@@ -575,7 +578,8 @@ class LocalFieldsRegistry(RegistryBase):
 @dataclass
 class ContainerAttrDexpNodePair:
     container_id: ContainerId
-    attr_dexp_node: AttrDexpNode
+    attr_dexp_node: IAttrDexpNode
+
 
 @dataclass
 class TopFieldsRegistry(RegistryBase):
@@ -585,12 +589,16 @@ class TopFieldsRegistry(RegistryBase):
     Not standard registry - stores only referenced fields.
     Stored within Entity.
     """
+
     NAMESPACE: ClassVar[Namespace] = FieldsNS
 
     entity: IEntity = field(repr=False)
 
     # TODO: internal - shadows .store, has different type, probably should be renamed
     store: Dict[AttrName, List[ContainerAttrDexpNodePair]] = field(repr=False, init=False, default_factory=dict)
+
+    def _apply_to_get_root_value(self, apply_result: "IApplyResult", attr_name: AttrName) -> RegistryRootValue:
+        raise EntityInternalError(owner=self, msg=f"Should no be called")
 
     def register_fields_of_container(self, container: IContainer):
         """
@@ -662,17 +670,15 @@ class ContextRegistry(RegistryBase):
                 #           if attr_name in self.store:
                 #               raise EntitySetupNameError(f"Attribute name '{attr_name}' is reserved. Rename class attribute in '{self.apply_settings_class}'")
 
-                attr_node = AttrDexpNode(
+                attr_node = AttrDexpNodeForAttribute(
                     name=attr_name,
                     namespace=self.NAMESPACE,
-                    type_info=type_info,
                     data=attr_getter,
+                    type_info=type_info,
                     type_object=type_object,
                 )
 
                 self.register_attr_node(attr_node, attr_name, replace_when_duplicate=True)
-
-        return
 
     def create_node(self,
                     dexp_node_name: str,
@@ -690,7 +696,6 @@ class ContextRegistry(RegistryBase):
             is_1st_node=is_1st_node,
             owner=owner,
         )
-
 
     def _apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RegistryRootValue:
         if attr_name not in self.store:
@@ -716,16 +721,17 @@ class ContextRegistry(RegistryBase):
 
 # ------------------------------------------------------------
 
+
 @dataclass
 class ThisRegistryBase(IThisRegistry, RegistryBase):
     """
     General idea/overview:
                                                 Field   bool-ena field-gr subent-sin subent-lst FuncArg: Filter(T.) FuncArg: T.attr
                                                 ------- -------- -------- ---------- ---------- ------------------- ---------------
-    a) .<field-name>     - direktno             -       yes      yes      yes        yes (*1)   - (vidi f)          yes- if Item
+    a) .<field-name>     - direct               -       yes      yes      yes        yes (*1)   - (see f)           yes- if Item
     b) This.Value                               yes     yes      -        -          -          -                   yes- if std.
-    c) This.Instance     - jel mi treba???      -       -        -        yes        -- (*2)    yes(Self)           yes- if Item?
-    d) This.Items: List[Item]                   -       -        -        -          yes        - (vidi g)          -
+    c) This.Instance     - do I need it???      -       -        -        yes        -- (*2)    yes(Self)           yes- if Item?
+    d) This.Items: List[Item]                   -       -        -        -          yes        - (see g)           -
     e) This.Children: ListChildField            -       yes      yes      yes        yes (*1)   -                   -
 
     f) This.Item.<field-name>                   -       -        -        -          -          yes(*3)             -
@@ -735,8 +741,7 @@ class ThisRegistryBase(IThisRegistry, RegistryBase):
     (*2) - maybe InstanceList
     (*3) - the question: how to make This.Item work? maybe simple as done in a) i e)
     """
-
-    # attr_node: Optional[AttrDexpNode] = field(default=None)
+    # attr_node: Optional[IAttrDexpNode] = field(default=None)
     # component: Optional[IComponent] = field(default=None)
     # model_klass: Optional[ModelKlassType] = field(default=None)
 
@@ -750,6 +755,9 @@ class ThisRegistryBase(IThisRegistry, RegistryBase):
     # --- autocomputed ---
     # This.Items -> List[Item]
     is_items_mode: bool = field(init=False, default=False)
+
+    def _apply_to_get_root_value(self, apply_result: "IApplyResult", attr_name: AttrName) -> RegistryRootValue:
+        raise EntityInternalError(owner=self, msg="Should not be called.")
 
 
 @dataclass
@@ -779,7 +787,7 @@ class ThisRegistryForModelKlass(ThisRegistryBase):
         - .Instance + <attr-names> is used only in manual setup cases,
           e.g. ChoiceField()
         """
-        this_registry = ThisRegistryForModelKlass(model_klass=model_klass) #, is_items_for_each_mode=is_items_for_each_mode)
+        this_registry = ThisRegistryForModelKlass(model_klass=model_klass)  # is_items_for_each_mode=is_items_for_each_mode)
         this_registry.setup(setup_session=setup_session)
         this_registry.finish()
 
@@ -860,7 +868,7 @@ class ThisRegistryForComponent(ThisRegistryBase):
     NAMESPACE: ClassVar[Namespace] = ThisNS
 
     component: Optional[IComponent] = field(default=None)
-    attr_node: Optional[AttrDexpNode] = field(default=None)
+    attr_node: Optional[IAttrDexpNode] = field(default=None)
 
     # autocomputed:
     has_children: bool = field(init=False, repr=False)
@@ -871,7 +879,7 @@ class ThisRegistryForComponent(ThisRegistryBase):
     def create(cls,
                setup_session: ISetupSession,
                component: IComponent,
-               attr_node: Optional[AttrDexpNode],
+               attr_node: Optional[IAttrDexpNode],
                ) -> Self:
         this_registry = ThisRegistryForComponent(attr_node=attr_node, component=component)
         this_registry.setup(setup_session=setup_session)
@@ -886,8 +894,8 @@ class ThisRegistryForComponent(ThisRegistryBase):
         self.has_children = bool(self.component.get_children())
 
         if self.attr_node:
-            if not isinstance(self.attr_node, AttrDexpNode):
-                raise EntitySetupValueError(owner=self, msg=f"Expected AttrDexpNode, got: {type(self.attr_node)} / {self.attr_node}")
+            if not isinstance(self.attr_node, IAttrDexpNode):
+                raise EntitySetupValueError(owner=self, msg=f"Expected IAttrDexpNode, got: {type(self.attr_node)} / {self.attr_node}")
             self.attr_name = self.attr_node.name
 
         if self.is_items_for_each_mode:
@@ -925,7 +933,6 @@ class ThisRegistryForComponent(ThisRegistryBase):
                     attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME,
                     component=self.component,
                 )
-
 
     def _apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RegistryRootValue:
         if not self.finished:

@@ -72,7 +72,7 @@ from .expressions import (
     IThisRegistry,
     IFunctionFactory, )
 from .expr_attr_nodes import (
-    AttrDexpNode,
+    IAttrDexpNode,
 )
 from .func_args import (
     FunctionArguments,
@@ -346,7 +346,7 @@ class IFunction(IFunctionDexpNode, ABC):
             elif isinstance(self.caller, IDotExpressionNode):
                 # TODO: to drop this case or not? To change to 'setup_session.current_frame' case?
                 dexp_node: IDotExpressionNode = self.caller
-                component: IComponent = dexp_node.get_component() if isinstance(dexp_node, AttrDexpNode) else None
+                component: IComponent = dexp_node.get_component() if isinstance(dexp_node, IAttrDexpNode) else None
                 if component:
                     # if DexpNode is attached to Component then create proper ThisRegistry immediately
                     this_registry = ThisRegistryForComponent.create(component=component, attr_node=dexp_node,
@@ -1167,7 +1167,7 @@ def try_create_function(
 # class InjectComponentTreeValuesFuncArgHint(IInjectFuncArgHint):
 #
 #     def setup_check(self, setup_session: ISetupSession, caller: Optional[IDotExpressionNode], func_arg: FuncArg):
-#         if not (isinstance(caller, AttrDexpNode)
+#         if not (isinstance(caller, IAttrDexpNode)
 #                 and caller.namespace == FieldsNS):
 #             raise EntityInternalError(owner=self, msg=f"Expected F.<fieldname>, got: {caller}")
 #

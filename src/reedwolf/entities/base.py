@@ -1522,11 +1522,11 @@ class IField(IComponent, ABC):
         ...
 
     # @abstractmethod
-    # def get_attr_node(self, setup_session: ISetupSession) -> "AttrDexpNode":  # noqa: F821
+    # def get_attr_node(self, setup_session: ISetupSession) -> "IAttrDexpNode":  # noqa: F821
     #     ...
 
     # @abstractmethod
-    # def get_bound_attr_node(self, setup_session: ISetupSession) -> "AttrDexpNode":  # noqa: F821
+    # def get_bound_attr_node(self, setup_session: ISetupSession) -> "IAttrDexpNode":  # noqa: F821
     #     ...
 
 # ------------------------------------------------------------
@@ -1606,7 +1606,7 @@ class IContainer(IComponent, ABC):
         ...
 
     @abstractmethod
-    def get_data_model_attr_node(self) -> "AttrDexpNode":  # noqa: F821
+    def get_data_model_attr_node(self) -> "IAttrDexpNode":  # noqa: F821
         ...
 
     @abstractmethod
@@ -1696,7 +1696,7 @@ class IDataModel(IComponent, ABC):
         return models
 
     # Not used:
-    # def get_attr_node(self, setup_session: ISetupSession) -> Union["AttrDexpNode", UndefinedType]:  # noqa: F821
+    # def get_attr_node(self, setup_session: ISetupSession) -> Union["IAttrDexpNode", UndefinedType]:  # noqa: F821
     #     return setup_session.models_registry.get_attr_node_by_data_model(data_model=self)
 
 # ------------------------------------------------------------

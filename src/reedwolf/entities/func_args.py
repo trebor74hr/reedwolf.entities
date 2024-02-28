@@ -404,7 +404,7 @@ class FunctionArguments:
                         value_kwargs[func_arg.name] = inject_type_info
 
             # if ReservedArgumentNames.INJECT_COMPONENT_TREE in expected_args:
-            #     if not (isinstance(caller, AttrDexpNode)
+            #     if not (isinstance(caller, IAttrDexpNode)
             #             and caller.namespace == FieldsNS):
             #         raise EntityInternalError(owner=self, msg=f"Expected F.<fieldname>, got: {caller}")
             #     component_tree_type_info = TypeInfo.get_or_create_by_type(py_type_hint=ComponentTreeWValuesType, caller=caller)

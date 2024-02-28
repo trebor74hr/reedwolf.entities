@@ -89,7 +89,7 @@ from .expressions import (
     create_dexp_by_attr_name,
 )
 from .expr_attr_nodes import (
-    AttrDexpNode
+    IAttrDexpNode
 )
 from .functions import (
     CustomFunctionFactory,
@@ -193,8 +193,8 @@ class FieldBase(IField, ABC):
 
     # if not supplied name will be extracted from binded model attr_node
     name:            Optional[str] = None
-    attr_node:       Union[AttrDexpNode, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
-    bound_attr_node: Union[AttrDexpNode, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
+    attr_node:       Union[IAttrDexpNode, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
+    bound_attr_node: Union[IAttrDexpNode, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
     python_type:     Union[type, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
     type_info:       Optional[TypeInfo] = field(init=False, repr=False, default=UNDEFINED)
 
@@ -524,8 +524,8 @@ class ChoiceField(FieldBase):
     # choice_available: Optional[DotExpression]=True # returns bool
 
     # computed later
-    choice_value_attr_node: AttrDexpNode = field(init=False, default=None, repr=False)
-    choice_title_attr_node: AttrDexpNode = field(init=False, default=None, repr=False)
+    choice_value_attr_node: IAttrDexpNode = field(init=False, default=None, repr=False)
+    choice_title_attr_node: IAttrDexpNode = field(init=False, default=None, repr=False)
 
     # TODO: možda složiti da radi i za Choice/Enum -> structural pattern
     #       matching like, samo nisam još našao zgodnu sintaksu.
@@ -582,8 +582,8 @@ class ChoiceField(FieldBase):
                 is_list = func_node.get_type_info().is_list
                 choice_from_function = True
 
-            elif isinstance(dexp_node, AttrDexpNode):
-                attr_node: AttrDexpNode = dexp_node  # better name
+            elif isinstance(dexp_node, IAttrDexpNode):
+                attr_node: IAttrDexpNode = dexp_node  # better name
                 if is_enum(attr_node.data.value):
                     raise EntitySetupValueError(owner=self, msg=f"Using enum {attr_node.data.value}. Use EnumField instead.")
 
@@ -687,7 +687,7 @@ class ChoiceField(FieldBase):
             dexp: DotExpression, 
             ):
         """
-        Create choice AttrDexpNode() within local ThisInstanceRegistry
+        Create choice AttrDexpNodeModelKlass() within local ThisInstanceRegistry
         """
         if not (dexp and isinstance(dexp, DotExpression) and dexp._namespace==ThisNS):
             raise EntitySetupValueError(owner=self, msg=f"Argument '{aname}' is not set or has wrong type - should be DotExpression in This. namespace. Got: {dexp} / {type(dexp)}")
@@ -758,7 +758,7 @@ class EnumField(FieldBase):
         else:
             # EnumField(... enum=CompanyTypeEnum)
             if self.enum and self.enum!=py_hint_type:
-                raise EntitySetupValueError(owner=self, msg=f"AttrDexpNode {attr_node} has predefined enum {self.enum} what is different from type_hint: {py_hint_type}")
+                raise EntitySetupValueError(owner=self, msg=f"IAttrDexpNode {attr_node} has predefined enum {self.enum} what is different from type_hint: {py_hint_type}")
             self.enum = py_hint_type
             enum_member_py_type = get_enum_member_py_type(self.enum)
 

@@ -74,7 +74,7 @@ from .data_models import (
     DataModelWithHandlers, UnboundModel,
 )
 from .expr_attr_nodes import (
-    AttrDexpNode,
+    IAttrDexpNode,
     )
 from .functions import (
     IFunction,
@@ -280,7 +280,7 @@ class ContainerBase(IContainer, ABC):
 
     # ------------------------------------------------------------
 
-    def _setup_data_model_dot_expression(self, data_model:IDataModel, setup_session: Optional[SetupSession] = None) -> AttrDexpNode:
+    def _setup_data_model_dot_expression(self, data_model:IDataModel, setup_session: Optional[SetupSession] = None) -> IAttrDexpNode:
         model_klass = data_model.model_klass
         if not isinstance(model_klass, DotExpression):
             raise EntityInternalError(owner=self, msg=f"Expecting model is DotExpression instance, got: {model_klass}")
@@ -504,7 +504,7 @@ class ContainerBase(IContainer, ABC):
 
     # ------------------------------------------------------------
 
-    def get_data_model_attr_node(self) -> AttrDexpNode:
+    def get_data_model_attr_node(self) -> IAttrDexpNode:
         return self.setup_session.get_registry(ModelsNS).get_attr_node_by_data_model(data_model=self.data_model)
 
     # ------------------------------------------------------------
@@ -979,7 +979,7 @@ class SubEntityBase(ContainerBase, ABC):
     #       apply_settings_class: Optional[Type[ApplySettings]] = field(repr=False, init=False, default=None)
     settings: Optional[Settings] = field(repr=False, init=False, default=None)
 
-    # bound_attr_node: Union[AttrDexpNode, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
+    # bound_attr_node: Union[IAttrDexpNode, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
 
     # Class attributes
     # namespace_only: ClassVar[Namespace] = ThisNS

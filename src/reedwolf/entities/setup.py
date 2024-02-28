@@ -70,7 +70,7 @@ from .functions import (
     try_create_function,
 )
 from .expr_attr_nodes import (
-    AttrDexpNode,
+    IAttrDexpNode, AttrDexpNodeForComponent, AttrDexpNodeForModelKlass,
 )
 
 # ------------------------------------------------------------
@@ -128,7 +128,7 @@ class RegistryBase(IRegistry):
     convenient to have some advanced logic within. Thus Registry logic 
     is put in specialized classes - SetupSession.
     """
-    store: Dict[AttrName, AttrDexpNode] = field(repr=False, init=False, default_factory=dict)
+    store: Dict[AttrName, IAttrDexpNode] = field(repr=False, init=False, default_factory=dict)
     setup_session: Union[ISetupSession, UndefinedType] = field(repr=False, init=False, default=UNDEFINED)
     finished: bool                  = field(init=False, repr=False, default=False)
 
@@ -147,12 +147,12 @@ class RegistryBase(IRegistry):
             raise EntityInternalError(owner=self, msg=f"setup_session already set: {self.setup_session}")
         self.setup_session = setup_session
 
-    def dexp_not_found_fallback(self, owner: IComponent, full_dexp_node_name: AttrName) -> Union[AttrDexpNode, UndefinedType]:
+    def dexp_not_found_fallback(self, owner: IComponent, full_dexp_node_name: AttrName) -> Union[IAttrDexpNode, UndefinedType]:
         """
         method is called when CALL_DEXP_NOT_FOUND_FALLBACK is set to True
         returns:
             - UNDEFINED if this functino does not find attribute
-            - otherwise return AttrDexpNode.
+            - otherwise return IAttrDexpNode.
         """
         raise NotImplementedError("When setting CALL_DEXP_NOT_FOUND_FALLBACK to True, you must implement dexp_not_found_fallback() method")
 
@@ -173,7 +173,7 @@ class RegistryBase(IRegistry):
             raise EntityApplyNameError(owner=self, msg=f"Unknown attribute '{attr_name}', available attribute(s): {valid_varnames_str}."
                                                        + (f" Caller: {caller}" if caller else ""))
 
-        attr_dexp_node: AttrDexpNode = self.store[attr_name]
+        attr_dexp_node: IAttrDexpNode = self.store[attr_name]
         # root_value: RegistryRootValue = self._apply_to_get_root_value(apply_result=apply_result, attr_name=attr_name)
         root_value: RegistryRootValue = self._apply_to_get_root_value(apply_result=apply_result, attr_name=attr_name)
         if not root_value:
@@ -194,23 +194,23 @@ class RegistryBase(IRegistry):
     def count(self) -> int:
         return len(self.store)
 
-    def get(self, key:str, default:Any=None) -> Optional[AttrDexpNode]:
+    def get(self, key:str, default:Any=None) -> Optional[IAttrDexpNode]:
         return self.store.get(key, default)
 
-    def items(self) -> List[Tuple[str, AttrDexpNode]]:
+    def items(self) -> List[Tuple[str, IAttrDexpNode]]:
         return self.store.items()
 
     # ------------------------------------------------------------
 
-    # def _register_value_attr_node(self, attr_node: AttrDexpNode) -> AttrDexpNode:
+    # def _register_value_attr_node(self, attr_node: IAttrDexpNode) -> IAttrDexpNode:
     #     " used for This.Value to return attribute value "
-    #     if not isinstance(attr_node, AttrDexpNode):
-    #         raise EntitySetupValueError(owner=self, msg=f"Expected AttrDexpNode, got: {type(attr_node)} / {attr_node} ")
+    #     if not isinstance(attr_node, IAttrDexpNode):
+    #         raise EntitySetupValueError(owner=self, msg=f"Expected IAttrDexpNode, got: {type(attr_node)} / {attr_node} ")
 
     #     type_info = attr_node.get_type_info()
     #     # NOTE: original name is: attr_node.name
     #     attr_name = ReservedAttributeNames.VALUE_ATTR_NAME.value
-    #     attr_node = AttrDexpNode(
+    #     attr_node = AttrDexpNodeForModelKlass(
     #                     name=attr_name,
     #                     data=type_info,
     #                     namespace=self.NAMESPACE,
@@ -227,7 +227,7 @@ class RegistryBase(IRegistry):
                                attr_name: ReservedAttributeNames,
                                component: IComponent,
                                attr_name_prefix: str = None,
-                               ) -> AttrDexpNode:
+                               ) -> IAttrDexpNode:
         """
         This.Children to return instance itself "
         """
@@ -237,7 +237,7 @@ class RegistryBase(IRegistry):
         component_fields_dataclass, child_field_list = component.get_component_fields_dataclass(setup_session=setup_session)
         assert child_field_list
         for nr, child_field in enumerate(child_field_list, 1):
-            attr_node = AttrDexpNode(
+            attr_node = AttrDexpNodeForComponent(
                             name=child_field.Name,
                             # data=child_field._type_info,
                             data=child_field._component,
@@ -251,9 +251,9 @@ class RegistryBase(IRegistry):
         children_attr_node = self._register_special_attr_node(attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME.value,
                                                               component=component,
                                                               type_info=type_info,
-                                                              attr_name_prefix = attr_name_prefix,
+                                                              attr_name_prefix=attr_name_prefix,
                                                               # TODO: missusing
-                                                              th_field = component_fields_dataclass)
+                                                              th_field=component_fields_dataclass)
         return children_attr_node
 
     # --------------------
@@ -265,7 +265,7 @@ class RegistryBase(IRegistry):
                                     type_info: TypeInfo,
                                     attr_name_prefix: Optional[str]=None,
                                     th_field: Optional[Any] = None,
-                                    ) -> AttrDexpNode:
+                                    ) -> IAttrDexpNode:
         # NOTE: removed restriction - was too strict
         # if not (is_model_klass(model_klass) or model_klass in STANDARD_TYPE_LIST or is_enum(model_klass)):
         #     raise EntitySetupValueError(owner=self, msg=f"Expected model class (DC/PYD), got: {type(model_klass)} / {model_klass} ")
@@ -279,13 +279,22 @@ class RegistryBase(IRegistry):
         if attr_name_prefix:
             attr_name = f"{attr_name_prefix}{attr_name}"
 
-        attr_node = AttrDexpNode(
-                        name=attr_name,
-                        data=component if component else type_info,
-                        namespace=self.NAMESPACE,
-                        type_info=type_info if component else None,
-                        type_object=th_field,
-                        )
+        if component:
+            attr_node = AttrDexpNodeForComponent(
+                            name=attr_name,
+                            data=component,
+                            namespace=self.NAMESPACE,
+                            type_info=type_info,
+                            type_object=th_field,
+                            )
+        else:
+            attr_node = AttrDexpNodeForModelKlass(
+                name=attr_name,
+                data=type_info,
+                namespace=self.NAMESPACE,
+                type_info=None,
+                type_object=th_field,
+            )
 
         self.register_attr_node(attr_node)
         return attr_node
@@ -294,7 +303,7 @@ class RegistryBase(IRegistry):
 
     # def register_items_attr_node(self,
     #                              owner_component: IContainer
-    #                              ) -> AttrDexpNode:
+    #                              ) -> IAttrDexpNode:
     #     " used for This.Items to return list items - each having children "
     #     # for nr, child in enumerate(children, 1):
     #     #     if not isinstance(child, IComponent):
@@ -302,7 +311,7 @@ class RegistryBase(IRegistry):
     #     assert self.is_items_mode
     #     type_info = owner_component.data_model.get_type_info()
     #     attr_name = ReservedAttributeNames.ITEMS_ATTR_NAME.value
-    #     attr_node = AttrDexpNode(
+    #     attr_node = AttrDexpNodeForModelKlass(
     #                     name=attr_name,
     #                     data=type_info,
     #                     namespace=self.NAMESPACE,
@@ -327,7 +336,7 @@ class RegistryBase(IRegistry):
     # ------------------------------------------------------------
 
     @classmethod
-    def _create_attr_node_for_model_attr(cls, model_klass: ModelKlassType, attr_name:str) -> AttrDexpNode:
+    def _create_attr_node_for_model_attr(cls, model_klass: ModelKlassType, attr_name:str) -> IAttrDexpNode:
         # NOTE: will go again and again into get_model_fields()
         #       but shortcut like this didn't worked: 
         #           type_info: TypeInfo = TypeInfo.get_or_create_by_type(th_field)
@@ -342,7 +351,7 @@ class RegistryBase(IRegistry):
                     attr_node_name=attr_name,
                     inspect_object=model_klass)
 
-        attr_node = AttrDexpNode(
+        attr_node = AttrDexpNodeForModelKlass(
                         name=attr_name,
                         data=type_info,
                         namespace=cls.NAMESPACE,
@@ -374,15 +383,15 @@ class RegistryBase(IRegistry):
             raise EntityInternalError(owner=self, msg=f"Node {dexp_node_name} should not contain . - only first level vars allowed")
 
         if not replace_when_duplicate and dexp_node_name in self.store:
-            raise EntitySetupNameError(owner=self, msg=f"AttrDexpNode '{dexp_node}' does not have unique name '{dexp_node_name}' within this registry, found: {self.store[dexp_node_name]}")
+            raise EntitySetupNameError(owner=self, msg=f"IAttrDexpNode '{dexp_node}' does not have unique name '{dexp_node_name}' within this registry, found: {self.store[dexp_node_name]}")
 
         self.store[dexp_node_name] = dexp_node
 
 
-    def register_attr_node(self, attr_node:AttrDexpNode,
+    def register_attr_node(self, attr_node:IAttrDexpNode,
                            alt_attr_node_name=None,
                            replace_when_duplicate:bool = False):
-        if not isinstance(attr_node, AttrDexpNode):
+        if not isinstance(attr_node, IAttrDexpNode):
             raise EntityInternalError(f"{type(attr_node)}->{attr_node}")
         if not self.NAMESPACE == attr_node.namespace:
             raise EntityInternalError(owner=self, msg=f"Method register({attr_node}) - namespace mismatch: {self.NAMESPACE} != {attr_node.namespace}")
@@ -438,7 +447,7 @@ class RegistryBase(IRegistry):
                                                      custom_msg=custom_msg)
 
     # ------------------------------------------------------------
-    # create_node -> AttrDexpNode, Operation or IFunctionDexpNode
+    # create_node -> IAttrDexpNode, Operation or IFunctionDexpNode
     # ------------------------------------------------------------
     def create_node(self,
                     dexp_node_name: str,
@@ -459,7 +468,7 @@ class RegistryBase(IRegistry):
             raise EntityInternalError(owner=self, msg=f"dexp_node_name is not a string, got: {dexp_node_name}")
 
         if dexp_node_name.startswith("_"):
-            raise EntitySetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': AttrDexpNode '{dexp_node_name}' is invalid, should not start with _")
+            raise EntitySetupNameError(owner=owner, msg=f"Namespace '{self.NAMESPACE}': IAttrDexpNode '{dexp_node_name}' is invalid, should not start with _")
 
         parent_type_info = None
         if owner_dexp_node:
@@ -515,7 +524,7 @@ class RegistryBase(IRegistry):
                 # if owner_dexp_node.name in ("Map", "First"): print("here34")
                 inspect_object = owner_dexp_node.get_type_info()
             else:
-                assert isinstance(owner_dexp_node, AttrDexpNode)
+                assert isinstance(owner_dexp_node, IAttrDexpNode)
                 # if isinstance(owner_dexp_node.data, IDataModel):
                 # if False and owner_dexp_node.attr_node_type == AttrDexpNodeTypeEnum.DATA_MODEL:
                 #     inspect_object = owner_dexp_node.data.model_klass
@@ -557,19 +566,19 @@ class RegistryBase(IRegistry):
 
             err_msg_prefix = f"'{owner.name} -> {owner_dexp_node.full_name} . {dexp_node_name}'"
 
-            if found_component:
-                data = found_component
-                type_info = found_component.get_type_info()
-                type_object = type_info.type_
-            else:
+            if not found_component:
+                # type_info = found_component.get_type_info()
+                # data = found_component
+                # type_object = type_info.type_
+                # else:
                 # if this is a component, then try to find child component by name in direct children
                 try:
                     type_info, th_field = extract_type_info(
                                 inspect_object=inspect_object,
                                 attr_node_name=dexp_node_name,
                                 )
-                    data = type_info
-                    type_object = th_field
+                    # data = type_info
+                    # type_object = th_field
                 except EntitySetupNameNotFoundError as ex:
                     ex.set_msg(f"{err_msg_prefix}: {ex.msg}")
                     raise
@@ -577,22 +586,29 @@ class RegistryBase(IRegistry):
                     ex.set_msg(f"{err_msg_prefix}: metadata / type-hints read problem: {ex}")
                     raise
 
-            assert type_info
-
             # if this is a list and not in a direct
             # TODO: is there a better way?
             if not is_1st_node and is_list_instance_or_type(inspect_object):
                 # TODO: too complex error message
                 raise EntitySetupValueError(owner=owner, msg=f"{err_msg_prefix} can not be read from list, got: {inspect_object}. Use list accessor functions.")
 
+
             # --------------------------------------------------
             # Create()
             # --------------------------------------------------
-            dexp_node = AttrDexpNode(
-                            name=full_dexp_node_name,
-                            data=data,
-                            namespace=self.NAMESPACE,
-                            type_object=type_object,
+            if found_component:
+                dexp_node = AttrDexpNodeForComponent(
+                                name=full_dexp_node_name,
+                                data=found_component,
+                                namespace=self.NAMESPACE,
+                                type_object=found_component.get_type_info().type_,
+                            )  # function=function
+            else:
+                dexp_node = AttrDexpNodeForModelKlass(
+                                name=full_dexp_node_name,
+                                data=type_info,
+                                namespace=self.NAMESPACE,
+                                type_object=th_field,
                             ) # function=function
 
         if not isinstance(dexp_node, IDotExpressionNode):
@@ -733,7 +749,7 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
 
     # ------------------------------------------------------------
 
-    def _register_attr_node(self, attr_node:AttrDexpNode, alt_attr_node_name=None):
+    def _register_attr_node(self, attr_node:IAttrDexpNode, alt_attr_node_name=None):
         """
         !!!!! NOTE helper method - USED ONLY IN UNIT TESTING !!!!!
         TODO: replace with register_dexp_node
