@@ -65,8 +65,6 @@ class DotexprExecuteOnItemFactoryFuncArgHint(IInjectFuncArgHint):
         create this registry function that retriieves settings processor
         which will crearte this factory for providded item
         """
-        # TODO: 2nd) resolve again ThisRegistry dependency
-        from .registries import ThisRegistry
 
         def execute_dot_expr_w_this_registry_of_item(
                 dot_expr:  DotExpression,
@@ -74,12 +72,10 @@ class DotexprExecuteOnItemFactoryFuncArgHint(IInjectFuncArgHint):
         ) -> AttrValue:
             # TODO: if this becommes heavy - instead of new frame, reuse existing and change instance only
             #       this_registry should be the same for same session (same type items)
-            setup_session = apply_result.current_frame.component.setup_session
             if not isinstance(item, IValueNode):
                 raise EntityInternalError(owner=self, msg=f"Expecting ValueNode, got: {item}")
             if item.component.is_subentity_items():
-                # TODO: put in method
-                this_registry = item.component._this_registry_for_item
+                this_registry = item.component.get_this_registry_for_item()
             else:
                 this_registry = item.component.get_this_registry()
 

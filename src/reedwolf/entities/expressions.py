@@ -25,6 +25,7 @@ from .utils import (
     UNDEFINED,
     UndefinedType, to_repr,
 )
+from .global_settings import GLOBAL_SETTINGS
 from .exceptions import (
     EntitySetupValueError,
     EntitySetupError,
@@ -201,11 +202,24 @@ class DexpValidator:
 
 @dataclass
 class RegistryRootValue:
-    value_root:         AttrValue
-    attr_name_new:      Union[AttrName, KlassMember, NoneType]
+    # this value will be used as result of current DotExpressionNode execution or will be used to read attr_name from it
+    value_root:         Union[AttrValue, IDexpValueSource]
+
+    # when set (string or callable or) then this attribute name will be used to read from value_root
+    attr_name_new:      Union[AttrName, Callable, KlassMember, NoneType]
+
+    # when set (True/False) then this value will be used to determine
+    # if to read attribute by attr_name from value_root or not
     do_fetch_by_name:   Union[bool, UndefinedType] = UNDEFINED
-    # later set
+
+    # ---- later set ----
     attr_dexp_node:     Optional["AttrDexpNode"] =  field(init=False, repr=False, default=None)
+
+    if GLOBAL_SETTINGS.is_unit_test:
+        def __post_init__(self):
+            # NOTE: all except this combinations is allowed
+            if self.attr_name_new and self.do_fetch_by_name is not UNDEFINED:
+                raise EntityInternalError(owner=self, msg=f"Invalid case: {self.attr_name_new} / {self.do_fetch_by_name}")
 
     def set_attr_dexp_node(self, attr_dexp_node: "AttrDexpNode") -> Self:
         if self.attr_dexp_node is not None:
@@ -234,9 +248,9 @@ class IRegistry:
                     ) -> IDotExpressionNode:
         ...
 
-    @abstractmethod
-    def register(self, component:"IComponent") -> "AttrDexpNode":
-        ...
+    # @abstractmethod
+    # def register(self, component:"IComponent") -> "AttrDexpNode":
+    #     ...
 
     @abstractmethod
     def finish(self) -> None:

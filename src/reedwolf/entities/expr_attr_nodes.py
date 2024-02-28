@@ -292,9 +292,8 @@ class AttrDexpNode(IDotExpressionNode):
             if prev_node_type_info and prev_node_type_info.is_list:
                 raise EntityApplyNameError(owner=self, msg=f"Fetching attribute '{attr_name}' expected list and got: '{to_repr(value_prev)}': '{type(value_prev)}'")
 
-            # Handles ValueNode cases too
-            value_new = self._get_value_new(apply_result=apply_result,
-                                            value_prev=value_prev,
+            # Handles ValueNode cases too  #  apply_result = apply_result,
+            value_new = self._get_value_new(value_prev=value_prev,
                                             attr_name=attr_name)
 
             # NOTE: dropped iterating list results - no such test example and hard to imagine which syntax to
@@ -316,14 +315,14 @@ class AttrDexpNode(IDotExpressionNode):
             #       not good solution
             ...
         elif value_is_list:
-            if not self.islist():
+            if not self.is_list():
                 raise EntityApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should not be a list, got: '{to_repr(value_new)}': '{type(value_new)}'")
         elif value_new is None:
             pass
             # NOTE: value not checked - can be evaluated to something not-None later
             # if not self.get_type_info().is_optional:
             #     raise EntityApplyValueError(owner=self, msg=f"Attribute '{attr_name}' has 'None' value and type is not 'Optional'.")
-        elif self.islist():
+        elif self.is_list():
             # apply_result.entity.get_component(apply_result.component_name_only)
             raise EntityApplyValueError(owner=self, msg=f"Attribute '{attr_name}' should be a list, got: '{to_repr(value_new)}': '{type(value_new)}'")
 
@@ -339,10 +338,11 @@ class AttrDexpNode(IDotExpressionNode):
         return dexp_result
 
 
-    def _get_value_new(self, apply_result: IApplyResult, value_prev: AttrValue, attr_name: AttrName) -> AttrValue:
+    def _get_value_new(self, value_prev: AttrValue, attr_name: AttrName) -> AttrValue:
+        # apply_result: IApplyResult,
         if isinstance(value_prev, IDexpValueSource):
             # try to find in children first, then in container_children if applicable
-            if not hasattr(value_prev, "children"):
+            if not getattr(value_prev, "children", UNDEFINED):
                 raise EntityInternalError(owner=self, msg=f"Attribute '{attr_name}' can not be found, node '{value_prev.name}' has no children")
             dexp_value_node = value_prev.children.get(attr_name, UNDEFINED)
             if dexp_value_node is UNDEFINED and hasattr(value_prev, "container_children"):
@@ -385,6 +385,7 @@ class AttrDexpNode(IDotExpressionNode):
                         # if all types match - could be internal problem?
                         raise EntityApplyNameError(owner=self, msg=f"Attribute '{attr_name}' not found in '{to_repr(value_prev)}': '{type(value_prev)}'")
 
+                    # finally - fetch the attribute / callable by name from value_prev
                     value_new = getattr(value_prev, attr_name)
                     if callable(value_new):
                         try:
@@ -392,37 +393,14 @@ class AttrDexpNode(IDotExpressionNode):
                             value_new2 = value_new()
                         except Exception as ex:
                             raise EntityApplyValueError(owner=self,
-                                   msg=f"Attribute '{attr_name}' is a callable '{value_new}' which raised error by calling:: '{ex}'")
+                                   msg=f"Attribute '{attr_name}' is a callable '{value_new}' which raised error when called:: '{ex}'")
                         value_new = value_new2
         return value_new
 
-    # NOTE: this logic is dropped - expected_type_info is sometimes missmatched and sometimes adaptations needs to be done ...
-    #       all in all - currently too complex, anyway type of final value will be checked later.
-    # def check_root_value_type_info(self, ...):
-    #     if root_value and value_new not in ([], {}, None, UNDEFINED):
-    #         adapted_value = apply_result.current_frame.component.try_adapt_value(value_new) \
-    #             if isinstance(apply_result.current_frame.component, IField) \
-    #             else value_new
-    #         # will be reported later
-    #         ignore_list_check = True # apply_result.current_frame.on_component_only is not None
-
-    #         # None is set in dataclasss initialization - and then this test fails. Ignore this for noew
-    #         assert root_value.attr_dexp_node
-    #         expected_type_info = root_value.attr_dexp_node.type_info
-    #         assert  expected_type_info
-    #         value_type_info = TypeInfo.get_or_create_by_value(adapted_value)
-    #         err_msg = expected_type_info.check_compatible(value_type_info, ignore_list_check=ignore_list_check)
-    #         if err_msg:
-    #             expected_type_info.check_compatible(value_type_info, ignore_list_check=ignore_list_check)
-    #             raise EntityApplyValueError(owner=self, msg=f"For attribute '{attr_name}' type is not compatible:\n  {err_msg}\n  expecting value of type:"
-    #                                                         f"\n  {expected_type_info}"
-    #                                                         f"\n  got:\n  {value_type_info}"
-    #                                                         f"\n  value: {adapted_value}")
-
-    def isoptional(self):
+    def is_optional(self):
         return self.type_info.is_optional if self.type_info else False
 
-    def islist(self):
+    def is_list(self):
         return self.type_info.is_list if self.type_info else False
 
     def as_str(self) -> str:

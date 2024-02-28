@@ -493,7 +493,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
     #     if not has_children:
     #         raise EntityInternalError(owner=self, msg="Non-fields should have children")
 
-    #     this_registry = ThisRegistry(component=self)
+    #     this_registry = ThisRegistryForComponent(component=self)
     #     # consider:
     #     # self.is_subentity_items()  => Items -> This.Items
     #     # self.is_subentity_single() => Children -> This.Children + This.<all-attributes> + This.Instance
@@ -1151,6 +1151,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
             child_field_list.append(
                     ChildField(
                         Name=child.name,
+                        _component=child,
                         _type_info=child_type_info,
                     ))
 
@@ -1490,7 +1491,11 @@ class ICleaner(IComponent, ABC):
     ...
 
 class IValidation(ICleaner, ABC):
-    ...
+    ensure:     DotExpression
+    available:  Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
+    name:       Optional[str] = field(default=None)
+    error:      Optional[TransMessageType] = field(repr=False, default=None)
+
 
 class IEvaluation(ICleaner, ABC):
     ...
@@ -1626,6 +1631,7 @@ class IEntity(IContainer, ABC):
 class IDataModel(IComponent, ABC):
 
     model_klass: ModelKlassType = field(init=False, repr=False)
+    type_info:   Optional[TypeInfo] = field(init=False, default=None, repr=False)
 
     # def _setup(self, setup_session:ISetupSession):
     #     if self.is_finished:

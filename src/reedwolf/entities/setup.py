@@ -53,7 +53,6 @@ from .meta import (
 )
 from .base import (
     IComponentFields,
-    IField,
     IStackOwnerSession,
     IComponent,
     IContainer,
@@ -156,7 +155,7 @@ class RegistryBase(IRegistry):
         """
 
         if attr_name not in self.store:
-            # NOTE: Should not hhappen if DotExpression.setup() has done its job properly
+            # NOTE: Should not happen if DotExpression.setup() has done its job properly
             _, valid_varnames_str = self.get_valid_varnames(attr_name)
             raise EntityApplyNameError(owner=self, msg=f"Unknown attribute '{attr_name}', available attribute(s): {valid_varnames_str}."
                                                        + (f" Caller: {caller}" if caller else ""))
@@ -164,6 +163,10 @@ class RegistryBase(IRegistry):
         attr_dexp_node: AttrDexpNode = self.store[attr_name]
         # root_value: RegistryRootValue = self._apply_to_get_root_value(apply_result=apply_result, attr_name=attr_name)
         root_value: RegistryRootValue = self._apply_to_get_root_value(apply_result=apply_result, attr_name=attr_name)
+        if not root_value:
+            # registry did not retrieve value - internal problem
+            raise EntityInternalError(owner=self, msg=f"Unknown attribute '{attr_name}' (2)."
+                                                       + (f" Caller: {caller}" if caller else ""))
 
         root_value.set_attr_dexp_node(attr_dexp_node)
         return root_value
@@ -209,21 +212,22 @@ class RegistryBase(IRegistry):
     def _register_all_children(self,
                                setup_session: ISetupSession,
                                attr_name: ReservedAttributeNames,
-                               owner: IComponent,
+                               component: IComponent,
                                attr_name_prefix: str = None,
                                ) -> AttrDexpNode:
         """
         This.Children to return instance itself "
         """
-        if not isinstance(owner, IComponent):
-            raise EntitySetupValueError(owner=self, msg=f"Expected ComponentBase, got: {type(owner)} / {to_repr(owner)}")
+        if not isinstance(component, IComponent):
+            raise EntitySetupValueError(owner=self, msg=f"Expected ComponentBase, got: {type(component)} / {to_repr(component)}")
 
-        component_fields_dataclass, child_field_list = owner.get_component_fields_dataclass(setup_session=setup_session)
+        component_fields_dataclass, child_field_list = component.get_component_fields_dataclass(setup_session=setup_session)
         assert child_field_list
         for nr, child_field in enumerate(child_field_list, 1):
             attr_node = AttrDexpNode(
                             name=child_field.Name,
-                            data=child_field._type_info,
+                            # data=child_field._type_info,
+                            data=child_field._component,
                             namespace=self.NAMESPACE,
                             type_info=child_field._type_info,
                             type_object=None,
@@ -231,21 +235,21 @@ class RegistryBase(IRegistry):
             self.register_attr_node(attr_node)
 
         type_info = TypeInfo.get_or_create_by_type(ListChildField)
-        children_attr_node = self._register_special_attr_node(
-                        type_info=type_info,
-                        attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME.value,
-                        attr_name_prefix = attr_name_prefix,
-                        # TODO: missusing
-                        th_field = component_fields_dataclass,
-                        )
+        children_attr_node = self._register_special_attr_node(attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME.value,
+                                                              component=component,
+                                                              type_info=type_info,
+                                                              attr_name_prefix = attr_name_prefix,
+                                                              # TODO: missusing
+                                                              th_field = component_fields_dataclass)
         return children_attr_node
 
     # --------------------
 
     def _register_special_attr_node(self,
-                                    # model_klass: ModelKlassType,
+                                    attr_name : ReservedAttributeNames,
+                                    # None for model_klass
+                                    component: Optional[IComponent],
                                     type_info: TypeInfo,
-                                    attr_name = ReservedAttributeNames,
                                     attr_name_prefix: Optional[str]=None,
                                     th_field: Optional[Any] = None,
                                     ) -> AttrDexpNode:
@@ -264,7 +268,7 @@ class RegistryBase(IRegistry):
 
         attr_node = AttrDexpNode(
                         name=attr_name,
-                        data=type_info,
+                        data=component if component else type_info,
                         namespace=self.NAMESPACE,
                         type_info=type_info, 
                         type_object=th_field,

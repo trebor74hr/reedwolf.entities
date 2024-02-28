@@ -95,7 +95,8 @@ from .functions import (
     CustomFunctionFactory,
 )
 from .registries import (
-    ThisRegistry,
+    ThisRegistryForComponent,
+    ThisRegistryForModelKlass,
 )
 from .valid_field import (
     MinValue,
@@ -336,8 +337,7 @@ class FieldBase(IField, ABC):
         if not attr_node:
             raise EntitySetupNameError(owner=self, msg=f"{attr_node.name}.bind_to='{self.bind_to}' could not be evaluated")
 
-        component = self if self.get_children() else None
-        this_registry = ThisRegistry(attr_node=attr_node, component=component)
+        this_registry = ThisRegistryForComponent(component=self, attr_node=attr_node)
 
         return this_registry
 
@@ -623,7 +623,7 @@ class ChoiceField(FieldBase):
                     raise EntityInternalError(owner=self, msg="Choices is a a list of model instances, expecting single instance.")
 
             #  exception to the rule - ChoiceField value and title from This.
-            this_registry = ThisRegistry.create_for_model_klass(
+            this_registry = ThisRegistryForModelKlass.create(
                                              setup_session=setup_session,
                                              model_klass=model_klass)
 
@@ -882,7 +882,7 @@ class FieldGroup(IFieldGroup):
 
     def create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:
         assert self.get_children(), self
-        this_registry = ThisRegistry(component=self)
+        this_registry = ThisRegistryForComponent(component=self)
         return this_registry
 
 

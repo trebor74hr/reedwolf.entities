@@ -696,7 +696,7 @@ class ApplyResult(IApplyResult):
             # if self.current_frame.component.is_container():
             # Fill internal cache for possible later use by some `dump_` functions
 
-        if depth==0:
+        if depth == 0:
             self.finish()
             self._execute_all_evaluations()
             self._execute_all_validations()

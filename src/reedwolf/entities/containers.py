@@ -89,7 +89,9 @@ from .registries import (
     LocalFieldsRegistry,
     OperationsRegistry,
     ContextRegistry,
-    UnboundModelsRegistry, TopFieldsRegistry, ThisRegistry,
+    UnboundModelsRegistry,
+    TopFieldsRegistry,
+    ThisRegistryForComponent,
 )
 from .valid_children import (
     ChildrenValidationBase,
@@ -495,7 +497,7 @@ class ContainerBase(IContainer, ABC):
         if not has_children:
             raise EntityInternalError(owner=self, msg="Non-fields should have children")
 
-        this_registry = ThisRegistry(component=self)
+        this_registry = ThisRegistryForComponent(component=self)
         return this_registry
 
     # ------------------------------------------------------------
@@ -1082,9 +1084,7 @@ class SubEntityItems(SubEntityBase):
         this_registry = super().create_this_registry(setup_session)
         assert self._this_registry_for_item is UNDEFINED
         # model_klass = type_info.py_type_hint
-        this_registry_for_item = ThisRegistry(
-                                        is_items_for_each_mode=True,
-                                        component=self)
+        this_registry_for_item = ThisRegistryForComponent(component=self, is_items_for_each_mode=True)
         # do setup() immediately. For self._this_registry it is done in self.get_or_create_this_registry()
         this_registry_for_item.setup(setup_session=setup_session)
         this_registry_for_item.finish()

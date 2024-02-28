@@ -85,7 +85,7 @@ class ValidationBase(IValidation, ABC):
             raise EntitySetupError(owner=self, msg=f"Argument '{attr_name}' must be integer >= 0 or DotExpression, got: {attr_value}")
 
     def _validate_common_impl(self, apply_result: IApplyResult) -> Union[NoneType, ValidationFailure]:
-        not_available_dexp_result: NotAvailableExecResult  = execute_available_dexp(self.available, apply_result=apply_result)
+        not_available_dexp_result: NotAvailableExecResult = execute_available_dexp(self.available, apply_result=apply_result)
         if not_available_dexp_result: 
             # TODO: log ...
             return None

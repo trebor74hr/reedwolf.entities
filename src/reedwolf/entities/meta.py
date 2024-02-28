@@ -255,6 +255,7 @@ class ChildField:
         -- Value - current model instance attribute value
     """
     Name: AttrName
+    _component: "IComponent" = field(repr=False)
     _type_info: "TypeInfo" = field(repr=False)
     Type: TypingType = field(init=False)
     # Value: AttrValue = field(init=False, default=UNDEFINED)

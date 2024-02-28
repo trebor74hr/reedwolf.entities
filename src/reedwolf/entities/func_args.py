@@ -224,14 +224,25 @@ class FunctionArguments:
 
             if setup_session.current_frame.this_registry.is_items_mode:
                 # TODO: resolve local import somehow
-                from reedwolf.entities.base import SetupStackFrame
+                from .base import SetupStackFrame
 
-                assert setup_session.container.is_subentity_items()
-                this_registry = setup_session.container.get_this_registry_for_item()
+                # OLD: container = setup_session.container
+                # OLD: component = setup_session.current_frame.component
+                if not hasattr(setup_session.current_frame.this_registry, "component"):
+                    raise EntityInternalError(owner=self, msg=f"Expected this_registry with component, got: {setup_session.current_frame.this_registry}")
+                component = setup_session.current_frame.this_registry.component
+                if component.is_subentity_items:
+                    container = component
+                else:
+                    container = component.parent_container
+                    if not container.is_subentity_items():
+                        raise EntityInternalError(owner=self, msg=f"setup session container is not SubEntityItems, got: {container}")
+
+                this_registry = container.get_this_registry_for_item()
                 with setup_session.use_stack_frame(
                         SetupStackFrame(
-                            container = setup_session.current_frame.container,
-                            component = setup_session.current_frame.component,
+                            container = container,
+                            component = component,
                             this_registry = this_registry,
                         )):
                     dexp_node = dexp.Setup(setup_session=setup_session, owner=setup_session.current_frame.component)
@@ -560,8 +571,13 @@ def check_prepared_arguments(
             err_messages.append(msg)
 
     if err_messages:
-        msg = ', '.join(err_messages)
-        raise EntitySetupTypeError(f"{prepared_args.parent_name}: {len(err_messages)} data type issue(s) => {msg}")
+        if len(err_messages)>1:
+            msg = '\n  '.join([f"{idx}. {err}" for idx, err in enumerate(err_messages,1)])
+            msg = f"{len(err_messages)} data type issues =>\n  {msg}"
+        else:
+            msg = err_messages[0]
+            msg = f"data type issue => {msg})"
+        raise EntitySetupTypeError(f"{prepared_args.parent_name}: {msg}")
 
 # ------------------------------------------------------------
 

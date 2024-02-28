@@ -55,7 +55,8 @@ from .base import (
     IBoundDataModel,
 )
 from .registries import (
-    ThisRegistry, UnboundModelsRegistry,
+    UnboundModelsRegistry,
+    ThisRegistryForModelKlass,
 )
 
 # ------------------------------------------------------------
@@ -79,7 +80,7 @@ class BoundDataModelBase(IBoundDataModel):
             model_dexp_node = self.model_klass._dexp_node
             model_klass = model_dexp_node.get_type_info().type_
 
-        this_registry = ThisRegistry(model_klass=model_klass)
+        this_registry = ThisRegistryForModelKlass(model_klass=model_klass)
         return this_registry
 
 
@@ -211,11 +212,11 @@ class BoundDataModelBase(IBoundDataModel):
 
         with apply_result.use_stack_frame(
                 ApplyStackFrame(
-                    container = container, 
-                    component = self,
+                    container=container,
+                    component=self,
                     value_node=NOT_APPLIABLE,
-                    instance = instance,
-                    instance_new = None,
+                    instance=instance,
+                    # instance_new=None,
                     this_registry=this_registry,
                     )):
 
@@ -239,6 +240,7 @@ class BoundDataModelBase(IBoundDataModel):
 
                 child_instances = rh_dexp_result.value
 
+                # -- set instance attribute to value retrieved from read_handler
                 # apply_result.settings.logger.warn(f"set data model read_handler to instance: {to_repr(instance)}.{model_with_handler.name} = {to_repr(rh_dexp_result.value)}")
                 setattr(instance, model_with_handler.name, child_instances)
 

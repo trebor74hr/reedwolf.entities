@@ -71,6 +71,9 @@ from .expressions import (
     ISetupSession,
     IThisRegistry,
     IFunctionFactory, )
+from .expr_attr_nodes import (
+    AttrDexpNode,
+)
 from .func_args import (
     FunctionArguments,
     create_function_arguments,
@@ -90,7 +93,8 @@ from .settings import (
 from .base import (
     IApplyResult,
     SetupStackFrame,
-    ApplyStackFrame, )
+    ApplyStackFrame,
+    IComponent, )
 
 ValueOrDexp = Union[DotExpression, IDotExpressionNode, Any]
 
@@ -287,7 +291,10 @@ class IFunction(IFunctionDexpNode, ABC):
 
     def setup_this_registry(self) -> Optional[IThisRegistry]:
         # TODO: resolve this circular dependency
-        from .registries import ThisRegistry
+        from .registries import (
+            ThisRegistryForModelKlass,
+            ThisRegistryForComponent,
+        )
 
         # TODO: maybe DRY is needed - similar logic found in base:: get_or_create_this_registry
         if self.this_registry is not UNDEFINED:
@@ -296,6 +303,8 @@ class IFunction(IFunctionDexpNode, ABC):
 
         # model_klass: ModelKlassType = None
         type_info: Optional[TypeInfo] = None  # not used
+
+        this_registry = None
 
         if not self.caller:
             # NOTE: Namespace top level like: Ctx.Length(This.name)
@@ -337,41 +346,53 @@ class IFunction(IFunctionDexpNode, ABC):
             elif isinstance(self.caller, IDotExpressionNode):
                 # TODO: to drop this case or not? To change to 'setup_session.current_frame' case?
                 dexp_node: IDotExpressionNode = self.caller
-                type_info = dexp_node.get_type_info()
+                component: IComponent = dexp_node.data if isinstance(dexp_node, AttrDexpNode) and isinstance(dexp_node.data, IComponent) else None
+                if component:
+                    # if DexpNode is attached to Component then create proper ThisRegistry immediately
+                    this_registry = ThisRegistryForComponent.create(component=component, attr_node=dexp_node,
+                                                                    setup_session=self.setup_session)
+                else:
+                    # otherwise (e.g. LiteralDexpNode) - create ThisRegistryByModelKlass()
+                    type_info = dexp_node.get_type_info()
             else:
                 raise EntityInternalError(owner=self, msg=f"Unsupported caller type, expected Function/DotExpressionNode, got: {self.caller}")
 
-        model_class = type_info.type_ if type_info else None
+        if not this_registry:
+            assert type_info
+            model_class = type_info.type_ if type_info else None
 
-        if model_class is None:
-            # direct function creation - currently only unit test uses it
-            this_registry = None
-        elif is_model_klass(model_class):
-            # complex structs: pydantic / dataclasses / List[Any] / ...
-            # can be List[<Container>__Fields]
-            # if type_info.is_list:
-            #     raise EntityInternalError(owner=self, msg="should not happen")
-            this_registry = ThisRegistry.create_for_model_klass(
-                                setup_session=self.setup_session,
-                                model_klass=type_info.py_type_hint)
-        elif self.items_func_arg:
-            if not type_info.is_list:
-                raise EntitySetupTypeError(owner=self, msg=f"For 'Items' functions only list types are supported, got: {type_info.py_type_hint}")
+            if model_class is None:
+                # direct function creation - currently only unit test uses it
+                this_registry = None
+            elif is_model_klass(model_class):
+                # complex structs: pydantic / dataclasses / List[Any] / ...
+                # can be List[<Container>__Fields]
+                # if type_info.is_list:
+                #     raise EntityInternalError(owner=self, msg="should not happen")
+                this_registry = ThisRegistryForModelKlass.create(
+                                    setup_session=self.setup_session,
+                                    model_klass=type_info.py_type_hint)
+            elif self.items_func_arg:
+                # See ThisRegistryForComponent.create() above
+                raise EntityInternalError(owner=self, msg=f"This case (items_func_arg) should have had processed before: {self}")
+                # if not type_info.is_list:
+                #     raise EntitySetupTypeError(owner=self, msg=f"For 'Items' functions only list types are supported, got: {type_info.py_type_hint}")
 
-            this_registry = self.setup_session.current_frame.container.get_this_registry_for_item(self.setup_session)
-            # this_registry = self.setup_session.current_frame.container.get_or_create_this_registry(self.setup_session)
+                # this_registry = self.setup_session.current_frame.container.get_this_registry_for_item(self.setup_session)
+                # # this_registry = self.setup_session.current_frame.container.get_or_create_this_registry(self.setup_session)
 
-            if not this_registry:
-                raise EntityInternalError(owner=self, msg="this_registry not set")
-            # if this_registry.is_items_for_each_mode: print("here33")
-            if self.items_func_arg and not this_registry.is_items_for_each_mode:
-                raise EntityInternalError(owner=self, msg=f"Failed to setup this_registry for Items in 'for-each' mode: {this_registry}")
+                # if not this_registry:
+                #     raise EntityInternalError(owner=self, msg="this_registry not set")
+                # # if this_registry.is_items_for_each_mode: print("here33")
+                # if self.items_func_arg and not this_registry.is_items_for_each_mode:
+                #     raise EntityInternalError(owner=self, msg=f"Failed to setup this_registry for Items in 'for-each' mode: {this_registry}")
 
-        elif model_class in STANDARD_TYPE_LIST:
-            this_registry = None
-        else:
-            assert not type_info.is_list
-            raise EntitySetupValueError(owner=self, msg=f"Can not set registry for This. namespace, unsupported type: {model_class} / {type_info}. Caller: {self.caller}")
+            elif model_class in STANDARD_TYPE_LIST:
+                # TODO: in theory - could attach some builtin attributes - e.g. Length, Upper etc.
+                this_registry = None
+            else:
+                assert not type_info.is_list
+                raise EntitySetupValueError(owner=self, msg=f"Can not set registry for This. namespace, unsupported type: {model_class} / {type_info}. Caller: {self.caller}")
 
         self.this_registry = this_registry
         return self.this_registry

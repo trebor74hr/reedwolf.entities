@@ -45,9 +45,9 @@ from .base import (
 def _validate_setup_common(validation, allow_none:Optional[bool]=None) -> 'AttrDexpNode':  # noqa: F821
     model_attr_node = validation.parent.get_data_model_attr_node()
     if allow_none is not None:
-        if allow_none and not model_attr_node.isoptional():
+        if allow_none and not model_attr_node.is_optional():
             raise EntitySetupTypeError(owner=validation, msg="Type hint is not Optional and cardinality allows None. Add Optional or set .allow_none=False/min=1+")
-        if not allow_none and model_attr_node.isoptional():
+        if not allow_none and model_attr_node.is_optional():
             raise EntitySetupTypeError(owner=validation, msg="Type hint is Optional and cardinality does not allow None. Remove Optional or set .allow_none=True/min=0")
     return model_attr_node
 
@@ -66,10 +66,11 @@ class ItemsValidation(ItemsValidationBase):
 
     def validate(self, apply_result: IApplyResult) -> Union[NoneType, ValidationFailure]:
         # TODO: check which namespaces are used, ...
-        if not (apply_result.current_frame.component.is_subentity_items()
-          and apply_result.current_frame.instance_is_list
-          and isinstance(apply_result.current_frame.instance, (list, tuple))):
-            raise EntityInternalError(owner=apply_result, msg=f"Internal check failed: {apply_result.current_frame.instance}") 
+        if not apply_result.current_frame.value_node.is_list():
+        # if not (apply_result.current_frame.component.is_subentity_items()
+        #   and apply_result.current_frame.instance_is_list
+        #   and isinstance(apply_result.current_frame.instance, (list, tuple))):
+            raise EntityInternalError(owner=apply_result, msg=f"Internal check failed: {apply_result.current_frame.value_node}")
 
         # apply_result.current_frame.instance ?= apply_result.current_frame.get_subentity_items
 
@@ -140,7 +141,7 @@ class Cardinality: # namespace holder
         def validate_setup(self):
             # [] is allowed, and that is not same as None ( allow_none=(self.min==0)) )
             model_attr_node = _validate_setup_common(validation=self, allow_none=False)
-            if not model_attr_node.islist():
+            if not model_attr_node.is_list():
                 raise EntitySetupTypeError(owner=self, msg="Type hint is not List and should be. Change to Single or add List[] type hint ")
 
         def validate(self, items_count:int, raise_err:bool=True):
@@ -170,7 +171,7 @@ class Cardinality: # namespace holder
 
         def validate_setup(self):
             model_attr_node = _validate_setup_common(validation=self, allow_none=self.allow_none)
-            if not model_attr_node.islist():
+            if not model_attr_node.is_list():
                 raise EntitySetupTypeError(owner=self, msg="Type hint is not a List and should be. Change to Single or add List[] type hint")
 
         def validate(self, items_count:int, raise_err:bool=True):
@@ -246,7 +247,7 @@ class SingleValidation(ValidationBase):
 
     def validate_setup(self):
         model_attr_node = _validate_setup_common(validation=self, allow_none=self.allow_none)
-        if model_attr_node.islist():
+        if model_attr_node.is_list():
             raise EntitySetupTypeError(owner=self, msg="Type hint is List and should be single instance. Change to Range/Multi or remove type hint List[]")
 
     def validate(self, apply_result: IApplyResult) -> Optional[ValidationFailure]:
