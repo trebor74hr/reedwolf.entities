@@ -181,22 +181,22 @@ class ComponentStatus(IntEnum):
     finished = 3
 
 
-class AttrDexpNodeTypeEnum(str, Enum):
-    CONTAINER = "CONTAINER"
-    FIELD     = "FIELD"
-    FIELD_GROUP = "FIELD_GROUP"
-    DATA_MODEL = "DATA_MODEL"
-    TYPE_INFO  = "TYPE_INFO"
-    ATTRIBUTE = "ATTRIBUTE"
-    ATTR_BY_METHOD = "ATTR_BY_METHOD"
-
-    # DATA      = "DATA"
-    # FUNCTION  = "FUNCTION"
-    # DEXP      = "DEXP"
-    # DEXP_FUNC = "DEXP_FUNC"
-    # VALIDATOR = "VALIDATOR"
-    # EVALUATOR = "EVALUATOR"
-    # MODEL_CLASS = "MODEL_CLASS"
+# class AttrDexpNodeTypeEnum(str, Enum):
+#     CONTAINER = "CONTAINER"
+#     FIELD     = "FIELD"
+#     FIELD_GROUP = "FIELD_GROUP"
+#     DATA_MODEL = "DATA_MODEL"
+#     TYPE_INFO  = "TYPE_INFO"
+#     ATTRIBUTE = "ATTRIBUTE"
+#     ATTR_BY_METHOD = "ATTR_BY_METHOD"
+#
+#     # DATA      = "DATA"
+#     # FUNCTION  = "FUNCTION"
+#     # DEXP      = "DEXP"
+#     # DEXP_FUNC = "DEXP_FUNC"
+#     # VALIDATOR = "VALIDATOR"
+#     # EVALUATOR = "EVALUATOR"
+#     # MODEL_CLASS = "MODEL_CLASS"
 
 # ------------------------------------------------------------
 

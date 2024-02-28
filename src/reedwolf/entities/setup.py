@@ -31,7 +31,8 @@ from .exceptions import (
     EntitySetupValueError,
 )
 from .namespaces import (
-    Namespace, ModelsNS,
+    Namespace,
+    ModelsNS,
 )
 from .expressions import (
     DotExpression,
@@ -42,7 +43,6 @@ from .expressions import (
     RegistryRootValue,
 )
 from .meta import (
-    Self,
     is_model_klass,
     FunctionArgumentsType,
     FunctionArgumentsTupleType,
@@ -52,7 +52,8 @@ from .meta import (
     get_model_fields,
     AttrName,
     ComponentStatus,
-    is_list_instance_or_type, ChildField, ListChildField, AttrDexpNodeTypeEnum,
+    is_list_instance_or_type,
+    ListChildField,
 )
 from .base import (
     IComponentFields,
@@ -61,10 +62,10 @@ from .base import (
     IContainer,
     extract_type_info,
     IApplyResult,
-    IDataModel,
     ReservedAttributeNames,
     SetupStackFrame,
-    UseStackFrameCtxManagerBase, )
+    UseStackFrameCtxManagerBase,
+)
 from .functions import (
     FunctionsFactoryRegistry,
     try_create_function,
@@ -525,23 +526,6 @@ class RegistryBase(IRegistry):
                 inspect_object = owner_dexp_node.get_type_info()
             else:
                 assert isinstance(owner_dexp_node, IAttrDexpNode)
-                # if isinstance(owner_dexp_node.data, IDataModel):
-                # if False and owner_dexp_node.attr_node_type == AttrDexpNodeTypeEnum.DATA_MODEL:
-                #     inspect_object = owner_dexp_node.data.model_klass
-                # # elif is_model_klass(owner_dexp_node.data):
-                # #     # @dataclass, Pydantic etc.
-                # #     inspect_object = owner_dexp_node.data
-                # # elif isinstance(owner_dexp_node.data, IContainer):
-                # else:
-                #     # elif owner_dexp_node.attr_node_type in (AttrDexpNodeTypeEnum.CONTAINER,
-                #     #                                         AttrDexpNodeTypeEnum.FIELD,
-                #     #                                         AttrDexpNodeTypeEnum.FIELD_GROUP,
-                #     #                                         ):
-                #     # Container does not have owner_dexp_node.type_info set in the moment of creation
-                #     # if not owner_dexp_node.attr_node_type in (AttrDexpNodeTypeEnum.TYPE_INFO,
-                #     #                                           AttrDexpNodeTypeEnum.ATTRIBUTE,
-                #     #                                           AttrDexpNodeTypeEnum.ATTR_BY_METHOD):
-                #     #     raise EntityInternalError(owner=self, msg=f"Expected type_info, got: {owner_dexp_node} / {owner_dexp_node.attr_node_type}")
                 parent_component : Optional[IComponent] = owner_dexp_node.get_component()
                 parent_type_info = owner_dexp_node.get_type_info()
                 if GlobalSettings.is_unit_test and parent_component:
