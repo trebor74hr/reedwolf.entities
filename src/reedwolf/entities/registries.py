@@ -75,7 +75,7 @@ from .expr_attr_nodes import (
     AttrDexpNodeForTypeInfo,
     AttrDexpNodeForDataModel,
     AttrDexpNodeForComponent,
-    AttrDexpNodeForAttribute,
+    AttrDexpNodeForKlassMember,
 )
 from .settings import (
     Settings,
@@ -129,7 +129,7 @@ class UnboundModelsRegistry(IThisRegistry, RegistryBase):
             name=full_dexp_node_name,
             type_info=type_info,  # must be like this
             namespace=self.NAMESPACE,
-            type_object=type_info.type_,
+            # type_object=type_info.type_,
         )
         self.register_attr_node(attr_node, alt_attr_node_name=None)
         return attr_node
@@ -620,19 +620,19 @@ class ContextRegistry(RegistryBase):
                     raise EntitySetupValueError(owner=self,
                                                 msg=f"Attribute {attr_name} expected FieldName or MethodName instance, got: {attr_getter} / {type(attr_getter)}")
                 settings_source = attr_getter.setup_dexp_attr_source(settings_source_list)
-                type_object = SettingsKlassMember(settings_type=settings_source.settings_type,
-                                                  klass=settings_source.klass,
-                                                  member_name=attr_getter)
+                klass_member = SettingsKlassMember(settings_type=settings_source.settings_type,
+                                                   klass=settings_source.klass,
+                                                   attribute=attr_getter)
                 # NOTE: No problem with override any more!
                 #           if attr_name in self.store:
                 #               raise EntitySetupNameError(f"Attribute name '{attr_name}' is reserved. Rename class attribute in '{self.apply_settings_class}'")
 
-                attr_node = AttrDexpNodeForAttribute(
+                attr_node = AttrDexpNodeForKlassMember(
                     name=attr_name,
                     namespace=self.NAMESPACE,
-                    attribute=attr_getter,
+                    # attribute=attr_getter,
                     # type_info=type_info,
-                    type_object=type_object,
+                    klass_member=klass_member,
                 )
 
                 self.register_attr_node(attr_node, attr_name, replace_when_duplicate=True)
@@ -660,13 +660,14 @@ class ContextRegistry(RegistryBase):
             raise EntityApplyNameError(owner=self, msg=f"Invalid attribute name '{attr_name}', available: {avail_names}.")
 
         attr_dexp_node = self.store[attr_name]
-        klass_member = attr_dexp_node.type_object
+        assert isinstance(attr_dexp_node, AttrDexpNodeForKlassMember)
+        klass_member = attr_dexp_node.klass_member
 
         if not isinstance(klass_member, SettingsKlassMember):
             raise EntityInternalError(owner=self, msg=f"Expected SettingsClassMember instance, got: {klass_member}")
 
         # can be method name or field name
-        attr_name_new = klass_member.member_name
+        attr_name_new = klass_member.attribute
         if klass_member.settings_type == SettingsType.APPLY_SETTINGS:
             value_root = apply_result.settings
         elif klass_member.settings_type == SettingsType.SETUP_SETTINGS:

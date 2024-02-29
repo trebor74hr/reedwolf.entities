@@ -338,7 +338,7 @@ def dynamic_import(module_path:str, member_name: Optional[str] = None) -> Any:
 
     call_repr = f"dynamic_import({module_path}{(', ' + member_name) if member_name else ''})"
     # bits = module_path.split(".")
-    # module_path, member_name = ".".join(bits[:-1]), bits[-1]
+    # module_path, attribute = ".".join(bits[:-1]), bits[-1]
     try:
         module_instance = import_module(module_path)
     except ImportError as ex:

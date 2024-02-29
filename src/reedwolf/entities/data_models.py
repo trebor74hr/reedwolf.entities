@@ -142,7 +142,7 @@ class BoundDataModelBase(IBoundDataModel):
                                             name=child_data_model.name,
                                             type_info=read_handler_type_info,
                                             namespace=models_registry.NAMESPACE,
-                                            type_object=None,
+                                            # type_object=None,
                                             )
 
                 models_registry.register_attr_node(attr_node=model_attr_dexp_node)

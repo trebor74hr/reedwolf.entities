@@ -222,7 +222,7 @@ class RegistryBase(IRegistry):
     #                     data=type_info,
     #                     namespace=self.NAMESPACE,
     #                     type_info=type_info,
-    #                     type_object=None,
+    #                     # type_object=None,
     #                     )
     #     self.register_attr_node(attr_node)
     #     return attr_node
@@ -250,7 +250,7 @@ class RegistryBase(IRegistry):
                             component=child_field._component,
                             namespace=self.NAMESPACE,
                             # type_info=child_field._type_info,
-                            type_object=None,
+                            # type_object=None,
                             )
             self.register_attr_node(attr_node)
 
@@ -292,7 +292,7 @@ class RegistryBase(IRegistry):
                             component=component,
                             namespace=self.NAMESPACE,
                             # type_info=type_info,
-                            type_object=th_field,
+                            # type_object=th_field,
                             )
         else:
             attr_node = AttrDexpNodeForTypeInfo(
@@ -300,7 +300,7 @@ class RegistryBase(IRegistry):
                             type_info=type_info,
                             namespace=self.NAMESPACE,
                             # type_info=None,
-                            type_object=th_field,
+                            # type_object=th_field,
                             )
 
         self.register_attr_node(attr_node)
@@ -323,7 +323,7 @@ class RegistryBase(IRegistry):
     #                     data=type_info,
     #                     namespace=self.NAMESPACE,
     #                     type_info=type_info,
-    #                     type_object=None,
+    #                     # type_object=None,
     #                     )
     #     self.register_attr_node(attr_node)
     #     return attr_node
@@ -362,7 +362,7 @@ class RegistryBase(IRegistry):
                         name=attr_name,
                         type_info=type_info,
                         namespace=cls.NAMESPACE,
-                        type_object=th_field,
+                        # type_object=th_field,
                         )
         return attr_node
 
@@ -597,14 +597,14 @@ class RegistryBase(IRegistry):
                                 name=full_dexp_node_name,
                                 component=found_component,
                                 namespace=self.NAMESPACE,
-                                type_object=type_info.type_,
+                                # type_object=type_info.type_,
                             )
             else:
                 dexp_node = AttrDexpNodeForTypeInfo(
                                 name=full_dexp_node_name,
                                 type_info=type_info,
                                 namespace=self.NAMESPACE,
-                                type_object=th_field,
+                                # type_object=th_field,
                             )
 
         if not isinstance(dexp_node, IDotExpressionNode):

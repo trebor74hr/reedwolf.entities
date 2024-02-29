@@ -1281,7 +1281,7 @@ class IAttribute:
 @dataclass
 class KlassMember:
     klass: Type
-    member_name: IAttribute
+    attribute: IAttribute
 
 
 CustomCtxAttributeList = List[IAttribute]

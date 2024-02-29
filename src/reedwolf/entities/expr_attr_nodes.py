@@ -80,7 +80,7 @@ class IAttrDexpNode(IDotExpressionNode, ABC):
 
     # TODO: I don't like this - overlaps with data/owner - remove this one?
     # based on attr_node_type - can contain Field() or class - used later to extract details
-    type_object: Union[ModelField, KlassMember, NoneType] = field(repr=False, default=UNDEFINED)
+    # type_object: Union[ModelField, KlassMember, NoneType] = field(repr=False, default=UNDEFINED)
 
     # ----- Later evaluated ------
     type_info: Optional[TypeInfo] = field(init=False, default=None)
@@ -345,8 +345,8 @@ class AttrDexpNodeForTypeInfo(IAttrDexpNode):
             raise EntityInternalError(owner=self, msg=f"Expected data: TypeInfo, got: {self.type_info}")
         # self.type_info = self.type_info
 
-        if self.type_object is UNDEFINED:
-            raise EntityInternalError(owner=self, msg=f"TypeInfo case - type_object should be set (ModelField), got: {self.type_object}")
+        # if self.type_object is UNDEFINED:
+        #     raise EntityInternalError(owner=self, msg=f"TypeInfo case - type_object should be set (ModelField), got: {self.type_object}")
 
         # TODO: put in TypeInfo this logic:
         type_name = getattr(self.type_info.type_, "__name__",
@@ -375,31 +375,39 @@ class AttrDexpNodeForDataModel(IAttrDexpNode):
 
 
 @dataclass(repr=False)
-class AttrDexpNodeForAttribute(IAttrDexpNode):
+class AttrDexpNodeForKlassMember(IAttrDexpNode):
 
-    attribute: Union[IAttribute] = None
+    klass_member: KlassMember = None
+
+    # ---- automatically evaluated
+    # attribute: IAttribute = field(init=False, repr=False)
 
     def __post_init__(self):
         super().__post_init__()
 
-        self._check_data('attribute', self.attribute)
+        self._check_data('klass_member', self.klass_member)
 
-        # isinstance(self.attribute, (Attribute, AttributeByMethod))
-        if not isinstance(self.attribute, IAttribute):
-            raise EntityInternalError(owner=self, msg=f"Expected data: Union[Attribute, AttributeByMethod], got: {self.attribute}")
+        if not isinstance(self.klass_member, KlassMember): #  and self.klass_member.attribute is self.attribute):
+            raise EntityInternalError(owner=self, msg=f"Attribute 'klass_member' must be instance of KlassMember, got: {self.klass_member}")
 
-        # TODO: don't like this - too hackish
-        if not isinstance(self.type_object, KlassMember) and self.type_object.name == self.attribute:
-            raise EntityInternalError(owner=self,
-                                      msg=f"MethodName case - type_object must be instance of KlassMember, got: {self.type_object},")
-        self.type_info = self.attribute.output_type_info
+        # self.attribute = self.klass_member.attribute
+
+        self.type_info = self.klass_member.attribute.output_type_info
         assert self.type_info
-        type_name = str(self.attribute)  # field name
+        type_name = str(self.klass_member)  # field name
         self.data_supplier_name = f"FN[{type_name}]"
 
 
 @dataclass(repr=False)
 class AttrDexpNodeForComponent(IAttrDexpNode):
+    """
+    TODO: cache this type of attr_dexp_node - attach to component
+          currently for the same component attr_node is created 3 times:
+            - localfields,
+            - topfields,
+            - children
+          Name could differ, but name is not neccessary to hold here.
+    """
 
     component: Union[IContainer, IFieldGroup, IField] = None
 
