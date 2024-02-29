@@ -65,7 +65,8 @@ from .base import (
     ISetupSession,
     IContainer,
     IEntity,
-    IValueNode, ICleaner,
+    IValueNode,
+    ICleaner,
 )
 from .expr_attr_nodes import (
     IAttrDexpNode,
@@ -307,7 +308,7 @@ class LocalFieldsRegistry(RegistryBase):
     CALL_DEXP_NOT_FOUND_FALLBACK: ClassVar[bool] = True
     ALLOWED_BASE_TYPES: ClassVar = (IField,)
     # TODO: ClassVar[Iterable[Type]]] does not match types
-    DENIED_BASE_TYPES:  ClassVar = (IDataModel, ICleaner, IContainer, IFieldGroup,)
+    DENIED_BASE_TYPES:  ClassVar = (IDataModel, ICleaner, IContainer, )
 
     container: IContainer = field(repr=False)
     top_fields_registry: "TopFieldsRegistry" = field(repr=False)
@@ -352,14 +353,14 @@ class LocalFieldsRegistry(RegistryBase):
             denied = False
             deny_reason = ""
             # containers don't have
-            type_info = component.get_type_info()  # Can be None
+            # type_info = component.get_type_info()  # Can be None
         # F.<container-name> is allowed - see TopFieldsRegistry
-        elif allow_containers and isinstance(component, IContainer):
+        elif allow_containers and isinstance(component, (IContainer, IFieldGroup)):
             # assert component is not self.container
             denied = False
             deny_reason = ""
             # will be computed from get_type_info() in dexp_node.finish()
-            type_info = None
+            # type_info = None
         # elif isinstance(component, (ISubentityBase, )):
         #     denied = False
         #     deny_reason = ""

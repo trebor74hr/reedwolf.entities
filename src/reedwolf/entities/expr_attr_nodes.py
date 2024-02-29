@@ -81,27 +81,17 @@ class IAttrDexpNode(IDotExpressionNode, ABC):
     # based on attr_node_type - can contain Field() or class - used later to extract details
     type_object: Union[ModelField, KlassMember, NoneType] = field(repr=False, default=UNDEFINED)
 
-
-    # in some cases (LocalFieldsNS) some fields should not be referenced, but are registered within Registry.store,
-    # in order to report to user the reason for denial - better than just to report - attribute / field name not found.
-    denied: bool = False
-    deny_reason: str = ""
-
     # ----- Later evaluated ------
     type_info: Optional[TypeInfo] = field(init=False, default=None)
     is_finished: bool = field(init=False, repr=False, default=False)
     full_name: str = field(init=False, repr=False, default=UNDEFINED)
     data_supplier_name: str = field(init=False, repr=False, default=UNDEFINED)
+    denied: bool = field(init=False, repr=False, default=False)
 
     # attr_node_type: AttrDexpNodeTypeEnum = field(init=False)
 
     def __post_init__(self):
         self.full_name = f"{self.namespace._name}.{self.name}"
-        if self.denied:
-            assert self.deny_reason
-        else:
-            assert not self.deny_reason
-
         if not isinstance(self.name, str) or self.name in (None, UNDEFINED):
             raise EntityInternalError(owner=self, msg=f"AttrDexpNode should have string name, got: {self.name}")
 
@@ -113,6 +103,9 @@ class IAttrDexpNode(IDotExpressionNode, ABC):
 
         if is_function(self.data):
             raise EntitySetupValueError(owner=self, msg=f"Node '.{self.name}' is a function. Maybe you forgot to wrap it with 'reedwolf.entities.Function()'?")
+
+    def _get_repr_extra(self) -> str:
+        return ", DENIED" if self.denied else ""
 
     def get_component(self) -> Optional[IComponent]:
         return None
@@ -318,15 +311,15 @@ class IAttrDexpNode(IDotExpressionNode, ABC):
         """
         Pretty print
         """
-        denied = "DENIED" if self.denied else ""
-        altname = f"{self.data_supplier_name}" if self.data_supplier_name != self.name else ""
+        extra_str = self._get_repr_extra()
+        alt_name = f"{self.data_supplier_name}" if self.data_supplier_name != self.name else ""
         out = self.type_info.as_str() if self.type_info else "-"
-        out += " " + (", ".join([val for val in [altname, denied] if val]))
+        out += " " + (", ".join([val for val in [alt_name, extra_str] if val]))
         return out.strip()
 
     def __str__(self):
-        denied = ", DENIED" if self.denied else ""
-        return f"{self.__class__.__name__}({self.full_name} : {self.data_supplier_name}{denied})"
+        extra_str = self._get_repr_extra()
+        return f"{self.__class__.__name__}({self.full_name} : {self.data_supplier_name}{extra_str})"
 
     def __repr__(self):
         return str(self)
@@ -404,8 +397,19 @@ class AttrDexpNodeForAttribute(IAttrDexpNode):
 class AttrDexpNodeForComponent(IAttrDexpNode):
     data: Union[IContainer, IFieldGroup, IField] = None
 
+    # in some cases (LocalFieldsNS) some fields should not be referenced, but are registered within Registry.store,
+    # in order to report to user the reason for denial - better than just to report - attribute / field name not found.
+    denied: bool = False
+    deny_reason: str = ""
+
     def __post_init__(self):
         super().__post_init__()
+        if self.denied:
+            assert self.deny_reason
+            assert not self.data.has_data()
+        else:
+            assert not self.deny_reason
+            assert self.data.has_data()
 
         self.data_supplier_name = f"{self.data.name}"
         # self.type_info is lazy - will be set in _fill_type_info()
