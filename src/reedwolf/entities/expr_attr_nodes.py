@@ -197,7 +197,8 @@ class IAttrDexpNode(IDotExpressionNode, ABC):
         else:
             # ==== 2+ value - based on previous result and evolved one step further, e.g. M.access.alive
             if not len(names)>1:
-                raise EntityInternalError(owner=self, msg=f"Names need to be list of at least 2 members: {names}") 
+                raise EntityInternalError(owner=self, msg=f"Names need to be list of at least 2 members: {names}")
+
             value_prev = dexp_result.value
             do_fetch_by_name = True
 
@@ -397,21 +398,34 @@ class AttrDexpNodeForAttribute(IAttrDexpNode):
 class AttrDexpNodeForComponent(IAttrDexpNode):
     data: Union[IContainer, IFieldGroup, IField] = None
 
+    # can be set from outside - e.g. for Children
+    name: str = field(default=None)
+
     # in some cases (LocalFieldsNS) some fields should not be referenced, but are registered within Registry.store,
     # in order to report to user the reason for denial - better than just to report - attribute / field name not found.
-    denied: bool = False
-    deny_reason: str = ""
+    denied: bool = field(init=False, repr=False)
+    deny_reason: str = field(init=False, repr=False)
 
     def __post_init__(self):
-        super().__post_init__()
-        if self.denied:
-            assert self.deny_reason
-            assert not self.data.has_data()
+        if self.name is None:
+            self.name = self.data.name
+            assert "." not in self.name
         else:
-            assert not self.deny_reason
-            assert self.data.has_data()
+            # NOTE: this can happen
+            # assert "." not in self.name
+            ...
 
-        self.data_supplier_name = f"{self.data.name}"
+        if self.data.has_data():
+            self.denied = False
+            self.deny_reason = ""
+        else:
+            # stored - but should not be used
+            self.denied = True
+            self.deny_reason = f"Component of type {self.data.__class__.__name__} can not be referenced in DotExpressions"
+
+        super().__post_init__()
+
+        self.data_supplier_name = f"{self.name}"
         # self.type_info is lazy - will be set in _fill_type_info()
 
         # TODO: antipattern - split to diff class implementations (inherit and make diff classes)

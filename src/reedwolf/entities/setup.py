@@ -112,12 +112,18 @@ def create_exception_name_not_found_error(namespace: Namespace,
                                           owner: IComponent,
                                           valid_varnames_str: str,
                                           full_dexp_node_name: str,
-                                          custom_msg: str = "") -> EntitySetupNameNotFoundError:
+                                          custom_msg: str = "",
+                                          failed_name: str = "",
+                                          ) -> EntitySetupNameNotFoundError:
     valid_names = f"Valid attributes: {valid_varnames_str}" if valid_varnames_str \
              else "Namespace has no attributes at all."
     if custom_msg:
         valid_names = f"{custom_msg} {valid_names}"
-    return EntitySetupNameNotFoundError(owner=owner, msg=f"Namespace '{namespace}': Invalid attribute name '{full_dexp_node_name}'. {valid_names}")
+    if failed_name and failed_name!=full_dexp_node_name:
+        failed_name_spec = full_dexp_node_name.replace(failed_name, f"^^{failed_name}^^")
+    else:
+        failed_name_spec = full_dexp_node_name
+    return EntitySetupNameNotFoundError(owner=owner, msg=f"Namespace '{namespace}': Invalid attribute name '{failed_name_spec}'. {valid_names}")
 
 # ------------------------------------------------------------
 
@@ -239,7 +245,7 @@ class RegistryBase(IRegistry):
         assert child_field_list
         for nr, child_field in enumerate(child_field_list, 1):
             attr_node = AttrDexpNodeForComponent(
-                            name=child_field.Name,
+                            # name=child_field.Name,
                             # data=child_field._type_info,
                             data=child_field._component,
                             namespace=self.NAMESPACE,
@@ -543,7 +549,9 @@ class RegistryBase(IRegistry):
                         raise create_exception_name_not_found_error(owner=owner,
                                                                     namespace=self.NAMESPACE,
                                                                     valid_varnames_str=valid_varnames_str,
-                                                                    full_dexp_node_name=full_dexp_node_name)
+                                                                    full_dexp_node_name=full_dexp_node_name,
+                                                                    failed_name=dexp_node_name,
+                                                                    )
 
                     if not found_component.has_data():
                         raise EntitySetupNameError(owner=parent_component, msg=f"Found component '{dexp_node_name}' contains no data, choose data component. Got: {found_component}")
@@ -583,6 +591,7 @@ class RegistryBase(IRegistry):
             if found_component:
                 type_info = found_component.get_type_info()
                 dexp_node = AttrDexpNodeForComponent(
+                                # preserve full path name
                                 name=full_dexp_node_name,
                                 data=found_component,
                                 namespace=self.NAMESPACE,
