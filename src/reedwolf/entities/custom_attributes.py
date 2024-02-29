@@ -22,7 +22,7 @@ class Attribute(IAttribute):
     """
     attr_field: ModelField = field(repr=False, init=False, default=None)
 
-    def setup_dexp_attr_source(self, settings_source_list: List[SettingsSource]) -> Tuple[TypeInfo, SettingsSource]:
+    def setup_dexp_attr_source(self, settings_source_list: List[SettingsSource]) -> SettingsSource:
         attr_field = settings_source = UNDEFINED
         for settings_source in settings_source_list:
             attr_field = settings_source.fields.get(self.name, UNDEFINED)
@@ -43,7 +43,7 @@ class Attribute(IAttribute):
         self.settings_source = settings_source
         self.attr_field = attr_field
 
-        return self.output_type_info, self.settings_source
+        return self.settings_source
 
 
 @dataclass
@@ -63,7 +63,7 @@ class AttributeByMethod(IAttribute):
     py_function: Callable = field(repr=False, init=False, default=None)
     settings_source: SettingsSource = field(repr=False, init=False, default=None)
 
-    def setup_dexp_attr_source(self, settings_source_list: List[SettingsSource]) -> Tuple[TypeInfo, SettingsSource]:
+    def setup_dexp_attr_source(self, settings_source_list: List[SettingsSource]) -> SettingsSource:
         # NOTE: similar logic in functions.py :: FunctionByMethod.set_settings_class()
         py_function = settings_source = UNDEFINED
         for settings_source in settings_source_list:
@@ -93,7 +93,7 @@ class AttributeByMethod(IAttribute):
         self.py_function = py_function
         self.settings_source = settings_source
 
-        return self.output_type_info, settings_source
+        return settings_source
 
 
 

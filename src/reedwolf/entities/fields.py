@@ -861,6 +861,10 @@ class FieldGroup(IFieldGroup):
     # NOTE: see available_old_logic
     #   available:      Union[bool, DotExpression] = field(repr=False, default=True)
 
+    # ------ later evaluated ----
+    _type_info: TypeInfo = field(init=False, repr=False, default=UNDEFINED)
+
+
     def init(self):
         # NOTE: see available_old_logic
         #   clean_available(owner=self, attr_name="available", dexp_or_bool=self.available)
@@ -888,6 +892,16 @@ class FieldGroup(IFieldGroup):
         this_registry = ThisRegistryForComponent(component=self)
         return this_registry
 
+    def get_type_info(self) -> TypeInfo:
+        """
+        Currently used only for UnboundModel case
+        """
+        # _component_fields_dataclass must be created before, thus is setup_session None
+        if self._type_info is UNDEFINED:
+            _component_fields_dataclass, _ = self.get_component_fields_dataclass(setup_session=None)
+            type_hint = _component_fields_dataclass
+            self._type_info = TypeInfo.get_or_create_by_type(type_hint)
+        return self._type_info
 
 
 

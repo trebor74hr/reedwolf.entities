@@ -177,7 +177,8 @@ class ModelsRegistry(RegistryBase):
                         name=data_model.name,
                         data=data_model,
                         namespace=self.NAMESPACE,
-                        type_info=data_model.get_type_info())
+                        # type_info=data_model.get_type_info()
+                    )
         return attr_node
 
     def register_all_nodes(self, root_attr_node: Optional[AttrDexpNodeForDataModel],
@@ -372,10 +373,10 @@ class LocalFieldsRegistry(RegistryBase):
             # assert not isinstance(component, cls.ALLOWED_BASE_TYPES), component
             denied = True
             deny_reason = f"Component of type {component.__class__.__name__} can not be referenced in DotExpressions"
-            if hasattr(component, "type_info"):
-                type_info = component.type_info
-            else:
-                type_info = None
+            # if hasattr(component, "type_info"):
+            #     type_info = component.type_info
+            # else:
+            #     type_info = None
         else:
             # if isinstance(component, cls.ALLOWED_BASE_TYPES):
             #     raise EntityInternalError(owner=cls, msg=f"Component is in ALLOWED_BASE_TYPES, and is not processed: {type(component)}. Add new if isinstance() here.")
@@ -387,7 +388,7 @@ class LocalFieldsRegistry(RegistryBase):
                         name=component_name,
                         data=component,
                         namespace=FieldsNS,
-                        type_info=type_info,
+                        # type_info=type_info,
                         denied=denied,
                         deny_reason=deny_reason)
         return attr_node
@@ -662,7 +663,7 @@ class ContextRegistry(RegistryBase):
                 if not isinstance(attr_getter, IAttribute):
                     raise EntitySetupValueError(owner=self,
                                                 msg=f"Attribute {attr_name} expected FieldName or MethodName instance, got: {attr_getter} / {type(attr_getter)}")
-                type_info, settings_source = attr_getter.setup_dexp_attr_source(settings_source_list)
+                settings_source = attr_getter.setup_dexp_attr_source(settings_source_list)
                 type_object = SettingsKlassMember(settings_type=settings_source.settings_type,
                                                   klass=settings_source.klass,
                                                   member_name=attr_getter)
@@ -674,7 +675,7 @@ class ContextRegistry(RegistryBase):
                     name=attr_name,
                     namespace=self.NAMESPACE,
                     data=attr_getter,
-                    type_info=type_info,
+                    # type_info=type_info,
                     type_object=type_object,
                 )
 

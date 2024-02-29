@@ -1268,7 +1268,14 @@ class IAttribute:
             self.dexp_attr_name = self.name
 
     @abstractmethod
-    def setup_dexp_attr_source(self, settings_source_list: List[SettingsSource]) -> Tuple[TypeInfo, SettingsSource]:
+    def setup_dexp_attr_source(self, settings_source_list: List[SettingsSource]) -> SettingsSource:
+        """
+        should setup:
+            self.output_type_info
+            self.settings_source
+        and:
+            return self.settings_source
+        """
         ...
 
 @dataclass

@@ -140,7 +140,11 @@ from .value_accessors import (
 # Entity
 # ------------------------------------------------------------
 
+@dataclass
 class ContainerBase(IContainer, ABC):
+
+    # ------ later evaluated ----
+    _type_info: TypeInfo = field(init=False, repr=False, default=UNDEFINED)
 
     @staticmethod
     def is_container() -> bool:
@@ -164,13 +168,14 @@ class ContainerBase(IContainer, ABC):
         Currently used only for UnboundModel case
         """
         # _component_fields_dataclass must be created before, thus is setup_session None
-        _component_fields_dataclass, _ = self.get_component_fields_dataclass(setup_session=None)
-        if self.is_subentity_items():
-            type_hint = List[_component_fields_dataclass]
-        else:
-            type_hint = _component_fields_dataclass
-        type_info = TypeInfo.get_or_create_by_type(type_hint)
-        return type_info
+        if self._type_info is UNDEFINED:
+            _component_fields_dataclass, _ = self.get_component_fields_dataclass(setup_session=None)
+            if self.is_subentity_items():
+                type_hint = List[_component_fields_dataclass]
+            else:
+                type_hint = _component_fields_dataclass
+            self._type_info = TypeInfo.get_or_create_by_type(type_hint)
+        return self._type_info
 
     def _get_function(self, name: str, strict:bool=True) -> Optional[IFunction]:
         # TODO: used only in unit tests, remove it and make better test maybe?

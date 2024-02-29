@@ -243,7 +243,7 @@ class RegistryBase(IRegistry):
                             # data=child_field._type_info,
                             data=child_field._component,
                             namespace=self.NAMESPACE,
-                            type_info=child_field._type_info,
+                            # type_info=child_field._type_info,
                             type_object=None,
                             )
             self.register_attr_node(attr_node)
@@ -285,7 +285,7 @@ class RegistryBase(IRegistry):
                             name=attr_name,
                             data=component,
                             namespace=self.NAMESPACE,
-                            type_info=type_info,
+                            # type_info=type_info,
                             type_object=th_field,
                             )
         else:
@@ -293,7 +293,7 @@ class RegistryBase(IRegistry):
                 name=attr_name,
                 data=type_info,
                 namespace=self.NAMESPACE,
-                type_info=None,
+                # type_info=None,
                 type_object=th_field,
             )
 
@@ -581,19 +581,20 @@ class RegistryBase(IRegistry):
             # Create()
             # --------------------------------------------------
             if found_component:
+                type_info = found_component.get_type_info()
                 dexp_node = AttrDexpNodeForComponent(
                                 name=full_dexp_node_name,
                                 data=found_component,
                                 namespace=self.NAMESPACE,
-                                type_object=found_component.get_type_info().type_,
-                            )  # function=function
+                                type_object=type_info.type_,
+                            )
             else:
                 dexp_node = AttrDexpNodeForModelKlass(
                                 name=full_dexp_node_name,
                                 data=type_info,
                                 namespace=self.NAMESPACE,
                                 type_object=th_field,
-                            ) # function=function
+                            )
 
         if not isinstance(dexp_node, IDotExpressionNode):
             raise EntityInternalError(owner=owner, msg=f"Namespace {self.NAMESPACE}: Type of found object is not IDotExpressionNode, got: {type(dexp_node)}.")

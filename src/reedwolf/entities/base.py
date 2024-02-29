@@ -567,6 +567,10 @@ class IComponent(ReedwolfDataclassBase, ABC):
         return not bool(self.parent)
 
 
+    @abstractmethod
+    def get_type_info(self) -> TypeInfo:
+        ...
+
     @staticmethod
     @abstractmethod
     def has_data() -> bool:
@@ -1433,6 +1437,12 @@ class IComponent(ReedwolfDataclassBase, ABC):
             raise EntitySetupError(owner=self, msg="finish() should be called only once.")
         # self.is_finished = True
         # self._status = ComponentStatus.finished
+        # for some classes - need to cache
+        if self.has_data():
+            type_info = self.get_type_info()
+            if not type_info:
+                raise EntityInternalError(owner=self, msg=f"get_type_info() failed to produce result in finish()")
+
         self._make_immutable_and_finish()
 
     # ------------------------------------------------------------
@@ -1485,6 +1495,10 @@ class ICleaner(IComponent, ABC):
     @staticmethod
     def has_data() -> bool:
         return False
+
+    def get_type_info(self) -> TypeInfo:
+        raise EntityInternalError(owner=self, msg=f"Method should not be called")
+
 
 class IValidation(ICleaner, ABC):
     ensure:     DotExpression
