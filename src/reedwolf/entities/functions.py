@@ -520,13 +520,11 @@ class IFunction(IFunctionDexpNode, ABC):
                      is_last_node: bool,
                      prev_node_type_info: Optional[TypeInfo],
                      ) -> Any:
-        instance = apply_result.current_frame.instance
-
         with apply_result.use_stack_frame(
                 ApplyStackFrame(
                     container=apply_result.current_frame.container,
                     component=apply_result.current_frame.component,
-                    instance = instance,
+                    instance=apply_result.current_frame.instance,
                     this_registry=self.this_registry,
                 )):
             # is_1st_node is not used ...

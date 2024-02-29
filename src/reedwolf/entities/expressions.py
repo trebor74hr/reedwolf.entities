@@ -300,14 +300,16 @@ class ISetupSession(ABC):
         """
         ...
 
-    @abstractmethod
-    def use_changed_current_stack_frame(self, **change_attrs: Dict[str, Any]) -> "UseStackFrameCtxManagerBase":
-        """
-        settings manager
-        will modify current_frame with change_attrs, use the same frame (will remain as current_frame)
-        and after usage will restore original attribute to original values
-        """
-        ...
+    # @abstractmethod
+    # def use_changed_current_stack_frame(self, **change_attrs: Dict[str, Any]) -> "UseStackFrameCtxManagerBase":
+    #     """
+    #     NOTE: Removed from use - I prefer mutation-free / functional style instead. Was used only once.
+    #
+    #     settings manager
+    #     will modify current_frame with change_attrs, use the same frame (will remain as current_frame)
+    #     and after usage will restore original attribute to original values
+    #     """
+    #     ...
 
     # @abstractmethod
     # def create_local_setup_session(self, this_registry: IThisRegistry) -> Self:

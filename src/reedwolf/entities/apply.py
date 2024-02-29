@@ -539,13 +539,13 @@ class ApplyResult(IApplyResult):
                 has_items = component.is_subentity_items()
                 if has_items:
                     value_node = ItemsValueNode(
-                        component = component,
-                        container = comp_container,
-                        instance_none_mode=self.instance_none_mode,
-                        parent_node = parent_value_node,
-                        instance = self.current_frame.instance,
-                        trace_value_history=self.entity.settings.is_trace(),
-                    )
+                            component = component,
+                            container = comp_container,
+                            instance_none_mode=self.instance_none_mode,
+                            parent_node = parent_value_node,
+                            instance = self.current_frame.instance,
+                            trace_value_history=self.entity.settings.is_trace(),
+                            )
                 else:
                     value_node = ValueNode(
                             component = component,
@@ -554,7 +554,7 @@ class ApplyResult(IApplyResult):
                             parent_node = parent_value_node,
                             instance = self.current_frame.instance,
                             trace_value_history=self.entity.settings.is_trace(),
-                        )
+                            )
                 value_node.setup(apply_result=self)
                 parent_value_node.add_child(value_node)
 
@@ -687,9 +687,16 @@ class ApplyResult(IApplyResult):
 
                     # == Create This. registry and put in local setup session
                     this_registry = component.get_this_registry()
-                    with self.use_changed_current_stack_frame(
-                        this_registry=this_registry
-                    ):
+                    with self.use_stack_frame(
+                        ApplyStackFrame(
+                            container=self.current_frame.container,
+                            component=self.current_frame.component,
+                            instance=self.current_frame.instance,
+                            this_registry=this_registry
+                        )):
+                    # with self.use_changed_current_stack_frame(
+                    #     this_registry=this_registry
+                    # ):
                         self._register_exec_cleaners(validation_class=ChildrenValidationBase,
                                                      evaluation_class=ChildrenEvaluationBase)
 

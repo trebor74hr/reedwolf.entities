@@ -1867,29 +1867,33 @@ class IStackOwnerSession(ABC):
             raise EntityInternalError(owner=self, msg=f"Expected {self.STACK_FRAME_CLASS}, got frame: {frame}") 
         return self.STACK_FRAME_CTX_MANAGER_CLASS(owner_session = self, frame=frame)
 
-    def use_changed_current_stack_frame(self, **change_attrs) -> "UseStackFrameCtxManagerBase":
-        if not self.current_frame:
-            raise EntityInternalError(owner=self, msg="No current frame")
-        if not change_attrs:
-            raise EntityInternalError(owner=self, msg="Expecting change_attrs")
+    # def use_changed_current_stack_frame(self, **change_attrs) -> "UseStackFrameCtxManagerBase":
+    #     """
+    #     Removed from use - I prefer mutation-free / functional style instead. Was used only once.
+    #     More info in @abstractmethod declaration on how this should work.
+    #     """
+    #     if not self.current_frame:
+    #         raise EntityInternalError(owner=self, msg="No current frame")
+    #     if not change_attrs:
+    #         raise EntityInternalError(owner=self, msg="Expecting change_attrs")
 
-        orig_attrs: Dict[str, Any] = {}
-        for attr_name, attr_value in change_attrs.items():
-            if not hasattr(self.current_frame, attr_name):
-                raise EntityInternalError(owner=self, msg=f"Unknown attribute: {attr_name} in frame: {self.current_frame}")
-            orig_attrs[attr_name] = getattr(self.current_frame, attr_name)
-            setattr(self.current_frame, attr_name, attr_value)
+    #     orig_attrs: Dict[str, Any] = {}
+    #     for attr_name, attr_value in change_attrs.items():
+    #         if not hasattr(self.current_frame, attr_name):
+    #             raise EntityInternalError(owner=self, msg=f"Unknown attribute: {attr_name} in frame: {self.current_frame}")
+    #         orig_attrs[attr_name] = getattr(self.current_frame, attr_name)
+    #         setattr(self.current_frame, attr_name, attr_value)
 
-        def restore_args_to_orig_callback():
-            for attr_name, attr_value in orig_attrs.items():
-                setattr(self.current_frame, attr_name, attr_value)
+    #     def restore_args_to_orig_callback():
+    #         for attr_name, attr_value in orig_attrs.items():
+    #             setattr(self.current_frame, attr_name, attr_value)
 
-        return self.STACK_FRAME_CTX_MANAGER_CLASS(
-                    owner_session = self,
-                    frame=self.current_frame,
-                    add_to_stack=False,
-                    cleanup_callback=restore_args_to_orig_callback,
-        )
+    #     return self.STACK_FRAME_CTX_MANAGER_CLASS(
+    #                 owner_session = self,
+    #                 frame=self.current_frame,
+    #                 add_to_stack=False,
+    #                 cleanup_callback=restore_args_to_orig_callback,
+    #     )
 
 
     def push_frame_to_stack(self, frame: IStackFrame):

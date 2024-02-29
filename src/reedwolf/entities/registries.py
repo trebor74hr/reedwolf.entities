@@ -789,7 +789,7 @@ class ThisRegistryForModelKlass(ThisRegistryBase):
         instance = apply_result.current_frame.instance
         # NOTE: can not use apply_result.current_frame.value_node, it is not set (nor value_node.instance)
         if not isinstance(instance, self.model_klass):
-            raise EntityInternalError(owner=self, msg=f"Type of apply session's instance expected to be '{self.model_klass}, got: {apply_result.current_frame.instance}")
+            raise EntityInternalError(owner=self, msg=f"Type of apply session's instance expected to be '{self.model_klass}, got: {instance}")
 
         if attr_name == ReservedAttributeNames.INSTANCE_ATTR_NAME:
             # with 2nd param == None -> do not fetch further
@@ -931,15 +931,18 @@ class ThisRegistryForComponent(ThisRegistryBase):
                     #     do_fetch_by_name=False)
 
                 elif attr_name == ReservedAttributeNames.CHILDREN_ATTR_NAME.value:
-                    if isinstance(apply_result.current_frame.instance, (list, tuple)):
-                        raise EntityInternalError(f"Single item expected, got: {apply_result.current_frame.instance}")
+                    # if isinstance(apply_result.current_frame.instance, (list, tuple)):
+                    #   raise EntityInternalError(f"Single item expected, got: {apply_result.current_frame.instance}")
+                    if isinstance(value_node.is_list()):
+                        raise EntityInternalError(f"Single item expected, got: {value_node}")
 
-                    if not isinstance(apply_result.current_frame.component.child_field_list, (list, tuple)):
+                    # if not isinstance(apply_result.current_frame.component.child_field_list, (list, tuple)):
+                    if not isinstance(value_node.component.child_field_list, (list, tuple)):
                         raise EntityInternalError(owner=apply_result.current_frame.component,
-                                                  msg=f"child_field_list not a list, got: {apply_result.current_frame.component.child_field_list}")
+                                                  msg=f"child_field_list not a list, got: {value_node.component.child_field_list}")
                     # TODO: .Children?
                     root_value = RegistryRootValue(
-                        value_root=apply_result.current_frame.component.child_field_list,
+                        value_root=value_node.component.child_field_list,
                         attr_name_new=None,
                         do_fetch_by_name=False,
                     )
