@@ -39,7 +39,7 @@ from .expressions import (
     ExecResult, IThisRegistry,
 )
 from .expr_attr_nodes import (
-    AttrDexpNodeForModelKlass,
+    AttrDexpNodeForTypeInfo,
 )
 from .functions import (
     CustomFunctionFactory,
@@ -138,9 +138,9 @@ class BoundDataModelBase(IBoundDataModel):
             # 1. if it is non-model -> Register new attribute node within M. /
             #    ModelsNS registry
             if not child_data_model.in_model:
-                model_attr_dexp_node = AttrDexpNodeForModelKlass(
+                model_attr_dexp_node = AttrDexpNodeForTypeInfo(
                                             name=child_data_model.name,
-                                            data=read_handler_type_info,
+                                            type_info=read_handler_type_info,
                                             namespace=models_registry.NAMESPACE,
                                             type_object=None,
                                             )

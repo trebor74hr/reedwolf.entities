@@ -71,7 +71,7 @@ from .functions import (
     try_create_function,
 )
 from .expr_attr_nodes import (
-    IAttrDexpNode, AttrDexpNodeForComponent, AttrDexpNodeForModelKlass,
+    IAttrDexpNode, AttrDexpNodeForComponent, AttrDexpNodeForTypeInfo,
 )
 
 # ------------------------------------------------------------
@@ -217,7 +217,7 @@ class RegistryBase(IRegistry):
     #     type_info = attr_node.get_type_info()
     #     # NOTE: original name is: attr_node.name
     #     attr_name = ReservedAttributeNames.VALUE_ATTR_NAME.value
-    #     attr_node = AttrDexpNodeForModelKlass(
+    #     attr_node = AttrDexpNodeForTypeInfo(
     #                     name=attr_name,
     #                     data=type_info,
     #                     namespace=self.NAMESPACE,
@@ -247,7 +247,7 @@ class RegistryBase(IRegistry):
             attr_node = AttrDexpNodeForComponent(
                             # name=child_field.Name,
                             # data=child_field._type_info,
-                            data=child_field._component,
+                            component=child_field._component,
                             namespace=self.NAMESPACE,
                             # type_info=child_field._type_info,
                             type_object=None,
@@ -289,19 +289,19 @@ class RegistryBase(IRegistry):
         if component:
             attr_node = AttrDexpNodeForComponent(
                             name=attr_name,
-                            data=component,
+                            component=component,
                             namespace=self.NAMESPACE,
                             # type_info=type_info,
                             type_object=th_field,
                             )
         else:
-            attr_node = AttrDexpNodeForModelKlass(
-                name=attr_name,
-                data=type_info,
-                namespace=self.NAMESPACE,
-                # type_info=None,
-                type_object=th_field,
-            )
+            attr_node = AttrDexpNodeForTypeInfo(
+                            name=attr_name,
+                            type_info=type_info,
+                            namespace=self.NAMESPACE,
+                            # type_info=None,
+                            type_object=th_field,
+                            )
 
         self.register_attr_node(attr_node)
         return attr_node
@@ -318,7 +318,7 @@ class RegistryBase(IRegistry):
     #     assert self.is_items_mode
     #     type_info = owner_component.data_model.get_type_info()
     #     attr_name = ReservedAttributeNames.ITEMS_ATTR_NAME.value
-    #     attr_node = AttrDexpNodeForModelKlass(
+    #     attr_node = AttrDexpNodeForTypeInfo(
     #                     name=attr_name,
     #                     data=type_info,
     #                     namespace=self.NAMESPACE,
@@ -358,9 +358,9 @@ class RegistryBase(IRegistry):
                     attr_node_name=attr_name,
                     inspect_object=model_klass)
 
-        attr_node = AttrDexpNodeForModelKlass(
+        attr_node = AttrDexpNodeForTypeInfo(
                         name=attr_name,
-                        data=type_info,
+                        type_info=type_info,
                         namespace=cls.NAMESPACE,
                         type_object=th_field,
                         )
@@ -532,13 +532,15 @@ class RegistryBase(IRegistry):
                 inspect_object = owner_dexp_node.get_type_info()
             else:
                 assert isinstance(owner_dexp_node, IAttrDexpNode)
-                parent_component : Optional[IComponent] = owner_dexp_node.get_component()
+
                 parent_type_info = owner_dexp_node.get_type_info()
-                if GlobalSettings.is_unit_test and parent_component:
-                    assert parent_type_info is owner_dexp_node.data.get_type_info()
                 # for component this is custom created dataclass <Component>__Fields
                 inspect_object = parent_type_info
-                if parent_component:
+                if isinstance(owner_dexp_node, AttrDexpNodeForComponent):
+                    parent_component: Optional[IComponent] = owner_dexp_node.component
+                    if GlobalSettings.is_unit_test:
+                        assert parent_type_info is owner_dexp_node.get_type_info()
+
                     # if this is a component, then try to find child component by name in direct children
                     children_dict = parent_component.get_children_dict()
                     found_component = children_dict.get(dexp_node_name, UNDEFINED)
@@ -593,14 +595,14 @@ class RegistryBase(IRegistry):
                 dexp_node = AttrDexpNodeForComponent(
                                 # preserve full path name
                                 name=full_dexp_node_name,
-                                data=found_component,
+                                component=found_component,
                                 namespace=self.NAMESPACE,
                                 type_object=type_info.type_,
                             )
             else:
-                dexp_node = AttrDexpNodeForModelKlass(
+                dexp_node = AttrDexpNodeForTypeInfo(
                                 name=full_dexp_node_name,
-                                data=type_info,
+                                type_info=type_info,
                                 namespace=self.NAMESPACE,
                                 type_object=th_field,
                             )

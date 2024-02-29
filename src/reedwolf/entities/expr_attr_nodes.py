@@ -1,7 +1,9 @@
 from abc import ABC, abstractmethod
 from typing import (
     Union,
-    Optional, List,
+    Optional,
+    List,
+    Any,
 )
 from dataclasses import (
     dataclass,
@@ -50,7 +52,6 @@ from .custom_attributes import (
 # TODO: remove this dependency
 from .base import (
     UndefinedType,
-    IComponent,
     IContainer,
     IField,
     IApplyResult,
@@ -72,7 +73,7 @@ class IAttrDexpNode(IDotExpressionNode, ABC):
     name: str
 
     # TODO: rename to owner
-    data: Union[IComponent, TypeInfo, IAttribute]
+    # data: Union[IComponent, TypeInfo, IAttribute]
 
     # to which namespace it belongs
     namespace: Namespace = None
@@ -85,6 +86,8 @@ class IAttrDexpNode(IDotExpressionNode, ABC):
     type_info: Optional[TypeInfo] = field(init=False, default=None)
     is_finished: bool = field(init=False, repr=False, default=False)
     full_name: str = field(init=False, repr=False, default=UNDEFINED)
+
+    # data source name - used only for diagnostics - in __str__
     data_supplier_name: str = field(init=False, repr=False, default=UNDEFINED)
     denied: bool = field(init=False, repr=False, default=False)
 
@@ -96,19 +99,17 @@ class IAttrDexpNode(IDotExpressionNode, ABC):
             raise EntityInternalError(owner=self, msg=f"AttrDexpNode should have string name, got: {self.name}")
 
         if not isinstance(self.namespace, Namespace):
-            raise EntityInternalError(owner=self, msg=f"Attr 'namespace' should be Namespace, got: {self.namespace}")
+            raise EntityInternalError(owner=self, msg=f"Attribute 'namespace' should be Namespace, got: {self.namespace}")
 
-        if self.data is None:
-            raise EntityInternalError(owner=self, msg=f"Data is not set for {self}")
+    def _check_data(self, attr_name: AttrName, data: Any):
+        if data is None:
+            raise EntityInternalError(owner=self, msg=f"Attribute '{attr_name}' is required.")
 
-        if is_function(self.data):
-            raise EntitySetupValueError(owner=self, msg=f"Node '.{self.name}' is a function. Maybe you forgot to wrap it with 'reedwolf.entities.Function()'?")
+        if is_function(data):
+            raise EntitySetupValueError(owner=self, msg=f"Attribute '{attr_name}' is a function. Maybe you forgot to wrap it with 'reedwolf.entities.Function()'?")
 
     def _get_repr_extra(self) -> str:
         return ", DENIED" if self.denied else ""
-
-    def get_component(self) -> Optional[IComponent]:
-        return None
 
     def finish(self):
         """ fill type_info, must be available for all nodes - with exceptions those with .denied don't have it """
@@ -122,8 +123,7 @@ class IAttrDexpNode(IDotExpressionNode, ABC):
         In regular case will raise error, inherit and fill the logic
         when self.type_info could be set lazy.
         """
-        raise EntityInternalError(owner=self,
-                                  msg=f"Attribute .type_info can not be set [2] (type={type(self.data)}).")
+        raise EntityInternalError(owner=self, msg=f"Attribute .type_info can not be set [2]")
 
     def get_type_info(self) -> TypeInfo:
         """
@@ -329,74 +329,79 @@ class IAttrDexpNode(IDotExpressionNode, ABC):
 
 
 @dataclass(repr=False)
-class AttrDexpNodeForModelKlass(IAttrDexpNode):
+class AttrDexpNodeForTypeInfo(IAttrDexpNode):
     """
     Class Attribute or Function return type
+    NOTE: for other classes type_info is private attribute automatically computed.
     """
-    data: Union[TypeInfo] = None
+    type_info: Union[TypeInfo] = None
 
     def __post_init__(self):
         super().__post_init__()
 
-        if not isinstance(self.data, TypeInfo):
-            raise EntityInternalError(owner=self, msg=f"Expected data: TypeInfo, got: {self.data}")
-        assert self.type_info is None
-        self.type_info = self.data
+        self._check_data('type_info', self.type_info)
+
+        if not isinstance(self.type_info, TypeInfo):
+            raise EntityInternalError(owner=self, msg=f"Expected data: TypeInfo, got: {self.type_info}")
+        # self.type_info = self.type_info
 
         if self.type_object is UNDEFINED:
             raise EntityInternalError(owner=self, msg=f"TypeInfo case - type_object should be set (ModelField), got: {self.type_object}")
-        # self.attr_node_type = AttrDexpNodeTypeEnum.TYPE_INFO
-        # .type_ could be a class/type or NewType instance
-        type_name = getattr(self.data.type_, "__name__",
-                            getattr(self.data.type_, "_name", repr(self.data.type_)))
+
+        # TODO: put in TypeInfo this logic:
+        type_name = getattr(self.type_info.type_, "__name__",
+                            getattr(self.type_info.type_, "_name", repr(self.type_info.type_)))
         self.data_supplier_name = f"TH[{type_name}]"
 
 
 @dataclass(repr=False)
 class AttrDexpNodeForDataModel(IAttrDexpNode):
-    data: Union[IDataModel] = None
+    data_model: Union[IDataModel] = None
 
     def __post_init__(self):
         super().__post_init__()
 
-        if not isinstance(self.data, IDataModel):
-            raise EntityInternalError(owner=self, msg=f"Expected data: IDataModel, got: {self.data}")
-        self.type_info = self.data.get_type_info()
+        self._check_data('data_model', self.data_model)
 
-        # self.attr_node_type = AttrDexpNodeTypeEnum.DATA_MODEL
-        self.data_supplier_name = f"{self.data.name}"
+        if not isinstance(self.data_model, IDataModel):
+            raise EntityInternalError(owner=self, msg=f"Expected data: IDataModel, got: {self.data_model}")
 
-    def get_component(self) -> Optional[IComponent]:
-        return self.data
+        self.type_info = self.data_model.get_type_info()
+
+        self.data_supplier_name = f"{self.data_model.name}"
+
+    # def get_component(self) -> Optional[IComponent]:
+    #     return self.data_model
 
 
 @dataclass(repr=False)
 class AttrDexpNodeForAttribute(IAttrDexpNode):
-    data: Union[IAttribute] = None
+
+    attribute: Union[IAttribute] = None
 
     def __post_init__(self):
         super().__post_init__()
 
+        self._check_data('attribute', self.attribute)
+
+        # isinstance(self.attribute, (Attribute, AttributeByMethod))
+        if not isinstance(self.attribute, IAttribute):
+            raise EntityInternalError(owner=self, msg=f"Expected data: Union[Attribute, AttributeByMethod], got: {self.attribute}")
+
         # TODO: don't like this - too hackish
-        if not isinstance(self.type_object, KlassMember) and self.type_object.name == self.data:
+        if not isinstance(self.type_object, KlassMember) and self.type_object.name == self.attribute:
             raise EntityInternalError(owner=self,
                                       msg=f"MethodName case - type_object must be instance of KlassMember, got: {self.type_object},")
-        self.type_info = self.data.output_type_info
+        self.type_info = self.attribute.output_type_info
         assert self.type_info
-        type_name = str(self.data)  # field name
+        type_name = str(self.attribute)  # field name
         self.data_supplier_name = f"FN[{type_name}]"
-
-        if isinstance(self.data, Attribute):
-            ...  # self.attr_node_type = AttrDexpNodeTypeEnum.ATTRIBUTE
-        elif isinstance(self.data, AttributeByMethod):
-            ...  # self.attr_node_type = AttrDexpNodeTypeEnum.ATTR_BY_METHOD
-        else:
-            raise EntityInternalError(owner=self, msg=f"Expected data: Union[Attribute, AttributeByMethod], got: {self.data}")
 
 
 @dataclass(repr=False)
 class AttrDexpNodeForComponent(IAttrDexpNode):
-    data: Union[IContainer, IFieldGroup, IField] = None
+
+    component: Union[IContainer, IFieldGroup, IField] = None
 
     # can be set from outside - e.g. for Children
     name: str = field(default=None)
@@ -408,20 +413,20 @@ class AttrDexpNodeForComponent(IAttrDexpNode):
 
     def __post_init__(self):
         if self.name is None:
-            self.name = self.data.name
+            self.name = self.component.name
             assert "." not in self.name
         else:
             # NOTE: this can happen
             # assert "." not in self.name
             ...
 
-        if self.data.has_data():
+        if self.component.has_data():
             self.denied = False
             self.deny_reason = ""
         else:
             # stored - but should not be used
             self.denied = True
-            self.deny_reason = f"Component of type {self.data.__class__.__name__} can not be referenced in DotExpressions"
+            self.deny_reason = f"Component of type {self.component.__class__.__name__} can not be referenced in DotExpressions"
 
         super().__post_init__()
 
@@ -429,14 +434,14 @@ class AttrDexpNodeForComponent(IAttrDexpNode):
         # self.type_info is lazy - will be set in _fill_type_info()
 
         # TODO: antipattern - split to diff class implementations (inherit and make diff classes)
-        if isinstance(self.data, IContainer):
+        if isinstance(self.component, IContainer):
             ...  # self.attr_node_type = AttrDexpNodeTypeEnum.CONTAINER
-        elif isinstance(self.data, IField):
+        elif isinstance(self.component, IField):
             ...  # self.attr_node_type = AttrDexpNodeTypeEnum.FIELD
-        elif isinstance(self.data, IFieldGroup):
+        elif isinstance(self.component, IFieldGroup):
             ...  # self.attr_node_type = AttrDexpNodeTypeEnum.FIELD_GROUP
         else:
-            raise EntityInternalError(owner=self, msg=f"Expected data: Union[IContainer, IField, IFieldGroup], got: {self.data}")
+            raise EntityInternalError(owner=self, msg=f"Expected data: Union[IContainer, IField, IFieldGroup], got: {self.component}")
 
         # if not self.data.has_data():
         #     raise EntityInternalError(owner=self, msg=f"Expected component that has_data, got: {self.data}")
@@ -445,12 +450,12 @@ class AttrDexpNodeForComponent(IAttrDexpNode):
         assert self.type_info is None
         if not self.denied:
             # assert self.attr_node_type not in (AttrDexpNodeTypeEnum.FIELD_GROUP,)
-            self.type_info = self.data.get_type_info()
+            self.type_info = self.component.get_type_info()
             if not self.type_info:
-                raise EntityInternalError(owner=self, msg=f"Attribute .type_info could not be set [1] (type={type(self.data)}).")
+                raise EntityInternalError(owner=self, msg=f"Attribute .type_info could not be set [1] (type={type(self.component)}).")
 
-    def get_component(self) -> Optional[IComponent]:
-        return self.data
+
+# ------------------------------------------------------------
 
 
 @dataclass

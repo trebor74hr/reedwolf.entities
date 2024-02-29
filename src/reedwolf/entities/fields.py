@@ -93,6 +93,7 @@ from .expr_attr_nodes import (
 )
 from .functions import (
     CustomFunctionFactory,
+    IFunction,
 )
 from .registries import (
     ThisRegistryForComponent,
@@ -582,28 +583,29 @@ class ChoiceField(FieldBase):
                 is_list = func_node.get_type_info().is_list
                 choice_from_function = True
 
-            elif isinstance(dexp_node, IAttrDexpNode):
-                attr_node: IAttrDexpNode = dexp_node  # better name
-                if is_enum(attr_node.data.value):
-                    raise EntitySetupValueError(owner=self, msg=f"Using enum {attr_node.data.value}. Use EnumField instead.")
+            # TODO: this logic is never called - uncomment on first use
+            # elif isinstance(dexp_node, IAttrDexpNode):
+            #     attr_node: IAttrDexpNode = dexp_node  # better name
+            #     if is_enum(attr_node.data.value):
+            #         raise EntitySetupValueError(owner=self, msg=f"Using enum {attr_node.data.value}. Use EnumField instead.")
 
-                type_info = attr_node.type_info
-                # if not hasattr(attr_node.data, "type_"):
-                #     raise EntitySetupValueError(owner=self, msg=f"Wrong type for choices: {attr_node.data} / {attr_node.data.value}. You can use Function().")
+            #     type_info = attr_node.type_info
+            #     # if not hasattr(attr_node.data, "type_"):
+            #     #     raise EntitySetupValueError(owner=self, msg=f"Wrong type for choices: {attr_node.data} / {attr_node.data.value}. You can use Function().")
 
-                choices = type_info.type_
-                is_list = type_info.is_list
+            #     choices = type_info.type_
+            #     is_list = type_info.is_list
 
-                if is_list and attr_node.namespace==ModelsNS and is_model_klass(choices):
-                    # FK case - e.g. Company -> company_types: List[CompanyType]
+            #     if is_list and attr_node.namespace==ModelsNS and is_model_klass(choices):
+            #         # FK case - e.g. Company -> company_types: List[CompanyType]
 
-                    # TODO: I don't like 'choices_checked' this attr_node and the logic it uses
-                    choices_checked = True
+            #         # TODO: I don't like 'choices_checked' this attr_node and the logic it uses
+            #         choices_checked = True
 
-                    # TODO: Explain - why [0]???
-                    # complex type, another struct
-                    self.python_type = choices[0]
-                    # TODO: deny default value - not available in this moment?
+            #         # TODO: Explain - why [0]???
+            #         # complex type, another struct
+            #         self.python_type = choices[0]
+            #         # TODO: deny default value - not available in this moment?
             else:
                 raise EntityInternalError(f"Unexpected: {self} -> type({type(self)})")
 
@@ -721,18 +723,19 @@ class EnumField(FieldBase):
             # EnumField(... enum=S.CompanyTypes)
             if self.is_unbound():
                 raise EntitySetupValueError(owner=self, msg=f"Enum should not be bound to DotExpression, expecting Enum, got: {self.enum}")
-            enum_attr_node = setup_session.get_dexp_node_by_dexp(dexp=self.enum)
-            if not enum_attr_node:
-                enum_attr_node = self.enum.Setup(setup_session=setup_session, owner=self)
+            func_enum_attr_node = setup_session.get_dexp_node_by_dexp(dexp=self.enum)
+            if not func_enum_attr_node:
+                func_enum_attr_node = self.enum.Setup(setup_session=setup_session, owner=self)
 
-            # self.enum = enum_attr_node.data.value
-            self.enum = enum_attr_node.data
-            # EnumMembers
+            # Currently only EnumMembers custom function supports - it stores enum in .data
+            if not isinstance(func_enum_attr_node, IFunction):
+                raise EntityInternalError(owner=self, msg=f"Expecting IFunctionDexpNode, got: {func_enum_attr_node}")
+
+            self.enum = func_enum_attr_node.data
             if not self.enum:
                 raise EntitySetupValueError(owner=self, msg="Underlying data type of attr_node expression is not enum. You should use: functions=[... Ctx.EnumMembers(enum=<EnumType>)]")
             elif not is_enum(self.enum):
                 raise EntitySetupValueError(owner=self, msg=f"Data type of attr_node expression {self.enum} should Enum, got: {type(self.enum)}. You should use: functions=[... Ctx.EnumMembers(enum=<EnumType>)]")
-            # attr_node.data.py_type_hint
 
         # when not found -> it will be raised in other place
         if self.is_unbound():
@@ -740,8 +743,6 @@ class EnumField(FieldBase):
             if not is_enum(py_hint_type):
                 raise EntitySetupValueError(owner=self, msg=f"In unbound mode, provide type to enum attribute, got: {py_hint_type}")
         else:
-            # if not isinstance(attr_node.data, TypeInfo):
-            #     raise EntitySetupValueError(owner=self, msg=f"Data type of attr_node {attr_node} should be TypeInfo, got: {type(attr_node.data)}")
             py_hint_type = attr_node.type_info.py_type_hint
 
         if not is_enum(py_hint_type):

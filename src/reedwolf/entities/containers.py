@@ -34,7 +34,8 @@ from .exceptions import (
     EntityApplyNameNotFoundError,
     EntityValidationError,
     EntityTypeError,
-    EntityValueError, EntityInitError,
+    EntityValueError,
+    EntityInitError,
 )
 from .namespaces import (
     ModelsNS,
@@ -52,7 +53,9 @@ from .meta import (
     Index0Type,
     KeyType,
     KeyPairs,
-    ModelInstanceType, ERR_MSG_ATTR_REQUIRED, ComponentStatus,
+    ModelInstanceType,
+    ERR_MSG_ATTR_REQUIRED,
+    ComponentStatus,
 )
 from .base import (
     get_name_from_bind,
@@ -67,15 +70,18 @@ from .base import (
 )
 from .expressions import (
     DotExpression,
-    create_dexp_by_attr_name, IThisRegistry,
+    create_dexp_by_attr_name,
+    IThisRegistry,
 )
 from .data_models import (
     DataModel,
-    DataModelWithHandlers, UnboundModel,
+    DataModelWithHandlers,
+    UnboundModel,
 )
 from .expr_attr_nodes import (
     IAttrDexpNode,
-    )
+    AttrDexpNodeForTypeInfo,
+)
 from .functions import (
     IFunction,
     FunctionsFactoryRegistry,
@@ -113,7 +119,7 @@ from .eval_base import (
     EvaluationBase,
     )
 from .fields import (
-    FieldGroup, DEXP_VALIDATOR_FOR_BIND,
+    DEXP_VALIDATOR_FOR_BIND,
 )
 from .settings import (
     Settings, ApplySettings,
@@ -330,8 +336,8 @@ class ContainerBase(IContainer, ABC):
         if not attr_node:
             raise EntityInternalError(owner=self, msg=f"AttrDexpNode not recognized: {model_klass}")
 
-        if not isinstance(attr_node.data, TypeInfo):
-            raise EntityInternalError(owner=self, msg=f"AttrDexpNode data is not TypeInfo, got: {type(attr_node.data)} / {attr_node.data}")
+        if not isinstance(attr_node, AttrDexpNodeForTypeInfo):
+            raise EntityInternalError(owner=self, msg=f"AttrDexpNode data is not TypeInfo, got: {attr_node}")
 
         return attr_node
 

@@ -72,7 +72,7 @@ from .expr_attr_nodes import (
     IAttrDexpNode,
     AttrValueContainerPath,
     AttrDexpNodeWithValuePath,
-    AttrDexpNodeForModelKlass,
+    AttrDexpNodeForTypeInfo,
     AttrDexpNodeForDataModel,
     AttrDexpNodeForComponent,
     AttrDexpNodeForAttribute,
@@ -119,15 +119,15 @@ class UnboundModelsRegistry(IThisRegistry, RegistryBase):
         return True
 
     def register_unbound_attr_node(self, component: Union[IField, IContainer], full_dexp_node_name: AttrName
-                                   ) -> AttrDexpNodeForModelKlass:
+                                   ) -> AttrDexpNodeForTypeInfo:
         type_info = component.get_type_info()
         # python_type = field.python_type
         # if not field.PYTHON_TYPE:
         #     raise EntityInternalError(owner=self, msg=f"Python type not yet set.")
         # type_info = TypeInfo.get_or_create_by_type(python_type)
-        attr_node = AttrDexpNodeForModelKlass(
+        attr_node = AttrDexpNodeForTypeInfo(
             name=full_dexp_node_name,
-            data=type_info,  # must be like this
+            type_info=type_info,  # must be like this
             namespace=self.NAMESPACE,
             type_object=type_info.type_,
         )
@@ -176,7 +176,7 @@ class ModelsRegistry(RegistryBase):
         # assert data_model.type_info.type_==model
         attr_node = AttrDexpNodeForDataModel(
                         name=data_model.name,
-                        data=data_model,
+                        data_model=data_model,
                         namespace=self.NAMESPACE,
                         # type_info=data_model.get_type_info()
                     )
@@ -344,7 +344,7 @@ class LocalFieldsRegistry(RegistryBase):
 
         attr_node = AttrDexpNodeForComponent(
                         # name=component.name,
-                        data=component,
+                        component=component,
                         namespace=FieldsNS,
                         )
         return attr_node
@@ -630,7 +630,7 @@ class ContextRegistry(RegistryBase):
                 attr_node = AttrDexpNodeForAttribute(
                     name=attr_name,
                     namespace=self.NAMESPACE,
-                    data=attr_getter,
+                    attribute=attr_getter,
                     # type_info=type_info,
                     type_object=type_object,
                 )
