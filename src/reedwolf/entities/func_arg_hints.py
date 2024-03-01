@@ -83,8 +83,8 @@ class DotexprExecuteOnItemFactoryFuncArgHint(IInjectFuncArgHint):
 
             with apply_result.use_stack_frame(
                     ApplyStackFrame(
-                        container = apply_result.current_frame.container,
-                        component = apply_result.current_frame.component,
+                        # container = apply_result.current_frame.container,
+                        # component = apply_result.current_frame.component,
                         instance=instance,
                         value_node=value_node,
                         this_registry = this_registry,

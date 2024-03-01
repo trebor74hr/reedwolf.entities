@@ -25,7 +25,7 @@ from .utils import (
     UNDEFINED,
     UndefinedType, to_repr,
 )
-from .global_settings import GLOBAL_SETTINGS
+from .global_settings import GlobalSettings
 from .exceptions import (
     EntitySetupValueError,
     EntitySetupError,
@@ -215,7 +215,7 @@ class RegistryRootValue:
     # ---- later set ----
     attr_dexp_node:     Optional["IAttrDexpNode"] =  field(init=False, repr=False, default=None)
 
-    if GLOBAL_SETTINGS.is_unit_test:
+    if GlobalSettings.is_development:
         def __post_init__(self):
             # NOTE: all except this combinations is allowed
             if self.attr_name_new and self.do_fetch_by_name is not UNDEFINED:
@@ -545,8 +545,6 @@ class DotExpression(DynamicAttrsBase):
 
         for bnr, bit in enumerate(self.Path, 1):
             # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(bit)
-
-            # if bit._node in ("H", "Map", "First"): print("here35")
 
             assert bit._namespace==self._namespace
             # TODO: if self._func_args:

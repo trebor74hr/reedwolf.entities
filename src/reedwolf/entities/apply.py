@@ -2,7 +2,6 @@ from dataclasses import (
     dataclass,
     field,
     asdict,
-    replace as dataclass_clone,
 )
 from typing import (
     Dict,
@@ -50,7 +49,6 @@ from .meta import (
 from .base import (
     IField,
     AttrValue,
-    GlobalConfig,
     KeyString,
     IComponent,
     IApplyResult,
@@ -218,7 +216,7 @@ class ApplyResult(IApplyResult):
         component = self.current_frame.component
 
         # TODO: make a copy to preserve original values. Maybe is not necessary.
-        current_stack_frame = dataclass_clone(self.current_frame)
+        current_stack_frame = self.current_frame.clone()
 
         validation_list: List[IValidation] = []
         evaluation_list: List[IEvaluation] = []
@@ -537,23 +535,22 @@ class ApplyResult(IApplyResult):
             else:
                 parent_value_node = self.current_frame.value_node
                 has_items = component.is_subentity_items()
+
+                value_node_kwargs = dict(
+                    component=component,
+                    container=comp_container,
+                    instance_none_mode=self.instance_none_mode,
+                    parent_node=parent_value_node,
+                    instance=self.current_frame.instance,
+                    trace_value_history=self.entity.settings.is_trace(),
+                )
                 if has_items:
                     value_node = ItemsValueNode(
-                            component = component,
-                            container = comp_container,
-                            instance_none_mode=self.instance_none_mode,
-                            parent_node = parent_value_node,
-                            instance = self.current_frame.instance,
-                            trace_value_history=self.entity.settings.is_trace(),
+                            **value_node_kwargs
                             )
                 else:
                     value_node = ValueNode(
-                            component = component,
-                            container = comp_container,
-                            instance_none_mode=self.instance_none_mode,
-                            parent_node = parent_value_node,
-                            instance = self.current_frame.instance,
-                            trace_value_history=self.entity.settings.is_trace(),
+                            **value_node_kwargs
                             )
                 value_node.setup(apply_result=self)
                 parent_value_node.add_child(value_node)
@@ -689,8 +686,8 @@ class ApplyResult(IApplyResult):
                     this_registry = component.get_this_registry()
                     with self.use_stack_frame(
                         ApplyStackFrame(
-                            container=self.current_frame.container,
-                            component=self.current_frame.component,
+                            # container=self.current_frame.container,
+                            # component=self.current_frame.component,
                             instance=self.current_frame.instance,
                             this_registry=this_registry
                         )):
@@ -830,8 +827,8 @@ class ApplyResult(IApplyResult):
                     instance=self.instance
                 )
             new_frame = ApplyStackFrame(
-                container = container,
-                component = container,
+                # container = container,
+                # component = container,
                 value_node=value_node,
                 instance = self.instance,
                 instance_new = self.instance_new,
@@ -862,8 +859,8 @@ class ApplyResult(IApplyResult):
                 raise EntityApplyValueError(owner=component, msg=f"Expected single model instance, got: {instance}: {type(instance)}")
 
             new_frame = ApplyStackFrame(
-                container = component,
-                component = component,
+                # container = component,
+                # component = component,
                 value_node=value_node,
                 # must inherit previous instance
                 parent_instance=self.current_frame.instance,
@@ -877,16 +874,16 @@ class ApplyResult(IApplyResult):
             assert self.current_frame.value_node == value_node
             assert self.current_frame.component == component
             assert in_component_only_tree == in_component_only_tree
-            new_frame = dataclass_clone(self.current_frame)
+            new_frame = self.current_frame.clone()
         else:
             # -- Fallback case --
             # register non-container frame - only component is new. take instance from previous frame
             new_frame = ApplyStackFrame(
-                component = component,
+                # component = component,
                 value_node=value_node,
                 # copy
                 instance = self.current_frame.instance,
-                container = self.current_frame.container,
+                # container = self.current_frame.container,
                 in_component_only_tree=in_component_only_tree,
                 # automatically copied
                 #   instance_new = self.current_frame.instance_new,
@@ -1097,8 +1094,8 @@ class ApplyResult(IApplyResult):
 
                 with self.use_stack_frame(
                         ApplyStackFrame(
-                            container = subentity_items,
-                            component = subentity_items,
+                            # container = subentity_items,
+                            # component = subentity_items,
                             value_node = item_value_node,
                             index0 = index0,
                             # main instance - original values
@@ -1130,13 +1127,13 @@ class ApplyResult(IApplyResult):
 
         with self.use_stack_frame(
                 ApplyStackFrame(
-                    component = subentity_items,
+                    # component = subentity_items,
                     # instance is a list of items
                     instance = instance_list,
                     value_node=value_node,
                     instance_is_list = True,
                     # ALT: self.current_frame.container
-                    container = subentity_items,
+                    # container = subentity_items,
                     parent_instance=self.current_frame.instance,
                     in_component_only_tree=in_component_only_tree,
                     this_registry=this_registry,
@@ -1241,8 +1238,8 @@ class ApplyResult(IApplyResult):
 
                 with self.use_stack_frame(
                         ApplyStackFrame(
-                            container = self.current_frame.container, 
-                            component = self.current_frame.component,
+                            # container = self.current_frame.container,
+                            # component = self.current_frame.component,
                             # only this is changed
                             instance = self.current_frame.instance_new,
                             # should not be used
@@ -1418,8 +1415,9 @@ class ApplyResult(IApplyResult):
         if self.current_frame.instance_new not in (None, UNDEFINED):
             if self.instance_new_struct_type == StructEnum.MODELS_LIKE:
                 with self.use_stack_frame(
-                        ApplyStackFrame(container=self.current_frame.container, 
-                                   component=self.current_frame.component, 
+                        ApplyStackFrame(
+                                   # container=self.current_frame.container,
+                                   # component=self.current_frame.component,
                                    # only this is changed
                                    instance=self.current_frame.instance_new,
                                    instance_new=UNDEFINED, 

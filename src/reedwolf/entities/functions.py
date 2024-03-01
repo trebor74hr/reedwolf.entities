@@ -233,7 +233,6 @@ class IFunction(IFunctionDexpNode, ABC):
         # chain_arg_type_info
         # self.value_arg_type_info = self.get_value_arg_type_info()
 
-        # if self.name in ("Map", "First"): print("here33")
         self._output_type_info = TypeInfo.extract_function_return_type_info(self.py_function)
 
         if self._output_type_info.is_item_type:
@@ -383,7 +382,6 @@ class IFunction(IFunctionDexpNode, ABC):
 
                 # if not this_registry:
                 #     raise EntityInternalError(owner=self, msg="this_registry not set")
-                # # if this_registry.is_items_for_each_mode: print("here33")
                 # if self.items_func_arg and not this_registry.is_items_for_each_mode:
                 #     raise EntityInternalError(owner=self, msg=f"Failed to setup this_registry for Items in 'for-each' mode: {this_registry}")
 
@@ -522,8 +520,8 @@ class IFunction(IFunctionDexpNode, ABC):
                      ) -> Any:
         with apply_result.use_stack_frame(
                 ApplyStackFrame(
-                    container=apply_result.current_frame.container,
-                    component=apply_result.current_frame.component,
+                    # container=apply_result.current_frame.container,
+                    # component=apply_result.current_frame.component,
                     instance=apply_result.current_frame.instance,
                     this_registry=self.this_registry,
                 )):

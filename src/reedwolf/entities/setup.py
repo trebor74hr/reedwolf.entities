@@ -528,7 +528,6 @@ class RegistryBase(IRegistry):
                 raise EntitySetupError(owner=self, msg=f"ModelsNS multi level DotExpressions (e.g. M.a.b) currently not supported, got: {owner_dexp_node} . {dexp_node_name}")
 
             if isinstance(owner_dexp_node, IFunctionDexpNode):
-                # if owner_dexp_node.name in ("Map", "First"): print("here34")
                 inspect_object = owner_dexp_node.get_type_info()
             else:
                 assert isinstance(owner_dexp_node, IAttrDexpNode)
@@ -538,8 +537,7 @@ class RegistryBase(IRegistry):
                 inspect_object = parent_type_info
                 if isinstance(owner_dexp_node, AttrDexpNodeForComponent):
                     parent_component: Optional[IComponent] = owner_dexp_node.component
-                    if GlobalSettings.is_unit_test:
-                        assert parent_type_info is owner_dexp_node.get_type_info()
+                    assert parent_type_info is owner_dexp_node.get_type_info()
 
                     # if this is a component, then try to find child component by name in direct children
                     children_dict = parent_component.get_children_dict()

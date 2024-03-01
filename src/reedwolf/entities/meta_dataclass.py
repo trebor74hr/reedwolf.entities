@@ -29,7 +29,7 @@ from .utils import (
     UNDEFINED,
 )
 from .global_settings import (
-    GLOBAL_SETTINGS,
+    GlobalSettings,
 )
 from .meta import (
     MAX_RECURSIONS,
@@ -209,6 +209,12 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
 
     @classmethod
     def _setup_setattr_immutable_guard(cls):
+        """
+        Done like this to have better control when to set up this.
+        ALT:
+            if GlobalSettings.is_development:
+                def __setattr__(self, ...):
+        """
         cls.__setattr__ = cls.__setattr_implementation
 
 
@@ -379,7 +385,8 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
             aval_new = aval
         return aval_new
 
-if GLOBAL_SETTINGS.is_unit_test:
+
+if GlobalSettings.is_development:
     ReedwolfDataclassBase._setup_setattr_immutable_guard()
 
 # ------------------------------------------------------------

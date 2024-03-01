@@ -58,6 +58,8 @@ from .registries import (
     UnboundModelsRegistry,
     ThisRegistryForModelKlass,
 )
+from .value_nodes import ValueNode
+
 
 # ------------------------------------------------------------
 
@@ -208,12 +210,21 @@ class BoundDataModelBase(IBoundDataModel):
         #                                 )
 
         container = self.get_first_parent_container(consider_self=False)
+        value_node_for_data_model = ValueNode(
+            component=self,
+            container=container,
+            instance_none_mode=apply_result.instance_none_mode,
+            parent_node=None,
+            # apply_result.current_frame.value_node if apply_result.current_frame else apply_result.top_value_node,
+            instance=instance,
+            trace_value_history=self.entity.settings.is_trace(),
+        )
 
         with apply_result.use_stack_frame(
                 ApplyStackFrame(
-                    container=container,
-                    component=self,
-                    value_node=NOT_APPLIABLE,
+                    # container=container,
+                    # component=self,
+                    value_node=value_node_for_data_model,
                     instance=instance,
                     # instance_new=None,
                     this_registry=this_registry,

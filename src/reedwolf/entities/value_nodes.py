@@ -2,7 +2,6 @@ from collections import OrderedDict
 from dataclasses import (
     dataclass,
     field,
-    replace as dataclass_clone,
     is_dataclass,
 )
 from typing import (
@@ -16,6 +15,7 @@ from .exceptions import (
     EntityInternalError,
     EntityApplyValueError,
 )
+from .global_settings import GlobalSettings
 from .utils import (
     UndefinedType,
     NA_IN_PROGRESS,
@@ -40,11 +40,12 @@ from .base import (
     IApplyResult,
     IContainer,
     ChangeOpEnum,
-    IStackFrame,
     InstanceAttrValue,
     GlobalConfig,
     ValueSetPhase,
-    IValueNode, IField,
+    IValueNode,
+    IField,
+    ApplyStackFrame,
 )
 from .value_accessors import (
     IValueAccessor,
@@ -99,7 +100,7 @@ class ValueNodeBase(IValueNode):
 
     # Setup later when ApplyStackFrame() is created, set with .set_apply_stack_frame()
     # this is cross reference, since stack_frame has ref to ValueNode too
-    apply_stack_frame: Union[IStackFrame, UndefinedType] = field(repr=False, default=UNDEFINED)
+    apply_stack_frame: Union[ApplyStackFrame, UndefinedType] = field(repr=False, default=UNDEFINED)
 
     # interrnal structures
     value_history: Union[UndefinedType, List[InstanceAttrValue]] = \
@@ -114,12 +115,13 @@ class ValueNodeBase(IValueNode):
     def __post_init__(self):
         self.name = self.component.name
 
-        if self.component.is_entity():
+        if self.component.is_entity() or self.component.is_data_model():
             assert self.parent_node is None
             self.top_node = self
             self.parent_container_node = None
             self._container_node = self
         else:
+            # if GlobalSettings.is_development:
             assert self.parent_node is not None
             assert self.parent_node.top_node.parent_node is None
             self.top_node = self.parent_node.top_node
@@ -216,7 +218,7 @@ class ValueNodeBase(IValueNode):
 
         return self
 
-    def set_apply_stack_frame(self, apply_stack_frame: IStackFrame):
+    def set_apply_stack_frame(self, apply_stack_frame: ApplyStackFrame):
         """
         called when creating ApplyStackFrame
         will be used in _finish_component()
@@ -227,7 +229,7 @@ class ValueNodeBase(IValueNode):
         if self.apply_stack_frame:
             raise EntityInternalError(owner=self, msg=f"apply_stack_frame is already set: {self.apply_stack_frame}")
         # TODO: make a copy to preserve original values. Maybe is not necessary.
-        apply_stack_frame_copy = dataclass_clone(apply_stack_frame)
+        apply_stack_frame_copy = apply_stack_frame.clone()
         self.apply_stack_frame = apply_stack_frame_copy
 
     # def is_top_node(self):
@@ -397,7 +399,7 @@ class ValueNodeBase(IValueNode):
         self.finished = True
 
     def clean(self):
-        if self.component.is_entity():
+        if self.component.is_entity() or self.component.is_data_model():
             assert self.parent_node is None
         else:
             if self.parent_node is None:
@@ -580,6 +582,8 @@ class ValueNode(ValueNodeBase):
 
 
     def add_to_container_children(self, child: Self):
+        if child.name == "offices":
+            print("here33")
         if child.name in self.container_children:
             raise EntityInternalError(owner=self, msg=f"Child {child} already in {self.container_children}: {self.container_children[child.name]}")
         self.container_children[child.name] = child

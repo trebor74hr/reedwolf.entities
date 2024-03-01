@@ -24,6 +24,8 @@ from dataclasses import (
     MISSING as DC_MISSING,
     make_dataclass,
     asdict,
+    InitVar,
+    replace as dataclass_clone,
 )
 from types import (
     MappingProxyType,
@@ -2114,8 +2116,6 @@ class IValueNode(IDexpValueSource):
     # - empty only on top tree node (Entity component)
     parent_node:  Optional[Self] = field(repr=False)
 
-    # top of the tree - automatically computed, must be TopValueNode
-    top_node:  Self = field(repr=False, init=False, compare=False)
 
     # use is_list() instead has_items
     #   when ItemsValueNode (container=SubentityItems)
@@ -2130,13 +2130,17 @@ class IValueNode(IDexpValueSource):
     # set only when item of parent.items (parent is SubentityItems)
     index0: Optional[Index0Type] = field(repr=False, default=None)
     key: Optional[KeyType] = field(repr=False, default=None)
-    key_string: KeyString = field(init=False, repr=True, default=UNDEFINED)
+
 
     # ------------------------------------------------------------
     # AUTOCOMPUTED
     # ------------------------------------------------------------
+    # top of the tree - automatically computed, must be TopValueNode
+    top_node:  Self = field(repr=False, init=False, compare=False)
+    key_string: KeyString = field(init=False, repr=True, default=UNDEFINED)
+
     # copy of component's name
-    name:       AttrName = field(init=False, repr=False)
+    name:       AttrName = field(init=False, repr=True)
 
     # used on locating F.<field-value-node> from other containers
     parent_container_node: Union[Self, UndefinedType] = field(init=False, repr=False, compare=False, default=UNDEFINED)
@@ -2177,10 +2181,10 @@ class ApplyStackFrame(IStackFrame):
 
     """
     # current container data instance which will be procesed: changed/validated/evaluated
-    component: IComponent
     # main container - class of instance - can be copied too but is a bit complicated
-    container: IContainer = field(repr=False)
     instance: ModelInstanceType
+    # container: InitVar[IContainer] = field(repr=False)
+    # component: InitVar[IComponent]
 
     # in value-node-tree current node - holds component/instance/container
     # can be NOT_APPLIABLE
@@ -2237,21 +2241,44 @@ class ApplyStackFrame(IStackFrame):
     # internal - filled in __post_init__
     # key_string: Optional[str] = field(init=False, repr=False, default=None)
 
+    # _component: IComponent = field(repr=False, init=False)
+    # _container: IContainer = field(repr=False, init=False)
+
     # used to check root value in models registry 
     data_model_root: Optional[IDataModel] = field(repr=False, init=False, default=None)
 
 
-    def __post_init__(self):
+    def __post_init__(self):  # , container: IContainer, component: IComponent
+        # self._component = component
+        # self._container = container
         self.clean()
 
-    def clean(self):
-        if not isinstance(self.container, IContainer):
-            raise EntityInternalError(owner=self, msg=f"Expected IContainer, got: {self.container}")
-        if not isinstance(self.component, IComponent):
-            raise EntityInternalError(owner=self, msg=f"Expected IComponent, got: {self.component}")
+    @property
+    def container(self) -> IContainer:
+        if not self.value_node:
+            raise EntityInternalError(owner=self, msg="Attribute 'container' can not be read, value_node not set.")
+        # assert self.value_node.container == self._container
+        # return self._container
+        return self.value_node.container
 
+    @property
+    def component(self) -> IComponent:
+        if not self.value_node:
+            raise EntityInternalError(owner=self, msg="Attribute 'component' can not be read, value_node not set.")
+        # assert self.value_node.component == self._component
+        # return self._component
+        return self.value_node.component
+
+    def clean(self):
+        # if not isinstance(self._container, IContainer):
+        #     raise EntityInternalError(owner=self, msg=f"Expected IContainer, got: {self.container}")
+        # if not isinstance(self.component, IComponent):
+        #     raise EntityInternalError(owner=self, msg=f"Expected IComponent, got: {self.component}")
         if self.index0 is not None and self.index0 < 0:
             raise EntityInternalError(owner=self, msg=f"index0 invalid value: {self.index0}")
+
+    def clone(self) -> Self:
+        return dataclass_clone(self)  # , container=self._container, component=self._component)
 
     def copy_from_previous_frame(self, previous_frame: Self):
         """
@@ -2301,10 +2328,10 @@ class ApplyStackFrame(IStackFrame):
             if not self.value_node:
                 raise EntityInternalError(owner=self, msg="value_node not set")
 
-            if not self.value_node.component == self.component:
+            if not self.value_node.component is self.component:
                 raise EntityInternalError(owner=self, msg=f"value_node component is different:\n {self.value_node.component} \n !=\n {self.component}")
 
-            self. value_node.clean()
+            self.value_node.clean()
 
         if self.instance_is_list is None:
             self.instance_is_list = False
