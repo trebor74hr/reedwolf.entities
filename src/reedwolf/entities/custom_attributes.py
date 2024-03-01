@@ -33,13 +33,13 @@ class Attribute(IAttribute):
             all_keys = set()
             for settings_source in settings_source_list:
                 all_keys.union(set(settings_source.fields.keys()))
-            models = [settings_source.klass for settings_source in settings_source_list]
+            models = [settings_source.model_klass for settings_source in settings_source_list]
             aval_names = get_available_names_example(attr_field, list(all_keys))
             raise EntitySetupNameError(owner=self,
                                        msg=f"Attribute {self.name} must be field name of class(es) '{models}', available: {aval_names}")
 
         # NOTE: attr_field is not used later
-        self.output_type_info = TypeInfo.get_or_create_by_type(py_type_hint=attr_field, caller=settings_source.klass)
+        self.output_type_info = TypeInfo.get_or_create_by_type(py_type_hint=attr_field, caller=settings_source.model_klass)
         self.settings_source = settings_source
         self.attr_field = attr_field
 
@@ -67,17 +67,17 @@ class AttributeByMethod(IAttribute):
         # NOTE: similar logic in functions.py :: FunctionByMethod.set_settings_class()
         py_function = settings_source = UNDEFINED
         for settings_source in settings_source_list:
-            py_function: FunctionNoArgs = getattr(settings_source.klass, self.name, UNDEFINED)
+            py_function: FunctionNoArgs = getattr(settings_source.model_klass, self.name, UNDEFINED)
             if py_function is not UNDEFINED:
                 break
 
         if py_function is UNDEFINED:
             # TODO: could I get all methods with no args?
-            models = [settings_source.klass for settings_source in settings_source_list]
+            models = [settings_source.model_klass for settings_source in settings_source_list]
             raise EntitySetupNameError(owner=self,
                                        msg=f"Method name '{self.name}' is not found within class(es): {models}")
 
-        klass = settings_source.klass
+        klass = settings_source.model_klass
         function_name = py_function.__name__
         if not is_instancemethod_by_name(klass, function_name):
             raise EntitySetupNameError(owner=self, msg=f"Function '{self.name}' is not instance method of class '{klass.__name__}'.")

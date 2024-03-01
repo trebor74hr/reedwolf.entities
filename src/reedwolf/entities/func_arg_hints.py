@@ -11,9 +11,9 @@ from .meta import (
     IFuncArgHint,
     IInjectFuncArgHint,
     TypeInfo,
-    ModelKlassType,
     AttrValue,
     IExecuteFuncArgHint,
+    ModelInstanceType,
 )
 from .exceptions import (
     EntityTypeError,
@@ -60,7 +60,7 @@ class DotexprExecuteOnItemFactoryFuncArgHint(IInjectFuncArgHint):
         return hash((self.__class__.__name__, self.type, self.inner_type))
 
     def get_apply_inject_value(self, apply_result: "IApplyResult", prep_arg: "PrepArg"
-                               ) -> Callable[[DotExpression, ModelKlassType], AttrValue]:
+                               ) -> Callable[[DotExpression, ModelInstanceType], AttrValue]:
         """
         create this registry function that retriieves settings processor
         which will crearte this factory for providded item
@@ -68,7 +68,7 @@ class DotexprExecuteOnItemFactoryFuncArgHint(IInjectFuncArgHint):
 
         def execute_dot_expr_w_this_registry_of_item(
                 dot_expr:  DotExpression,
-                item: Union[ModelKlassType, IValueNode],
+                item: Union[ModelInstanceType, IValueNode],
         ) -> AttrValue:
             # TODO: if this becommes heavy - instead of new frame, reuse existing and change instance only
             #       this_registry should be the same for same session (same type items)

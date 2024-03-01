@@ -33,7 +33,6 @@ from .meta_dataclass import (
 )
 from .meta import (
     NoneType,
-    ModelKlassType,
     is_model_klass,
     is_model_instance,
     ValuesTree,
@@ -502,10 +501,10 @@ class ApplyResult(IApplyResult):
         if self.finished:
             raise EntityInternalError(owner=self, msg="Already finished")
 
-        subentity_items_instance_list: ModelKlassType = NOT_APPLIABLE
-        subentity_items_instance_list_new: ModelKlassType = NOT_APPLIABLE
-        subentity_instance: Union[ModelKlassType, UndefinedType] = UNDEFINED
-        subentity_instance_new: Union[ModelKlassType, UndefinedType] = UNDEFINED
+        # subentity_items_instance_list: ModelInstanceType = NOT_APPLIABLE
+        subentity_items_instance_list_new: ModelInstanceType = NOT_APPLIABLE
+        # subentity_instance: Union[ModelInstanceType, UndefinedType] = UNDEFINED
+        subentity_instance_new: Union[ModelInstanceType, UndefinedType] = UNDEFINED
 
         in_component_only_tree = UNDEFINED
         if self.component_only and component is self.component_only:
@@ -841,7 +840,7 @@ class ApplyResult(IApplyResult):
     def _get_subentity_model_instances(self,
                                        subentity: IContainer,
                                        in_component_only_tree: bool
-                                       ) -> Tuple[ModelKlassType, ModelKlassType]:
+                                       ) -> Tuple[ModelInstanceType, ModelInstanceType]:
         """
         evaluate data_model.model_klass DotExpression and get instance
         and instance_new. Applies to SubentityItems and SubentitySingle.
@@ -874,8 +873,8 @@ class ApplyResult(IApplyResult):
                                                 depth: int,
                                                 in_component_only_tree: bool,
                                                 mode_subentity_items: bool,
-                                                # subentity_instance: Union[ModelKlassType, UndefinedType],
-                                                subentity_instance_new: Union[ModelKlassType, UndefinedType],
+                                                # subentity_instance: Union[ModelInstanceType, UndefinedType],
+                                                subentity_instance_new: Union[ModelInstanceType, UndefinedType],
                                                 ) -> ApplyStackFrame:
         new_frame = None
 
@@ -1050,8 +1049,8 @@ class ApplyResult(IApplyResult):
     def _apply_subentity_items(self,
                                subentity_items: SubEntityItems,
                                value_node: SubentityItemsValueNode,
-                               # instance_list: ModelKlassType,
-                               instance_list_new: ModelKlassType,
+                               # instance_list: ModelInstanceType,
+                               instance_list_new: ModelInstanceType,
                                in_component_only_tree:bool,
                                depth: int,
                                ) -> NoneType:
@@ -1061,7 +1060,7 @@ class ApplyResult(IApplyResult):
         """
         # instance_list, instance_list_new = self._get_subentity_model_instances(
         #             subentity_items, in_component_only_tree)
-        instance_list: ModelKlassType = value_node.instance
+        instance_list: ModelInstanceType = value_node.instance
 
         if instance_list is None:
             # TODO: checkk type_info is optional - similar to single case

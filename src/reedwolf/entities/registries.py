@@ -621,7 +621,7 @@ class ContextRegistry(RegistryBase):
                                                 msg=f"Attribute {attr_name} expected FieldName or MethodName instance, got: {attr_getter} / {type(attr_getter)}")
                 settings_source = attr_getter.setup_dexp_attr_source(settings_source_list)
                 klass_member = SettingsKlassMember(settings_type=settings_source.settings_type,
-                                                   klass=settings_source.klass,
+                                                   klass=settings_source.model_klass,
                                                    attribute=attr_getter)
                 # NOTE: No problem with override any more!
                 #           if attr_name in self.store:

@@ -368,7 +368,7 @@ class ValueNodeBase(IValueNode):
 
     # ------------------------------------------------------------
     def _make_dataclass_with_opt_fields(self,
-                                        current_instance_parent: ModelKlassType,
+                                        current_instance_parent: ModelInstanceType,
                                         attr_name_prev: AttrName,
                                         attr_name: AttrName,
                                         ) -> ModelKlassType:

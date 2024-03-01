@@ -1233,13 +1233,13 @@ class SettingsType(str, Enum):
 @dataclass
 class SettingsSource:
     settings_type: SettingsType
-    klass: ModelKlassType
+    model_klass: ModelKlassType
     _fields: Optional[Dict[AttrName, ModelField]] = field(init=False, repr=False, default=None)
 
     @property
     def fields(self):
         if self._fields is None:
-            self._fields = get_model_fields(self.klass)
+            self._fields = get_model_fields(self.model_klass)
         return self._fields
 
 @dataclass

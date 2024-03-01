@@ -83,7 +83,7 @@ class ReedwolfMetaclass(ABCMeta):
     #     """
     #     NOTE: this method is called in each instance creation, so it is crucial
     #           not to add logic that will slow down the whole system.
-    #           Therefore a several cache vars are added to klass.
+    #           Therefore a several cache vars are added to model_klass.
 
     #     Several uses:
     #        1) create instance and save initial arguments to instance._rwf_kwargs.
@@ -91,14 +91,14 @@ class ReedwolfMetaclass(ABCMeta):
     #           not passed init arguments with default_factory are also added to kwargs
     #           to cover some cases.
     #           ._rwf_kwargs are used later in copy().
-    #        2) Fill klass._RWF_ARG_NAMES with __init__() argument names.
+    #        2) Fill model_klass._RWF_ARG_NAMES with __init__() argument names.
     #           Must do it in lazy-init fashion - on first instance creation.
     #           Class argument will be used in copy().
     #           Can not do it in __new__, it is too early, I need result of decorator,
     #           i.e. dataclass(new_class), and in that moment fields/__init__ are not created.
-    #        3) fill klass._RWF_INIT_FUNC_ARGS - list of __init__ function arguments
+    #        3) fill model_klass._RWF_INIT_FUNC_ARGS - list of __init__ function arguments
     #           used internally for first 2 purposes.
-    #        3) fill klass._RWF_DC_FACTORY_ARGS - list of dataclass init fields
+    #        3) fill model_klass._RWF_DC_FACTORY_ARGS - list of dataclass init fields
     #           with default_factory
     #     """
     #     # extra_kwargs = {name: kwargs.pop(name)
@@ -121,44 +121,44 @@ class ReedwolfMetaclass(ABCMeta):
     #     # ------------------------------------------------------------
     #     # instance._rwf_kwargs = kwargs
 
-    #     # klass = instance.__class__
+    #     # model_klass = instance.__class__
     #     # if args:
     #     #     # NOTE: presuming order is preserved
-    #     #     if not hasattr(klass, "_RWF_INIT_FUNC_ARGS"):
-    #     #         klass._RWF_INIT_FUNC_ARGS = get_func_arguments(instance.__init__)
+    #     #     if not hasattr(model_klass, "_RWF_INIT_FUNC_ARGS"):
+    #     #         model_klass._RWF_INIT_FUNC_ARGS = get_func_arguments(instance.__init__)
 
     #     #     # ------------------------------------------------------------
     #     #     # merge: args + kwargs => self._rwf_kwargs
-    #     #     kwargs_from_args = {param_name: arg_value  for param_name, arg_value in zip(klass._RWF_INIT_FUNC_ARGS, args)}
+    #     #     kwargs_from_args = {param_name: arg_value  for param_name, arg_value in zip(model_klass._RWF_INIT_FUNC_ARGS, args)}
     #     #     same_params = set(kwargs_from_args.keys()).intersection(set(kwargs))
     #     #     if same_params:
     #     #         raise EntityInternalError(owner=instance, msg=f"Params overlap: {same_params}")
     #     #     instance._rwf_kwargs.update(kwargs_from_args)
 
     #     # if is_dataclass(instance):
-    #     #     if not hasattr(klass, "_RWF_DC_FACTORY_ARGS"):
-    #     #         klass._RWF_DC_FACTORY_ARGS = tuple(fld for fld in dc_fields(instance)
+    #     #     if not hasattr(model_klass, "_RWF_DC_FACTORY_ARGS"):
+    #     #         model_klass._RWF_DC_FACTORY_ARGS = tuple(fld for fld in dc_fields(instance)
     #     #                                            if fld.init and fld.default_factory != DC_MISSING)
 
     #     #     # lists/dicts - if not passed take their instances to make from them later
     #     #     #   cases to cover: entity.Entity(); entity.contains.append(StringField())
     #     #     args_with_default_factory = {fld.name: getattr(instance, fld.name)
-    #     #                                  for fld in klass._RWF_DC_FACTORY_ARGS
+    #     #                                  for fld in model_klass._RWF_DC_FACTORY_ARGS
     #     #                                  if fld.name not in instance._rwf_kwargs}
     #     #     instance._rwf_kwargs.update(args_with_default_factory)
 
     #     # # ------------------------------------------------------------
-    #     # # fill klass._RWF_ARG_NAMES
+    #     # # fill model_klass._RWF_ARG_NAMES
     #     # if not hasattr(instance.__class__, "_RWF_ARG_NAMES"):
     #     #     # code duplication for speed optimization
-    #     #     if not hasattr(klass, "_RWF_INIT_FUNC_ARGS"):
-    #     #         klass._RWF_INIT_FUNC_ARGS = get_func_arguments(instance.__init__)
+    #     #     if not hasattr(model_klass, "_RWF_INIT_FUNC_ARGS"):
+    #     #         model_klass._RWF_INIT_FUNC_ARGS = get_func_arguments(instance.__init__)
 
     #     #     # Should produce the same result as __init__ params parsing
     #     #     # if is_dataclass(instance):
     #     #     #     arg_names = [fld.name for fld in dc_fields(instance) if fld.init]
-    #     #     klass._RWF_ARG_NAMES = tuple(klass._RWF_INIT_FUNC_ARGS.keys()) \
-    #     #             if hasattr(klass, "__init__") else ()
+    #     #     model_klass._RWF_ARG_NAMES = tuple(model_klass._RWF_INIT_FUNC_ARGS.keys()) \
+    #     #             if hasattr(model_klass, "__init__") else ()
 
     #     return instance
 
@@ -241,12 +241,12 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
     @classmethod
     def __get_rwf_arg_names(cls) -> Iterable[str]:
         """
-        Lazy init klass._RWF_ARG_NAMES
+        Lazy init model_klass._RWF_ARG_NAMES
         """
         rwf_arg_names_varname = cls._get_cache_rwf_varname("_RWF_ARG_NAMES")
         if not hasattr(cls, rwf_arg_names_varname):
             rwf_init_func_args = get_func_arguments(cls.__init__)
-            # Should be the same as klass._RWF_DC_FIELD_NAMES
+            # Should be the same as model_klass._RWF_DC_FIELD_NAMES
             arg_names = tuple(rwf_init_func_args.keys()) if hasattr(cls, "__init__") else ()
             setattr(cls, rwf_arg_names_varname, arg_names)
             return arg_names
@@ -287,8 +287,8 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
     @classmethod
     def _get_cache_rwf_varname(cls, name_prefix: str) -> str:
         """
-        When class A inherits other class B, on first A() creation the process could use B klass variable
-        since it is not yet created for A klass. Therefore I need to put klass name into klass variable, to be sure to
+        When class A inherits other class B, on first A() creation the process could use B model_klass variable
+        since it is not yet created for A model_klass. Therefore I need to put model_klass name into model_klass variable, to be sure to
         get/set i.e. use proper variable.
         Example:
             EntityValueNode -> ValueNode
@@ -334,7 +334,7 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
                 rwf_dc_fields = getattr(klass, rwf_dc_fields_varname)
 
             # Tried to optimize - no diff (a bit slower, though)
-            # rwf_kwargs = [(fld, getattr(self, fld.name, UNDEFINED)) for fld in klass._RWF_DC_FIELDS]
+            # rwf_kwargs = [(fld, getattr(self, fld.name, UNDEFINED)) for fld in model_klass._RWF_DC_FIELDS]
             # rwf_kwargs = {fld.name: attr_val for fld, attr_val in rwf_kwargs
             #               if hasattr(attr_val, "_is_dexp_or_ns") or (
             #                 attr_val not in (UNDEFINED, DC_MISSING) and attr_val is not fld.default)}
