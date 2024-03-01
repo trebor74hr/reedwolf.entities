@@ -7,21 +7,12 @@ from typing import (
     Dict,
     Optional,
     Tuple,
-    Type, List,
+    Type,
+    List,
+    Union,
 )
 from collections import OrderedDict
 
-from .exceptions import (
-    EntityApplyError,
-    EntityValidationError,
-    EntityInternalError,
-    EntityApplyValueError,
-)
-from .expressions import (
-    ExecResult,
-    NotAvailableExecResult,
-    DotExpression,
-)
 from .utils import (
     UNDEFINED,
     NA_DEFAULTS_MODE,
@@ -29,6 +20,16 @@ from .utils import (
     NOT_APPLIABLE,
     to_repr,
     UndefinedType,
+)
+from .exceptions import (
+    EntityApplyError,
+    EntityValidationError,
+    EntityInternalError,
+    EntityApplyValueError,
+)
+from .meta_dataclass import (
+    MAX_RECURSIONS,
+    Self,
 )
 from .meta import (
     NoneType,
@@ -44,7 +45,11 @@ from .meta import (
     KeyType,
     ModelInstanceType,
 )
-from .meta_dataclass import MAX_RECURSIONS, Self
+from .expressions import (
+    ExecResult,
+    NotAvailableExecResult,
+    DotExpression,
+)
 from .base import (
     IField,
     AttrValue,
@@ -63,7 +68,12 @@ from .base import (
     IEvaluation,
     ValueSetPhase,
 )
-from .value_nodes import ValueNode, ItemsValueNode, TopValueNode
+from .value_nodes import (
+    ValueNode,
+    SubentityItemsValueNode,
+    EntityValueNode,
+    SubentityValueNode,
+)
 from .valid_base     import ValidationBase
 from .eval_base      import EvaluationBase
 from .valid_field    import FieldValidationBase
@@ -493,7 +503,9 @@ class ApplyResult(IApplyResult):
             raise EntityInternalError(owner=self, msg="Already finished")
 
         subentity_items_instance_list: ModelKlassType = NOT_APPLIABLE
-        subentity_items_current_instance_list_new: ModelKlassType = NOT_APPLIABLE
+        subentity_items_instance_list_new: ModelKlassType = NOT_APPLIABLE
+        subentity_instance: Union[ModelKlassType, UndefinedType] = UNDEFINED
+        subentity_instance_new: Union[ModelKlassType, UndefinedType] = UNDEFINED
 
         in_component_only_tree = UNDEFINED
         if self.component_only and component is self.component_only:
@@ -520,7 +532,7 @@ class ApplyResult(IApplyResult):
                 if self.instance is not NA_DEFAULTS_MODE:
                     raise EntityInternalError(owner=self, msg=f"Defaults mode - instance must be NA_DEFAULTS_MODE, got: {type(self.instance)}")
 
-            value_node = TopValueNode(
+            value_node = EntityValueNode(
                     component=self.entity,
                     instance_none_mode=self.instance_none_mode,
                     instance=self.instance,
@@ -563,24 +575,40 @@ class ApplyResult(IApplyResult):
                     trace_value_history=self.entity.settings.is_trace(),
                 )
                 if has_items:
-                    subentity_items_instance_list, subentity_items_current_instance_list_new = self._get_subentity_model_instances(
-                        subentity=component, in_component_only_tree=in_component_only_tree)
-                    value_node = ItemsValueNode(
+                    subentity_items_instance_list, subentity_items_instance_list_new = self._get_subentity_model_instances(
+                                                            subentity=component, in_component_only_tree=in_component_only_tree)
+                    value_node = SubentityItemsValueNode(
                             instance=subentity_items_instance_list,
                             **value_node_kwargs,
                             )
                 else:
                     if component.is_subentity():
-                        subentity_instance, subentity_current_instance_new = self._get_subentity_model_instances(
-                            subentity=component, in_component_only_tree=in_component_only_tree)
-                        instance = subentity_instance
-                    else:
-                        instance = self.current_frame.instance
+                        # ========================================
+                        # == SubEntityItems with single item ==
+                        #    will be processed as any other fields
+                        # ========================================
+                        subentity_instance, subentity_instance_new = self._get_subentity_model_instances(
+                                                                                subentity=component,
+                                                                                in_component_only_tree=in_component_only_tree)
+                        if subentity_instance is None:
+                            # TODO: check that type_info.is_optional ...
+                            ...
+                        elif isinstance(subentity_instance, (list, tuple)):
+                            raise EntityApplyValueError(owner=component, msg=f"Did not expected list/tuple, got: {subentity_instance}: {type(subentity_instance)}")
 
-                    value_node = ValueNode(
-                            instance=instance,
+                        elif not is_model_instance(subentity_instance):
+                            raise EntityApplyValueError(owner=component, msg=f"Expected single model instance, got: {subentity_instance}: {type(subentity_instance)}")
+
+                        value_node = SubentityValueNode(
+                            instance=subentity_instance,
                             **value_node_kwargs,
-                    )
+                        )
+                    else:
+                        value_node = ValueNode(
+                            instance=self.current_frame.instance,
+                            **value_node_kwargs,
+                        )
+
                 value_node.setup(apply_result=self)
                 parent_value_node.add_child(value_node)
 
@@ -607,8 +635,8 @@ class ApplyResult(IApplyResult):
             self._apply_subentity_items(
                 subentity_items=component,
                 value_node=value_node,
-                instance_list=subentity_items_instance_list,
-                current_instance_list_new=subentity_items_current_instance_list_new,
+                # instance_list=subentity_items_instance_list,
+                instance_list_new=subentity_items_instance_list_new,
                 in_component_only_tree=in_component_only_tree,
                 depth=depth,
             )
@@ -616,14 +644,14 @@ class ApplyResult(IApplyResult):
             return
             # -----------------------------------------------
 
-        # TODO: reuse: subentity_instance, subentity_current_instance_new
-        #   to avoid call to self._get_subentity_model_instances() again
         new_frame = self._create_apply_stack_frame_for_component(
                                           component=component,
                                           value_node=value_node,
                                           depth=depth,
                                           in_component_only_tree=in_component_only_tree,
                                           mode_subentity_items=mode_subentity_items,
+                                          # subentity_instance=subentity_instance,
+                                          subentity_instance_new=subentity_instance_new,
                                           )
         value_node.set_apply_stack_frame(apply_stack_frame=new_frame)
 
@@ -832,11 +860,11 @@ class ApplyResult(IApplyResult):
         instance = dexp_result.value
 
         # new instance if any
-        current_instance_new = self._get_subentity_current_instance_new(
+        instance_new = self._get_subentity_instance_new(
             subentity=subentity,
             in_component_only_tree=in_component_only_tree)
 
-        return instance, current_instance_new
+        return instance, instance_new
 
     # ------------------------------------------------------------
 
@@ -846,6 +874,8 @@ class ApplyResult(IApplyResult):
                                                 depth: int,
                                                 in_component_only_tree: bool,
                                                 mode_subentity_items: bool,
+                                                # subentity_instance: Union[ModelKlassType, UndefinedType],
+                                                subentity_instance_new: Union[ModelKlassType, UndefinedType],
                                                 ) -> ApplyStackFrame:
         new_frame = None
 
@@ -872,25 +902,27 @@ class ApplyResult(IApplyResult):
         elif not mode_subentity_items and component.is_subentity_any():
 
             # ---- SubEntityItems case -> process single or iterate all items -----
-            instance, current_instance_new = self._get_subentity_model_instances(
-                component, in_component_only_tree)
+            # assert subentity_instance is not UNDEFINED, subentity_instance
+            assert subentity_instance_new is not UNDEFINED, subentity_instance_new
 
-            # ---- SubEntity case
-            if not component.is_subentity():
-                raise EntityApplyValueError(owner=component, msg=f"Did not expect single instance: {to_repr(instance)}")
+            # instance, instance_new = self._get_subentity_model_instances(
+            #     component, in_component_only_tree)
 
-            # ========================================
-            # == SubEntityItems with single item ==
-            #    will be processed as any other fields
-            # ========================================
-            if instance is None:
-                # TODO: check that type_info.is_optional ...
-                ...
-            elif isinstance(instance, (list, tuple)):
-                raise EntityApplyValueError(owner=component, msg=f"Did not expected list/tuple, got: {instance}: {type(instance)}")
+            # # ---- SubEntity case
+            # if not component.is_subentity():
+            #     raise EntityApplyValueError(owner=component, msg=f"Did not expect single instance: {to_repr(subentity_instance)}")
+            # # ========================================
+            # # == SubEntityItems with single item ==
+            # #    will be processed as any other fields
+            # # ========================================
+            # if subentity_instance is None:
+            #     # TODO: check that type_info.is_optional ...
+            #     ...
+            # elif isinstance(subentity_instance, (list, tuple)):
+            #     raise EntityApplyValueError(owner=component, msg=f"Did not expected list/tuple, got: {subentity_instance}: {type(subentity_instance)}")
 
-            elif not is_model_instance(instance):
-                raise EntityApplyValueError(owner=component, msg=f"Expected single model instance, got: {instance}: {type(instance)}")
+            # elif not is_model_instance(subentity_instance):
+            #     raise EntityApplyValueError(owner=component, msg=f"Expected single model instance, got: {subentity_instance}: {type(subentity_instance)}")
 
             new_frame = ApplyStackFrame(
                 # container = component,
@@ -899,7 +931,7 @@ class ApplyResult(IApplyResult):
                 # must inherit previous instance
                 # parent_instance=self.current_frame.instance,
                 # instance = instance,
-                instance_new = current_instance_new,
+                instance_new = subentity_instance_new,
                 in_component_only_tree=in_component_only_tree,
             )
         elif mode_subentity_items:
@@ -1017,9 +1049,9 @@ class ApplyResult(IApplyResult):
 
     def _apply_subentity_items(self,
                                subentity_items: SubEntityItems,
-                               value_node: ValueNode,
-                               instance_list: ModelKlassType,
-                               current_instance_list_new: ModelKlassType,
+                               value_node: SubentityItemsValueNode,
+                               # instance_list: ModelKlassType,
+                               instance_list_new: ModelKlassType,
                                in_component_only_tree:bool,
                                depth: int,
                                ) -> NoneType:
@@ -1027,8 +1059,9 @@ class ApplyResult(IApplyResult):
         SubEntityItems with item List
         Recursion -> _apply(mode_subentity_items=True) -> ...
         """
-        # instance_list, current_instance_list_new = self._get_subentity_model_instances(
+        # instance_list, instance_list_new = self._get_subentity_model_instances(
         #             subentity_items, in_component_only_tree)
+        instance_list: ModelKlassType = value_node.instance
 
         if instance_list is None:
             # TODO: checkk type_info is optional - similar to single case
@@ -1047,12 +1080,12 @@ class ApplyResult(IApplyResult):
             raise EntityApplyValueError(owner=self, msg=f"{subentity_items}: Expected list/tuple in the new instance, got: {instance_list}")
 
         new_instances_by_key = None
-        if current_instance_list_new not in (None, UNDEFINED):
-            if not isinstance(current_instance_list_new, (list, tuple)):
-                raise EntityApplyValueError(owner=subentity_items, msg=f"Expected list/tuple in the new instance, got: {current_instance_list_new}")
+        if instance_list_new not in (None, UNDEFINED):
+            if not isinstance(instance_list_new, (list, tuple)):
+                raise EntityApplyValueError(owner=subentity_items, msg=f"Expected list/tuple in the new instance, got: {instance_list_new}")
 
             new_instances_by_key = {}
-            for index0, item_instance_new in enumerate(current_instance_list_new, 0):
+            for index0, item_instance_new in enumerate(instance_list_new, 0):
                 key = subentity_items.get_key_pairs_or_index0(instance=item_instance_new, index0=index0, apply_result=self)
                 if key in new_instances_by_key:
                     raise EntityApplyValueError(owner=subentity_items, msg=f"Duplicate key {key}, first item is: {new_instances_by_key[key]}")
@@ -1074,7 +1107,7 @@ class ApplyResult(IApplyResult):
                     raise EntityApplyValueError(owner=self, msg=f"Instance {instance} has key(s) with value None, got: {', '.join(missing_keys)}")
 
             change_op: Optional[ChangeOpEnum]  = None
-            if current_instance_list_new not in (None, UNDEFINED):
+            if instance_list_new not in (None, UNDEFINED):
                 item_instance_new = new_instances_by_key.get(key, UNDEFINED)
                 if item_instance_new is UNDEFINED:
                     item_instance_new = None
@@ -1112,7 +1145,7 @@ class ApplyResult(IApplyResult):
                 instance, index0, item_instance_new = \
                     instance_item.instance, instance_item.index0, instance_item.item_instance_new
                 # Go one level deeper
-                # not ItemsValueNode - emphasize distinction of item's parent node (also subentity, but collection)
+                # not SubentityItemsValueNode - emphasize distinction of item's parent node (also subentity, but collection)
                 item_value_node = ValueNode(
                         component = subentity_items,
                         container= subentity_items,
@@ -1126,7 +1159,7 @@ class ApplyResult(IApplyResult):
                         change_op=instance_item.change_op,
                 ).setup(apply_result=self)
 
-                assert isinstance(value_node, ItemsValueNode)
+                assert isinstance(value_node, SubentityItemsValueNode)
                 value_node.add_item(item_value_node)
 
                 with self.use_stack_frame(
@@ -1257,9 +1290,9 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def _get_subentity_current_instance_new(self, subentity: IContainer, in_component_only_tree:bool):
+    def _get_subentity_instance_new(self, subentity: IContainer, in_component_only_tree:bool):
         if self.instance_new_struct_type is None:
-            current_instance_new = None
+            instance_new = None
         elif self.instance_new_struct_type == StructEnum.MODELS_LIKE:
             if not isinstance(subentity.data_model.model_klass, DotExpression):
                 raise EntityInternalError(owner=self, msg=f"For subentity {subentity} expected data_model based on DotExpression, got: {subentity.data_model.model_klass}")
@@ -1299,22 +1332,22 @@ class ApplyResult(IApplyResult):
                                                 apply_result=self, 
                                                 )
                 # set new value
-                current_instance_new = dexp_result.value
-                if frame.data_model_root.type_info.is_list and not isinstance(current_instance_new, (list, tuple)):
+                instance_new = dexp_result.value
+                if frame.data_model_root.type_info.is_list and not isinstance(instance_new, (list, tuple)):
                     # TODO: temp fallback - resolve properly since this is not normal case ... (raise or ...)
-                    current_instance_new = [current_instance_new]
+                    instance_new = [instance_new]
             else:
-                current_instance_new = None
+                instance_new = None
 
         elif self.instance_new_struct_type == StructEnum.ENTITY_LIKE:
             exec_result = self.get_attr_value_by_comp_name(
                                 component=subentity,
                                 instance=self.current_frame.instance_new)
-            current_instance_new = exec_result.value
+            instance_new = exec_result.value
         else: 
             raise EntityInternalError(owner=self, msg=f"Invalid instance_new_struct_type = {self.instance_new_struct_type}")
 
-        return current_instance_new
+        return instance_new
 
 
     # ============================================================

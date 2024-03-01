@@ -2098,11 +2098,8 @@ class ValueSetPhase(str, Enum):
 @dataclass
 class IValueNode(IDexpValueSource):
 
-    component:  IComponent = field(repr=False)
     instance: ModelInstanceType = field(repr=False)
     instance_none_mode: bool = field(repr=False)
-
-
 
     # ------------------------------------------------------------
     # Following are all accessible by . operator in ValueExpressions
@@ -2112,17 +2109,19 @@ class IValueNode(IDexpValueSource):
     # should collect value history or not? defined by Settings.trace
     trace_value_history: bool = field(repr=False)
 
-    # it is  init=False in TopValueNode
+    # it is  init=False in EntityValueNode
     container: IContainer = field(repr=False)
 
-    # init=False for TopValueNode
+    # init=False for EntityValueNode
     # <field>.Parent
     # - empty only on top tree node (Entity component)
     parent_node:  Optional[Self] = field(repr=False)
 
+    # can be overridden - so must be last in the list of "obligatory" arguments
+    component:  IComponent = field(repr=False)
 
     # use is_list() instead has_items
-    #   when ItemsValueNode (container=SubentityItems)
+    #   when SubentityItemsValueNode (container=SubentityItems)
     #     has_items=True  - container - has filled .items[], has no children
     #   otherwise:
     #     has_items=False - individual item - with values, has children (some with values)
@@ -2142,7 +2141,7 @@ class IValueNode(IDexpValueSource):
     # ------------------------------------------------------------
     # AUTOCOMPUTED
     # ------------------------------------------------------------
-    # top of the tree - automatically computed, must be TopValueNode
+    # top of the tree - automatically computed, must be EntityValueNode
     top_node:  Self = field(repr=False, init=False, compare=False)
     key_string: KeyString = field(init=False, repr=True, default=UNDEFINED)
 

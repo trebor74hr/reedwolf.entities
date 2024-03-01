@@ -37,13 +37,6 @@ from .expressions import (
     ISetupSession,
     ExecResult, IThisRegistry,
 )
-from .expr_attr_nodes import (
-    AttrDexpNodeForTypeInfo,
-)
-from .functions import (
-    CustomFunctionFactory,
-    IFunction,
-)
 from .base import (
     get_name_from_bind,
     IDataModel,
@@ -53,11 +46,20 @@ from .base import (
     IUnboundDataModel,
     IBoundDataModel,
 )
+from .value_nodes import (
+    DataModelValueNode,
+)
+from .expr_attr_nodes import (
+    AttrDexpNodeForTypeInfo,
+)
+from .functions import (
+    CustomFunctionFactory,
+    IFunction,
+)
 from .registries import (
     UnboundModelsRegistry,
     ThisRegistryForModelKlass,
 )
-from .value_nodes import ValueNode
 
 
 # ------------------------------------------------------------
@@ -209,7 +211,7 @@ class BoundDataModelBase(IBoundDataModel):
         #                                 )
 
         container = self.get_first_parent_container(consider_self=False)
-        value_node_for_data_model = ValueNode(
+        value_node_for_data_model = DataModelValueNode(
             component=self,
             container=container,
             instance_none_mode=apply_result.instance_none_mode,

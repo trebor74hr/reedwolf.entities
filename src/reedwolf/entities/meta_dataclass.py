@@ -291,7 +291,7 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
         since it is not yet created for A klass. Therefore I need to put klass name into klass variable, to be sure to
         get/set i.e. use proper variable.
         Example:
-            TopValueNode -> ValueNode
+            EntityValueNode -> ValueNode
         """
         return f"{name_prefix}__{cls.__module__}__{cls.__name__}"
 

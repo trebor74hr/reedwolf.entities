@@ -427,7 +427,7 @@ def is_list_instance_or_type(maybe_list: Any) -> bool:
     if isinstance(maybe_list, TypeInfo):
         is_list = maybe_list.is_list
     elif isinstance(maybe_list, IDexpValueSource):
-        # ValueNode case - located on a single ValueNode (even within items component) or on a ItemsValueNode
+        # ValueNode case - located on a single ValueNode (even within items component) or on a SubentityItemsValueNode
         is_list = maybe_list.is_list()
     elif hasattr(maybe_list, "get_type_info"):
         is_list = maybe_list.get_type_info().is_list

@@ -51,6 +51,7 @@ from .base import (
     IValueNode,
     IField,
     ApplyStackFrame,
+    IDataModel, IFieldGroup, IComponent, IEntity,
 )
 from .value_accessors import (
     IValueAccessor,
@@ -128,6 +129,9 @@ class ValueNodeBase(IValueNode):
             self.parent_container_node = None
             self._container_node = self
         else:
+            if not isinstance(self.component, IComponent):
+                raise EntityInternalError(owner=self, msg=f"Expected IComponent, got: {self.component}")
+
             # if GlobalSettings.is_development:
             assert self.parent_node is not None
             assert self.parent_node.top_node.parent_node is None
@@ -483,8 +487,8 @@ class ValueNodeBase(IValueNode):
         if current_value is not UNDEFINED:
             values_dict["value_instance"] = current_value
 
-        if isinstance(self, ItemsValueNode):
-            # TODO: antipattern -> put in ItemsValueNode
+        if isinstance(self, SubentityItemsValueNode):
+            # TODO: antipattern -> put in SubentityItemsValueNode
             values_dict["subentity_items"] = []
             for item_value_node in self.items:
                 # RECURSION
@@ -505,6 +509,8 @@ class ValueNodeBase(IValueNode):
 
 @dataclass
 class ValueNode(ValueNodeBase):
+
+    component:  Union[IField, IFieldGroup] = field(repr=False, default=None)
 
     # has_items: bool = field(init=False, repr=True, default=False)
 
@@ -534,7 +540,7 @@ class ValueNode(ValueNodeBase):
         return False
 
     # def get_items(self) -> List[Self]:
-    #     raise EntityInternalError(owner=self, msg=f"get_items() available only on ItemsValueNode() instances")
+    #     raise EntityInternalError(owner=self, msg=f"get_items() available only on SubentityItemsValueNode() instances")
 
     def get_self_or_items(self) -> Union[Self, List[IValueNode]]:
         return self
@@ -623,10 +629,12 @@ class ValueNode(ValueNodeBase):
 
 
 @dataclass
-class TopValueNode(ValueNode):
+class EntityValueNode(ValueNode):
     """
     Just to have different type
     """
+    component: IEntity = field(repr=False, default=None)
+
     # <field>.Parent
     # - empty only on top tree node (Entity component)
     parent_node:  Optional[Self] = field(init=False, repr=False, default=None)
@@ -641,7 +649,10 @@ class TopValueNode(ValueNode):
 
 
 @dataclass
-class ItemsValueNode(ValueNodeBase):
+class SubentityItemsValueNode(ValueNodeBase):
+
+    # TODO: ISubentityItems
+    component: IContainer = field(repr=False, default=None)
 
     # has_items: bool = field(init=False, repr=True, default=True)
 
@@ -651,7 +662,7 @@ class ItemsValueNode(ValueNodeBase):
 
     def __post_init__(self):
         super().__post_init__()
-        assert self.component.is_subentity_any()
+        assert self.component.is_subentity_items()
         # TODO: items collide with dict.items(). maybe a rename to _items + get_items() would be better?
         self.items = []
 
@@ -671,7 +682,7 @@ class ItemsValueNode(ValueNodeBase):
         return self.items
 
     def get_value(self, strict: bool) -> List[IValueNode]:
-        # raise EntityInternalError(owner=self, msg=f"get_value() not available on ItemsValueNode() instances")
+        # raise EntityInternalError(owner=self, msg=f"get_value() not available on SubentityItemsValueNode() instances")
         if strict and not self.finished:
             raise EntityInternalError(owner=self, msg=f"Current value is not finished, last value: {self._value}")
         if self.finished:
@@ -699,3 +710,13 @@ class ItemsValueNode(ValueNodeBase):
             add_lines = item_node.dump_to_strlist(depth+1)
             lines.extend(add_lines)
 
+# ------------------------------------------------------------
+
+
+class SubentityValueNode(ValueNode):
+    # TODO: ISubentity
+    component: IContainer = field(repr=False, default=None)
+
+
+class DataModelValueNode(ValueNode):
+    component:  IDataModel = field(repr=False)

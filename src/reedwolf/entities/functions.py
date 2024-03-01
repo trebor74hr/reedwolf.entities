@@ -477,7 +477,7 @@ class IFunction(IFunctionDexpNode, ABC):
             # must execute callable in exp_arg.type_info.py_type_hint
             execute_func_arg_hint = exp_arg.type_info.py_type_hint
         elif exp_arg.type_info.is_item_type:
-            # ListItemType -> input is ValueNode or ItemsValueNode -> return self or .items
+            # ListItemType -> input is ValueNode or SubentityItemsValueNode -> return self or .items
             if exp_arg.type_info.is_item_type_list:
                 if isinstance(arg_value, list):
                     # check each list item and leave arg_value as is
@@ -489,7 +489,7 @@ class IFunction(IFunctionDexpNode, ABC):
                     if not (isinstance(arg_value, IDexpValueSource) and arg_value.is_list()):
                         raise EntityApplyTypeError(owner=exp_arg,
                                                    msg=f"Expected IDexpValueSource instance (i.e. ValueNode), got: {arg_value} / {type(arg_value)}")
-                    # will retrieve ItemsValueNode.items
+                    # will retrieve SubentityItemsValueNode.items
                     arg_value = arg_value.get_self_or_items()
             else:
                 # check type and leave value as is - ValueNode
@@ -498,7 +498,7 @@ class IFunction(IFunctionDexpNode, ABC):
 
         elif isinstance(arg_value, IDexpValueSource):
             # ValueNode -> get real value
-            assert not arg_value.is_list(), "TODO: check this case: ItemsValueNode -> need to get_value() i.e. real value"
+            assert not arg_value.is_list(), "TODO: check this case: SubentityItemsValueNode -> need to get_value() i.e. real value"
             arg_value = arg_value.get_value(strict=False)
         elif isinstance(arg_value, (DotExpression, IDotExpressionNode)):
             # argument is DotExpression which needs to be executed (evaluated), e.g. This.Instance

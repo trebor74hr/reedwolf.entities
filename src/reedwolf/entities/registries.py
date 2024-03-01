@@ -86,7 +86,7 @@ from .setup import (
     RegistryUseDenied,
 )
 from .value_nodes import (
-    ItemsValueNode,
+    SubentityItemsValueNode,
 )
 
 
@@ -480,7 +480,7 @@ class LocalFieldsRegistry(RegistryBase):
             # complex case - field is not in current value_node container
             # - the setup phase has found it in some other container
             # - follow the path, first go up and then go down to locate the container
-            # - in down path no ItemsValueNode container should be found
+            # - in down path no SubentityItemsValueNode container should be found
             # TODO: logger.log() # print(f"{attr_name} -> up: {attr_dexp_node.attr_value_container_path.path_up}, down: {attr_dexp_node.attr_value_container_path.path_down}")
             # ------------------------------------------------------------
             # GO UP
@@ -492,9 +492,9 @@ class LocalFieldsRegistry(RegistryBase):
                     break  # travel up ended
                 container_id = path_up.pop(0)
                 container_value_node_curr = (container_value_node_curr if container_value_node_curr else value_node).parent_container_node
-                if isinstance(container_value_node_curr, ItemsValueNode):
+                if isinstance(container_value_node_curr, SubentityItemsValueNode):
                     # when items, need to jump over - i.e. one level up
-                    # ItemsValueNode is intermediate node object that holds all items
+                    # SubentityItemsValueNode is intermediate node object that holds all items
                     container_value_node_curr = container_value_node_curr.parent_container_node
 
                 if not (container_value_node_curr and container_value_node_curr.name == container_id):
@@ -513,7 +513,7 @@ class LocalFieldsRegistry(RegistryBase):
                     break  # travel up ended
                 value_node_name = path_down.pop(0)
                 if not hasattr(container_value_node_curr, "container_children"):
-                    # ItemsValueNode does not have this property
+                    # SubentityItemsValueNode does not have this property
                     raise EntityInternalError(owner=self, msg=f"IValueNode is not ValueNode container {container_value_node_curr}")
                 value_node_temp = container_value_node_curr.container_children.get(value_node_name, None)
                 if not value_node_temp:
