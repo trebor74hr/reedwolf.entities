@@ -5,6 +5,7 @@ from dataclasses import (
     fields as dc_fields,
     MISSING as DC_MISSING,
 )
+from enum import IntEnum
 from typing import (
     List,
     Optional,
@@ -12,7 +13,7 @@ from typing import (
     Type,
     Union,
     Any,
-    Callable,
+    Callable, NewType, Iterable,
 )
 # immutable dict - python 3.3+
 # https://stackoverflow.com/questions/11014262/how-to-create-an-immutable-dictionary-in-python
@@ -31,12 +32,28 @@ from .utils import (
 from .global_settings import (
     GlobalSettings,
 )
-from .meta import (
-    MAX_RECURSIONS,
-    SELF_ARG_NAME,
-    Self, ComponentStatus,
-    ERR_MSG_IMMUTABLE,
-)
+
+# ------------------------------------------------------------
+
+try:
+    from typing import Self
+except ImportError:
+    # TODO: consider using typing_extensions for python version < 3.11
+    Self = NewType("Self", Any)
+
+MAX_RECURSIONS: int = 30
+
+SELF_ARG_NAME = "self"
+
+ERR_MSG_IMMUTABLE = ("Change is not allowed. Instance is setup and is in immutable state. "
+                     "You can .copy() and change the new instance before .setup() is called.")
+
+class ComponentStatus(IntEnum):
+    draft = 0
+    did_init = 1
+    did_phase_one = 2
+    finished = 3
+
 
 
 # ------------------------------------------------------------
@@ -171,8 +188,10 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
         assert self._status != ComponentStatus.finished, self
 
         klass = self.__class__
-        if not hasattr(klass, "_RWF_DC_CACHE_FIELD_NAMES"):
-            raise EntityInternalError(owner=self, msg="_RWF_DC_CACHE_FIELD_NAMES is not yet set.")
+
+        rwf_dc_cache_field_names_varname = klass._get_cache_rwf_varname("_RWF_DC_CACHE_FIELD_NAMES")
+        if not hasattr(klass, rwf_dc_cache_field_names_varname):
+            raise EntityInternalError(owner=self, msg=f"{rwf_dc_cache_field_names_varname} is not yet set.")
 
         # ALT: only arguments from __init__
         # for arg_name in self.__get_rwf_arg_names():
@@ -202,7 +221,8 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
         # if getattr(self, "_immutable", None):
         # if self._immutable:
         if self._status == ComponentStatus.finished \
-          and not (getattr(self, key, UNDEFINED) == UNDEFINED and key in self._RWF_DC_CACHE_FIELD_NAMES):
+          and not (getattr(self, key, UNDEFINED) == UNDEFINED
+                   and key in getattr(self.__class__, self._get_cache_rwf_varname("_RWF_DC_CACHE_FIELD_NAMES"))):
             # cache values are allowed to be set only once (not existing or initialized to UNDEFINED)
             raise EntityImmutableError(owner=self, msg=ERR_MSG_IMMUTABLE)
         super().__setattr__(key, value)
@@ -219,17 +239,19 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
 
 
     @classmethod
-    def __get_rwf_arg_names(cls) -> List[str]:
+    def __get_rwf_arg_names(cls) -> Iterable[str]:
         """
         Lazy init klass._RWF_ARG_NAMES
         """
-        if not hasattr(cls, "_RWF_ARG_NAMES"):
+        rwf_arg_names_varname = cls._get_cache_rwf_varname("_RWF_ARG_NAMES")
+        if not hasattr(cls, rwf_arg_names_varname):
             rwf_init_func_args = get_func_arguments(cls.__init__)
-
             # Should be the same as klass._RWF_DC_FIELD_NAMES
-            cls._RWF_ARG_NAMES = tuple(rwf_init_func_args.keys()) \
-                if hasattr(cls, "__init__") else ()
-        return cls._RWF_ARG_NAMES
+            arg_names = tuple(rwf_init_func_args.keys()) if hasattr(cls, "__init__") else ()
+            setattr(cls, rwf_arg_names_varname, arg_names)
+            return arg_names
+
+        return getattr(cls, rwf_arg_names_varname)
 
 
     def change(self, **kwargs) -> Self:
@@ -262,6 +284,17 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
 
         return self._copy(traverse=traverse, as_class=as_class, change=change)
 
+    @classmethod
+    def _get_cache_rwf_varname(cls, name_prefix: str) -> str:
+        """
+        When class A inherits other class B, on first A() creation the process could use B klass variable
+        since it is not yet created for A klass. Therefore I need to put klass name into klass variable, to be sure to
+        get/set i.e. use proper variable.
+        Example:
+            TopValueNode -> ValueNode
+        """
+        return f"{name_prefix}__{cls.__module__}__{cls.__name__}"
+
 
     def _getset_rwf_kwargs(self):
         """
@@ -290,10 +323,15 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
             # from .expressions import DotExpression
 
             klass = self.__class__
-            if not hasattr(klass, "_RWF_DC_FIELDS"):
+            rwf_dc_fields_varname = klass._get_cache_rwf_varname("_RWF_DC_FIELDS")
+            if not hasattr(klass, rwf_dc_fields_varname):
                 dc_field_set = dc_fields(self)
-                klass._RWF_DC_FIELDS = [fld for fld in dc_field_set if fld.init]
-                klass._RWF_DC_CACHE_FIELD_NAMES = [fld.name for fld in dc_field_set if fld.metadata.get("cache", False)]
+                rwf_dc_fields = [fld for fld in dc_field_set if fld.init]
+                setattr(klass, rwf_dc_fields_varname, rwf_dc_fields)
+                setattr(klass, klass._get_cache_rwf_varname("_RWF_DC_CACHE_FIELD_NAMES"),
+                        [fld.name for fld in dc_field_set if fld.metadata.get("cache", False)])
+            else:
+                rwf_dc_fields = getattr(klass, rwf_dc_fields_varname)
 
             # Tried to optimize - no diff (a bit slower, though)
             # rwf_kwargs = [(fld, getattr(self, fld.name, UNDEFINED)) for fld in klass._RWF_DC_FIELDS]
@@ -301,7 +339,7 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
             #               if hasattr(attr_val, "_is_dexp_or_ns") or (
             #                 attr_val not in (UNDEFINED, DC_MISSING) and attr_val is not fld.default)}
             rwf_kwargs = {}
-            for fld in klass._RWF_DC_FIELDS:
+            for fld in rwf_dc_fields:
                 attr_name = fld.name
                 attr_val = getattr(self, attr_name, UNDEFINED)
                 # if isinstance(attr_val, DotExpression) or Namespace
@@ -357,6 +395,7 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
                       for aname, aval in rwf_kwargs.items()}
             # create instance from the same class with *identical* arguments
             # OLD: instance_copy = as_class(*args, **kwargs)
+            # TODO: consider wrapping it in try: except: and enrich it
             instance_copy = as_class(**kwargs)
             instances_copied[self_id] = instance_copy
 
@@ -411,5 +450,4 @@ def get_func_arguments(func: Callable) -> Dict[str, Any]:
 #     setattr(self, attr_name, property(lambda self: attr_val))
 # so the only solution is to have standard __setattr__
 # which denies change when ._immutable
-
 

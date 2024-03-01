@@ -41,6 +41,10 @@ from .namespaces import (
     ModelsNS,
     FieldsNS,
     )
+from .meta_dataclass import (
+    ComponentStatus,
+    Self,
+)
 from .meta import (
     STANDARD_TYPE_LIST,
     TransMessageType,
@@ -48,14 +52,12 @@ from .meta import (
     is_model_klass,
     get_model_fields,
     ModelKlassType,
-    Self,
     NoneType,
     Index0Type,
     KeyType,
     KeyPairs,
     ModelInstanceType,
     ERR_MSG_ATTR_REQUIRED,
-    ComponentStatus,
 )
 from .base import (
     get_name_from_bind,

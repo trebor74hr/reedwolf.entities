@@ -42,6 +42,11 @@ from .namespaces import (
     ModelsNS,
     ContextNS,
 )
+from .meta_dataclass import (
+    ReedwolfDataclassBase,
+    ComponentStatus,
+    Self,
+)
 from .meta import (
     TypeInfo,
     FunctionArgumentsType,
@@ -50,14 +55,11 @@ from .meta import (
     HookOnFinishedAllCallable,
     LiteralType,
     AttrName,
-    Self,
     AttrValue,
     NoneType,
     KlassMember,
-    ComponentStatus,
     IDexpValueSource,
 )
-from .meta_dataclass import ReedwolfDataclassBase
 
 
 # ------------------------------------------------------------

@@ -10,8 +10,8 @@ from .exceptions import (
     EntityTypeError,
     EntityNameNotFoundError, EntityInstatiateError,
 )
+from .meta_dataclass import Self
 from .meta import (
-    Self,
     AttrName,
     IAttribute,
     SettingsType,

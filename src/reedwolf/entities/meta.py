@@ -27,7 +27,7 @@ from typing import (
     Sequence as SequenceType,
     Iterable, Type as TypingType,
 )
-from enum import Enum, IntEnum
+from enum import Enum
 from decimal import Decimal
 from datetime import (
     date,
@@ -44,13 +44,12 @@ from dataclasses import (
     make_dataclass,
 )
 
-MAX_RECURSIONS: int = 30
-
-try:
-    from typing import Self
-except ImportError:
-    # TODO: consider using typing_extensions for python version < 3.11
-    Self = NewType("Self", Any)
+from .meta_dataclass import (
+    ReedwolfDataclassBase,
+    MAX_RECURSIONS,
+    SELF_ARG_NAME,
+    Self,
+)
 
 try:
     # ----------------------------------------
@@ -151,8 +150,6 @@ AttrName = TypeVar("AttrName", bound=str)
 AttrValue = TypeVar("AttrValue", bound=Any)
 AttrIndex = TypeVar("AttrIndex", bound=int)
 
-SELF_ARG_NAME = "self"
-
 # used in Container.container_id and Entity.containers
 ContainerId = TypeVar("ContainerId", bound=str)
 
@@ -169,16 +166,9 @@ ERR_MSG_ATTR_REQUIRED = "Attribute '{}' is required."
 
 ERR_MSG_SUPPORTED = ("Supporting custom and standard python types, and typing: Optional, Union[..., NoneType] "
                     "and Sequence/List[ py-types | Union[py-types, NoneType]].")
-ERR_MSG_IMMUTABLE = ("Change is not allowed. Instance is setup and is in immutable state. "
-                       "You can .copy() and change the new instance before .setup() is called.")
+
 
 # ------------------------------------------------------------
-
-class ComponentStatus(IntEnum):
-    draft = 0
-    did_init = 1
-    did_phase_one = 2
-    finished = 3
 
 
 # class AttrDexpNodeTypeEnum(str, Enum):
@@ -1173,7 +1163,7 @@ def dataclass_type_to_tuple(dataclass_klass: Type, depth: int=0) -> List[Tuple[A
     recursive
     used for unit tests
     """
-    if depth>MAX_RECURSIONS:
+    if depth> MAX_RECURSIONS:
         raise EntityInternalError(msg=f"Reached maximum recrusion level: {depth}")
 
     if not is_dataclass(dataclass_klass):
@@ -1337,7 +1327,8 @@ FunctionNoArgs = Callable[[], Any]
 #     FuncArgDotExprBoolType: bool,
 # }
 
-class IDexpValueSource:
+@dataclass
+class IDexpValueSource(ReedwolfDataclassBase):
     """
     Used in IValueNode
     """

@@ -27,23 +27,20 @@ from .exceptions import (
 from .namespaces import (
     Namespace,
 )
-from .expressions import (
-    IDotExpressionNode,
-    RegistryRootValue,
-)
+from .meta_dataclass import ComponentStatus
 from .meta import (
     TypeInfo,
     is_function,
-    ModelField,
     AttrName,
     AttrValue,
-    NoneType,
     KlassMember,
     ContainerId,
-    ComponentStatus,
     is_list_instance_or_type,
     IDexpValueSource,
-    IAttribute,
+)
+from .expressions import (
+    IDotExpressionNode,
+    RegistryRootValue,
 )
 from .custom_attributes import (
     Attribute,

@@ -15,7 +15,6 @@ from .exceptions import (
     EntityInternalError,
     EntityApplyValueError,
 )
-from .global_settings import GlobalSettings
 from .utils import (
     UndefinedType,
     NA_IN_PROGRESS,
@@ -23,15 +22,21 @@ from .utils import (
     NA_DEFAULTS_MODE,
     UNDEFINED,
 )
-from .meta import (
+from .meta_dataclass import (
+    MAX_RECURSIONS,
     Self,
+    ComponentStatus,
+)
+from .meta import (
     AttrValue,
     NoneType,
     KeyString,
     AttrName,
     ModelKlassType,
     get_dataclass_field_type_info,
-    make_dataclass_with_optional_fields, ModelInstanceType, ComponentTreeWValuesType, MAX_RECURSIONS,
+    make_dataclass_with_optional_fields,
+    ModelInstanceType,
+    ComponentTreeWValuesType,
 )
 from .expressions import (
     ExecResult,
@@ -68,10 +73,13 @@ class ValueNodeBase(IValueNode):
     _accessor: IValueAccessor = field(init=False, default=UNDEFINED, repr=False)
 
     # used only for computing .key
-    _container_node: Self = field(repr=False, init=False, compare=False, default=None)
+    _container_node: IValueNode = field(repr=False, init=False, compare=False, default=None)
 
     # <field>.Value
     _value: Union[AttrValue, UndefinedType] = field(repr=False, init=False, default=UNDEFINED)
+
+    # TODO: replace .initialized and .finished with ._status
+    _status: ComponentStatus = field(init=False, repr=False, default=ComponentStatus.draft)
 
     # initial value is filled, ready for evaluations
     initialized: bool = field(repr=False, init=False, default=False)
@@ -111,7 +119,6 @@ class ValueNodeBase(IValueNode):
     _instance_parent: Union[ModelInstanceType, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
     _attr_name_last: Union[AttrName, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
 
-
     def __post_init__(self):
         self.name = self.component.name
 
@@ -130,7 +137,7 @@ class ValueNodeBase(IValueNode):
             assert self.parent_container_node.component.is_container(), self.parent_container_node
             assert self.parent_container_node and self.parent_container_node != self
 
-            if isinstance(self.parent_container_node, ValueNode):
+            if not self.copy_mode and isinstance(self.parent_container_node, ValueNode):
                 # only for single containers are unique and can be fetched
                 self.parent_container_node.add_to_container_children(self)
 
@@ -220,8 +227,9 @@ class ValueNodeBase(IValueNode):
 
     def set_apply_stack_frame(self, apply_stack_frame: ApplyStackFrame):
         """
-        called when creating ApplyStackFrame
-        will be used in _finish_component()
+        Called when creating ApplyStackFrame - but only in 2 places (what is enough).
+        Only used in _finish_component() and is necessary.
+        TODO: check if this is really necessary - circular dependency Stack -> ValueNode -> Stack
         """
         assert apply_stack_frame
         if not apply_stack_frame.value_node == self:
@@ -384,6 +392,7 @@ class ValueNodeBase(IValueNode):
         if self.finished: # and self._value is not NA_DEFAULTS_MODE:
             raise EntityInternalError(owner=self, msg=f"Invalid state, already marked as finished, last value: {self._value}")
         self.initialized = True
+        self._status = ComponentStatus.did_init
 
     def mark_finished(self):
         """
@@ -397,6 +406,7 @@ class ValueNodeBase(IValueNode):
         if self.change_op is None and self._value != self.init_value:
             self.change_op = ChangeOpEnum.UPDATE
         self.finished = True
+        self._status = ComponentStatus.finished
 
     def clean(self):
         if self.component.is_entity() or self.component.is_data_model():
@@ -499,10 +509,10 @@ class ValueNode(ValueNodeBase):
     # has_items: bool = field(init=False, repr=True, default=False)
 
     # <field>.Children - when component has children - initialized with empty {}, later filled
-    children:   Union[UndefinedType, Dict[AttrName, Self]] = field(repr=False, init=False, default=UNDEFINED)
+    children:   Union[UndefinedType, Dict[AttrName, IValueNode]] = field(repr=False, init=False, default=UNDEFINED)
 
     # F.<field-name> filled only if container - contains all fields (flattens FieldGroup and BooleanFeild children field tree)
-    container_children: Dict[AttrName, Self] = field(repr=False, init=False, default_factory=dict)
+    container_children: Dict[AttrName, IValueNode] = field(repr=False, init=False, default_factory=dict)
 
     # TODO: # F.<field-name>
     # TODO: # originally initialized in conteiner_node and all children (except SubEntityItems),
@@ -526,7 +536,7 @@ class ValueNode(ValueNodeBase):
     # def get_items(self) -> List[Self]:
     #     raise EntityInternalError(owner=self, msg=f"get_items() available only on ItemsValueNode() instances")
 
-    def get_self_or_items(self) -> Union[Self, List[Self]]:
+    def get_self_or_items(self) -> Union[Self, List[IValueNode]]:
         return self
 
     def set_value(self, value: AttrValue, dexp_result: Optional[ExecResult], value_set_phase: ValueSetPhase) -> NoneType:
@@ -581,14 +591,14 @@ class ValueNode(ValueNodeBase):
         return self._value
 
 
-    def add_to_container_children(self, child: Self):
-        if child.name == "offices":
-            print("here33")
+    def add_to_container_children(self, child: IValueNode):
+        if child.name is None:
+            raise EntityInternalError(owner=self, msg=f"Child {child} name not set")
         if child.name in self.container_children:
             raise EntityInternalError(owner=self, msg=f"Child {child} already in {self.container_children}: {self.container_children[child.name]}")
         self.container_children[child.name] = child
 
-    def add_child(self, value_node: Self):
+    def add_child(self, value_node: IValueNode):
         if self.children is UNDEFINED:
             raise EntityInternalError(owner=self, msg=f"failed to add {value_node}, already children dict not initialized")
         # TODO: assert value_node is not self
@@ -637,7 +647,7 @@ class ItemsValueNode(ValueNodeBase):
 
     # <field>.Items
     # - when component has items - initialized with empty {}, later filled
-    items:      Union[UndefinedType, List[Self]] = field(repr=False, init=False, default=UNDEFINED)
+    items:      Union[UndefinedType, List[IValueNode]] = field(repr=False, init=False, default=UNDEFINED)
 
     def __post_init__(self):
         super().__post_init__()
@@ -651,11 +661,16 @@ class ItemsValueNode(ValueNodeBase):
 
     # def get_items(self) -> List[Self]:
     #     return self.items
+    def add_child(self, value_node: IValueNode):
+        raise EntityInternalError(owner=self, msg=f"Should not be called")
 
-    def get_self_or_items(self) -> Union[Self, List[Self]]:
+    def set_value(self, value: AttrValue, dexp_result: Optional[ExecResult], value_set_phase: ValueSetPhase) -> NoneType:
+        raise EntityInternalError(owner=self, msg=f"Should not be called")
+
+    def get_self_or_items(self) -> Union[Self, List[IValueNode]]:
         return self.items
 
-    def get_value(self, strict: bool) -> List[Self]:
+    def get_value(self, strict: bool) -> List[IValueNode]:
         # raise EntityInternalError(owner=self, msg=f"get_value() not available on ItemsValueNode() instances")
         if strict and not self.finished:
             raise EntityInternalError(owner=self, msg=f"Current value is not finished, last value: {self._value}")
@@ -665,7 +680,7 @@ class ItemsValueNode(ValueNodeBase):
             raise EntityInternalError(owner=self, msg=f"Current value is not possible in ItemsValueNode after finished, last value: {self._value}")
         return self._value
 
-    def add_item(self, value_node: Self):
+    def add_item(self, value_node: IValueNode):
         # TODO: assert value_node is not self
         # TODO: assert value_node.parent_node is not self
         self.items.append(value_node)

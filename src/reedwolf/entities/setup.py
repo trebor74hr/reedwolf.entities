@@ -34,14 +34,7 @@ from .namespaces import (
     Namespace,
     ModelsNS,
 )
-from .expressions import (
-    DotExpression,
-    IDotExpressionNode,
-    IFunctionDexpNode,
-    IRegistry,
-    ISetupSession,
-    RegistryRootValue,
-)
+from .meta_dataclass import ComponentStatus
 from .meta import (
     is_model_klass,
     FunctionArgumentsType,
@@ -51,9 +44,16 @@ from .meta import (
     HookOnFinishedAllCallable,
     get_model_fields,
     AttrName,
-    ComponentStatus,
     is_list_instance_or_type,
     ListChildField,
+)
+from .expressions import (
+    DotExpression,
+    IDotExpressionNode,
+    IFunctionDexpNode,
+    IRegistry,
+    ISetupSession,
+    RegistryRootValue,
 )
 from .base import (
     IComponentFields,

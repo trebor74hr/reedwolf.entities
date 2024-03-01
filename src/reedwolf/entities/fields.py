@@ -57,6 +57,10 @@ from .namespaces import (
     FieldsNS,
     ThisNS,
 )
+from .meta_dataclass import (
+    ComponentStatus,
+    Self,
+)
 from .meta import (
     TransMessageType,
     TypeInfo,
@@ -66,8 +70,6 @@ from .meta import (
     get_enum_member_py_type,
     EmptyFunctionArguments,
     STANDARD_TYPE_LIST,
-    Self,
-    ComponentStatus,
     ERR_MSG_ATTR_REQUIRED,
 )
 from .base import (

@@ -37,23 +37,23 @@ from .namespaces import (
     ContextNS,
     OperationsNS,
 )
-from .expressions import (
-    DotExpression,
-    IDotExpressionNode,
-    IThisRegistry,
-    RegistryRootValue,
-)
+from .meta_dataclass import Self
 from .meta import (
     ModelKlassType,
     get_model_fields,
     TypeInfo,
     AttrName,
-    Self,
     KlassMember,
     SettingsType,
     IAttribute,
     CustomCtxAttributeList,
     ContainerId,
+)
+from .expressions import (
+    DotExpression,
+    IDotExpressionNode,
+    IThisRegistry,
+    RegistryRootValue,
 )
 from .base import (
     ReservedAttributeNames,

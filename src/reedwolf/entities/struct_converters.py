@@ -25,8 +25,8 @@ from .exceptions import (
     EntityTypeError,
 )
 from .expressions import DotExpression
+from .meta_dataclass import MAX_RECURSIONS
 from .meta import (
-    MAX_RECURSIONS,
     ModelKlassType,
     AttrValue,
     UNDEFINED,

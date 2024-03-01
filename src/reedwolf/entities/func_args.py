@@ -26,6 +26,7 @@ from .exceptions import (
     EntitySetupTypeError,
     EntityInternalError,
     )
+from .meta_dataclass import SELF_ARG_NAME
 from .meta import (
     FunctionArgumentsType,
     TypeInfo,
@@ -33,7 +34,6 @@ from .meta import (
     is_function,
     NoneType,
     IFuncArgHint,
-    SELF_ARG_NAME,
 )
 from .expressions import (
     DotExpression,

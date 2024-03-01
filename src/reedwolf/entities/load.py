@@ -26,8 +26,8 @@ from .exceptions import (
     EntityInternalError,
 )
 from .namespaces import ALL_NS_OBJECTS
+from .meta_dataclass import MAX_RECURSIONS
 from .meta import (
-    MAX_RECURSIONS,
     STANDARD_TYPE_W_NONE_LIST,
     LiteralType,
 )

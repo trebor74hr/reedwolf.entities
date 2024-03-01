@@ -32,7 +32,6 @@ from ...utils import (
         )
 from ...meta import (
         STANDARD_TYPE_LIST,
-        Self,
         NoneType,
         )
 from ...base import (
@@ -40,9 +39,9 @@ from ...base import (
     IStackFrame,
     UseStackFrameCtxManagerBase,
     IComponent,
-    MAX_RECURSIONS,
     DTO_STRUCT_CHILDREN_SUFFIX,
 )
+from ...meta_dataclass import MAX_RECURSIONS, Self
 from ...fields import (
         FieldBase, 
         FieldGroup, 

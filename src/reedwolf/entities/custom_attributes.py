@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Union, List, Dict, Callable, Tuple
 
 from .exceptions import EntitySetupNameError
+from .utils import get_available_names_example
 from .meta import (
     UNDEFINED,
     IAttribute,
@@ -10,9 +11,8 @@ from .meta import (
     FunctionNoArgs,
     TypeInfo,
     SettingsSource,
-    ModelField, SELF_ARG_NAME, get_function_non_empty_arguments,
+    ModelField, get_function_non_empty_arguments,
 )
-from .utils import get_available_names_example
 
 
 @dataclass

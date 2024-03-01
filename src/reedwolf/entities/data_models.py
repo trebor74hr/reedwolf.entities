@@ -24,12 +24,11 @@ from .exceptions import (
 from .namespaces import (
     ModelsNS,
 )
+from .meta_dataclass import Self
 from .meta import (
-    Self,
     TypeInfo,
     is_model_klass,
     ModelKlassType,
-    # get_model_fields,
     extract_py_type_hints,
     EmptyFunctionArguments, ModelInstanceType,
 )
@@ -225,7 +224,7 @@ class BoundDataModelBase(IBoundDataModel):
                     # container=container,
                     # component=self,
                     value_node=value_node_for_data_model,
-                    instance=instance,
+                    # instance=instance,
                     # instance_new=None,
                     this_registry=this_registry,
                     )):

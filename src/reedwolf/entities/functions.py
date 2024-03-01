@@ -44,7 +44,13 @@ from .exceptions import (
     EntityInternalError,
     EntitySetupTypeError,
     EntitySetupError,
-    EntityApplyError, EntityApplyTypeError, )
+    EntityApplyError,
+    EntityApplyTypeError,
+)
+from .meta_dataclass import (
+    ComponentStatus,
+    SELF_ARG_NAME,
+)
 from .meta import (
     FunctionArgumentsType,
     TypeInfo,
@@ -60,8 +66,7 @@ from .meta import (
     LiteralType,
     ValueArgValidatorPyFuncDictType,
     AttrName,
-    is_instancemethod_by_name, SELF_ARG_NAME, get_function_non_empty_arguments, SettingsType, ComponentStatus,
-    IDexpValueSource,
+    is_instancemethod_by_name, get_function_non_empty_arguments, SettingsType, IDexpValueSource,
 )
 from .expressions import (
     DotExpression,
@@ -522,7 +527,7 @@ class IFunction(IFunctionDexpNode, ABC):
                 ApplyStackFrame(
                     # container=apply_result.current_frame.container,
                     # component=apply_result.current_frame.component,
-                    instance=apply_result.current_frame.instance,
+                    # instance=apply_result.current_frame.instance,
                     this_registry=self.this_registry,
                 )):
             # is_1st_node is not used ...

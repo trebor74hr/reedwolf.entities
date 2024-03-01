@@ -31,8 +31,6 @@ from .utils import (
     UndefinedType,
 )
 from .meta import (
-    MAX_RECURSIONS,
-    Self,
     NoneType,
     ModelKlassType,
     is_model_klass,
@@ -46,6 +44,7 @@ from .meta import (
     KeyType,
     ModelInstanceType,
 )
+from .meta_dataclass import MAX_RECURSIONS, Self
 from .base import (
     IField,
     AttrValue,
@@ -491,13 +490,31 @@ class ApplyResult(IApplyResult):
                 raise EntityInternalError(owner=component, msg=f"Componenent's container '{comp_container}' must match caller's '{self.current_frame.component.name}' container: {caller_container.name}") 
 
         if self.finished:
-            raise EntityInternalError(owner=self, msg="Already finished") 
+            raise EntityInternalError(owner=self, msg="Already finished")
+
+        subentity_items_instance_list: ModelKlassType = NOT_APPLIABLE
+        subentity_items_current_instance_list_new: ModelKlassType = NOT_APPLIABLE
+
+        in_component_only_tree = UNDEFINED
+        if self.component_only and component is self.component_only:
+            # partial apply - detected component
+            if not mode_subentity_items and self.current_frame.in_component_only_tree:
+                raise EntityInternalError(owner=self,
+                                          # {parent} ->
+                                          msg=f"{component}: in_component_only_tree should be False, got {self.current_frame.in_component_only_tree}")
+
+            if self.instance_new not in (None, UNDEFINED) and not self.instance_new_struct_type:
+                self._detect_instance_new_struct_type(component)
+
+            # NOTE: self.component_only should be found
+            in_component_only_tree = True
 
         if not self.stack_frames:
             # no stack around -> initial call -> depth=0
             assert top_call
             depth = 0
-            in_component_only_tree = False
+            if in_component_only_tree is UNDEFINED:
+                in_component_only_tree = False
 
             if self.defaults_mode:
                 if self.instance is not NA_DEFAULTS_MODE:
@@ -516,7 +533,8 @@ class ApplyResult(IApplyResult):
             # depth > 0 - has stack
             assert not top_call
             depth = self.current_frame.depth
-            in_component_only_tree = self.current_frame.in_component_only_tree 
+            if in_component_only_tree is UNDEFINED:
+                in_component_only_tree = self.current_frame.in_component_only_tree
 
             # check if instance model is ok
             if not component.is_subentity_any():
@@ -526,6 +544,7 @@ class ApplyResult(IApplyResult):
                 #  TODO: consider adding validation again with:
                 #    else:
                 #      self.component._accessor.validate_instance_type(owner_name=self.component.name,
+
 
             if mode_subentity_items:
                 # reuse already created in caller
@@ -541,34 +560,44 @@ class ApplyResult(IApplyResult):
                     container=comp_container,
                     instance_none_mode=self.instance_none_mode,
                     parent_node=parent_value_node,
-                    instance=self.current_frame.instance,
                     trace_value_history=self.entity.settings.is_trace(),
                 )
                 if has_items:
+                    subentity_items_instance_list, subentity_items_current_instance_list_new = self._get_subentity_model_instances(
+                        subentity=component, in_component_only_tree=in_component_only_tree)
                     value_node = ItemsValueNode(
-                            **value_node_kwargs
+                            instance=subentity_items_instance_list,
+                            **value_node_kwargs,
                             )
                 else:
+                    if component.is_subentity():
+                        subentity_instance, subentity_current_instance_new = self._get_subentity_model_instances(
+                            subentity=component, in_component_only_tree=in_component_only_tree)
+                        instance = subentity_instance
+                    else:
+                        instance = self.current_frame.instance
+
                     value_node = ValueNode(
-                            **value_node_kwargs
-                            )
+                            instance=instance,
+                            **value_node_kwargs,
+                    )
                 value_node.setup(apply_result=self)
                 parent_value_node.add_child(value_node)
 
         # TODO: in partial mode this raises RecursionError:
         #       component == self.component_only
-        if self.component_only and component is self.component_only:
-            # partial apply - detected component
-            if not mode_subentity_items and in_component_only_tree:
-                raise EntityInternalError(owner=self, 
-                        # {parent} -> 
-                        msg=f"{component}: in_component_only_tree should be False, got {in_component_only_tree}")
+        # if self.component_only and component is self.component_only:
+        #     # partial apply - detected component
+        #     if not mode_subentity_items and in_component_only_tree:
+        #         raise EntityInternalError(owner=self,
+        #                 # {parent} ->
+        #                 msg=f"{component}: in_component_only_tree should be False, got {in_component_only_tree}")
 
-            if self.instance_new not in (None, UNDEFINED) and not self.instance_new_struct_type:
-                self._detect_instance_new_struct_type(component)
+        #     if self.instance_new not in (None, UNDEFINED) and not self.instance_new_struct_type:
+        #         self._detect_instance_new_struct_type(component)
 
-            # NOTE: self.component_only should be found 
-            in_component_only_tree = True
+        #     # NOTE: self.component_only should be found
+        #     in_component_only_tree = True
 
         if depth > MAX_RECURSIONS:
             raise EntityInternalError(owner=self, msg=f"Maximum recursion depth exceeded ({depth})")
@@ -578,12 +607,17 @@ class ApplyResult(IApplyResult):
             self._apply_subentity_items(
                 subentity_items=component,
                 value_node=value_node,
+                instance_list=subentity_items_instance_list,
+                current_instance_list_new=subentity_items_current_instance_list_new,
                 in_component_only_tree=in_component_only_tree,
                 depth=depth,
             )
+            # -----------------------------------------------
             return
             # -----------------------------------------------
 
+        # TODO: reuse: subentity_instance, subentity_current_instance_new
+        #   to avoid call to self._get_subentity_model_instances() again
         new_frame = self._create_apply_stack_frame_for_component(
                                           component=component,
                                           value_node=value_node,
@@ -688,7 +722,7 @@ class ApplyResult(IApplyResult):
                         ApplyStackFrame(
                             # container=self.current_frame.container,
                             # component=self.current_frame.component,
-                            instance=self.current_frame.instance,
+                            # instance=self.current_frame.instance,
                             this_registry=this_registry
                         )):
                     # with self.use_changed_current_stack_frame(
@@ -830,7 +864,7 @@ class ApplyResult(IApplyResult):
                 # container = container,
                 # component = container,
                 value_node=value_node,
-                instance = self.instance,
+                # instance = self.instance,
                 instance_new = self.instance_new,
                 in_component_only_tree=in_component_only_tree,
             )
@@ -863,8 +897,8 @@ class ApplyResult(IApplyResult):
                 # component = component,
                 value_node=value_node,
                 # must inherit previous instance
-                parent_instance=self.current_frame.instance,
-                instance = instance,
+                # parent_instance=self.current_frame.instance,
+                # instance = instance,
                 instance_new = current_instance_new,
                 in_component_only_tree=in_component_only_tree,
             )
@@ -882,7 +916,7 @@ class ApplyResult(IApplyResult):
                 # component = component,
                 value_node=value_node,
                 # copy
-                instance = self.current_frame.instance,
+                # instance = self.current_frame.instance,
                 # container = self.current_frame.container,
                 in_component_only_tree=in_component_only_tree,
                 # automatically copied
@@ -984,6 +1018,8 @@ class ApplyResult(IApplyResult):
     def _apply_subentity_items(self,
                                subentity_items: SubEntityItems,
                                value_node: ValueNode,
+                               instance_list: ModelKlassType,
+                               current_instance_list_new: ModelKlassType,
                                in_component_only_tree:bool,
                                depth: int,
                                ) -> NoneType:
@@ -991,8 +1027,8 @@ class ApplyResult(IApplyResult):
         SubEntityItems with item List
         Recursion -> _apply(mode_subentity_items=True) -> ...
         """
-        instance_list, current_instance_list_new = self._get_subentity_model_instances(
-                    subentity_items, in_component_only_tree)
+        # instance_list, current_instance_list_new = self._get_subentity_model_instances(
+        #             subentity_items, in_component_only_tree)
 
         if instance_list is None:
             # TODO: checkk type_info is optional - similar to single case
@@ -1008,7 +1044,7 @@ class ApplyResult(IApplyResult):
             # NOTE: found no better way to do it
             instance_list = []
         elif not isinstance(instance_list, (list, tuple)):
-            raise EntityApplyValueError(owner=self, msg=f"{subentity_items}: Expected list/tuple in the new instance, got: {current_instance_list_new}")
+            raise EntityApplyValueError(owner=self, msg=f"{subentity_items}: Expected list/tuple in the new instance, got: {instance_list}")
 
         new_instances_by_key = None
         if current_instance_list_new not in (None, UNDEFINED):
@@ -1023,7 +1059,7 @@ class ApplyResult(IApplyResult):
                 new_instances_by_key[key] = item_instance_new
 
 
-        parent_instance = self.current_frame.instance
+        # parent_instance = self.current_frame.instance
 
         # NOTE: considered to use dict() since dictionaries are ordered in Python 3.6+
         #       ordering-perserving As of Python 3.7, this is a guaranteed, i.e.  Dict keeps insertion order
@@ -1090,6 +1126,7 @@ class ApplyResult(IApplyResult):
                         change_op=instance_item.change_op,
                 ).setup(apply_result=self)
 
+                assert isinstance(value_node, ItemsValueNode)
                 value_node.add_item(item_value_node)
 
                 with self.use_stack_frame(
@@ -1099,11 +1136,11 @@ class ApplyResult(IApplyResult):
                             value_node = item_value_node,
                             index0 = index0,
                             # main instance - original values
-                            instance = instance, 
-                            parent_instance=parent_instance,
+                            # instance = instance,
+                            # parent_instance=parent_instance,
                             # new instance - new values (when update mode)
                             instance_new = item_instance_new, 
-                            parent_instance_new=self.current_frame.instance_new,
+                            # parent_instance_new=self.current_frame.instance_new,
                             in_component_only_tree=in_component_only_tree,
                             depth=depth+1,
                             )):
@@ -1129,12 +1166,12 @@ class ApplyResult(IApplyResult):
                 ApplyStackFrame(
                     # component = subentity_items,
                     # instance is a list of items
-                    instance = instance_list,
+                    # instance = instance_list,
                     value_node=value_node,
                     instance_is_list = True,
                     # ALT: self.current_frame.container
                     # container = subentity_items,
-                    parent_instance=self.current_frame.instance,
+                    # parent_instance=self.current_frame.instance,
                     in_component_only_tree=in_component_only_tree,
                     this_registry=this_registry,
                     # NOTE: instance_new skipped - (contains list of
@@ -1236,12 +1273,20 @@ class ApplyResult(IApplyResult):
                 else:
                     on_component_only = None
 
+                value_node_new = self.current_frame.value_node.copy(
+                    traverse=False,
+                    change=dict(
+                        instance=self.current_frame.instance_new,
+                        copy_mode=True,
+                    ))
+
                 with self.use_stack_frame(
                         ApplyStackFrame(
                             # container = self.current_frame.container,
                             # component = self.current_frame.component,
                             # only this is changed
-                            instance = self.current_frame.instance_new,
+                            # instance = self.current_frame.instance_new,
+                            value_node=value_node_new,
                             # should not be used
                             instance_new = UNDEFINED, 
                             on_component_only=on_component_only,
@@ -1414,13 +1459,21 @@ class ApplyResult(IApplyResult):
         updated = False
         if self.current_frame.instance_new not in (None, UNDEFINED):
             if self.instance_new_struct_type == StructEnum.MODELS_LIKE:
+                # make a shallow copy with instance_new and put in new stack
+                value_node_new = self.current_frame.value_node.copy(
+                                    traverse=False,
+                                    change=dict(
+                                        instance=self.current_frame.instance_new,
+                                        copy_mode=True,
+                                    ))
                 with self.use_stack_frame(
                         ApplyStackFrame(
-                                   # container=self.current_frame.container,
-                                   # component=self.current_frame.component,
-                                   # only this is changed
-                                   instance=self.current_frame.instance_new,
-                                   instance_new=UNDEFINED, 
+                                    # container=self.current_frame.container,
+                                    # component=self.current_frame.component,
+                                    # only this is changed
+                                    # instance=self.current_frame.instance_new,
+                                    instance_new=UNDEFINED,
+                                    value_node=value_node_new,
                         )):
                     instance_new_bind_dexp_result = \
                             component.get_dexp_result_from_instance(apply_result=self)
