@@ -952,7 +952,7 @@ class ApplyResult(IApplyResult):
                 in_component_only_tree=in_component_only_tree,
                 # automatically copied
                 #   instance_new = self.current_frame.instance_new,
-                #   index0 = self.current_frame.index0,
+                # index0 = self.current_frame.index0,
             )
         assert new_frame
 
@@ -1166,7 +1166,7 @@ class ApplyResult(IApplyResult):
                             # container = subentity_items,
                             # component = subentity_items,
                             value_node = item_value_node,
-                            index0 = index0,
+                            # index0= index0,
                             # main instance - original values
                             # instance = instance,
                             # parent_instance=parent_instance,

@@ -2131,7 +2131,9 @@ class IValueNode(IDexpValueSource):
     change_op: Optional[ChangeOpEnum] = field(repr=True, default=None)
 
     # set only when item of parent.items (parent is SubentityItems)
+    # i.e. filled only when container list member
     index0: Optional[Index0Type] = field(repr=False, default=None)
+
     key: Optional[KeyType] = field(repr=False, default=None)
 
     # used when applying instance_new - will be copied from current node but with instance=instance_new
@@ -2227,7 +2229,7 @@ class ApplyStackFrame(IStackFrame):
     # instance_new_struct_type: Union[StructEnum, NoneType, UndefinedType] = field(repr=False)
 
     # filled only when container list member
-    index0: Optional[Index0Type] = None
+    # index0_tmp: InitVar[Optional[Index0Type]] = None
 
     # parent instance / parent_instance_new - currenntly used for key_string logic
     # parent_instance: Optional[ModelInstanceType] = field(repr=False, default=None)
@@ -2250,19 +2252,30 @@ class ApplyStackFrame(IStackFrame):
     # _component: IComponent = field(repr=False, init=False)
     # _container: IContainer = field(repr=False, init=False)
     # _instance: ModelInstanceType = field(repr=False, init=False)
+    # _index0: Optional[Index0Type] = None
 
     # used to check root value in models registry 
     data_model_root: Optional[IDataModel] = field(repr=False, init=False, default=None)
 
 
-    def __post_init__(self):  # , instance: ModelInstanceType, container: IContainer, component: IComponent
-        # self._component = component
-        # self._container = container
-        # self._instance = instance
-        self.clean()
+    # def __post_init__(self):  # , index0: Optional[Index0Type], instance: ModelInstanceType, container: IContainer, component: IComponent
+    #     # self._component = component
+    #     # self._container = container
+    #     # self._instance = instance
+    #     # self._index0 = index0
+    #     # NOTE: must be called only after copy() is done:
+    #     # self.clean()
 
     @property
-    def instance(self) -> IContainer:
+    def index0(self) -> Optional[Index0Type]:
+        if not self.value_node:
+            raise EntityInternalError(owner=self, msg="Attribute 'index0' can not be read, value_node not set.")
+        # NOTE: in some cases this was different, but value_node.index0 seemed correct.
+        # assert self.value_node.index0 == self._index0:
+        return self.value_node.index0
+
+    @property
+    def instance(self) -> ModelInstanceType:
         if not self.value_node:
             raise EntityInternalError(owner=self, msg="Attribute 'instance' can not be read, value_node not set.")
         return self.value_node.instance
@@ -2280,15 +2293,10 @@ class ApplyStackFrame(IStackFrame):
         return self.value_node.component
 
     def clean(self):
-        # if not isinstance(self._container, IContainer):
-        #     raise EntityInternalError(owner=self, msg=f"Expected IContainer, got: {self.container}")
-        # if not isinstance(self.component, IComponent):
-        #     raise EntityInternalError(owner=self, msg=f"Expected IComponent, got: {self.component}")
-        if self.index0 is not None and self.index0 < 0:
-            raise EntityInternalError(owner=self, msg=f"index0 invalid value: {self.index0}")
+        pass
 
     def clone(self) -> Self:
-        return dataclass_clone(self) # , instance=self._instance)  # , container=self._container, component=self._component)
+        return dataclass_clone(self) # , index0=self._index0, instance=self._instance)  # , container=self._container, component=self._component)
 
     def copy_from_previous_frame(self, previous_frame: Self):
         """
@@ -2313,7 +2321,7 @@ class ApplyStackFrame(IStackFrame):
             # self._copy_attr_from_previous_frame(previous_frame, "data_model_root", may_be_copied=False)
             self._copy_attr_from_previous_frame(previous_frame, "instance_new")
             self._copy_attr_from_previous_frame(previous_frame, "instance_is_list")
-            self._copy_attr_from_previous_frame(previous_frame, "index0")
+            # self._copy_attr_from_previous_frame(previous_frame, "_index0")
 
             # only these can be copied
             # self._copy_attr_from_previous_frame(previous_frame, "parent_instance")
@@ -2323,17 +2331,22 @@ class ApplyStackFrame(IStackFrame):
             if self.component is previous_frame.component:
                 self._copy_attr_from_previous_frame(previous_frame, "on_component_only", may_be_copied=False)
                 # self._copy_attr_from_previous_frame(previous_frame, "key_string", may_be_copied=False)
-
-                # NOTE: not this for now:
                 self._copy_attr_from_previous_frame(previous_frame, "this_registry",
                                                     # for Apply -> ChildrenValidation setup can be different
                                                     if_set_must_be_same=False)
         # check / init again
-        self.clean()
+        # self.clean()
 
 
     def post_clean(self):
         # new logic - must be sure
+        # if not isinstance(self._container, IContainer):
+        #     raise EntityInternalError(owner=self, msg=f"Expected IContainer, got: {self.container}")
+        # if not isinstance(self.component, IComponent):
+        #     raise EntityInternalError(owner=self, msg=f"Expected IComponent, got: {self.component}")
+        # if self.index0 is not None and self.index0 < 0:
+        #     raise EntityInternalError(owner=self, msg=f"index0 must be integer >= 1, got: {self.index0}")
+
         if self.value_node is not NOT_APPLIABLE:
             if not self.value_node:
                 raise EntityInternalError(owner=self, msg="value_node not set")

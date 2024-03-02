@@ -151,7 +151,8 @@ class ValueNodeBase(IValueNode):
                 assert self.parent_node and self.parent_node._container_node
                 self._container_node = self.parent_container_node
 
-
+        if self.index0 is not None and self.index0 < 0:
+            raise EntityInternalError(owner=self, msg=f"index0 must be integer >= 1, got: {self.index0}")
 
     def setup(self, apply_result: "IApplyResult") -> Self:
         """
@@ -510,6 +511,7 @@ class ValueNodeBase(IValueNode):
 @dataclass
 class ValueNode(ValueNodeBase):
 
+    # only these types, other component types have specialized ValueNode
     component:  Union[IField, IFieldGroup] = field(repr=False, default=None)
 
     # has_items: bool = field(init=False, repr=True, default=False)
@@ -519,6 +521,7 @@ class ValueNode(ValueNodeBase):
 
     # F.<field-name> filled only if container - contains all fields (flattens FieldGroup and BooleanFeild children field tree)
     container_children: Dict[AttrName, IValueNode] = field(repr=False, init=False, default_factory=dict)
+
 
     # TODO: # F.<field-name>
     # TODO: # originally initialized in conteiner_node and all children (except SubEntityItems),
@@ -605,6 +608,9 @@ class ValueNode(ValueNodeBase):
         self.container_children[child.name] = child
 
     def add_child(self, value_node: IValueNode):
+        if value_node.index0 is not None:
+            raise EntityInternalError(owner=self, msg=f"value_node shouldn't have index0 set, got: {value_node}")
+
         if self.children is UNDEFINED:
             raise EntityInternalError(owner=self, msg=f"failed to add {value_node}, already children dict not initialized")
         # TODO: assert value_node is not self
@@ -694,6 +700,8 @@ class SubentityItemsValueNode(ValueNodeBase):
     def add_item(self, value_node: IValueNode):
         # TODO: assert value_node is not self
         # TODO: assert value_node.parent_node is not self
+        if value_node.index0 is None:
+            raise EntityInternalError(owner=self, msg=f"value_node should have index0 set, got: {value_node}")
         self.items.append(value_node)
 
     def _clean(self, child_node: "ValueNodeBase"):
