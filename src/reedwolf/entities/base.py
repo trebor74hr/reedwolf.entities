@@ -2240,7 +2240,7 @@ class ApplyStackFrame(IStackFrame):
 
     # currently used only in cleaners - by default None to enable "automatic-copy",
     # if not set - then set to False in post_clean()
-    instance_is_list: Optional[bool] = field(repr=False, default=None)
+    # instance_is_list: Optional[bool] = field(repr=False, default=None)
 
     # --------------------
     # -- autocomputed
@@ -2256,7 +2256,6 @@ class ApplyStackFrame(IStackFrame):
 
     # used to check root value in models registry 
     data_model_root: Optional[IDataModel] = field(repr=False, init=False, default=None)
-
 
     # def __post_init__(self):
     #     # , instance_new_tmp: Any, index0: Optional[Index0Type], instance: ModelInstanceType, container: IContainer, component: IComponent
@@ -2326,7 +2325,7 @@ class ApplyStackFrame(IStackFrame):
             # will be autocomputed
             # self._copy_attr_from_previous_frame(previous_frame, "data_model_root", may_be_copied=False)
             # self._copy_attr_from_previous_frame(previous_frame, "instance_new")
-            self._copy_attr_from_previous_frame(previous_frame, "instance_is_list")
+            # self._copy_attr_from_previous_frame(previous_frame, "instance_is_list")
             # self._copy_attr_from_previous_frame(previous_frame, "_index0")
 
             # only these can be copied
@@ -2362,8 +2361,8 @@ class ApplyStackFrame(IStackFrame):
 
             self.value_node.clean()
 
-        if self.instance_is_list is None:
-            self.instance_is_list = False
+        # if self.instance_is_list is None:
+        #     self.instance_is_list = False
 
         # TODO: DRY - similar logic in ApplyResult._detect_instance_new_struct_type()
         if self.on_component_only:
@@ -2372,34 +2371,39 @@ class ApplyStackFrame(IStackFrame):
                                      else self.on_component_only.get_first_parent_container(consider_self=True)
                                     ).data_model
             # can be list in this case
-            # TODO: check if list only: if self.data_model_root.type_info.is_list:
-            # TODO: use self.current_frame.instance_is_list for list case
-            instance_to_test = self.instance[0] \
-                               if isinstance(self.instance, (list, tuple)) \
-                               else self.instance
+            # instance_to_test = self.instance[0] \
+            #                    if isinstance(self.instance, (list, tuple)) \
+            #                    else self.instance
         else:
             self.data_model_root = self.container.data_model
-            if self.instance_is_list and self.instance is not None:
-                if not isinstance(self.instance, (list, tuple)):
-                    raise EntityInternalError(owner=self, msg=f"Expected list of model instances, got: {self.instance}")
-                instance_to_test = self.instance[0] if self.instance else None
-            else:
-                instance_to_test = self.instance
+            component = self.value_node.component
+            if component.is_entity() or component.is_subentity_any():
+                # check instance type only once per container
+                assert self.instance is not None
+                # if self.instance_is_list and self.instance is not None:
+                if self.value_node.is_list():
+                    if not isinstance(self.instance, (list, tuple)):
+                        raise EntityInternalError(owner=self, msg=f"Expected list of model instances in 'instance', got: {self.instance}")
+                    if self.instance_new is not None and not isinstance(self.instance_new, (list, tuple)):
+                        raise EntityInternalError(owner=self, msg=f"Expected list of model instances in 'instance_new', got: {self.instance_new}")
+                #     instance_to_test = self.instance[0] if self.instance else None
+                # else:
+                #     instance_to_test = self.instance
 
-        if instance_to_test is NA_DEFAULTS_MODE:
-            # defaults_mode
-            pass
-        elif instance_to_test is None:
-            # if instance is a list and it is empty, then nothing to check
-            pass
-        else:
-            pass
-            # TODO: this should be checked only once per container, and I am not sure what is good way to do it
-            # # if not is_model_klass(instance_to_test.__class__):
-            # #     raise EntityInternalError(owner=self, msg=f"Expected model instance: {instance_to_test.__class__} or list[instances], got: {self.instance}")
-            # self._accessor.validate_instance_type(owner_name=self.component.name,
-            #                                                      instance=instance_to_test,
-            #                                                      model_klass=self.container.data_model.model_klass )
+        # if instance_to_test is NA_DEFAULTS_MODE:
+        #     # defaults_mode
+        #     pass
+        # elif instance_to_test is None:
+        #     # if instance is a list and it is empty, then nothing to check
+        #     pass
+        # else:
+        #     pass
+        #     # TODO: this should be checked only once per container, and I am not sure what is good way to do it
+        #     # # if not is_model_klass(instance_to_test.__class__):
+        #     # #     raise EntityInternalError(owner=self, msg=f"Expected model instance: {instance_to_test.__class__} or list[instances], got: {self.instance}")
+        #     # self._accessor.validate_instance_type(owner_name=self.component.name,
+        #     #                                                      instance=instance_to_test,
+        #     #                                                      model_klass=self.container.data_model.model_klass )
 
         if self.this_registry:
             assert isinstance(self.this_registry, IThisRegistry)

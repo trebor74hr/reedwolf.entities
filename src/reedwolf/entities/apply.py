@@ -1205,7 +1205,7 @@ class ApplyResult(IApplyResult):
                     # instance is a list of items
                     # instance = instance_list,
                     value_node=value_node,
-                    instance_is_list = True,
+                    # instance_is_list = True,
                     # ALT: self.current_frame.container
                     # container = subentity_items,
                     # parent_instance=self.current_frame.instance,
