@@ -39,7 +39,7 @@ from .meta import (
     ComponentTreeWValuesType,
 )
 from .expressions import (
-    ExecResult,
+    ExecResult, NotAvailableExecResult,
 )
 from .base import (
     IApplyResult,
@@ -94,7 +94,7 @@ class ValueNodeBase(IValueNode):
     init_value: Union[UndefinedType, AttrValue] = \
         field(repr=False, init=False, default=UNDEFINED)
 
-    # NOTE: used only in .set_instance_attr_to_value()
+    # NOTE: used only in .set_instance_attr_value()
     #       to set new value on model instance.
     #       Result of Field.bind_to=M.<field> DotExpression execution.
     # TODO: consider ALT: Could be done with bind_to.Path() too.
@@ -256,10 +256,31 @@ class ValueNodeBase(IValueNode):
             return True
         return self._value!=self.init_value
 
+    # ------------------------------------------------------------
+
+    def get_instance_new_attr_value(self, component: IComponent) -> ExecResult:
+        """
+        TODO: this belongs to ValueNode() class, everything that is required is there.
+        """
+        attr_name = component.name
+        value = component._accessor.get_value(instance=self.instance_new,
+                                              attr_name=attr_name,
+                                              attr_index=None)
+        if value is UNDEFINED:
+            # TODO: depending of self.entity strategy or apply(strategy)
+            #   - raise error
+            #   - return NotAvailableExecResult() / UNDEFINED (default)
+            #   - return None (default)
+            return NotAvailableExecResult.create(reason="Missing instance attribute")
+
+        exec_result = ExecResult()
+        exec_result.set_value(value, attr_name, changer_name=f"{component.name}.ATTR")
+        return exec_result
+
 
     # ------------------------------------------------------------
 
-    def set_instance_attr_to_value(self):
+    def set_instance_attr_value(self):
         """
         will set instance.<attr-name> = self._value
         attr-name could be nested (e.g. M.access.can_delete)

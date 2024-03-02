@@ -2157,7 +2157,11 @@ class IValueNode(IDexpValueSource):
         ...
 
     @abstractmethod
-    def set_instance_attr_to_value(self):
+    def get_instance_new_attr_value(self, component: IComponent) -> ExecResult:
+        ...
+
+    @abstractmethod
+    def set_instance_attr_value(self):
         ...
 
     # @abstractmethod

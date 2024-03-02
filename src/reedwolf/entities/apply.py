@@ -431,13 +431,13 @@ class ApplyResult(IApplyResult):
         value_node.set_value(new_value, dexp_result=dexp_result, value_set_phase=value_set_phase)
 
         # TODO: prebaci se na drugi mod - pa ovo zakomentiraj - pogledaj
-        #       value_node.set_instance_attr_to_value()
+        #       value_node.set_instance_attr_value()
         if value_set_phase != ValueSetPhase.INIT_BY_BIND and self.current_frame.instance is not NA_DEFAULTS_MODE:
             # --- change the model attribute - handle nested cases too e.g. M.company.access.can_delete
             # component = component,
             # self._model_instance_attr_change_value(new_value=new_value)
             # self._model_instance_attr_change_value(value_node=value_node)
-            value_node.set_instance_attr_to_value()
+            value_node.set_instance_attr_value()
 
         return
 
@@ -820,7 +820,7 @@ class ApplyResult(IApplyResult):
 
                 # --------------------------------------------------
                 # TODO: ovo uključi nakon što se values_dict - pa zakomentiraj
-                #           value_node.set_instance_attr_to_value()
+                #           value_node.set_instance_attr_value()
                 #       možda i bolje ime funkcije?
                 # --------------------------------------------------
                 # TODO: if not value_node.is_changed():
@@ -828,7 +828,7 @@ class ApplyResult(IApplyResult):
                 # TODO: # and self.current_frame.instance is not NA_DEFAULTS_MODE:
                 # TODO: assert value_node.change_op
                 # TODO: if value_node.change_op == ChangeOpEnum.UPDATE:
-                # TODO:     value_node.set_instance_attr_to_value()
+                # TODO:     value_node.set_instance_attr_value()
                 # TODO: elif value_node.change_op == ChangeOpEnum.ADDED:
                 # TODO:     # TODO: HM, what to do?
                 # TODO:     ...
@@ -1347,9 +1347,10 @@ class ApplyResult(IApplyResult):
                 instance_new = None
 
         elif self.instance_new_struct_type == StructEnum.ENTITY_LIKE:
-            exec_result = self.get_attr_value_by_comp_name(
-                                component=subentity,
-                                instance=self.current_frame.instance_new)
+            exec_result = self.current_frame.value_node.get_instance_new_attr_value(subentity)
+            # exec_result = self.get_attr_value_by_comp_name(
+            #                     component=subentity,
+            #                     instance=self.current_frame.instance_new)
             instance_new = exec_result.value
         else: 
             raise EntityInternalError(owner=self, msg=f"Invalid instance_new_struct_type = {self.instance_new_struct_type}")
@@ -1522,10 +1523,12 @@ class ApplyResult(IApplyResult):
                     new_value = instance_new_bind_dexp_result.value
 
             elif self.instance_new_struct_type == StructEnum.ENTITY_LIKE:
-                instance_new_bind_dexp_result = self.get_attr_value_by_comp_name(
-                                                    component=component,
-                                                    instance=self.current_frame.instance_new)
+                instance_new_bind_dexp_result = self.current_frame.value_node.get_instance_new_attr_value(component)
                 new_value = instance_new_bind_dexp_result.value
+                # instance_new_bind_dexp_result = self.get_attr_value_by_comp_name(
+                #                                     component=component,
+                #                                     instance=self.current_frame.instance_new)
+                # new_value = instance_new_bind_dexp_result.value
             else: 
                 raise EntityInternalError(owner=self, msg=f"Invalid instance_new_struct_type = {self.instance_new_struct_type}")
 
@@ -1735,6 +1738,9 @@ class ApplyResult(IApplyResult):
     # ------------------------------------------------------------
 
     def get_attr_value_by_comp_name(self, component:IComponent, instance: ModelInstanceType) -> ExecResult:
+        """
+        TODO: this belongs to ValueNode() class, everything that is required is there.
+        """
         attr_name = component.name
         value = component._accessor.get_value(instance=instance, attr_name=attr_name, attr_index=None)
         if value is UNDEFINED:
