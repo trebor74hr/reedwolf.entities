@@ -2121,6 +2121,10 @@ class IValueNode(IDexpValueSource):
     #   otherwise:
     #     has_items=False - individual item - with values, has children (some with values)
 
+    # UPDATE by this instance - can be ENTITY_LIKE or MODELS_LIKE (same dataclass) struct
+    # required but is None when not update
+    instance_new: Union[ModelInstanceType, NoneType, UndefinedType] = field(repr=False, default=UNDEFINED)
+
     # set only when item of parent.items (parent is SubentityItems)
     # set only when item is deleted (DELETE) or item is added (ADDED)
     change_op: Optional[ChangeOpEnum] = field(repr=True, default=None)
@@ -2200,7 +2204,7 @@ class ApplyStackFrame(IStackFrame):
 
     # UPDATE by this instance - can be ENTITY_LIKE or MODELS_LIKE (same dataclass) struct
     # required but is None when not update
-    instance_new: Union[ModelInstanceType, NoneType, UndefinedType] = field(repr=False, default=UNDEFINED)
+    # instance_new_tmp: InitVar[Union[ModelInstanceType, NoneType, UndefinedType]] = field(repr=False, default=UNDEFINED)
 
     # partial mode - component subtree in processing
     # component is found and its subtree is being processed
@@ -2248,18 +2252,27 @@ class ApplyStackFrame(IStackFrame):
     # _container: IContainer = field(repr=False, init=False)
     # _instance: ModelInstanceType = field(repr=False, init=False)
     # _index0: Optional[Index0Type] = None
+    # _instance_new: ModelInstanceType = field(repr=False, init=False)
 
     # used to check root value in models registry 
     data_model_root: Optional[IDataModel] = field(repr=False, init=False, default=None)
 
 
-    # def __post_init__(self):  # , index0: Optional[Index0Type], instance: ModelInstanceType, container: IContainer, component: IComponent
+    # def __post_init__(self):
+    #     # , instance_new_tmp: Any, index0: Optional[Index0Type], instance: ModelInstanceType, container: IContainer, component: IComponent
+    #     # self._instance_new = instance_new_tmp if instance_new_tmp is not UNDEFINED else None
     #     # self._component = component
     #     # self._container = container
     #     # self._instance = instance
     #     # self._index0 = index0
     #     # NOTE: must be called only after copy() is done:
     #     # self.clean()
+
+    @property
+    def instance_new(self) -> ModelInstanceType:
+        if not self.value_node:
+            raise EntityInternalError(owner=self, msg="Attribute 'instance_new' can not be read, value_node not set.")
+        return self.value_node.instance_new
 
     @property
     def index0(self) -> Optional[Index0Type]:
@@ -2288,7 +2301,8 @@ class ApplyStackFrame(IStackFrame):
         return self.value_node.component
 
     def clone(self) -> Self:
-        return dataclass_clone(self) # , index0=self._index0, instance=self._instance)  # , container=self._container, component=self._component)
+        # , instance_new_tmp=self._instance_new, index0=self._index0, instance=self._instance)  # , container=self._container, component=self._component)
+        return dataclass_clone(self)
 
     def copy_from_previous_frame(self, previous_frame: Self):
         """
@@ -2311,7 +2325,7 @@ class ApplyStackFrame(IStackFrame):
             # self._copy_attr_from_previous_frame(previous_frame, "container", may_be_copied=False)
             # will be autocomputed
             # self._copy_attr_from_previous_frame(previous_frame, "data_model_root", may_be_copied=False)
-            self._copy_attr_from_previous_frame(previous_frame, "instance_new")
+            # self._copy_attr_from_previous_frame(previous_frame, "instance_new")
             self._copy_attr_from_previous_frame(previous_frame, "instance_is_list")
             # self._copy_attr_from_previous_frame(previous_frame, "_index0")
 

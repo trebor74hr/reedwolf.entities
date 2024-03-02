@@ -535,6 +535,7 @@ class ApplyResult(IApplyResult):
                     component=self.entity,
                     instance_none_mode=self.instance_none_mode,
                     instance=self.instance,
+                    instance_new=self.instance_new,
                     trace_value_history=self.entity.settings.is_trace(),
                 ).setup(apply_result=self)
 
@@ -578,6 +579,7 @@ class ApplyResult(IApplyResult):
                                                             subentity=component, in_component_only_tree=in_component_only_tree)
                     value_node = SubentityItemsValueNode(
                             instance=subentity_items_instance_list,
+                            instance_new=subentity_items_instance_list_new,
                             **value_node_kwargs,
                             )
                 else:
@@ -600,11 +602,13 @@ class ApplyResult(IApplyResult):
 
                         value_node = SubentityValueNode(
                             instance=subentity_instance,
+                            instance_new=subentity_instance_new,
                             **value_node_kwargs,
                         )
                     else:
                         value_node = ValueNode(
                             instance=self.current_frame.instance,
+                            instance_new=self.current_frame.instance_new,
                             **value_node_kwargs,
                         )
 
@@ -894,7 +898,7 @@ class ApplyResult(IApplyResult):
                 # component = container,
                 value_node=value_node,
                 # instance = self.instance,
-                instance_new = self.instance_new,
+                # instance_new=self.instance_new,
                 in_component_only_tree=in_component_only_tree,
             )
 
@@ -930,7 +934,7 @@ class ApplyResult(IApplyResult):
                 # must inherit previous instance
                 # parent_instance=self.current_frame.instance,
                 # instance = instance,
-                instance_new = subentity_instance_new,
+                # instance_new=subentity_instance_new,
                 in_component_only_tree=in_component_only_tree,
             )
         elif mode_subentity_items:
@@ -1141,7 +1145,7 @@ class ApplyResult(IApplyResult):
         if instances_by_key:
             # value_node_w_items = self.current_frame.value_node
             for key, instance_item in instances_by_key.items():
-                instance, index0, item_instance_new = \
+                item_instance, index0, item_instance_new = \
                     instance_item.instance, instance_item.index0, instance_item.item_instance_new
                 # Go one level deeper
                 # not SubentityItemsValueNode - emphasize distinction of item's parent node (also subentity, but collection)
@@ -1150,7 +1154,8 @@ class ApplyResult(IApplyResult):
                         container= subentity_items,
                         instance_none_mode=self.instance_none_mode,
                         parent_node = value_node,
-                        instance = instance,
+                        instance = item_instance,
+                        instance_new=item_instance_new,
                         trace_value_history=self.entity.settings.is_trace(),
                         # specific when instance is item in items collection (of parent)
                         index0=index0,
@@ -1171,7 +1176,7 @@ class ApplyResult(IApplyResult):
                             # instance = instance,
                             # parent_instance=parent_instance,
                             # new instance - new values (when update mode)
-                            instance_new = item_instance_new, 
+                            # instance_new=item_instance_new,
                             # parent_instance_new=self.current_frame.instance_new,
                             in_component_only_tree=in_component_only_tree,
                             depth=depth+1,
@@ -1309,6 +1314,8 @@ class ApplyResult(IApplyResult):
                     traverse=False,
                     change=dict(
                         instance=self.current_frame.instance_new,
+                        # should not be used
+                        instance_new=NOT_APPLIABLE,
                         copy_mode=True,
                     ))
 
@@ -1320,7 +1327,7 @@ class ApplyResult(IApplyResult):
                             # instance = self.current_frame.instance_new,
                             value_node=value_node_new,
                             # should not be used
-                            instance_new = UNDEFINED, 
+                            # instance_new=UNDEFINED,
                             on_component_only=on_component_only,
                         )) as frame:
                     dexp_result: ExecResult = \
@@ -1496,6 +1503,8 @@ class ApplyResult(IApplyResult):
                                     traverse=False,
                                     change=dict(
                                         instance=self.current_frame.instance_new,
+                                        # should not be used
+                                        instance_new=NOT_APPLIABLE,
                                         copy_mode=True,
                                     ))
                 with self.use_stack_frame(
@@ -1504,7 +1513,7 @@ class ApplyResult(IApplyResult):
                                     # component=self.current_frame.component,
                                     # only this is changed
                                     # instance=self.current_frame.instance_new,
-                                    instance_new=UNDEFINED,
+                                    # instance_new=UNDEFINED,
                                     value_node=value_node_new,
                         )):
                     instance_new_bind_dexp_result = \
