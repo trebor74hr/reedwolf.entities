@@ -1742,10 +1742,6 @@ class IUnboundDataModel(IDataModel, ABC):
 class IStackFrame:
 
     @abstractmethod
-    def clean(self):
-        ...
-
-    @abstractmethod
     def post_clean(self):
         ...
 
@@ -1941,11 +1937,19 @@ class SetupStackFrame(IStackFrame):
     # type_info: TypeInfo
 
 
-    def __post_init__(self):
-        self.clean()
+    # def __post_init__(self):
+    #     self.clean()
 
 
-    def clean(self):
+    def copy_from_previous_frame(self, previous_frame: Self):
+        assert previous_frame
+        self._copy_attr_from_previous_frame(previous_frame, "this_registry",
+                                            if_set_must_be_same=False)
+        # check / init again
+        # self.clean()
+
+
+    def post_clean(self):
         if not isinstance(self.container, IContainer):
             raise EntityInternalError(owner=self, msg=f"Expected IContainer, got: {self.container}")
         if not isinstance(self.component, IComponent):
@@ -1956,15 +1960,6 @@ class SetupStackFrame(IStackFrame):
         else:
             self.data_model = self.container.data_model
 
-    def copy_from_previous_frame(self, previous_frame: Self):
-        assert previous_frame
-        self._copy_attr_from_previous_frame(previous_frame, "this_registry",
-                                            if_set_must_be_same=False)
-        # check / init again
-        self.clean()
-
-
-    def post_clean(self):
         if self.this_registry:
             assert isinstance(self.this_registry, IThisRegistry)
 
@@ -2291,9 +2286,6 @@ class ApplyStackFrame(IStackFrame):
         if not self.value_node:
             raise EntityInternalError(owner=self, msg="Attribute 'component' can not be read, value_node not set.")
         return self.value_node.component
-
-    def clean(self):
-        pass
 
     def clone(self) -> Self:
         return dataclass_clone(self) # , index0=self._index0, instance=self._instance)  # , container=self._container, component=self._component)

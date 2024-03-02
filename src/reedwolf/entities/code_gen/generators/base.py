@@ -392,9 +392,6 @@ class CodegenStackFrame(IStackFrame):
         if self.owner_comp_dump:
             self.owner_class_name_path.append(self.owner_comp_dump.class_declaration.name)
 
-    def clean(self):
-        pass
-
     def post_clean(self):
         pass
 

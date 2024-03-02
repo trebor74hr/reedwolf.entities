@@ -89,9 +89,6 @@ class StructConverterStackFrame(IStackFrame):
             raise EntityInternalError(owner=self, msg=f"Depth is {self.depth} and length of path-names not matched: {self.path_names}")
 
 
-    def clean(self):
-        pass
-
     def post_clean(self):
         pass
 
