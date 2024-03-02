@@ -625,6 +625,10 @@ class IComponent(ReedwolfDataclassBase, ABC):
         return False
 
     # ------------------------------------------------------------
+    def has_children(self) -> bool:
+        if not hasattr(self, "_children"):
+            return bool(self.get_children())
+        return bool(self._children)
 
     def get_children(self, deep_collect: bool = False, cache: bool = True, traverse_all: bool = False) -> List[Self]:
         """
@@ -1032,7 +1036,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
                     if hasattr(self, "bind_to"):
                         raise EntityInternalError(owner=self, msg=f"Only fields expected to have bind_to attr, got: {type(self)}")
 
-            if self.get_children():
+            if self.has_children():
                 # Set up dataclass and list of fields for later use in FieldsNS.
                 # Will validate if all type_info are available
                 self.get_component_fields_dataclass(setup_session=setup_session)
@@ -1075,7 +1079,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
         if not setup_session:
             raise EntityInternalError(owner=self, msg="_component_fields_dataclass not set and setup_session not provided")
 
-        # TODO: to have deep_collect or not??
+        # NOTE: deep_collect is required, otherwise errors later occur
         children = self.get_children(deep_collect=True)
 
         if not children:

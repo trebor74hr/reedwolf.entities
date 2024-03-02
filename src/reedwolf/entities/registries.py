@@ -866,7 +866,7 @@ class ThisRegistryForComponent(ThisRegistryBase):
         if not self.component:
             raise EntitySetupTypeError(owner=self, msg=f"Argument component is obligatory.")
 
-        self.has_children = bool(self.component.get_children())
+        self.has_children = self.component.has_children()
 
         if self.attr_node:
             if not isinstance(self.attr_node, IAttrDexpNode):

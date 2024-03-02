@@ -891,7 +891,8 @@ class FieldGroup(IFieldGroup):
         return True
 
     def create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:
-        assert self.get_children(), self
+        if not self.has_children():
+            raise EntityInternalError(owner=self, msg="Expected component with children.")
         this_registry = ThisRegistryForComponent(component=self)
         return this_registry
 

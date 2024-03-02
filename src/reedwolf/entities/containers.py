@@ -508,8 +508,7 @@ class ContainerBase(IContainer, ABC):
         if self.is_data_model():
             raise EntityInternalError(owner=self, msg=f"For DataModel create_this_registry() needs to be overridden.")
 
-        has_children = bool(self.get_children())
-        if not has_children:
+        if not self.has_children():
             raise EntityInternalError(owner=self, msg="Non-fields should have children")
 
         this_registry = ThisRegistryForComponent(component=self)

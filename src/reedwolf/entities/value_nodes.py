@@ -558,7 +558,7 @@ class ValueNode(ValueNodeBase):
         # self.component can be SubEntityItems - the node with Children
         super().__post_init__()
 
-        if self.component.get_children():
+        if self.component.has_children():
             # TODO: with py 3.7 {} has ordered items as default behaviour,
             #       so std {} could be used instead
             self.children = OrderedDict()

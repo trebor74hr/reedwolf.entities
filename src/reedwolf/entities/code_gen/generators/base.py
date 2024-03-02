@@ -535,7 +535,6 @@ class DumpToBase(IStackOwnerSession):
         component = self.current_frame.component
 
         todo_comment = ""
-        children = component.get_children()
 
         vars_declarations = []
 
@@ -592,6 +591,7 @@ class DumpToBase(IStackOwnerSession):
                     )
         vars_declarations.append(var_declaration)
 
+        children = component.get_children()
         if children:
             class_py_type = f"{snake_case_to_camel(component.name)}ChildrenDTO"
             class_declaration = self.KlassClassDeclaration(
