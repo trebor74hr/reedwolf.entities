@@ -11,9 +11,6 @@ from typing import (
     Dict,
 )
 
-from .global_settings import (
-    GlobalSettings,
-)
 from .utils import (
     get_available_names_example,
     UNDEFINED,
@@ -71,7 +68,9 @@ from .functions import (
     try_create_function,
 )
 from .expr_attr_nodes import (
-    IAttrDexpNode, AttrDexpNodeForComponent, AttrDexpNodeForTypeInfo,
+    IAttrDexpNode,
+    AttrDexpNodeForComponent,
+    AttrDexpNodeForTypeInfo,
 )
 
 # ------------------------------------------------------------
@@ -342,14 +341,13 @@ class RegistryBase(IRegistry):
 
     # ------------------------------------------------------------
 
-    @classmethod
-    def _create_attr_node_for_model_attr(cls, model_klass: ModelKlassType, attr_name:str) -> IAttrDexpNode:
+    def _create_attr_node_for_model_attr(self, model_klass: ModelKlassType, attr_name:str) -> IAttrDexpNode:
         # NOTE: will go again and again into get_model_fields()
         #       but shortcut like this didn't worked: 
         #           type_info: TypeInfo = TypeInfo.get_or_create_by_type(th_field)
-
-        if attr_name in (ReservedAttributeNames.INSTANCE_ATTR_NAME,):
-            raise EntitySetupNameError(msg=f"Model attribute name '{attr_name} is reserved. Rename it and try again (model={model_klass.__name__}).")
+        # if attr_name is RESERVED_ATTRIBUTE_NAMES:
+        #     #  (model={model_klass.__name__})
+        #     raise EntitySetupNameError(owner=self, msg=f"Model attribute name '{attr_name} is reserved. Rename it and try again.")
 
         # This one should not fail
         # , func_node
@@ -361,7 +359,7 @@ class RegistryBase(IRegistry):
         attr_node = AttrDexpNodeForTypeInfo(
                         name=attr_name,
                         type_info=type_info,
-                        namespace=cls.NAMESPACE,
+                        namespace=self.NAMESPACE,
                         # type_object=th_field,
                         )
         return attr_node

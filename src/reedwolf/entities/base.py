@@ -13,7 +13,6 @@ from typing import (
     Tuple,
     ClassVar,
     Callable,
-    # TODO: rename must be done - some test is failing
     Type,
 )
 from dataclasses import (
@@ -24,16 +23,12 @@ from dataclasses import (
     MISSING as DC_MISSING,
     make_dataclass,
     asdict,
-    InitVar,
     replace as dataclass_clone,
 )
 from types import (
     MappingProxyType,
 )
 
-from .global_settings import (
-    GlobalSettings,
-)
 from .utils import (
     snake_case_to_camel,
     to_repr,
@@ -41,7 +36,6 @@ from .utils import (
     YAML_INDENT,
     varname_to_title,
     UNDEFINED,
-    NA_DEFAULTS_MODE,
     UndefinedType,
     get_available_names_example,
     DumpFormatEnum,
@@ -92,7 +86,10 @@ from .meta import (
     KeyType,
     ModelInstanceType,
     ContainerId,
-    IDexpValueSource, ChildField, ListChildField,
+    IDexpValueSource,
+    ChildField,
+    ListChildField,
+    get_enum_values,
 )
 from .expressions import (
     DotExpression,
@@ -100,9 +97,11 @@ from .expressions import (
     IDotExpressionNode,
     ISetupSession,
     IThisRegistry,
-    DexpValidator, )
+    DexpValidator,
+)
 from .settings import (
-    Settings, ApplySettings,
+    Settings,
+    ApplySettings,
 )
 from .value_accessors import (
     IValueAccessor,
@@ -162,6 +161,7 @@ def get_name_from_bind(bind_to: DotExpression):
 
 # ------------------------------------------------------------
 
+
 class ReservedAttributeNames(str, Enum):
 
     # Manual setup cases only
@@ -195,6 +195,9 @@ class ReservedAttributeNames(str, Enum):
     #   ITEMS_TREE_ATTR_NAME = 
     #   CHILDREN_TREE_ATTR_NAME = "ParentPath" 
     #   VALUE_TREE_ATTR_NAME = 
+
+
+RESERVED_ATTRIBUTE_NAMES = get_enum_values(ReservedAttributeNames)
 
 # ------------------------------------------------------------
 

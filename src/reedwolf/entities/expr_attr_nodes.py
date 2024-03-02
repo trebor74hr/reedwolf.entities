@@ -23,6 +23,8 @@ from .exceptions import (
     EntityInternalError,
     EntityApplyNameError,
     EntityApplyValueError,
+    EntitySetupNameError,
+    EntityApplyNameNotFoundError,
 )
 from .namespaces import (
     Namespace,
@@ -46,7 +48,6 @@ from .custom_attributes import (
     Attribute,
     AttributeByMethod,
 )
-# TODO: remove this dependency
 from .base import (
     UndefinedType,
     IContainer,
@@ -54,7 +55,10 @@ from .base import (
     IApplyResult,
     ExecResult,
     ReservedAttributeNames,
-    IDataModel, IFieldGroup,
+    IDataModel,
+    IFieldGroup,
+    IComponent,
+    RESERVED_ATTRIBUTE_NAMES,
 )
 
 # ------------------------------------------------------------
@@ -104,6 +108,12 @@ class IAttrDexpNode(IDotExpressionNode, ABC):
 
         if is_function(data):
             raise EntitySetupValueError(owner=self, msg=f"Attribute '{attr_name}' is a function. Maybe you forgot to wrap it with 'reedwolf.entities.Function()'?")
+
+        if attr_name is RESERVED_ATTRIBUTE_NAMES:
+            # NOTE: independent if the registry/namespace is implemented in the registry or not,
+            #       reserved names are forbidden in all registries/namespaces.
+            #       (model={model_klass.__name__})
+            raise EntitySetupNameError(owner=self.namespace, msg=f"Expression's attribute name '{attr_name} is reserved. Rename the attribute and try again (type of attribute: {self.__class__.__name__})")
 
     def _get_repr_extra(self) -> str:
         return ", DENIED" if self.denied else ""
@@ -255,25 +265,32 @@ class IAttrDexpNode(IDotExpressionNode, ABC):
     def _get_value_new(self, value_prev: AttrValue, attr_name: AttrName) -> AttrValue:
         # apply_result: IApplyResult,
         if isinstance(value_prev, IDexpValueSource):
+            # ValueNode case
             # try to find in children first, then in container_children if applicable
             if not getattr(value_prev, "children", UNDEFINED):
                 raise EntityInternalError(owner=self, msg=f"Attribute '{attr_name}' can not be found, node '{value_prev.name}' has no children")
+
             dexp_value_node = value_prev.children.get(attr_name, UNDEFINED)
+
             if dexp_value_node is UNDEFINED and hasattr(value_prev, "container_children"):
                 dexp_value_node = value_prev.container_children.get(attr_name, UNDEFINED)
+
             if dexp_value_node is UNDEFINED:
-                raise EntityInternalError(owner=self, msg=f"Attribute '{attr_name}' can not be found in '{value_prev.name}'")
+                raise EntityApplyNameNotFoundError(owner=self, msg=f"Attribute '{attr_name}' can not be found in '{value_prev.name}'")
+
             value_new = dexp_value_node
         else:
+            # model or special attribute
             # removed. idx == 0 and
             if attr_name == ReservedAttributeNames.INSTANCE_ATTR_NAME:
                 value_new = value_prev
             else:
                 if (value_prev is UNDEFINED
-                        or value_prev is None
-                        or value_prev is NA_DEFAULTS_MODE
+                    or value_prev is None
+                    or value_prev is NA_DEFAULTS_MODE
                 ):
-                    # 'Maybe monad' like
+                    # 'Maybe' monad like - previous value has NO VALUE => promote it further and further to final value
+                    # TODO: capture source/attribute of the first None/<empty> value is evaluated - for diagnostics
                     value_new = value_prev
                 else:
                     if isinstance(attr_name, (Attribute, AttributeByMethod)):
@@ -285,7 +302,7 @@ class IAttrDexpNode(IDotExpressionNode, ABC):
                     if not hasattr(value_prev, attr_name):
                         # TODO: list which fields are available
                         # if all types match - could be internal problem?
-                        raise EntityApplyNameError(owner=self, msg=f"Attribute '{attr_name}' not found in '{to_repr(value_prev)}': '{type(value_prev)}'")
+                        raise EntityApplyNameNotFoundError(owner=self, msg=f"Attribute '{attr_name}' not found in '{to_repr(value_prev)}': '{type(value_prev)}'")
 
                     # finally - fetch the attribute / callable by name from value_prev
                     value_new = getattr(value_prev, attr_name)
@@ -297,6 +314,7 @@ class IAttrDexpNode(IDotExpressionNode, ABC):
                             raise EntityApplyValueError(owner=self,
                                    msg=f"Attribute '{attr_name}' is a callable '{value_new}' which raised error when called:: '{ex}'")
                         value_new = value_new2
+
         return value_new
 
     def is_optional(self):
@@ -420,10 +438,13 @@ class AttrDexpNodeForComponent(IAttrDexpNode):
         if self.name is None:
             self.name = self.component.name
             assert "." not in self.name
-        else:
-            # NOTE: this can happen
-            # assert "." not in self.name
-            ...
+        # else: assert "." not in self.name
+
+        self._check_data('component', self.component)
+
+        # if not isinstance(self.component, (IContainer, IField, IFieldGroup)):
+        if not isinstance(self.component, (IComponent,)):
+            raise EntityInternalError(owner=self, msg=f"Expected data: Union[IContainer, IField, IFieldGroup], got: {self.component}")
 
         if self.component.has_data():
             self.denied = False
@@ -436,17 +457,7 @@ class AttrDexpNodeForComponent(IAttrDexpNode):
         super().__post_init__()
 
         self.data_supplier_name = f"{self.name}"
-        # self.type_info is lazy - will be set in _fill_type_info()
-
-        # TODO: antipattern - split to diff class implementations (inherit and make diff classes)
-        if isinstance(self.component, IContainer):
-            ...  # self.attr_node_type = AttrDexpNodeTypeEnum.CONTAINER
-        elif isinstance(self.component, IField):
-            ...  # self.attr_node_type = AttrDexpNodeTypeEnum.FIELD
-        elif isinstance(self.component, IFieldGroup):
-            ...  # self.attr_node_type = AttrDexpNodeTypeEnum.FIELD_GROUP
-        else:
-            raise EntityInternalError(owner=self, msg=f"Expected data: Union[IContainer, IField, IFieldGroup], got: {self.component}")
+        # NOTE: self.type_info is lazy and will be set in _fill_type_info()
 
         # if not self.data.has_data():
         #     raise EntityInternalError(owner=self, msg=f"Expected component that has_data, got: {self.data}")

@@ -420,9 +420,6 @@ def is_model_instance(instance: ModelInstanceType) -> bool:
         return False
     return is_model_klass(instance.__class__)
 
-def is_enum(maybe_enum: Any) -> bool:
-    return isinstance(maybe_enum, type) and issubclass(maybe_enum, Enum)
-
 def is_list_instance_or_type(maybe_list: Any) -> bool:
     if isinstance(maybe_list, TypeInfo):
         is_list = maybe_list.is_list
@@ -438,15 +435,40 @@ def is_list_instance_or_type(maybe_list: Any) -> bool:
     return is_list
 
 
-def get_enum_member_py_type(enum_kls) -> type:
-    " teke first member value and return its type "
-    assert is_enum(enum_kls)
-    return type(list(enum_kls.__members__.values())[0].value)
+def is_enum(maybe_enum: Any) -> bool:
+    return isinstance(maybe_enum, type) and issubclass(maybe_enum, Enum)
 
-def get_enum_members(enum_kls) -> List[Tuple[str, Any]]:
-    " teke first member value and return its type "
-    assert is_enum(enum_kls)
-    return [(k, ev.value) for k, ev in enum_kls.__members__.items()]
+
+def get_enum_member_py_type(enum_kls: Type[Enum]) -> type:
+    """
+    Take first member value and return its type.
+    """
+    if not is_enum(enum_kls):
+        raise EntityTypeError(f"Expected Enum class, got: {enum_kls}")
+    # ATL: ._member_map_
+    return type(list(enum_kls)[0].value)
+
+
+def get_enum_members(enum_kls: Type[Enum]) -> List[Tuple[str, Any]]:
+    """
+    return list of tuples (enum-name, enum-value)
+    """
+    if not is_enum(enum_kls):
+        raise EntityTypeError(f"Expected Enum class, got: {enum_kls}")
+    # ALT: ._member_map_
+    # return [(k, ev.value) for k, ev in enum_kls.__members__.items()]
+    return [(ev.name, ev.value) for ev in enum_kls]
+
+
+def get_enum_values(enum_kls: Type[Enum]) -> List[Any]:
+    """
+    return list of enum-values
+    """
+    if not is_enum(enum_kls):
+        raise EntityTypeError(f"Expected Enum class, got: {enum_kls}")
+    # ALT: ._member_names_
+    return [ev.value for ev in enum_kls]
+
 
 def get_function_non_empty_arguments(py_function: Callable) -> List[AttrName]:
     # Check that function receives only single param if method(self), or no param if function()

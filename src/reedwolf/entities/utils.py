@@ -107,15 +107,17 @@ def dump_to_format(instance: Union[dict, list], format_: DumpFormatEnum) -> str:
         # noinspection PyUnresolvedReferences
         out = yaml.safe_dump(instance)
     else:
-        aval_formats = ", ".join([str(v) for v in DumpFormatEnum.__members__.keys()])
+        # Reuse meta.py::get_enum_values()?
+        # aval_formats = ", ".join([str(v) for v in DumpFormatEnum.__members__.keys()])
+        aval_formats = ", ".join([str(v) for _,v in DumpFormatEnum])
         raise TypeError(f"Format '{format_}' not supported. Available are: {aval_formats}")
     return out
 
 
 def load_from_format(input_str: str, format_: DumpFormatEnum) -> Union[dict, list]:
-    if format_==DumpFormatEnum.JSON:
+    if format_ == DumpFormatEnum.JSON:
         out = json.loads(input_str)
-    elif format_==DumpFormatEnum.YAML:
+    elif format_ == DumpFormatEnum.YAML:
         if yaml is None:
             raise TypeError(f"Format '{format_}' not available. Install PyYaml and try again.")
 
@@ -126,7 +128,9 @@ def load_from_format(input_str: str, format_: DumpFormatEnum) -> Union[dict, lis
         # noinspection PyUnresolvedReferences
         out = yaml.safe_load(input_str)
     else:
-        aval_formats = ", ".join([str(v) for v in DumpFormatEnum.__members__.keys()])
+        # Reuse meta.py::get_enum_values()?
+        # aval_formats = ", ".join([str(v) for v in DumpFormatEnum.__members__.keys()])
+        aval_formats = ", ".join([str(v) for k,v in DumpFormatEnum])
         raise TypeError(f"Format '{format_}' not supported. Available are: {aval_formats}")
     return out
 

@@ -205,20 +205,25 @@ class ModelsRegistry(RegistryBase):
 
         self.root_attr_nodes[name] = root_attr_node
 
-        # company.business_type.name --> company__business_types__name
-        name_for_reg = name.replace(".", "__")
-
-        for attr_name in get_model_fields(model_klass):
-            attr_node = self._create_attr_node_for_model_attr(model_klass, attr_name)
-            alt_attr_node_name = None if is_root else f"{name_for_reg}__{attr_name}"
-            self.register_attr_node(attr_node, alt_attr_node_name=alt_attr_node_name)
-
-        # register
+        # Fetch and check type_info
         type_info = data_model.get_type_info()
         type_info_from_model = TypeInfo.get_or_create_by_type(model_klass)
         if not type_info_from_model.type_ == type_info.type_:
             raise EntityInternalError(owner=self, msg=f"Model type info inner type <> data_model's: {type_info} <> {type_info_from_model}")
 
+        # company.business_type.name --> company__business_types__name
+        name_for_reg = name.replace(".", "__")
+
+        # --------------------------------------------------
+        # Register attributes
+        # --------------------------------------------------
+        # Register M.<all-fields>
+        for attr_name in get_model_fields(model_klass):
+            attr_node = self._create_attr_node_for_model_attr(model_klass, attr_name)
+            alt_attr_node_name = None if is_root else f"{name_for_reg}__{attr_name}"
+            self.register_attr_node(attr_node, alt_attr_node_name=alt_attr_node_name)
+
+        # Register M.Instance - can be used for Functions(arguments)
         # Exception: allowed to access: .Instance -> apply_session.current_frame.instance
         self._register_special_attr_node(attr_name=ReservedAttributeNames.INSTANCE_ATTR_NAME.value,
                                          component=None,
@@ -720,6 +725,13 @@ class ThisRegistryBase(IThisRegistry, RegistryBase):
 
 @dataclass
 class ThisRegistryForModelKlass(ThisRegistryBase):
+    """
+    Used for:
+        M.    - used for bind_to
+        This. - DataModel function arguments in handler functions
+        This. - function arguments in general when ModelKlass is current node
+        This. - choices / Enum
+    """
     NAMESPACE: ClassVar[Namespace] = ThisNS
 
     model_klass: ModelKlassType = field(default=None)
@@ -766,17 +778,22 @@ class ThisRegistryForModelKlass(ThisRegistryBase):
         super().setup(setup_session)
 
         if inspect.isclass(self.model_klass) and issubclass(self.model_klass, IValueNode):
-            raise EntityInternalError(owner=self, msg=f"Got ValueNode klass: {self.model_klass}")
+            raise EntityInternalError(owner=self, msg=f"Did not expected ValueNode class, got: {self.model_klass}. Use ThisRegistryForComponent().")
         if not self.is_items_for_each_mode and self.is_items_mode:
             # This.Items
             self._register_special_attr_node(attr_name=ReservedAttributeNames.ITEMS_ATTR_NAME.value,
                                              component=None,
                                              type_info=self.model_klass_type_info)  # already a List
         else:
-            # NOTE: Includes self.is_items_for_each_mode too
+            # NOTE: Covers self.is_items_for_each_mode too
+
             # This.<all-attributes>
             self._register_model_nodes(model_klass=self.model_klass_type_info.type_)
+
+            # This.Instance
             # Exception: allowed to access: .Instance -> apply_session.current_frame.instance
+            # NOTE: not allowed for ValueNode-s, since .instance holds initial values only, only ValueNode-s
+            #       hold current values. Additionally, .Instance would break ValueNode tree logic.
             self._register_special_attr_node(attr_name=ReservedAttributeNames.INSTANCE_ATTR_NAME.value,
                                              component=None,
                                              type_info=self.model_klass_type_info,
@@ -789,7 +806,7 @@ class ThisRegistryForModelKlass(ThisRegistryBase):
         instance = apply_result.current_frame.instance
         # NOTE: can not use apply_result.current_frame.value_node, it is not set (nor value_node.instance)
         if not isinstance(instance, self.model_klass):
-            raise EntityInternalError(owner=self, msg=f"Type of apply session's instance expected to be '{self.model_klass}, got: {instance}")
+            raise EntityInternalError(owner=self, msg=f"Type of apply session's instance expected to be '{self.model_klass}', got: {instance}")
 
         if attr_name == ReservedAttributeNames.INSTANCE_ATTR_NAME:
             # with 2nd param == None -> do not fetch further
