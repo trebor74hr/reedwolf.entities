@@ -30,6 +30,7 @@ from .exceptions import (
 from .meta_dataclass import (
     MAX_RECURSIONS,
     Self,
+    ComponentStatus,
 )
 from .meta import (
     NoneType,
@@ -989,7 +990,7 @@ class ApplyResult(IApplyResult):
         changes: List[InstanceChange] = []
 
         for value_node in self.value_node_list:
-            if not value_node.finished:
+            if not value_node._status==ComponentStatus.finished:
                 raise EntityInternalError(owner=value_node, msg=f"ValueNode not finished")
             if value_node.is_list() or not value_node.is_changed():
                 continue

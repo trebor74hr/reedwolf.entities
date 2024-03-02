@@ -79,16 +79,16 @@ class ValueNodeBase(IValueNode):
     # <field>.Value
     _value: Union[AttrValue, UndefinedType] = field(repr=False, init=False, default=UNDEFINED)
 
-    # TODO: replace .initialized and .finished with ._status
+    # internal status, using: draft, did_init, finished
+    # TODO: consider compare=False ?? do not compare by this attribute (for easier unit-test checks)
     _status: ComponentStatus = field(init=False, repr=False, default=ComponentStatus.draft)
 
     # initial value is filled, ready for evaluations
-    initialized: bool = field(repr=False, init=False, default=False)
+    # initialized: bool = field(repr=False, init=False, default=False)
 
     # process of update/evaluate is finished - no more changes to values
     # ready for validations
-    # TODO: consider compare=False ?? do not compare by this attribute (for easier unit-test checks)
-    finished: bool = field(repr=False, init=False, default=False)
+    # finished: bool = field(repr=False, init=False, default=False)
 
     # initial value - Just value - no wrapper
     init_value: Union[UndefinedType, AttrValue] = \
@@ -392,25 +392,29 @@ class ValueNodeBase(IValueNode):
         return temp_dataclass_model
 
     def mark_initialized(self):
-        if self.initialized:
-            raise EntityInternalError(owner=self, msg=f"Init phase already marked, last value: {self._value}")
-        if self.finished: # and self._value is not NA_DEFAULTS_MODE:
-            raise EntityInternalError(owner=self, msg=f"Invalid state, already marked as finished, last value: {self._value}")
-        self.initialized = True
+        if self._status!=ComponentStatus.draft:
+            raise EntityInternalError(owner=self, msg=f"Should be in draft status, got: {self._status}, last value: {self._value}")
+        # if self.initialized:
+        #     raise EntityInternalError(owner=self, msg=f"Init phase already marked, last value: {self._value}")
+        # if self.finished: # and self._value is not NA_DEFAULTS_MODE:
+        #     raise EntityInternalError(owner=self, msg=f"Invalid state, already marked as finished, last value: {self._value}")
+        # self.initialized = True
         self._status = ComponentStatus.did_init
 
     def mark_finished(self):
         """
         redundant code in is_changed()
         """
-        if not self.initialized:
-            raise EntityInternalError(owner=self, msg=f"Init phase should have been finished first, last value: {self._value}")
-        if self.finished: # and self._value is not NA_DEFAULTS_MODE:
-            raise EntityInternalError(owner=self, msg=f"Current value already finished, last value: {self._value}")
+        if self._status!=ComponentStatus.did_init:
+            raise EntityInternalError(owner=self, msg=f"Init phase should have been finished first, status={self._status}, last value: {self._value}")
+        # if not self.initialized:
+        #     raise EntityInternalError(owner=self, msg=f"Init phase should have been finished first, last value: {self._value}")
+        # if self.finished: # and self._value is not NA_DEFAULTS_MODE:
+        #     raise EntityInternalError(owner=self, msg=f"Current value already finished, last value: {self._value}")
 
         if self.change_op is None and self._value != self.init_value:
             self.change_op = ChangeOpEnum.UPDATE
-        self.finished = True
+        # self.finished = True
         self._status = ComponentStatus.finished
 
     def clean(self):
@@ -554,7 +558,8 @@ class ValueNode(ValueNodeBase):
         - dexp_result can be None too - in NA_* some undefined values
         - fills value_history objects only in "trace" mode - only in the case when value is not of type UndefinedType
         """
-        if self.finished:
+        # if self.finished:
+        if self._status==ComponentStatus.finished:
             raise EntityInternalError(owner=self, msg=f"Current value already finished, last value: {self._value}")
 
         if dexp_result is not None and self.init_dexp_result is UNDEFINED:
@@ -565,10 +570,14 @@ class ValueNode(ValueNodeBase):
         else:
             assert value_set_phase != ValueSetPhase.INIT_BY_BIND, value_set_phase
 
-        if not self.initialized and not value_set_phase.startswith("INIT_"):
+        if self._status!=self._status.did_init and not value_set_phase.startswith("INIT_"):
             raise EntityInternalError(owner=self, msg=f"Setting value in init phase '{value_set_phase}' can be done before marking 'initialized'. Last_value: {self._value}")
-        elif self.initialized and not value_set_phase.startswith("EVAL_"):
+        elif self._status==self._status.did_init and not value_set_phase.startswith("EVAL_"):
             raise EntityInternalError(owner=self, msg=f"Setting value in eval phase '{value_set_phase}' can be done after marking 'initialized'. Last_value: {self._value}")
+        # if not self.initialized and not value_set_phase.startswith("INIT_"):
+        #     raise EntityInternalError(owner=self, msg=f"Setting value in init phase '{value_set_phase}' can be done before marking 'initialized'. Last_value: {self._value}")
+        # elif self.initialized and not value_set_phase.startswith("EVAL_"):
+        #     raise EntityInternalError(owner=self, msg=f"Setting value in eval phase '{value_set_phase}' can be done after marking 'initialized'. Last_value: {self._value}")
 
         # TODO: if settings.trace - then update values_history
 
@@ -595,7 +604,8 @@ class ValueNode(ValueNodeBase):
 
     def get_value(self, strict:bool) -> AttrValue:
         # Items has its own
-        if strict and not self.finished:
+        # if strict and not self.finished:
+        if strict and not self._status==ComponentStatus.finished:
             raise EntityInternalError(owner=self, msg=f"Current value is not finished, last value: {self._value}")
         return self._value
 
@@ -689,12 +699,14 @@ class SubentityItemsValueNode(ValueNodeBase):
 
     def get_value(self, strict: bool) -> List[IValueNode]:
         # raise EntityInternalError(owner=self, msg=f"get_value() not available on SubentityItemsValueNode() instances")
-        if strict and not self.finished:
+        # if strict and not self.finished:
+        # elif self.finished:
+        if strict and not self._status==ComponentStatus.finished:
             raise EntityInternalError(owner=self, msg=f"Current value is not finished, last value: {self._value}")
-        if self.finished:
+        elif self._status==ComponentStatus.finished:
             # contains internal status ... UNDEFINED, NA_... and similar, real value is in "items"
             # i.e. it is not possible to convert/extract simply.
-            raise EntityInternalError(owner=self, msg=f"Current value is not possible in ItemsValueNode after finished, last value: {self._value}")
+            raise EntityInternalError(owner=self, msg=f"Current value is not possible in SubentityItemsValueNode after finished, last value: {self._value}")
         return self._value
 
     def add_item(self, value_node: IValueNode):
