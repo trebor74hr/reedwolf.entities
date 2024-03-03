@@ -180,7 +180,7 @@ class BoundDataModelBase(IBoundDataModel):
 
 
     def _apply_nested_models(self, apply_result: IApplyResult, instance: ModelInstanceType):
-        children_data_models = self.get_children()
+        children_data_models = self.get_children_direct()
         if not children_data_models:
             return 
 

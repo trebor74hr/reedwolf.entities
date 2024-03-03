@@ -732,7 +732,7 @@ class ApplyResult(IApplyResult):
                 # ------------------------------------------------------------
                 # --- Recursive walk down - for each child call _apply
                 # ------------------------------------------------------------
-                children = component.get_children()
+                children = component.get_children_direct()
                 for child in children:
                     # TODO: self.settings.logger.warning(f"{'  ' * self.current_frame.depth} _apply: {component.name} -> {child.name}")
                     # --------------------
@@ -1693,38 +1693,38 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def get_current_value_instance(self,
-                                   component: IComponent,
-                                   init_when_missing:bool=False
-                                   ) -> AttrValue:
-        """ if not found will return UNDEFINED
-            Probaly a bit faster, only dict queries.
-        """
-        current_value = self.current_frame.value_node.get_value(strict=False)
+    # def get_current_value_instance(self,
+    #                                component: IComponent,
+    #                                init_when_missing:bool=False
+    #                                ) -> AttrValue:
+    #     """ if not found will return UNDEFINED
+    #         Probaly a bit faster, only dict queries.
+    #     """
+    #     current_value = self.current_frame.value_node.get_value(strict=False)
 
-        if current_value is UNDEFINED:
-            if not init_when_missing:
-                raise EntityInternalError(owner=component, msg="Value fetch too early") 
+    #     if current_value is UNDEFINED:
+    #         if not init_when_missing:
+    #             raise EntityInternalError(owner=component, msg="Value fetch too early")
 
-            # ------------------------------------------------------------
-            # NOTE: apply() / mode_dexp_dependency 
-            #       complex case - value is required from node that was not yet
-            #       processed. So process it now and later will be skipped when
-            #       it comes in normal order.
-            #       Example:
-            #       apply() -> ._apply() -> DotExpression 
-            #               -> get_current_value_instance() 
-            #               -> ._apply()
-            # 
-            # This yields RECURSION! See doc for _apply() - mode_dexp_dependency
-            # ------------------------------------------------------------
-            self._apply(component=component, mode_dexp_dependency=True)
+    #         # ------------------------------------------------------------
+    #         # NOTE: apply() / mode_dexp_dependency
+    #         #       complex case - value is required from node that was not yet
+    #         #       processed. So process it now and later will be skipped when
+    #         #       it comes in normal order.
+    #         #       Example:
+    #         #       apply() -> ._apply() -> DotExpression
+    #         #               -> get_current_value_instance()
+    #         #               -> ._apply()
+    #         #
+    #         # This yields RECURSION! See doc for _apply() - mode_dexp_dependency
+    #         # ------------------------------------------------------------
+    #         self._apply(component=component, mode_dexp_dependency=True)
 
-            current_value = self.current_frame.value_node.get_value(strict=False)
-            if current_value is UNDEFINED:
-                raise EntityInternalError(owner=component, msg="Value fetch too early")
+    #         current_value = self.current_frame.value_node.get_value(strict=False)
+    #         if current_value is UNDEFINED:
+    #             raise EntityInternalError(owner=component, msg="Value fetch too early")
 
-        return current_value
+    #     return current_value
 
     # ------------------------------------------------------------
 
@@ -1737,27 +1737,28 @@ class ApplyResult(IApplyResult):
 
     # ------------------------------------------------------------
 
-    def get_attr_value_by_comp_name(self, component:IComponent, instance: ModelInstanceType) -> ExecResult:
-        """
-        TODO: this belongs to ValueNode() class, everything that is required is there.
-        """
-        attr_name = component.name
-        value = component._accessor.get_value(instance=instance, attr_name=attr_name, attr_index=None)
-        if value is UNDEFINED:
-            # TODO: depending of self.entity strategy or apply(strategy)
-            #   - raise error
-            #   - return NotAvailableExecResult() / UNDEFINED (default)
-            #   - return None (default)
-            return NotAvailableExecResult.create(reason="Missing instance attribute")
+    # def get_attr_value_by_comp_name(self, component:IComponent, instance: ModelInstanceType) -> ExecResult:
+    #     """
+    #     TODO: this belongs to ValueNode() class, everything that is required is there.
+    #     """
+    #     attr_name = component.name
+    #     value = component._accessor.get_value(instance=instance, attr_name=attr_name, attr_index=None)
+    #     if value is UNDEFINED:
+    #         # TODO: depending of self.entity strategy or apply(strategy)
+    #         #   - raise error
+    #         #   - return NotAvailableExecResult() / UNDEFINED (default)
+    #         #   - return None (default)
+    #         return NotAvailableExecResult.create(reason="Missing instance attribute")
 
-        exec_result = ExecResult()
-        exec_result.set_value(value, attr_name, changer_name=f"{component.name}.ATTR")
-        return exec_result
+    #     exec_result = ExecResult()
+    #     exec_result.set_value(value, attr_name, changer_name=f"{component.name}.ATTR")
+    #     return exec_result
 
     # ------------------------------------------------------------
 
     def get_values_tree(self, force: bool = False) -> ComponentTreeWValuesType:
         """
+        Used in dump logic.
         will go recursively through every value_node
         fetch their "children"  and "items" and collect to output structure.
         selects all nodes, put in tree, includes self

@@ -72,7 +72,7 @@ def dump_html_models_to_str(
 
     lines = []
 
-    children = component.get_children()
+    children = component.get_children_direct()
 
     lines_children = {} # ordered
     for child_comp in children:

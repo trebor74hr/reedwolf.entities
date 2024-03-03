@@ -627,10 +627,16 @@ class IComponent(ReedwolfDataclassBase, ABC):
     # ------------------------------------------------------------
     def has_children(self) -> bool:
         if not hasattr(self, "_children"):
-            return bool(self.get_children())
+            return bool(self.get_children_direct())
         return bool(self._children)
 
-    def get_children(self, deep_collect: bool = False, cache: bool = True, traverse_all: bool = False) -> List[Self]:
+    def get_children_direct(self) -> List[Self]:
+        return self._get_children(deep_collect=False, cache=True, traverse_all=False)
+
+    def get_children_deep(self) -> List[Self]:
+        return self._get_children(deep_collect=True, cache=True, traverse_all=False)
+
+    def _get_children(self, deep_collect: bool = False, cache: bool = True, traverse_all: bool = False) -> List[Self]:
         """
         TODO: check if traverse_all is needed - maybe child.may_collect_my_children should not be checked?
         Fills/uses undocumented attributes - internal:
@@ -662,11 +668,11 @@ class IComponent(ReedwolfDataclassBase, ABC):
             if not cache or not hasattr(self, "_children_deep"):
                 children = []
                 # RECURSION - 1 level
-                for child in self.get_children(deep_collect=False, cache=cache):
+                for child in self._get_children(deep_collect=False, cache=cache):
                     children.append(child)
                     if traverse_all or child.may_collect_my_children():
                         # RECURSION
-                        child_children = child.get_children(deep_collect=True, traverse_all=traverse_all, cache=cache)
+                        child_children = child._get_children(deep_collect=True, traverse_all=traverse_all, cache=cache)
                         if child_children:
                             children.extend(child_children)
                 out = children
@@ -1080,7 +1086,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
             raise EntityInternalError(owner=self, msg="_component_fields_dataclass not set and setup_session not provided")
 
         # NOTE: deep_collect is required, otherwise errors later occur
-        children = self.get_children(deep_collect=True)
+        children = self.get_children_deep()
 
         if not children:
             raise EntityInternalError(owner=self, msg="No children found.")

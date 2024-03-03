@@ -591,7 +591,7 @@ class DumpToBase(IStackOwnerSession):
                     )
         vars_declarations.append(var_declaration)
 
-        children = component.get_children()
+        children = component.get_children_direct()
         if children:
             class_py_type = f"{snake_case_to_camel(component.name)}ChildrenDTO"
             class_declaration = self.KlassClassDeclaration(
@@ -677,7 +677,7 @@ class DumpToBase(IStackOwnerSession):
 
         is_composite_component = isinstance(component, (FieldGroup, Entity, SubEntityBase))
 
-        children = component.get_children()
+        children = component.get_children_direct()
 
         if children and depth!=0 and (
           self.file_split_to_depth is None 

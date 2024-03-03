@@ -184,7 +184,7 @@ class StructConverterRunner(IStackOwnerSession):
                 self.current_frame.set_dto_kwarg(dto_attr_name, instance_value)
 
         is_field_with_children = False
-        children = component.get_children()
+        children = component.get_children_direct()
 
         if children: #  and component.can_have_children():
             # for boolean without children - dto_class will be this will be {}
