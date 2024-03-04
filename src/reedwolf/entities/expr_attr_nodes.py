@@ -254,7 +254,7 @@ class IAttrDexpNode(IDotExpressionNode, ABC):
 
         # ValueNode case
         if is_last_node and isinstance(value_new, IDexpValueSource):
-            # fetch unfinished value
+            # evaluate last ValueNode (in unfinished state) to concrete value (e.g. int,str,date)
             value_new = value_new.get_value(strict=False)
 
         dexp_result.set_value(attr_name=attr_name, changer_name=attr_name, value=value_new)

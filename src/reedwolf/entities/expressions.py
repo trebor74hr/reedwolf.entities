@@ -18,7 +18,7 @@ from typing import (
     Any,
     Callable,
     Dict,
-    ClassVar,
+    ClassVar, Iterable, Tuple,
 )
 
 from .utils import (
@@ -237,6 +237,7 @@ class IRegistry:
 
     NAMESPACE: ClassVar[Namespace] = None
 
+
     @abstractmethod
     def setup(self, setup_session: "ISetupSession") -> None:
         ...
@@ -282,6 +283,11 @@ class IRegistry:
         Common logic and caller to this is in apply_to_get_root_value()
         """
         ...
+
+    @abstractmethod
+    def dexp_node_store_items(self) -> Iterable[Tuple[str, "IAttrDexpNode"]]:
+        ...
+
 
 # ------------------------------------------------------------
 
@@ -1235,14 +1241,19 @@ def execute_available_dexp(
 
 def execute_dexp_or_node(
         dexp_or_value: Union[DotExpression, Any],
-        # Union[OperationDexpNode, IFunctionDexpNode, LiteralDexpNode]
-        dexp_node: Union[IDotExpressionNode, Any], 
+        dexp_node: Union[IDotExpressionNode, Any],
         prev_node_type_info: TypeInfo,
         dexp_result: ExecResult,
         apply_result: "IApplyResult" # noqa: F821
         ) -> ExecResult:
+    """
+    In some cases dexp_node is not good enough - e.g. FunctionDexpNode, then DotExpression._evaluator must be called
+    in all other cases dexp_node is executed directly.
 
-    # TODO: this function has ugly interface - solve this better
+    TODO: needs better explanation / examples.
+    TODO: this function has ugly interface - solve this better
+    """
+
 
     if isinstance(dexp_or_value, DotExpression) and not isinstance(dexp_or_value, Just):
         dexp_result = dexp_or_value._evaluator.execute_dexp(

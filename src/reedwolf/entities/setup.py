@@ -8,7 +8,7 @@ from typing import (
     Optional,
     ClassVar,
     Tuple,
-    Dict,
+    Dict, Iterable,
 )
 
 from .utils import (
@@ -203,7 +203,7 @@ class RegistryBase(IRegistry):
     def get(self, key:str, default:Any=None) -> Optional[IAttrDexpNode]:
         return self.store.get(key, default)
 
-    def items(self) -> List[Tuple[str, IAttrDexpNode]]:
+    def dexp_node_store_items(self) -> Iterable[Tuple[str, IAttrDexpNode]]:
         return self.store.items()
 
     # ------------------------------------------------------------
@@ -406,7 +406,7 @@ class RegistryBase(IRegistry):
 
     def pprint(self):
         print(f"  Namespace {self.NAMESPACE._name}:")
-        for dexp_node_name, dexp_node in self.store.items():
+        for dexp_node_name, dexp_node in self.dexp_node_store_items():
             print(f"    {dexp_node_name} = {dexp_node.as_str()}")
 
     def __str__(self):
@@ -436,7 +436,7 @@ class RegistryBase(IRegistry):
         return func_node
 
     def get_valid_varnames(self, attr_name: str) -> Tuple[List[str], str]:
-        valid_varnames_list = [vn for vn, attr_dexp_node in self.store.items() if not attr_dexp_node.denied]
+        valid_varnames_list = [vn for vn, attr_dexp_node in self.dexp_node_store_items() if not attr_dexp_node.denied]
         valid_varnames_str = get_available_names_example(attr_name, list(valid_varnames_list), max_display=7)
         return valid_varnames_list, valid_varnames_str
 
@@ -789,7 +789,7 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
         for ns, registry in self._registry_dict.items():
             if registry.is_unbound_models_registry():
                 raise EntityInternalError(owner=self, msg=f"Found unbound models registry for ns={ns} and it should have been replaced. Got: {registry}")
-            for vname, dexp_node in registry.items():
+            for _, dexp_node in registry.dexp_node_store_items():
                 assert isinstance(dexp_node, IDotExpressionNode)
                 # do some basic validate
                 dexp_node.finish()

@@ -1071,12 +1071,12 @@ class FunctionsFactoryRegistry:
         return f"{self.__class__.__name__}({len(self.store)})"
     __repr__ = __str__
 
-    def items(self) -> List[Tuple[str, FunctionFactoryBase]]:
+    def func_factory_store_items(self) -> List[Tuple[str, FunctionFactoryBase]]:
         return list(self.store.items())
 
-    def get(self, name:str, strict:bool=False) -> Optional[IFunction]:
+    def get(self, name: str, strict: bool=False) -> Optional[IFunction]:
         if strict and name not in self.store:
-            funcs_avail = get_available_names_example(name, self.store.keys())
+            funcs_avail = get_available_names_example(name, list(self.store.keys()))
             raise EntitySetupNameNotFoundError(owner=self, msg=f"Function '{name}' is not valid. Valid are: {funcs_avail}")
         function = self.store.get(name, None)
         return function
@@ -1091,7 +1091,7 @@ class FunctionsFactoryRegistry:
 
     def pprint(self):
         print("Functions:")
-        for func_name, function in self.store.items():
+        for func_name, function in self.func_factory_store_items():
             print(f"  {func_name} -> {function}")
 
 
