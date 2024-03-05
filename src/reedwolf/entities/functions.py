@@ -1013,7 +1013,7 @@ class FunctionsFactoryRegistry:
     builtin_functions_dict: Dict[AttrName, IFunctionFactory]
 
     # later evaluated
-    store: Dict[str, FunctionFactoryBase] = field(repr=False, init=False, default_factory=dict)
+    func_factory_store: Dict[str, FunctionFactoryBase] = field(repr=False, init=False, default_factory=dict)
 
     def __post_init__(self):
         """
@@ -1044,7 +1044,7 @@ class FunctionsFactoryRegistry:
             self.add(builtin_function, func_name=func_name)
 
         # assert len(self.store)>=3, self.store
-        return len(self.store)
+        return len(self.func_factory_store)
 
 
     def add(self, function_factory: FunctionFactoryBase, func_name: Optional[str]=None):
@@ -1057,36 +1057,36 @@ class FunctionsFactoryRegistry:
 
         assert isinstance(func_name, str) and func_name, func_name
 
-        if func_name in self.store:
+        if func_name in self.func_factory_store:
             if not function_factory.force:
-                raise EntitySetupNameError(owner=self, msg=f"Function '{func_name}' is already defined: {self.store[func_name]}. You may choose another name.")
-        self.store[func_name] = function_factory
+                raise EntitySetupNameError(owner=self, msg=f"Function '{func_name}' is already defined: {self.func_factory_store[func_name]}. You may choose another name.")
+        self.func_factory_store[func_name] = function_factory
 
 
 
     def as_str(self):
-        return f"{self.__class__.__name__}(functions={', '.join(self.store.keys())}, include_builtin={self.builtin_functions_dict})"
+        return f"{self.__class__.__name__}(functions={', '.join(self.func_factory_store.keys())}, include_builtin={self.builtin_functions_dict})"
 
     def __str__(self):
-        return f"{self.__class__.__name__}({len(self.store)})"
+        return f"{self.__class__.__name__}({len(self.func_factory_store)})"
     __repr__ = __str__
 
     def func_factory_store_items(self) -> List[Tuple[str, FunctionFactoryBase]]:
-        return list(self.store.items())
+        return list(self.func_factory_store.items())
 
     def get(self, name: str, strict: bool=False) -> Optional[IFunction]:
-        if strict and name not in self.store:
-            funcs_avail = get_available_names_example(name, list(self.store.keys()))
+        if strict and name not in self.func_factory_store:
+            funcs_avail = get_available_names_example(name, list(self.func_factory_store.keys()))
             raise EntitySetupNameNotFoundError(owner=self, msg=f"Function '{name}' is not valid. Valid are: {funcs_avail}")
-        function = self.store.get(name, None)
+        function = self.func_factory_store.get(name, None)
         return function
 
     def get_all_names(self, first_custom:bool = False) -> List[str]:
         if first_custom:
-            out = [fnname for fnname in self.store.keys() if fnname.islower()]
-            out += [fnname for fnname in self.store.keys() if not fnname.islower()]
+            out = [fnname for fnname in self.func_factory_store.keys() if fnname.islower()]
+            out += [fnname for fnname in self.func_factory_store.keys() if not fnname.islower()]
             return out
-        return list(self.store.keys())
+        return list(self.func_factory_store.keys())
 
 
     def pprint(self):

@@ -33,13 +33,11 @@ from .namespaces import (
 )
 from .meta_dataclass import ComponentStatus
 from .meta import (
-    is_model_klass,
     FunctionArgumentsType,
     FunctionArgumentsTupleType,
     ModelKlassType,
     TypeInfo,
     HookOnFinishedAllCallable,
-    get_model_fields,
     AttrName,
     is_list_instance_or_type,
     ListChildField,
@@ -126,7 +124,6 @@ def create_exception_name_not_found_error(namespace: Namespace,
 
 # ------------------------------------------------------------
 
-
 @dataclass
 class RegistryBase(IRegistry):
     """
@@ -134,7 +131,6 @@ class RegistryBase(IRegistry):
     convenient to have some advanced logic within. Thus Registry logic 
     is put in specialized classes - SetupSession.
     """
-    store: Dict[AttrName, IAttrDexpNode] = field(repr=False, init=False, default_factory=dict)
     setup_session: Union[ISetupSession, UndefinedType] = field(repr=False, init=False, default=UNDEFINED)
     finished: bool                  = field(init=False, repr=False, default=False)
 
@@ -162,9 +158,9 @@ class RegistryBase(IRegistry):
         """
         raise NotImplementedError("When setting CALL_DEXP_NOT_FOUND_FALLBACK to True, you must implement dexp_not_found_fallback() method")
 
+
     def apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName, caller: Optional[str] = None) -> RegistryRootValue: # noqa: F821
-        # TODO: same method declared in IRegistry
-        """ 
+        """
         Apply phase - Namespace.<attr_name> -
         function returns the instance (root value) from which attr_name will be read from
 
@@ -172,14 +168,15 @@ class RegistryBase(IRegistry):
         different source / instance is used based on different attr_name. See
         ThisNS.Instance.
         """
+        store = self.get_store()
 
-        if attr_name not in self.store:
+        if attr_name not in store:
             # NOTE: Should not happen if DotExpression.setup() has done its job properly
             _, valid_varnames_str = self.get_valid_varnames(attr_name)
             raise EntityApplyNameError(owner=self, msg=f"Unknown attribute '{attr_name}', available attribute(s): {valid_varnames_str}."
                                                        + (f" Caller: {caller}" if caller else ""))
 
-        attr_dexp_node: IAttrDexpNode = self.store[attr_name]
+        attr_dexp_node: IAttrDexpNode = store[attr_name]
         # root_value: RegistryRootValue = self._apply_to_get_root_value(apply_result=apply_result, attr_name=attr_name)
         root_value: RegistryRootValue = self._apply_to_get_root_value(apply_result=apply_result, attr_name=attr_name)
         if not root_value:
@@ -195,16 +192,28 @@ class RegistryBase(IRegistry):
             raise EntityInternalError(owner=self, msg="already finished") 
         if not self.setup_session:
             raise EntityInternalError(owner=self, msg="setup_session not set, function .setup() not called")
+
+        store = self.get_store()
+        if isinstance(self, RegistryUseDenied):
+            if store:
+                raise EntityInternalError(owner=self, msg="found items in store for RegistryUseDenied")
+        else:
+            if not store:
+                raise EntityInternalError(owner=self, msg="no items in store defined.")
         self.finished = True
 
     def count(self) -> int:
-        return len(self.store)
+        store = self.get_store()
+        return len(store) if store else None
 
-    def get(self, key:str, default:Any=None) -> Optional[IAttrDexpNode]:
-        return self.store.get(key, default)
+    # def get_by_name(self, name: str, default: Any=UNDEFINED) -> Union[IAttrDexpNode, UndefinedType]:
+    #     return self.get_store().get(name, default)
 
-    def dexp_node_store_items(self) -> Iterable[Tuple[str, IAttrDexpNode]]:
-        return self.store.items()
+    def attr_dexp_node_store_items(self) -> Iterable[Tuple[str, IAttrDexpNode]]:
+        store = self.get_store()
+        if store in (None, UNDEFINED):
+            raise EntityInternalError(owner=self, msg=f"Store not supported for this registry type")
+        return store.items()
 
     # ------------------------------------------------------------
 
@@ -327,18 +336,6 @@ class RegistryBase(IRegistry):
     #     self.register_attr_node(attr_node)
     #     return attr_node
 
-    # --------------------
-
-    def _register_model_nodes(self, model_klass: ModelKlassType):
-        if not is_model_klass(model_klass):
-            raise EntitySetupValueError(owner=self, msg=f"Expected model class (DC/PYD), got: {type(model_klass)} / {to_repr(model_klass)} ")
-
-        for attr_name in get_model_fields(model_klass):
-            attr_node = self._create_attr_node_for_model_attr(model_klass, attr_name)
-            self.register_attr_node(attr_node)
-
-
-
     # ------------------------------------------------------------
 
     def _create_attr_node_for_model_attr(self, model_klass: ModelKlassType, attr_name:str) -> IAttrDexpNode:
@@ -366,17 +363,53 @@ class RegistryBase(IRegistry):
 
     # ------------------------------------------------------------
 
-    def register_dexp_node(self, dexp_node:IDotExpressionNode,
-                           alt_dexp_node_name=None,
+    # def _register_dexp_node(self, dexp_node:IDotExpressionNode,
+    #                         alt_dexp_node_name=None,
+    #                         replace_when_duplicate:bool = False):
+    #     if self.finished:
+    #         raise EntityInternalError(owner=self, msg=f"Register({dexp_node}) - already finished, adding not possible.")
+
+    #     if not isinstance(dexp_node, IDotExpressionNode):
+    #         raise EntityInternalError(f"{type(dexp_node)}->{dexp_node}")
+    #     dexp_node_name = alt_dexp_node_name if alt_dexp_node_name else dexp_node.name
+
+    #     if not dexp_node_name.count(".") == 0:
+    #         raise EntityInternalError(owner=self, msg=f"Node {dexp_node_name} should not contain . - only first level vars allowed")
+
+    #     if not replace_when_duplicate and dexp_node_name in self.get_store():
+    #         raise EntitySetupNameError(owner=self, msg=f"IAttrDexpNode '{dexp_node}' does not have unique name '{dexp_node_name}' within this registry, found: {self.get_store()[dexp_node_name]}")
+
+    #     self.get_store()[dexp_node_name] = dexp_node
+
+
+    def register_attr_node(self, attr_node:IAttrDexpNode,
+                           alt_attr_node_name=None,
                            replace_when_duplicate:bool = False):
+        # --------------------------------------------------
         """
+        ex. def _register_dexp_node(self, dexp_node:IDotExpressionNode,
+                                    alt_dexp_node_name=None,
+                                    replace_when_duplicate:bool = False):
         Data can register IFunctionDexpNode-s instances since the
         output will be used directly as data and not as a function call.
-            function=[Function(name="Countries", title="Countries", 
+            function=[Function(name="Countries", title="Countries",
                               py_function=CatalogManager.get_countries)],
             ...
             available=(S.Countries.name != "test"),
         """
+
+        if not isinstance(attr_node, IAttrDexpNode):
+            raise EntityInternalError(f"{type(attr_node)}->{attr_node}")
+        if not self.NAMESPACE == attr_node.namespace:
+            raise EntityInternalError(owner=self, msg=f"Method register({attr_node}) - namespace mismatch: {self.NAMESPACE} != {attr_node.namespace}")
+
+        # ovo nadalje je izvučeno i ubačeno iz _register_dexp_node()
+        #       return self._register_dexp_node(dexp_node=attr_node,
+        #                                 alt_dexp_node_name=alt_attr_node_name,
+        #                                 replace_when_duplicate=replace_when_duplicate)
+        dexp_node = attr_node
+        alt_dexp_node_name = alt_attr_node_name
+
         if self.finished:
             raise EntityInternalError(owner=self, msg=f"Register({dexp_node}) - already finished, adding not possible.")
 
@@ -387,30 +420,20 @@ class RegistryBase(IRegistry):
         if not dexp_node_name.count(".") == 0:
             raise EntityInternalError(owner=self, msg=f"Node {dexp_node_name} should not contain . - only first level vars allowed")
 
-        if not replace_when_duplicate and dexp_node_name in self.store:
-            raise EntitySetupNameError(owner=self, msg=f"IAttrDexpNode '{dexp_node}' does not have unique name '{dexp_node_name}' within this registry, found: {self.store[dexp_node_name]}")
+        store = self.get_store()
+        if not replace_when_duplicate and dexp_node_name in store:
+            raise EntitySetupNameError(owner=self, msg=f"IAttrDexpNode '{dexp_node}' does not have unique name '{dexp_node_name}' within this registry, found: {store[dexp_node_name]}")
 
-        self.store[dexp_node_name] = dexp_node
+        store[dexp_node_name] = dexp_node
 
-
-    def register_attr_node(self, attr_node:IAttrDexpNode,
-                           alt_attr_node_name=None,
-                           replace_when_duplicate:bool = False):
-        if not isinstance(attr_node, IAttrDexpNode):
-            raise EntityInternalError(f"{type(attr_node)}->{attr_node}")
-        if not self.NAMESPACE == attr_node.namespace:
-            raise EntityInternalError(owner=self, msg=f"Method register({attr_node}) - namespace mismatch: {self.NAMESPACE} != {attr_node.namespace}")
-        return self.register_dexp_node(dexp_node=attr_node,
-                                       alt_dexp_node_name=alt_attr_node_name,
-                                       replace_when_duplicate=replace_when_duplicate)
 
     def pprint(self):
         print(f"  Namespace {self.NAMESPACE._name}:")
-        for dexp_node_name, dexp_node in self.dexp_node_store_items():
+        for dexp_node_name, dexp_node in self.attr_dexp_node_store_items():
             print(f"    {dexp_node_name} = {dexp_node.as_str()}")
 
     def __str__(self):
-        return f"{self.__class__.__name__}(cnt={len(self.store)})"
+        return f"{self.__class__.__name__}(cnt={len(self.get_store())})"
 
     __repr__ = __str__
 
@@ -436,7 +459,7 @@ class RegistryBase(IRegistry):
         return func_node
 
     def get_valid_varnames(self, attr_name: str) -> Tuple[List[str], str]:
-        valid_varnames_list = [vn for vn, attr_dexp_node in self.dexp_node_store_items() if not attr_dexp_node.denied]
+        valid_varnames_list = [vn for vn, attr_dexp_node in self.attr_dexp_node_store_items() if not attr_dexp_node.denied]
         valid_varnames_str = get_available_names_example(attr_name, list(valid_varnames_list), max_display=7)
         return valid_varnames_list, valid_varnames_str
 
@@ -492,18 +515,19 @@ class RegistryBase(IRegistry):
 
         found_component: Optional[IComponent] = None
 
+        store = self.get_store()
         if owner_dexp_node is None:
             # --------------------------------------------------
             # get() -> TOP LEVEL - only level that is stored
             # --------------------------------------------------
             # e.g. M.company Predefined before in Entity.setup() function.
             if owner.is_unbound() and self.NAMESPACE == ModelsNS:
-                if full_dexp_node_name in self.store:
-                    raise EntitySetupNameError(owner=self, msg=f"full_dexp_node_name={full_dexp_node_name} already in store: {self.store[full_dexp_node_name]}")
+                if full_dexp_node_name in store:
+                    raise EntitySetupNameError(owner=self, msg=f"full_dexp_node_name={full_dexp_node_name} already in store: {store[full_dexp_node_name]}")
                 # TODO: solve with IUnboundModelsRegistry - method available in UnboundModelsRegistry only
                 attr_node_template = self.register_unbound_attr_node(component=owner, full_dexp_node_name=full_dexp_node_name)
             else:
-                attr_node_template = self.store.get(full_dexp_node_name, UNDEFINED)
+                attr_node_template = store.get(full_dexp_node_name, UNDEFINED)
                 if attr_node_template is UNDEFINED:
                     if self.CALL_DEXP_NOT_FOUND_FALLBACK:
                         attr_node_template = self.dexp_not_found_fallback(owner=owner, full_dexp_node_name=full_dexp_node_name)
@@ -556,6 +580,7 @@ class RegistryBase(IRegistry):
 
             err_msg_prefix = f"'{owner.name} -> {owner_dexp_node.full_name} . {dexp_node_name}'"
 
+            type_info = UNDEFINED
             if not found_component:
                 # type_info = found_component.get_type_info()
                 # data = found_component
@@ -587,7 +612,7 @@ class RegistryBase(IRegistry):
             # Create()
             # --------------------------------------------------
             if found_component:
-                type_info = found_component.get_type_info()
+                # type_info = found_component.get_type_info()
                 dexp_node = AttrDexpNodeForComponent(
                                 # preserve full path name
                                 name=full_dexp_node_name,
@@ -610,9 +635,30 @@ class RegistryBase(IRegistry):
 
         return dexp_node
 
-
 # ------------------------------------------------------------
 
+
+@dataclass
+class RegistryBaseWithStoreBase(RegistryBase):
+
+    store: Dict[AttrName, IAttrDexpNode] = field(repr=False, init=False, default_factory=dict)
+
+    def get_store(self) -> Dict[AttrName, IAttrDexpNode]:
+        return self.store
+
+    def count(self) -> int:
+        """
+        Used only for repr()/str()
+        """
+        return len(self.store)
+
+    # def get_by_name(self, name: str, default: Any=UNDEFINED) -> Union[IAttrDexpNode, UndefinedType]:
+    #     return self.store.get(name, default)
+
+    def attr_dexp_node_store_items(self) -> Iterable[Tuple[str, IAttrDexpNode]]:
+        return self.store.items()
+
+# ------------------------------------------------------------
 
 
 class RegistryUseDenied(RegistryBase):
@@ -620,6 +666,8 @@ class RegistryUseDenied(RegistryBase):
     def apply_to_get_root_value(self, apply_result: "IApplyResult", attr_name: AttrName, caller: Optional[str] = None) -> RegistryRootValue: # noqa: F821
         raise EntityInternalError(owner=self, msg="Registry should not be used to get root value.")
 
+    def get_store(self) -> Union[Dict[AttrName, IAttrDexpNode], UndefinedType]:
+        return UNDEFINED
 
 # ------------------------------------------------------------
 
@@ -789,7 +837,9 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
         for ns, registry in self._registry_dict.items():
             if registry.is_unbound_models_registry():
                 raise EntityInternalError(owner=self, msg=f"Found unbound models registry for ns={ns} and it should have been replaced. Got: {registry}")
-            for _, dexp_node in registry.dexp_node_store_items():
+            if isinstance(registry, RegistryUseDenied):
+                continue
+            for _, dexp_node in registry.attr_dexp_node_store_items():
                 assert isinstance(dexp_node, IDotExpressionNode)
                 # do some basic validate
                 dexp_node.finish()

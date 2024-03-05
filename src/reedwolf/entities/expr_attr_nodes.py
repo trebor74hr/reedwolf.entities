@@ -266,17 +266,21 @@ class IAttrDexpNode(IDotExpressionNode, ABC):
         # apply_result: IApplyResult,
         if isinstance(value_prev, IDexpValueSource):
             # ValueNode case
+            value_node: IDexpValueSource = value_prev
             # try to find in children first, then in container_children if applicable
-            if not getattr(value_prev, "children", UNDEFINED):
-                raise EntityInternalError(owner=self, msg=f"Attribute '{attr_name}' can not be found, node '{value_prev.name}' has no children")
+            if not getattr(value_node, "children", UNDEFINED):
+                raise EntityInternalError(owner=self, msg=f"Attribute '{attr_name}' can not be found, node '{value_node.name}' has no children")
 
-            dexp_value_node = value_prev.children.get(attr_name, UNDEFINED)
+            assert hasattr(value_node, "component"), value_node
+            assert attr_name in value_node.component._attr_dexp_node_store, value_node
 
-            if dexp_value_node is UNDEFINED and hasattr(value_prev, "container_children"):
-                dexp_value_node = value_prev.container_children.get(attr_name, UNDEFINED)
+            dexp_value_node = value_node.children.get(attr_name, UNDEFINED)
+
+            if dexp_value_node is UNDEFINED and hasattr(value_node, "container_children"):
+                dexp_value_node = value_node.container_children.get(attr_name, UNDEFINED)
 
             if dexp_value_node is UNDEFINED:
-                raise EntityApplyNameNotFoundError(owner=self, msg=f"Attribute '{attr_name}' can not be found in '{value_prev.name}'")
+                raise EntityApplyNameNotFoundError(owner=self, msg=f"Attribute '{attr_name}' can not be found in '{value_node.name}'")
 
             value_new = dexp_value_node
         else:

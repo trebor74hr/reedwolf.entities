@@ -147,12 +147,9 @@ class IDotExpressionNode(ReedwolfDataclassBase, ABC):
 
     def finish(self):
         if self._status == ComponentStatus.finished:
-        # if self.is_finished:
             raise EntityInternalError(owner=self, msg="already finished")
         self._getset_rwf_kwargs()
-        # self._initialized = True
         self._status = ComponentStatus.finished
-        # self.is_finished = True
 
 # ------------------------------------------------------------
 
@@ -219,7 +216,7 @@ class RegistryRootValue:
 
     if GlobalSettings.is_development:
         def __post_init__(self):
-            # NOTE: all except this combinations is allowed
+            # NOTE: all except these combinations is allowed
             if self.attr_name_new and self.do_fetch_by_name is not UNDEFINED:
                 raise EntityInternalError(owner=self, msg=f"Invalid case: {self.attr_name_new} / {self.do_fetch_by_name}")
 
@@ -243,6 +240,10 @@ class IRegistry:
         ...
 
     @abstractmethod
+    def get_store(self) -> Dict[AttrName, IDotExpressionNode]:
+        ...
+
+    @abstractmethod
     def create_node(self,
                     dexp_node_name: str,
                     owner_dexp_node: IDotExpressionNode,
@@ -259,8 +260,9 @@ class IRegistry:
     def finish(self) -> None:
         ...
 
+    @staticmethod
     @abstractmethod
-    def is_unbound_models_registry(self) -> bool:
+    def is_unbound_models_registry() -> bool:
         """
         == isinstance(self, UnboundModelRegistry)
         Currently not in use
@@ -285,9 +287,18 @@ class IRegistry:
         ...
 
     @abstractmethod
-    def dexp_node_store_items(self) -> Iterable[Tuple[str, "IAttrDexpNode"]]:
+    def attr_dexp_node_store_items(self) -> Iterable[Tuple[str, "IAttrDexpNode"]]:
         ...
 
+    @abstractmethod
+    def create_func_node(self,
+                         setup_session: "ISetupSession",
+                         caller: IDotExpressionNode,
+                         attr_node_name:str,
+                         func_args:FunctionArgumentsType,
+                         value_arg_type_info:TypeInfo,
+                         ) -> "IFunctionDexpNode":
+        ...
 
 # ------------------------------------------------------------
 

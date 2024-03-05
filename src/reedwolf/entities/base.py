@@ -310,6 +310,11 @@ class IComponent(ReedwolfDataclassBase, ABC):
     #   _immutable: bool     = field(init=False, repr=False, default=False)
     _status: ComponentStatus = field(init=False, repr=False, default=ComponentStatus.draft)
 
+    # List of Attribute DotExpression nodes available for this component (only mine) and container (my components + from all my direct components).
+    # Used in LocalFieldsRegistry, TopFieldsRegistry and in evaluating 2+ Dexp attr expressions e.g. This.access.name
+    # (setup: ..., apply: get_value()). Used in Registry.get_store()
+    _attr_dexp_node_store: Dict[AttrName, "IAttrDexpNode"] = field(repr=False, init=False, default_factory=dict)
+
     @property
     def is_finished(self) -> bool:
         # TODO: for speed perf consider having inline logic instead of this property
@@ -1495,7 +1500,10 @@ class IComponent(ReedwolfDataclassBase, ABC):
     def get_or_create_this_registry(self, setup_session: ISetupSession) -> Optional[IThisRegistry]:
         # TODO: maybe DRY is needed - similar logic found in functions:: setup_this_registry
         if not self._this_registry is not UNDEFINED:
-            this_registry = self.create_this_registry(setup_session=setup_session)
+            if self.is_unbound():
+                this_registry = None
+            else:
+                this_registry = self.create_this_registry(setup_session=setup_session)
             if this_registry:
                 this_registry.setup(setup_session=setup_session)
                 this_registry.finish()
@@ -1552,15 +1560,8 @@ class IField(IComponent, ABC):
         -> Optional["ValidationFailure"]:
         ...
 
-    # @abstractmethod
-    # def get_attr_node(self, setup_session: ISetupSession) -> "IAttrDexpNode":  # noqa: F821
-    #     ...
-
-    # @abstractmethod
-    # def get_bound_attr_node(self, setup_session: ISetupSession) -> "IAttrDexpNode":  # noqa: F821
-    #     ...
-
 # ------------------------------------------------------------
+
 
 class IFieldGroup(IComponent, ABC):
 
@@ -1726,11 +1727,8 @@ class IDataModel(IComponent, ABC):
                 dep_data_model.fill_models(models=models, parent=self)
         return models
 
-    # Not used:
-    # def get_attr_node(self, setup_session: ISetupSession) -> Union["IAttrDexpNode", UndefinedType]:  # noqa: F821
-    #     return setup_session.models_registry.get_attr_node_by_data_model(data_model=self)
-
 # ------------------------------------------------------------
+
 
 class IBoundDataModel(IDataModel, ABC):
 
