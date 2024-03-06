@@ -28,7 +28,7 @@ from .utils import (
 )
 from .meta import (
     TransMessageType,
-    NoneType,
+    NoneType, ComponentName, MessageType,
 )
 from .expressions   import (
     DotExpression,
@@ -60,9 +60,9 @@ class ItemsValidation(ItemsValidationBase):
     ensure:     DotExpression
     available:  Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
 
-    name:       Optional[str] = field(default=None)
-    error:      Optional[TransMessageType] = field(repr=False, default=None)
-    title:      Optional[TransMessageType] = field(repr=False, default=None)
+    name:       Optional[ComponentName] = field(default=None)
+    error:      Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
+    title:      Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
 
     def validate(self, apply_result: IApplyResult) -> Union[NoneType, ValidationFailure]:
         # TODO: check which namespaces are used, ...
@@ -117,9 +117,9 @@ class Cardinality: # namespace holder
         max:        Optional[Union[int, DotExpression]] = None
         available:  Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
 
-        name:       Optional[str] = field(default=None)
-        error:      Optional[TransMessageType] = field(repr=False, default=None)
-        title:      Optional[TransMessageType] = field(repr=False, default=None)
+        name:       Optional[ComponentName] = field(default=None)
+        error:      Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
+        title:      Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
 
         # autocomputed
         parent:     Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
@@ -161,9 +161,9 @@ class Cardinality: # namespace holder
         allow_none: Optional[Union[bool, DotExpression]] = True
         available: Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
 
-        name: Optional[str] = field(default=None)
-        error: Optional[TransMessageType] = field(repr=False, default=None)
-        title: Optional[TransMessageType] = field(repr=False, default=None)
+        name: Optional[ComponentName] = field(default=None)
+        error: Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
+        title: Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
 
         # autocomputed
         parent: Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
@@ -199,9 +199,9 @@ class Unique: # namespace holder
         ignore_none: Optional[Union[bool, DotExpression]] = field(default=True)
         available: Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
 
-        name: Optional[str] = field(default=None)
-        error: Optional[TransMessageType] = field(repr=False, default=None)
-        title: Optional[TransMessageType] = field(repr=False, default=None)
+        name: Optional[ComponentName] = field(default=None)
+        error: Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
+        title: Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
 
         # autocomputed
         parent: Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
@@ -218,9 +218,9 @@ class Unique: # namespace holder
         ignore_none: Optional[Union[bool, DotExpression]] = field(default=True)
         available: Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
 
-        name: Optional[str] = field(default=None)
-        error: Optional[TransMessageType] = field(repr=False, default=None)
-        title: Optional[TransMessageType] = field(repr=False, default=None)
+        name: Optional[ComponentName] = field(default=None)
+        error: Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
+        title: Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
 
         # autocomputed
         parent: Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821
@@ -237,9 +237,9 @@ class SingleValidation(ValidationBase):
     allow_none: Union[bool, DotExpression] = True
     available: Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
 
-    name: Optional[str] = field(default=None)
-    error: Optional[TransMessageType] = field(repr=False, default=None)
-    title: Optional[TransMessageType] = field(repr=False, default=None)
+    name: Optional[ComponentName] = field(default=None)
+    error: Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
+    title: Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
 
     # autocomputed
     parent: Union['ContainerBase', UndefinedType] = field(init=False, default=UNDEFINED, repr=False)  # noqa: F821

@@ -47,7 +47,7 @@ from .meta import (
     StandardType,
     STANDARD_TYPE_LIST,
     TransMessageType,
-    NoneType,
+    NoneType, ComponentName, MessageType,
 )
 from .exceptions import (
     EntitySetupError,
@@ -73,10 +73,10 @@ class FieldValidationBase(ValidationBase, ABC):
 class FieldValidation(FieldValidationBase):
     """ generic validation runned on field """
     ensure:         DotExpression
-    name:           Optional[str] = field(default=None)
-    error:          Optional[TransMessageType] = field(repr=False, default=None)
+    name:           Optional[ComponentName] = field(default=None)
+    error:          Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
-    title:          Optional[TransMessageType] = field(repr=False, default=None)
+    title:          Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
 
     def validate(self, apply_result: IApplyResult) -> Union[NoneType, ValidationFailure]:
         return self._validate_common_impl(apply_result=apply_result)
@@ -88,10 +88,10 @@ class FieldValidation(FieldValidationBase):
 
 @dataclass
 class Required(FieldValidationBase):
-    name:           Optional[str] = None
-    error:          Optional[TransMessageType] = field(repr=False, default=None)
+    name:           Optional[ComponentName] = None
+    error:          Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
-    title:          Optional[TransMessageType] = field(repr=False, default=None)
+    title:          Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
 
     def init(self):
         if not self.error:
@@ -120,10 +120,10 @@ class Readonly(FieldValidationBase):
     """
     # TODO: check if autocomputed = ALLWAYS should not be enabled
     value:          Optional[Union[bool, DotExpression]] = True
-    name:           Optional[str] = None
-    error:          Optional[TransMessageType] = field(repr=False, default=None)
+    name:           Optional[ComponentName] = None
+    error:          Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
-    title:          Optional[TransMessageType] = field(repr=False, default=None)
+    title:          Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
 
     def init(self):
         if not isinstance(self.value, (bool, DotExpression)):
@@ -174,10 +174,10 @@ class MinValue(FieldValidationBase):
     # TODO: MaxValue
     # TODO: DRY - lot of similar code in all these classes
     value:          Union[StandardType, DotExpression]
-    name:           Optional[str] = None
-    error:          Optional[TransMessageType] = field(repr=False, default=None)
+    name:           Optional[ComponentName] = None
+    error:          Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
-    title:          Optional[TransMessageType] = field(repr=False, default=None)
+    title:          Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
 
     def init(self):
         # TODO: allow DotExpression 
@@ -204,10 +204,10 @@ class MinValue(FieldValidationBase):
 @dataclass
 class ExactLength(FieldValidationBase):
     value:          Union[int, DotExpression]
-    name:           Optional[str] = None
-    error:          Optional[TransMessageType] = field(repr=False, default=None)
+    name:           Optional[ComponentName] = None
+    error:          Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
-    title:          Optional[TransMessageType] = field(repr=False, default=None)
+    title:          Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
 
     def init(self):
         self._check_dot_expression_or_positive_int("value", self.value)
@@ -233,10 +233,10 @@ class ExactLength(FieldValidationBase):
 @dataclass
 class MaxLength(FieldValidationBase):
     value:          Union[int, DotExpression]
-    name:           Optional[str] = None
-    error:          Optional[TransMessageType] = field(repr=False, default=None)
+    name:           Optional[ComponentName] = None
+    error:          Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
-    title:          Optional[TransMessageType] = field(repr=False, default=None)
+    title:          Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
 
     def init(self):
         self._check_dot_expression_or_positive_int("value", self.value)
@@ -262,10 +262,10 @@ class MaxLength(FieldValidationBase):
 @dataclass
 class MinLength(FieldValidationBase):
     value:          Union[int, DotExpression]
-    name:           Optional[str] = None
-    error:          Optional[TransMessageType] = field(repr=False, default=None)
+    name:           Optional[ComponentName] = None
+    error:          Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
-    title:          Optional[TransMessageType] = field(repr=False, default=None)
+    title:          Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
 
     def init(self):
         self._check_dot_expression_or_positive_int("value", self.value)
@@ -292,10 +292,10 @@ class RangeLength(FieldValidationBase):
     # see MaxLength NOTE:
     min:            Union[int, DotExpression]
     max:            Union[int, DotExpression]
-    name:           Optional[str] = None
-    error:          Optional[TransMessageType] = field(repr=False, default=None)
+    name:           Optional[ComponentName] = None
+    error:          Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
-    title:          Optional[TransMessageType] = field(repr=False, default=None)
+    title:          Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
 
     def init(self):
         if self.min is None and self.max is None:

@@ -57,7 +57,7 @@ from .meta import (
     KeyType,
     KeyPairs,
     ModelInstanceType,
-    ERR_MSG_ATTR_REQUIRED,
+    ERR_MSG_ATTR_REQUIRED, ComponentName, MessageType,
 )
 from .base import (
     get_name_from_bind,
@@ -662,8 +662,8 @@ class Entity(IEntity, ContainerBase):
     contains:           List[IComponent] = field(repr=False, default_factory=list)
 
     # --- optional - following can be bound later with .bind_to()
-    name:               Optional[str] = field(default=None)
-    title:              Optional[TransMessageType] = field(repr=False, default=None)
+    name:               Optional[ComponentName] = field(default=None)
+    title:              Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
 
     # binding interface - not dumped/exported
     bind_to:            Optional[Union[DataModel, ModelKlassType]] = field(repr=False, default=None,
@@ -949,8 +949,8 @@ class SubEntityBase(ContainerBase, ABC):
 
     # required since if it inherit name from DataModel then the name will not
     # be unique in self.components (SubEntityItems and DataModel will share the same name)
-    name:           Optional[str] = field(default=None)
-    title:          Optional[TransMessageType] = field(repr=False, default=None)
+    name:           Optional[ComponentName] = field(default=None)
+    title:          Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
 
     # --- can be index based or standard key-fields names
     keys:           Optional[KeysBase] = field(repr=False, default=None)

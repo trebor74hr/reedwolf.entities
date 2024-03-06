@@ -21,7 +21,7 @@ from .expressions import (
     DotExpression,
     DEXP_VALIDATOR_NOT_MODELS,
 )
-from .meta import TransMessageType, STANDARD_TYPE_LIST, LiteralType
+from .meta import TransMessageType, STANDARD_TYPE_LIST, LiteralType, ComponentName, MessageType, NoneType
 from .utils import to_repr
 
 
@@ -38,9 +38,9 @@ class EvaluationBase(IEvaluation, ABC):
     REQUIRES_AUTOCOMPUTE: ClassVar[bool] = field(default=True)
 
     value:          Union[LiteralType, DotExpression]
-    name:           Optional[str] = field(default=None)
+    name:           Optional[ComponentName] = field(default=None)
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
-    title:          Optional[TransMessageType] = field(repr=False, default=None)
+    title:          Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
 
     def init(self):
         if hasattr(self, "available"):

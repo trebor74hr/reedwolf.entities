@@ -152,6 +152,7 @@ AttrIndex = TypeVar("AttrIndex", bound=int)
 
 # used in Container.container_id and Entity.containers
 ContainerId = TypeVar("ContainerId", bound=str)
+ComponentName = TypeVar("ComponentName", bound=str)
 
 # ------------------------------------------------------------
 # functions.py
@@ -292,6 +293,8 @@ HookOnFinishedAllCallable = TypeVar("HookOnFinishedAllCallable", bound=Callable[
 # ------------ NewType-s ------------
 
 # A good example of NewType use-case, will require construction e.g. _("test")
+MessageType             = TypeVar("MessageType", bound=str)
+
 TransMessageType        = NewType("TransMessageType", str)
 _ = TransMessageType
 

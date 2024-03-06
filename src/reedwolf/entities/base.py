@@ -89,7 +89,7 @@ from .meta import (
     IDexpValueSource,
     ChildField,
     ListChildField,
-    get_enum_values,
+    get_enum_values, ComponentName, MessageType,
 )
 from .expressions import (
     DotExpression,
@@ -178,7 +178,7 @@ class ReservedAttributeNames(str, Enum):
     # Containers (Entity/SubEntity) + FieldGroup + Field with children (BooleanField)
     # -------------------------------------------------------------------------------------
     # Applies to components which have children (list of components, e.g. in
-    # contiains)
+    # contains)
     CHILDREN_ATTR_NAME = "Children" 
 
     # SubEntityItems 
@@ -186,8 +186,9 @@ class ReservedAttributeNames(str, Enum):
     # Applies to components which can have list of items (SubEntities)
     ITEMS_ATTR_NAME = "Items" 
 
-    # TODO: reach 1 level deep:
-    #   PARENT_ATTR_NAME = "Parent" 
+    # every Component which has Parent
+    PARENT_ATTR_NAME = "Parent"
+
     #   CHILDREN_KEY = "__children__" 
 
     # TODO: traversing?:
@@ -288,13 +289,17 @@ class IComponent(ReedwolfDataclassBase, ABC):
     parent_name:    Union[str, UndefinedType] = field(init=False, default=UNDEFINED)
     entity:         Union[Self, "IEntity"] = field(init=False, compare=False, default=UNDEFINED, repr=False)
     _accessor:      IValueAccessor = field(init=False, default=UNDEFINED, repr=False)
-    # TODO: name:   Optional[str] = field(init=False, default=None)
 
     name_counter_by_parent_name: Dict[str, int] = field(init=False, repr=False, default_factory=dict)
 
     # ------------------------------------------------------------
 
-    # lazy init - done in Setup phase
+    # ----- lazy init - done in Setup phase -----
+
+    # Usually is input param, if not set then filled later. Put here to avoid issues with inheritance when it is input param.
+    # TODO: name:           Optional[ComponentName] = field(init=False, default=None)
+
+    # these 2 are computed together
     child_field_list: Optional[ListChildField] = field(init=False, repr=False, default=None)
     _component_fields_dataclass: Optional[Type[IComponentFields]] = field(init=False, repr=False, default=None)
 
@@ -1529,7 +1534,7 @@ class IValidation(ICleaner, ABC):
     ensure:     DotExpression
     available:  Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
     name:       Optional[str] = field(default=None)
-    error:      Optional[TransMessageType] = field(repr=False, default=None)
+    error:      Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
 
 
 class IEvaluation(ICleaner, ABC):
@@ -2825,7 +2830,8 @@ def extract_type_info(
         if not fields:
             fields = get_model_fields(parent_object, strict=False)
         field_names = list(fields.keys())
-        valid_names = f"Valid attributes: {get_available_names_example(attr_node_name, field_names)}" if field_names else "Type has no attributes at all."
+        # (m) := model instance - to differentiate from AttrDexpNode / ValueNode / Component's members
+        valid_names = f"Valid attributes (m): {get_available_names_example(attr_node_name, field_names)}" if field_names else "Type has no attributes at all."
         raise EntitySetupNameNotFoundError(msg=f"Type object {parent_object} has no attribute '{attr_node_name}'. {valid_names}")
 
     if not isinstance(type_info, TypeInfo):

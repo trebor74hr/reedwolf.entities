@@ -153,33 +153,47 @@ def composite_functions(*func:Callable[..., Any]) -> Callable[..., Any]:
 
 
 
-def get_available_names_example(name:str, name_list:List[str], max_display:int = 5) -> str:
+def get_available_names_example(name:str, name_list:List[str], max_display:int = 5, last_names: Optional[List[str]] = None) -> str:
     # assert isinstance(name_list, list), name_list
     if not name_list:
         return "no available names"
+    if last_names is None:
+        last_names = ()
 
     len_names_all = len(name_list)
-    names_ellipsis = "..." if len_names_all > max_display else ""
+    names_ellipsis = f"... ({len_names_all - max_display} more)" if len_names_all > max_display else ""
     # names_all      = ', '.join([p for p in name_list][:max_display])
 
     # filter out private names
     name_list_all = [p for p in name_list if not p.startswith("_")]
-    name_list = name_list_all
+    name_list = []
 
-    if name:
+    name_len = len(name) if name else 0
+    if name_len >= 2:
         new = []
         name_bits = [bit.strip("_") for bit in name.split("_")] if "_" in name else None
-        for name_cand in name_list:
-            if name_cand.startswith(name[:3]) or name[:4] in name_cand:
+        for name_cand in name_list_all:
+            if name_cand.startswith(name[:3]) or (name_len >= 3 and name[:4] in name_cand):
                 new.append(name_cand)
             elif name_bits:
-                if bool([nb for nb in name_bits if len(nb)>=3 and nb[:3] in name_cand]):
+                if bool([nb for nb in name_bits if len(nb) >= 3 and nb[:3] in name_cand]):
                     new.append(name_cand)
         name_list = new
 
     diff = max_display - len(name_list)
-    if diff>0:
-        name_list += [name for name in name_list_all if name not in name_list][:diff]
+    if diff > 0:
+        # add other fields - first lower
+        name_list += [name for name in name_list_all if name not in name_list and name[0].islower() and name not in last_names][:diff]
+
+    diff = max_display - len(name_list)
+    if diff > 0:
+        # add other fields - first upper
+        name_list += [name for name in name_list_all if name not in name_list and name[0].isupper() and name not in last_names][:diff]
+
+    diff = max_display - len(name_list)
+    if diff > 0 and last_names:
+        # finally - last_names
+        name_list += [name for name in name_list_all if name not in name_list and name in last_names][:diff]
 
     len_name_list = len(name_list)
     if len_name_list >= max_display:

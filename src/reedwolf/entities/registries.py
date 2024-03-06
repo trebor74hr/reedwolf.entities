@@ -46,7 +46,7 @@ from .meta import (
     SettingsType,
     IAttribute,
     CustomCtxAttributeList,
-    ContainerId, is_model_klass,
+    ContainerId, is_model_klass, ComponentName, ListChildField,
 )
 from .expressions import (
     DotExpression,
@@ -335,20 +335,73 @@ class LocalFieldsRegistry(RegistryBase):
         """
         # A.3. COMPONENTS - collect attr_nodes - previously flattened (recursive function fill_components)
         # container_id = self.container.container_id
+        # parent_dict: Dict[ComponentName, IComponent] = {}
         for component_name, component in self.container.components.items():
-            if component is self.container or not component.has_data():
-                continue
-            # self._register_component(component)
-            # allow direct SubEntityItems to be accessible
-            attr_node = self.create_attr_node(component)
-            self.register_attr_node(attr_node)  # , is_list=False))
+            component_parent = component.parent
 
-            # TODO: put this in a component.register_attr_node() function
-            # store in Component's store too - to be available in This.
-            # or in 2+ expression bit-nodes (This.access.name).
-            if (attr_node.name not in component._attr_dexp_node_store
-              and attr_node.component is not component):
-                component._attr_dexp_node_store[attr_node.name] = attr_node
+            if not (component.is_container() and component is not self.container):
+                # skip case when container is child. Containers should register its own special fields.
+                if component_parent and component_parent is not component:
+                    self._register_special_attr_node(attr_name=ReservedAttributeNames.PARENT_ATTR_NAME.value,
+                                                     component=component_parent,
+                                                     type_info=component_parent.get_type_info(),
+                                                     attr_dexp_node_store=component._attr_dexp_node_store)
+                if component.is_subentity_items():
+                    self._register_special_attr_node(attr_name=ReservedAttributeNames.ITEMS_ATTR_NAME.value,
+                                                     component=component,
+                                                     type_info=component.get_type_info(),
+                                                     attr_dexp_node_store=component._attr_dexp_node_store)
+
+                if isinstance(component, IField):
+                    # simple datatype as raw value (terminates ValueNode logic), e.g. int, str, date
+                    self._register_special_attr_node(attr_name=ReservedAttributeNames.VALUE_ATTR_NAME.value,
+                                                     component=component,
+                                                     type_info=component.get_type_info(),
+                                                     attr_dexp_node_store=component._attr_dexp_node_store)
+
+                if component.is_container() or component.is_fieldgroup():
+                    # TODO: boolean+enables - not covered - special datastruct needed:
+                    #   if isinstance(component, IField) and component.has_children():
+                    # complex datastructure as raw instance (terminates ValueNode logic), e.g. Fields(name="name", age=30)
+                    self._register_special_attr_node(attr_name=ReservedAttributeNames.INSTANCE_ATTR_NAME,
+                                                     component=component,
+                                                     type_info=component.get_type_info(),
+                                                     attr_dexp_node_store=component._attr_dexp_node_store)
+
+                if component.has_children():
+                    component_fields_dataclass, _ = component.get_component_fields_dataclass(
+                                                                    setup_session=self.setup_session)
+                    type_info = TypeInfo.get_or_create_by_type(ListChildField)
+                    self._register_special_attr_node(
+                        attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME.value,
+                        component=component,
+                        type_info=type_info,
+                        attr_dexp_node_store=component._attr_dexp_node_store
+                        # TODO: missusing: th_field=component_fields_dataclass,
+                    )
+
+            # register children one by one
+            if component is not self.container and component.has_data():
+                # self._register_component(component)
+                # allow direct SubEntityItems to be accessible
+                attr_node = self.create_attr_node(component)
+                self.register_attr_node(attr_node)  # , is_list=False))
+
+                # Store in Component's parent store too - to be available in This.
+                # and in 2+ expression bit-nodes (e.g. F.access.name).
+                # Skip registering the component in its own store.
+                if (component_parent
+                  and component_parent is not self.container
+                  and component_parent is not component):
+                    self.register_attr_node(attr_node=attr_node,
+                                            attr_dexp_node_store=component_parent._attr_dexp_node_store)
+                    # if attr_node.name in component._attr_dexp_node_store:
+                    #     raise EntityInternalError(owner=self,
+                    #                               msg=f"Attribute with name '{attr_node.name}' already found in {component}, got: {component._attr_dexp_node_store[attr_node.name]}")
+                    # component._attr_dexp_node_store[attr_node.name] = attr_node
+
+
+
 
         return
 
@@ -943,7 +996,6 @@ class ThisRegistryForComponent(ThisRegistryBase):
                 # This.<all-attribute> + This.Children: ListChildField
                 self._register_all_children(
                     setup_session=setup_session,
-                    attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME,
                     component=self.component,
                 )
 

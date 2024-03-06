@@ -30,7 +30,7 @@ from .meta import (
     is_model_klass,
     ModelKlassType,
     extract_py_type_hints,
-    EmptyFunctionArguments, ModelInstanceType,
+    EmptyFunctionArguments, ModelInstanceType, ComponentName,
 )
 from .expressions import (
     DotExpression,
@@ -279,7 +279,7 @@ class UnboundModel(IUnboundDataModel):
     """
     This is a dummy class, just to mark unbound mode
     """
-    name: Optional[str] = field(default=None, init=False)
+    name: Optional[ComponentName] = field(default=None, init=False)
 
     # model_klass: Union[ModelKlassType, UndefinedType] = field(repr=False, init=False, default=UNDEFINED)
     # parent: Union[IDataModel, UndefinedType] = field(init=False, default=UNDEFINED, repr=False)
@@ -304,7 +304,7 @@ class DataModelWithHandlers(BoundDataModelBase):
     # return type of this function is used as model
     read_handler:   CustomFunctionFactory
 
-    name:           Optional[str] = field(default=None)
+    name:           Optional[ComponentName] = field(default=None)
     title:          Optional[str] = field(default=None, repr=False)
     in_model:       bool = field(default=True)
     contains:       Optional[List[Self]] = field(repr=False, default_factory=list)
@@ -383,7 +383,7 @@ class DataModel(BoundDataModelBase):
 
     model_klass:              Union[ModelKlassType, DotExpression] = field(repr=False)
 
-    name:               Optional[str] = field(default=None)
+    name:               Optional[ComponentName] = field(default=None)
     contains:           Optional[List[Union[DataModelWithHandlers, Self]]] = field(repr=False, default_factory=list)
 
     # title:            TransMessageType

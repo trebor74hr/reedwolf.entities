@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 
 from .meta import (
     TransMessageType,
-    NoneType,
+    NoneType, ComponentName, MessageType,
 )
 from .expressions import (
     DotExpression,
@@ -32,10 +32,10 @@ class ChildrenValidationBase(ValidationBase, ABC):
 @dataclass
 class ChildrenValidation(ChildrenValidationBase):
     ensure:         DotExpression
-    name:           Optional[str] = field(default=None)
-    error:          Optional[TransMessageType] = field(repr=False, default=None)
+    name:           Optional[ComponentName] = field(default=None)
+    error:          Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
     available:      Optional[Union[bool, DotExpression]] = field(repr=False, default=True)
-    title:          Optional[TransMessageType] = field(repr=False, default=None)
+    title:          Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
 
     def validate(self, apply_result: IApplyResult) -> Union[NoneType, ValidationFailure]:
         # TODO: check which namespaces are used, ...

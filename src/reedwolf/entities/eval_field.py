@@ -91,7 +91,7 @@ class Default(FieldEvaluationBase):
     # value:          Union[LiteralType, DotExpression]
     # name:           Optional[str] = None
     # available:      Optional[Union[bool, DotExpression]] = True
-    # title:          Optional[TransMessageType] = None
+    # title:          Union[MessageType, TransMessageType, NoneType] = None
 
     REQUIRES_AUTOCOMPUTE: ClassVar[bool] = False
 

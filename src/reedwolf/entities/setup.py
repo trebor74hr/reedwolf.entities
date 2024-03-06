@@ -59,7 +59,7 @@ from .base import (
     IApplyResult,
     ReservedAttributeNames,
     SetupStackFrame,
-    UseStackFrameCtxManagerBase,
+    UseStackFrameCtxManagerBase, RESERVED_ATTRIBUTE_NAMES,
 )
 from .functions import (
     FunctionsFactoryRegistry,
@@ -239,9 +239,8 @@ class RegistryBase(IRegistry):
 
     def _register_all_children(self,
                                setup_session: ISetupSession,
-                               attr_name: ReservedAttributeNames,
                                component: IComponent,
-                               attr_name_prefix: str = None,
+                               # attr_name_prefix: str = None,
                                ) -> IAttrDexpNode:
         """
         This.Children to return instance itself "
@@ -266,7 +265,7 @@ class RegistryBase(IRegistry):
         children_attr_node = self._register_special_attr_node(attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME.value,
                                                               component=component,
                                                               type_info=type_info,
-                                                              attr_name_prefix=attr_name_prefix,
+                                                              # attr_name_prefix=attr_name_prefix,
                                                               # TODO: missusing
                                                               th_field=component_fields_dataclass)
         return children_attr_node
@@ -280,6 +279,7 @@ class RegistryBase(IRegistry):
                                     type_info: TypeInfo,
                                     attr_name_prefix: Optional[str]=None,
                                     th_field: Optional[Any] = None,
+                                    attr_dexp_node_store: Optional[Dict[AttrName, IAttrDexpNode]] = None,
                                     ) -> IAttrDexpNode:
         # NOTE: removed restriction - was too strict
         # if not (is_model_klass(model_klass) or model_klass in STANDARD_TYPE_LIST or is_enum(model_klass)):
@@ -311,7 +311,7 @@ class RegistryBase(IRegistry):
                             # type_object=th_field,
                             )
 
-        self.register_attr_node(attr_node)
+        self.register_attr_node(attr_node, attr_dexp_node_store=attr_dexp_node_store)
         return attr_node
 
     # --------------------
@@ -384,7 +384,8 @@ class RegistryBase(IRegistry):
 
     def register_attr_node(self, attr_node:IAttrDexpNode,
                            alt_attr_node_name=None,
-                           replace_when_duplicate:bool = False):
+                           replace_when_duplicate:bool = False,
+                           attr_dexp_node_store: Optional[Dict[AttrName, IAttrDexpNode]] = None):
         # --------------------------------------------------
         """
         ex. def _register_dexp_node(self, dexp_node:IDotExpressionNode,
@@ -420,11 +421,13 @@ class RegistryBase(IRegistry):
         if not dexp_node_name.count(".") == 0:
             raise EntityInternalError(owner=self, msg=f"Node {dexp_node_name} should not contain . - only first level vars allowed")
 
-        store = self.get_store()
-        if not replace_when_duplicate and dexp_node_name in store:
-            raise EntitySetupNameError(owner=self, msg=f"IAttrDexpNode '{dexp_node}' does not have unique name '{dexp_node_name}' within this registry, found: {store[dexp_node_name]}")
+        if attr_dexp_node_store is None:
+            attr_dexp_node_store = self.get_store()
 
-        store[dexp_node_name] = dexp_node
+        if not replace_when_duplicate and dexp_node_name in attr_dexp_node_store:
+            raise EntitySetupNameError(owner=self, msg=f"IAttrDexpNode '{dexp_node}' does not have unique name '{dexp_node_name}' within this registry, found: {attr_dexp_node_store[dexp_node_name]}")
+
+        attr_dexp_node_store[dexp_node_name] = dexp_node
 
 
     def pprint(self):
@@ -460,7 +463,10 @@ class RegistryBase(IRegistry):
 
     def get_valid_varnames(self, attr_name: str) -> Tuple[List[str], str]:
         valid_varnames_list = [vn for vn, attr_dexp_node in self.attr_dexp_node_store_items() if not attr_dexp_node.denied]
-        valid_varnames_str = get_available_names_example(attr_name, list(valid_varnames_list), max_display=7)
+        valid_varnames_str = get_available_names_example(attr_name,
+                                                         list(valid_varnames_list),
+                                                         max_display=10,
+                                                         last_names=RESERVED_ATTRIBUTE_NAMES)
         return valid_varnames_list, valid_varnames_str
 
     def create_exception_name_not_found_error(self,
@@ -567,7 +573,11 @@ class RegistryBase(IRegistry):
                     if not found_component:
                         # in this momemnt
                         children_names = list(children_dict.keys())
-                        valid_varnames_str = get_available_names_example(dexp_node_name, children_names, max_display=7) if children_names else ""
+                        valid_varnames_str = get_available_names_example(dexp_node_name,
+                                                                         children_names,
+                                                                         max_display=10,
+                                                                         last_names=RESERVED_ATTRIBUTE_NAMES) \
+                                                if children_names else ""
                         raise create_exception_name_not_found_error(owner=owner,
                                                                     namespace=self.NAMESPACE,
                                                                     valid_varnames_str=valid_varnames_str,

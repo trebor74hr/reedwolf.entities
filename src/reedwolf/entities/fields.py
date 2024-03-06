@@ -70,7 +70,7 @@ from .meta import (
     get_enum_member_py_type,
     EmptyFunctionArguments,
     STANDARD_TYPE_LIST,
-    ERR_MSG_ATTR_REQUIRED,
+    ERR_MSG_ATTR_REQUIRED, ComponentName, MessageType, NoneType,
 )
 from .base import (
     get_name_from_bind,
@@ -156,7 +156,7 @@ class FieldBase(IField, ABC):
 
     # to Model attribute
     bind_to:        Union[DotExpression, str] = field(default=UNDEFINED)
-    title:          Optional[TransMessageType] = field(repr=False, default=None)
+    title:          Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
 
     # NOTE: required - is also Validation, i.e. Required() - just commonly used
     #       validation, nothing special that deserves special attribute.
@@ -168,7 +168,7 @@ class FieldBase(IField, ABC):
     #       Default() adds extra features.
     #   default:        Optional[Union[StandardType, DotExpression]] = None
 
-    description:    Optional[TransMessageType] = field(repr=False, default=None)
+    description:    Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
 
     # NOTE: see available_old_logic
     #   available:      Union[bool, DotExpression] = field(repr=False, default=True)
@@ -188,14 +188,14 @@ class FieldBase(IField, ABC):
     #   See also "available".
 
     # NOTE: this has no relation to type hinting - this is used for html input placeholder attribute
-    hint:           Optional[TransMessageType] = field(repr=False, default=None)
+    hint:           Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
 
     # for arbitrary custom values, entity system ignores the field
     #   e.g. "autocomplete": True ...
     meta:           Optional[Dict[str, Any]] = field(repr=False, default=None)
 
     # if not supplied name will be extracted from binded model attr_node
-    name:            Optional[str] = None
+    name:            Optional[ComponentName] = None
     attr_node:       Union[IAttrDexpNode, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
     bound_attr_node: Union[IAttrDexpNode, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
     python_type:     Union[type, UndefinedType] = field(init=False, repr=False, default=UNDEFINED)
@@ -858,8 +858,8 @@ class EmailField(FieldBase):
 @dataclass
 class FieldGroup(IFieldGroup):
     contains:       List[IComponent] = field(repr=False)
-    name:           Optional[str] = field(default=None)
-    title:          Optional[TransMessageType] = field(repr=False, default=None)
+    name:           Optional[ComponentName] = field(default=None)
+    title:          Union[MessageType, TransMessageType, NoneType] = field(repr=False, default=None)
     cleaners:       Optional[List[Union[ChildrenValidationBase, ChildrenEvaluationBase]]] = field(repr=False, default_factory=list)
     accessor:       Optional[ValueAccessorInputType] = field(repr=False, default=None)
     # NOTE: see available_old_logic
