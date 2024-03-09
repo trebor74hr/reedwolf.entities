@@ -1,8 +1,9 @@
 """
 Special function arguments helpers - custom type hints or wrappers
 """
+from abc import abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional, Type, Any, Callable, Union
+from typing import Optional, Type, Any, Callable, Union, List
 
 from .utils import (
     UNDEFINED,
@@ -12,8 +13,7 @@ from .meta import (
     IInjectFuncArgHint,
     TypeInfo,
     AttrValue,
-    IExecuteFuncArgHint,
-    ModelInstanceType,
+    ModelInstanceType, IDexpValueSource,
 )
 from .exceptions import (
     EntityTypeError,
@@ -33,6 +33,16 @@ from .base import (
     IValueNode,
     ApplyStackFrame,
 )
+
+# can be various types, check: functions.py::execute_arg()
+
+ValueOrDexp = Union[
+                  DotExpression,
+                  IDotExpressionNode,
+                  IDexpValueSource,
+                  List[IDexpValueSource],
+                  # TODO: InjectFuncArgValueByCallable,
+              ]
 
 
 @dataclass
@@ -97,6 +107,17 @@ class DotexprExecuteOnItemFactoryFuncArgHint(IInjectFuncArgHint):
         return execute_dot_expr_w_this_registry_of_item
 
 
+class IExecuteFuncArgHint(IFuncArgHint):
+
+    @abstractmethod
+    def get_apply_value(self, apply_result: "IApplyResult",
+                        exp_arg: PrepArg,
+                        arg_value: ValueOrDexp,
+                        prev_node_type_info: TypeInfo,
+                        ) -> AttrValue:
+        ...
+
+
 @dataclass
 class AttrnameFuncArgHint(IExecuteFuncArgHint):
     inner_type: Optional[Type] = field(repr=True, default=Any)
@@ -112,8 +133,8 @@ class AttrnameFuncArgHint(IExecuteFuncArgHint):
         return hash((self.__class__.__name__, self.type, self.inner_type))
 
     def get_apply_value(self, apply_result: "IApplyResult",
-                        exp_arg: "PrepArg",
-                        arg_value: AttrValue,
+                        exp_arg: PrepArg,
+                        arg_value: ValueOrDexp,
                         prev_node_type_info: TypeInfo,
                         ) -> AttrValue:
         # TODO: check that dot expression (arg_value) is in Models/Fields namespace
@@ -154,15 +175,25 @@ class DotexprFuncArgHint(IExecuteFuncArgHint):
         return hash((self.__class__.__name__, self.type, self.inner_type))
 
     def get_apply_value(self, apply_result: "IApplyResult",
-                        exp_arg: "PrepArg",
-                        arg_value: AttrValue,
+                        exp_arg: PrepArg,
+                        arg_value: ValueOrDexp,
                         prev_node_type_info: TypeInfo,
                         ) -> AttrValue:
+        if isinstance(arg_value, DotExpression):
+            namespace = arg_value._namespace
+        # elif isinstance(arg_value, IDotExpressionNode):
+        #     raise NotImplementedError()  # namespace = arg_value.namespace
+        else:
+            raise EntityInternalError(owner=self, msg=f"Expected DotExpression / IDotExpressionNode: {arg_value}")
+
         dexp_result = execute_dexp_or_node(
             dexp_or_value=arg_value,
             dexp_node=arg_value,
+            namespace=namespace,
             dexp_result=UNDEFINED,
             prev_node_type_info=prev_node_type_info,
             apply_result=apply_result)
         arg_value = dexp_result.value
         return arg_value
+
+

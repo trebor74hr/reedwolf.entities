@@ -244,6 +244,7 @@ class BoundDataModelBase(IBoundDataModel):
                 rh_dexp_result = model_with_handler.read_handler_dexp.execute_node(
                                     apply_result=apply_result, 
                                     dexp_result=ExecResult(),
+                                    namespace=NOT_APPLIABLE,
                                     prev_node_type_info=None,
                                     is_1st_node=True, # TODO: is this correct? used?
                                     is_last_node=True,

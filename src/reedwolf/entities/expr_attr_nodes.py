@@ -12,6 +12,9 @@ from dataclasses import (
 
 from .namespaces import (
     ThisNS,
+    MultiNamespace,
+    FieldsNS,
+    NamespaceRule,
 )
 from .utils import (
     UNDEFINED,
@@ -29,7 +32,9 @@ from .exceptions import (
 from .namespaces import (
     Namespace,
 )
-from .meta_dataclass import ComponentStatus
+from .meta_dataclass import (
+    ComponentStatus,
+)
 from .meta import (
     TypeInfo,
     is_function,
@@ -76,8 +81,8 @@ class IAttrDexpNode(IDotExpressionNode, ABC):
     # TODO: rename to owner
     # data: Union[IComponent, TypeInfo, IAttribute]
 
-    # to which namespace it belongs
-    namespace: Namespace = None
+    # namespace node belongs to
+    namespace: Union[Namespace, MultiNamespace] = None
 
     # TODO: I don't like this - overlaps with data/owner - remove this one?
     # based on attr_node_type - can contain Field() or class - used later to extract details
@@ -95,12 +100,17 @@ class IAttrDexpNode(IDotExpressionNode, ABC):
     # attr_node_type: AttrDexpNodeTypeEnum = field(init=False)
 
     def __post_init__(self):
-        self.full_name = f"{self.namespace._name}.{self.name}"
+        if isinstance(self.namespace, MultiNamespace):
+            ns_names = '+'.join([f"{nsr.namespace._name}" for nsr in self.namespace.rules])
+            self.full_name = f"{ns_names}.{self.name}"
+        else:
+            if not isinstance(self.namespace, Namespace):
+                raise EntityInternalError(owner=self, msg=f"Attribute 'namespace' should be Namespace, got: {self.namespace}")
+            self.full_name = f"{self.namespace._name}.{self.name}"
+
         if not isinstance(self.name, str) or self.name in (None, UNDEFINED):
             raise EntityInternalError(owner=self, msg=f"AttrDexpNode should have string name, got: {self.name}")
 
-        if not isinstance(self.namespace, Namespace):
-            raise EntityInternalError(owner=self, msg=f"Attribute 'namespace' should be Namespace, got: {self.namespace}")
 
     def _check_data(self, attr_name: AttrName, data: Any):
         if data is None:
@@ -145,6 +155,7 @@ class IAttrDexpNode(IDotExpressionNode, ABC):
                      apply_result: IApplyResult,
                      # previous - can be undefined too
                      dexp_result: Union[ExecResult, UndefinedType],
+                     namespace: Union[Namespace, UndefinedType],
                      is_1st_node: bool,
                      is_last_node: bool,
                      prev_node_type_info: Optional[TypeInfo],
@@ -179,7 +190,8 @@ class IAttrDexpNode(IDotExpressionNode, ABC):
             else:
                 # take from setup_session
                 setup_session = apply_result.get_setup_session()
-                registry = setup_session.get_registry(self.namespace)
+                # NOTE: self.namespace can be MultiNamespace
+                registry = setup_session.get_registry(namespace)
 
             # Get starting instance. For FieldsNS.<field> can be ValueNode instance
             root_value: RegistryRootValue = registry.apply_to_get_root_value(apply_result=apply_result,
@@ -433,12 +445,26 @@ class AttrDexpNodeForComponent(IAttrDexpNode):
     # can be set from outside - e.g. for Children
     name: str = field(default=None)
 
+    # initially set to Namespace, used only for check, will changed later to MultiNamespace()
+    namespace: Union[Namespace, MultiNamespace] = field(repr=False, default=None)
+
+    # ---- later evaluated ----
     # in some cases (LocalFieldsNS) some fields should not be referenced, but are registered within Registry.store,
     # in order to report to user the reason for denial - better than just to report - attribute / field name not found.
     denied: bool = field(init=False, repr=False)
     deny_reason: str = field(init=False, repr=False)
 
+
+
     def __post_init__(self):
+        # automatically set and interpreted later
+        if not isinstance(self.namespace, Namespace):
+            if self.namespace not in (FieldsNS, ThisNS):
+                raise EntityInternalError(owner=self, msg=f"Expected F./This., got: {self.namespace}")
+            self.namespace = MultiNamespace([
+                NamespaceRule(namespace=FieldsNS, deny_root=True, deny_root_reason="Attribute not available, use ThisNS instead."),
+                NamespaceRule(namespace=ThisNS),
+            ])
         if self.name is None:
             self.name = self.component.name
             assert "." not in self.name

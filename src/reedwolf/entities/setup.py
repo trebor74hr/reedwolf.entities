@@ -29,7 +29,7 @@ from .exceptions import (
 )
 from .namespaces import (
     Namespace,
-    ModelsNS,
+    ModelsNS, MultiNamespace,
 )
 from .meta_dataclass import ComponentStatus
 from .meta import (
@@ -401,8 +401,12 @@ class RegistryBase(IRegistry):
 
         if not isinstance(attr_node, IAttrDexpNode):
             raise EntityInternalError(f"{type(attr_node)}->{attr_node}")
-        if not self.NAMESPACE == attr_node.namespace:
-            raise EntityInternalError(owner=self, msg=f"Method register({attr_node}) - namespace mismatch: {self.NAMESPACE} != {attr_node.namespace}")
+
+        if isinstance(attr_node.namespace, MultiNamespace):
+            attr_node.namespace.validate_namespace(owner=self, namespace=self.NAMESPACE)
+        else:
+            if self.NAMESPACE != attr_node.namespace:
+                raise EntityInternalError(owner=self, msg=f"Method register({attr_node}) - namespace mismatch: {self.NAMESPACE} != {attr_node.namespace}")
 
         # ovo nadalje je izvučeno i ubačeno iz _register_dexp_node()
         #       return self._register_dexp_node(dexp_node=attr_node,
@@ -765,6 +769,7 @@ class SetupSessionBase(IStackOwnerSession, ISetupSession):
 
 
     def get_registry(self, namespace: Namespace, strict: bool = True, is_internal_use: bool = False) -> IRegistry:
+        assert isinstance(namespace, Namespace)  # should not be MultiNamespace
         registry = self._registry_dict.get(namespace._name, UNDEFINED)
         if registry is UNDEFINED:
             if strict:

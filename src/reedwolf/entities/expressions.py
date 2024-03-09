@@ -35,13 +35,13 @@ from .exceptions import (
     EntitySetupTypeError,
 )
 from .namespaces import (
-    DynamicAttrsBase,
     OperationsNS,
     Namespace,
     ThisNS,
     ModelsNS,
     ContextNS,
 )
+from .dynamic_attrs import DynamicAttrsBase
 from .meta_dataclass import (
     ReedwolfDataclassBase,
     ComponentStatus,
@@ -135,6 +135,8 @@ class IDotExpressionNode(ReedwolfDataclassBase, ABC):
                      apply_result: "IApplyResult",  # noqa: F821
                      # previous - can be undefined too
                      dexp_result: Union[ExecResult, UndefinedType],
+                     # in rare cases can be undefined (e.g. model read handler)
+                     namespace: Union[Namespace, UndefinedType],
                      is_1st_node: bool,
                      is_last_node: bool,
                      prev_node_type_info: Optional[TypeInfo],
@@ -560,7 +562,7 @@ class DotExpression(DynamicAttrsBase):
         # current_dexp_node = None
         last_dexp_node = None
         # dexp_node_name = None
-        dexp_evaluator = DotExpressionEvaluator()
+        dexp_evaluator = DotExpressionEvaluator(namespace=self._namespace)
 
         for bnr, bit in enumerate(self.Path, 1):
             # if SETUP_CALLS_CHECKS.can_use(): SETUP_CALLS_CHECKS.setup_called(bit)
@@ -924,6 +926,7 @@ class LiteralDexpNode(IDotExpressionNode):
     def execute_node(self,
                      apply_result: "IApplyResult",  # noqa: F821
                      dexp_result: ExecResult,
+                     namespace: Union[Namespace, UndefinedType],
                      is_1st_node: bool,
                      is_last_node: bool,
                      prev_node_type_info: Optional[TypeInfo],
@@ -1164,10 +1167,10 @@ class OperationDexpNode(IDotExpressionNode):
     def __repr__(self):
         return f"Op{self}"
 
-
     def execute_node(self,
                      apply_result: "IApplyResult",  # noqa: F821
                      dexp_result: ExecResult,
+                     namespace: Union[Namespace, UndefinedType],
                      is_1st_node: bool,
                      is_last_node: bool,
                      prev_node_type_info: Optional[TypeInfo],
@@ -1180,8 +1183,9 @@ class OperationDexpNode(IDotExpressionNode):
             raise NotImplementedError("TODO:")
 
         first_dexp_result = execute_dexp_or_node(
-                                self.first, 
-                                self._first_dexp_node, 
+                                dexp_or_value=self.first,
+                                dexp_node=self._first_dexp_node,
+                                namespace=namespace,
                                 prev_node_type_info=prev_node_type_info,
                                 dexp_result=dexp_result,
                                 apply_result=apply_result)
@@ -1189,8 +1193,9 @@ class OperationDexpNode(IDotExpressionNode):
         # if self.second is not in (UNDEFINED, None):
         if self._second_dexp_node is not None:
             second_dexp_result = execute_dexp_or_node(
-                                    self.second, 
-                                    self._second_dexp_node, 
+                                    dexp_or_value=self.second,
+                                    dexp_node=self._second_dexp_node,
+                                    namespace=namespace,
                                     prev_node_type_info=prev_node_type_info,
                                     dexp_result=dexp_result,
                                     apply_result=apply_result)
@@ -1253,9 +1258,10 @@ def execute_available_dexp(
 def execute_dexp_or_node(
         dexp_or_value: Union[DotExpression, Any],
         dexp_node: Union[IDotExpressionNode, Any],
+        namespace: Namespace,
         prev_node_type_info: TypeInfo,
         dexp_result: ExecResult,
-        apply_result: "IApplyResult" # noqa: F821
+        apply_result: "IApplyResult"  # noqa: F821
         ) -> ExecResult:
     """
     In some cases dexp_node is not good enough - e.g. FunctionDexpNode, then DotExpression._evaluator must be called
@@ -1264,7 +1270,8 @@ def execute_dexp_or_node(
     TODO: needs better explanation / examples.
     TODO: this function has ugly interface - solve this better
     """
-
+    if not isinstance(namespace, Namespace):
+        raise EntityInternalError(owner=dexp_or_value, msg=f"Expected namespace, got: {namespace}")
 
     if isinstance(dexp_or_value, DotExpression) and not isinstance(dexp_or_value, Just):
         dexp_result = dexp_or_value._evaluator.execute_dexp(
@@ -1276,6 +1283,7 @@ def execute_dexp_or_node(
                             apply_result=apply_result, 
                             dexp_result=dexp_result,
                             prev_node_type_info=prev_node_type_info,
+                            namespace=namespace,
                             is_1st_node=True, # correct or not?
                             is_last_node=True,
                             )

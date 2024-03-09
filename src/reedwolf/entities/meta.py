@@ -83,9 +83,7 @@ from .exceptions import (
     EntityTypeError,
     EntityInternalError,
 )
-from .namespaces import (
-    DynamicAttrsBase,
-)
+from .dynamic_attrs import DynamicAttrsBase
 
 # ------------------------------------------------------------
 # SPECIAL DATATYPES
@@ -225,17 +223,6 @@ class IFuncArgHint:
         """
         must implement hash since it will be stored in TypeInfo.TYPE_INFO_REGISTRY
         """
-        ...
-
-
-class IExecuteFuncArgHint(IFuncArgHint):
-
-    @abstractmethod
-    def get_apply_value(self, apply_result: "IApplyResult",
-                        exp_arg: "PrepArg",
-                        arg_value: AttrValue,
-                        prev_node_type_info: "TypeInfo",
-                        ) -> AttrValue:
         ...
 
 

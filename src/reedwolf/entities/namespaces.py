@@ -1,24 +1,18 @@
 # TODO: this module probably should be merged into expressions - since there is circular dependency - see __getattr__
-from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from typing import (
-    Optional,
+    Optional, List, Any,
 )
+
+from .dynamic_attrs import DynamicAttrsBase
+from .exceptions import EntityInternalError
+
 
 # ------------------------------------------------------------
 # Namespaces - classes and singletons
 # ------------------------------------------------------------
 # Namespaces are dummy objects/classes to enable different namespaces in
 # DotExpression declaration
-
-
-class DynamicAttrsBase(ABC):
-    """
-    Just to mark objects that are (too) flexible
-    all attributes are "existing" returning again objects that are same alike.
-    """
-    @abstractmethod
-    def __getattr__(self, name):
-        ...
 
 
 class Namespace(DynamicAttrsBase):
@@ -53,6 +47,29 @@ class Namespace(DynamicAttrsBase):
         from .expressions import DotExpression
         return DotExpression(node=attr_name, namespace=self)
 
+@dataclass
+class NamespaceRule:
+    namespace: Namespace = field(repr=True)
+    deny_root: bool = field(repr=True, default=False)
+    deny_root_reason: str = field(repr=False, default="")
+
+    def __post_init__(self):
+        if self.deny_root and not self.deny_root_reason:
+            raise EntityInternalError(f"{self}: Provide deny_root_reason.")
+        elif not self.deny_root and self.deny_root_reason:
+            raise EntityInternalError(f"{self}: Attr deny_root_reason should be set only when deny_root")
+
+@dataclass
+class MultiNamespace:
+    rules: List[NamespaceRule] = field(repr=True, default_factory=list)
+
+    def validate_namespace(self, owner: Any, namespace: Namespace):
+        found: bool = False
+        for rule in self.rules:
+            if namespace is rule.namespace:
+                found = True
+        if not found:
+            raise EntityInternalError(owner=owner, msg=f"{self} did match namespace: {namespace}")
 
 
 # NOTE: dropped, ContextNS / Ctx. should be used instead.

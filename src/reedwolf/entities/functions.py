@@ -33,6 +33,7 @@ from typing import (
     Tuple,
 )
 
+from .namespaces import Namespace
 from .utils import (
     UNDEFINED,
     get_available_names_example, UndefinedType,
@@ -62,12 +63,10 @@ from .meta import (
     ItemType,
     IInjectFuncArgHint,
     AttrValue,
-    IExecuteFuncArgHint,
     LiteralType,
     ValueArgValidatorPyFuncDictType,
     AttrName,
-    is_instancemethod_by_name, get_function_non_empty_arguments, SettingsType, IDexpValueSource,
-)
+    is_instancemethod_by_name, get_function_non_empty_arguments, SettingsType, IDexpValueSource, )
 from .expressions import (
     DotExpression,
     IDotExpressionNode,
@@ -87,7 +86,7 @@ from .func_args import (
 )
 from .func_arg_hints import (
     JustDotexprFuncArgHint,
-    DotexprFuncArgHint,
+    DotexprFuncArgHint, IExecuteFuncArgHint, ValueOrDexp,
 )
 from .settings import (
     Settings,
@@ -101,7 +100,6 @@ from .base import (
     ApplyStackFrame,
     IComponent, )
 
-ValueOrDexp = Union[DotExpression, IDotExpressionNode, Any]
 
 # 4 types
 class DatatypeBasicEnum(Enum):
@@ -519,6 +517,7 @@ class IFunction(IFunctionDexpNode, ABC):
     def execute_node(self,
                      apply_result: "IApplyResult",  # noqa: F821
                      dexp_result: ExecResult,
+                     namespace: Union[Namespace, UndefinedType],
                      is_1st_node: bool,
                      is_last_node: bool,
                      prev_node_type_info: Optional[TypeInfo],
@@ -607,8 +606,8 @@ class IFunction(IFunctionDexpNode, ABC):
         kwargs_from_args = {}
         for arg_value, exp_arg in zip(args, args_unfilled_by_kwargs):
             kwargs_from_args[exp_arg.name] = self.execute_arg(apply_result=apply_result,
-                                                arg_value = arg_value,
-                                                exp_arg = exp_arg,
+                                                arg_value=arg_value,
+                                                exp_arg=exp_arg,
                                                 prev_node_type_info = prev_node_type_info)
 
         kwargs_from_kwargs = {arg_name: self.execute_arg(apply_result=apply_result,

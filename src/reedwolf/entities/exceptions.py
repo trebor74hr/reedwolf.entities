@@ -7,9 +7,7 @@ from typing import (
 from .utils import (
     message_truncate,
 )
-from .namespaces import (
-    DynamicAttrsBase,
-)
+from .dynamic_attrs import DynamicAttrsBase
 
 
 # TODO: check https://snarky.ca/unravelling-from/ - how to convert/transform exception

@@ -52,9 +52,7 @@ from .exceptions import (
     EntityApplyError,
     EntityInitError,
 )
-from .namespaces import (
-    DynamicAttrsBase,
-)
+from .dynamic_attrs import DynamicAttrsBase
 from .meta_dataclass import (
     ReedwolfDataclassBase,
     ComponentStatus,
