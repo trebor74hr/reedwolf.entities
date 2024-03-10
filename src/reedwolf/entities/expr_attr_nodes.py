@@ -18,6 +18,7 @@ from .namespaces import (
 )
 from .utils import (
     UNDEFINED,
+    UndefinedType,
     NA_DEFAULTS_MODE,
     to_repr,
 )
@@ -54,7 +55,6 @@ from .custom_attributes import (
     AttributeByMethod,
 )
 from .base import (
-    UndefinedType,
     IContainer,
     IField,
     IApplyResult,
@@ -72,6 +72,7 @@ from .base import (
 @dataclass(repr=False)
 class IAttrDexpNode(IDotExpressionNode, ABC):
     """
+    TODO: ren IAttrDexpNode -> AttrDexpNodeBase, define base.py::IAttrDexpNode or expressions.py
     Name comes from dot-chaining nodes - e.g.
         M . company . name
             ADN()     ADN()
@@ -83,6 +84,9 @@ class IAttrDexpNode(IDotExpressionNode, ABC):
 
     # namespace node belongs to
     namespace: Union[Namespace, MultiNamespace] = None
+
+    # if attribute node is for list - e.g. ITEMS
+    for_list: bool = field(repr=False, default=False)
 
     # TODO: I don't like this - overlaps with data/owner - remove this one?
     # based on attr_node_type - can contain Field() or class - used later to extract details
@@ -101,7 +105,7 @@ class IAttrDexpNode(IDotExpressionNode, ABC):
 
     def __post_init__(self):
         if isinstance(self.namespace, MultiNamespace):
-            ns_names = '+'.join([f"{nsr.namespace._name}" for nsr in self.namespace.rules])
+            ns_names = '/'.join([f"{nsr.namespace._name}" for nsr in self.namespace.rules])
             self.full_name = f"{ns_names}.{self.name}"
         else:
             if not isinstance(self.namespace, Namespace):
@@ -182,7 +186,8 @@ class IAttrDexpNode(IDotExpressionNode, ABC):
                 else:
                     raise EntityInternalError(owner=self, msg=f"Initial evaluation step for non-subentity_items failed, expected single name member (e.g. M), got: {self.name}\n  == Compoonent: {frame.container}")
 
-            if self.namespace == ThisNS:
+            # NOTE: self.namespace can be MultiNamespace
+            if namespace == ThisNS:
                 # TODO: DRY this - identical logic in expressions.py:: Setup()
                 if not apply_result.current_frame.this_registry:
                     raise EntityApplyNameError(owner=self, msg=f"Namespace 'This.' is not available in this context, got: {self.name}\n  == Compoonent: {frame.container}")
@@ -215,8 +220,9 @@ class IAttrDexpNode(IDotExpressionNode, ABC):
                 do_fetch_by_name = True
         else:
             # ==== 2+ value - based on previous result and evolved one step further, e.g. M.access.alive
-            if not len(names)>1:
-                raise EntityInternalError(owner=self, msg=f"Names need to be list of at least 2 members: {names}")
+            # TODO: for components with value path (field from other container) - this may fail
+            # if not len(names)>1:
+            #     raise EntityInternalError(owner=self, msg=f"Names need to be list of at least 2 members: {names}")
 
             value_prev = dexp_result.value
             do_fetch_by_name = True
@@ -284,7 +290,7 @@ class IAttrDexpNode(IDotExpressionNode, ABC):
                 raise EntityInternalError(owner=self, msg=f"Attribute '{attr_name}' can not be found, node '{value_node.name}' has no children")
 
             assert hasattr(value_node, "component"), value_node
-            assert attr_name in value_node.component._attr_dexp_node_store, value_node
+            assert value_node.component.get_attr_dexp_node_store().get(attr_name, default=UNDEFINED), value_node
 
             dexp_value_node = value_node.children.get(attr_name, UNDEFINED)
 
@@ -458,13 +464,20 @@ class AttrDexpNodeForComponent(IAttrDexpNode):
 
     def __post_init__(self):
         # automatically set and interpreted later
-        if not isinstance(self.namespace, Namespace):
+        if isinstance(self.namespace, Namespace):
             if self.namespace not in (FieldsNS, ThisNS):
                 raise EntityInternalError(owner=self, msg=f"Expected F./This., got: {self.namespace}")
+
+            deny_root = (self.name in RESERVED_ATTRIBUTE_NAMES)
             self.namespace = MultiNamespace([
-                NamespaceRule(namespace=FieldsNS, deny_root=True, deny_root_reason="Attribute not available, use ThisNS instead."),
+                NamespaceRule(namespace=FieldsNS, deny_root=deny_root,
+                              deny_root_reason_templ="Reserved attribute '{attr_name}' is not available as a first attribute in the namespace '{namespace}'. Attribute could be available in a non-first attributes (e.g. 'Fields.<field-name>.{attr_name}') or in field's context's 'This' namespace (e.g. 'This.{attr_name}')."
+                                                     if deny_root else ""),
                 NamespaceRule(namespace=ThisNS),
             ])
+
+        assert isinstance(self.namespace, MultiNamespace), self.namespace
+
         if self.name is None:
             self.name = self.component.name
             assert "." not in self.name
@@ -517,6 +530,7 @@ class AttrValueContainerPath:
     container_node_mode: bool = field(repr=False)
     path_up: List[ContainerId]
     path_down: List[ContainerId]
+
 
 @dataclass
 class AttrDexpNodeWithValuePath(AttrDexpNodeForComponent):

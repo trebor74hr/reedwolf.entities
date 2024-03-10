@@ -451,6 +451,7 @@ class ContainerBase(IContainer, ABC):
                     this_registry = None,
                 )):
 
+            # each container will have own LocalFieldsRegistry (with assigned TopFieldsRegistry)
             # A.3. COMPONENTS - collect attr_nodes - previously flattened (recursive function fill_components)
             fields_registry: LocalFieldsRegistry = self.setup_session.get_registry(FieldsNS)
             fields_registry.register_all()
@@ -809,10 +810,12 @@ class Entity(IEntity, ContainerBase):
         # NOTE: Will setup all data_model and bind_to and ModelsNS.
         #       In phase two will setup all other components and FieldsNS, ThisNS and FunctionsNS.
         self._setup_phase_one()
+
         super()._setup(setup_session=self.setup_session)
         # if self.is_top_parent():
-        if self.is_entity():
-            self.setup_session.call_hooks_on_finished_all()
+        assert self.is_entity()
+        self.setup_session.call_hooks_on_finished_all()
+
         return self
 
 

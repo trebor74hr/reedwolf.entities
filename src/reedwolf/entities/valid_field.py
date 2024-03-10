@@ -47,7 +47,10 @@ from .meta import (
     StandardType,
     STANDARD_TYPE_LIST,
     TransMessageType,
-    NoneType, ComponentName, MessageType,
+    NoneType,
+    ComponentName,
+    MessageType,
+    _,
 )
 from .exceptions import (
     EntitySetupError,
@@ -59,7 +62,6 @@ from .base import (
     IApplyResult,
     ValidationFailure,
 )
-from . import _
 from .valid_base import (
     ValidationBase,
 )

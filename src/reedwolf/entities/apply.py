@@ -992,10 +992,13 @@ class ApplyResult(IApplyResult):
         for value_node in self.value_node_list:
             if not value_node._status==ComponentStatus.finished:
                 raise EntityInternalError(owner=value_node, msg=f"ValueNode not finished")
+
             if value_node.is_list() or not value_node.is_changed():
                 continue
 
-            assert value_node.change_op
+            if not value_node.change_op:
+                raise EntityInternalError(owner=self, msg=f"{value_node}.change_op is not set: {value_node.change_op}")
+
             changes.append(
                 InstanceChange(
                     key_string=value_node.key_string,

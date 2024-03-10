@@ -1,11 +1,12 @@
 # TODO: this module probably should be merged into expressions - since there is circular dependency - see __getattr__
 from dataclasses import dataclass, field
 from typing import (
-    Optional, List, Any,
+    Optional, List, Any, Union,
 )
 
 from .dynamic_attrs import DynamicAttrsBase
-from .exceptions import EntityInternalError
+from .exceptions import EntityInternalError, EntitySetupNameError
+from .utils import UndefinedType
 
 
 # ------------------------------------------------------------
@@ -51,25 +52,28 @@ class Namespace(DynamicAttrsBase):
 class NamespaceRule:
     namespace: Namespace = field(repr=True)
     deny_root: bool = field(repr=True, default=False)
-    deny_root_reason: str = field(repr=False, default="")
+    deny_root_reason_templ: str = field(repr=False, default="")
 
     def __post_init__(self):
-        if self.deny_root and not self.deny_root_reason:
+        if self.deny_root and not self.deny_root_reason_templ:
             raise EntityInternalError(f"{self}: Provide deny_root_reason.")
-        elif not self.deny_root and self.deny_root_reason:
+        elif not self.deny_root and self.deny_root_reason_templ:
             raise EntityInternalError(f"{self}: Attr deny_root_reason should be set only when deny_root")
 
 @dataclass
 class MultiNamespace:
     rules: List[NamespaceRule] = field(repr=True, default_factory=list)
 
-    def validate_namespace(self, owner: Any, namespace: Namespace):
+    def validate_namespace(self, owner: Any, namespace: Namespace, attr_name: str, is_1st_node: bool):
         found: bool = False
         for rule in self.rules:
             if namespace is rule.namespace:
+                if is_1st_node and rule.deny_root:
+                    deny_reason = rule.deny_root_reason_templ.format(attr_name=attr_name, namespace=namespace)
+                    raise EntitySetupNameError(owner=owner, msg=deny_reason)
                 found = True
         if not found:
-            raise EntityInternalError(owner=owner, msg=f"{self} did match namespace: {namespace}")
+            raise EntityInternalError(owner=owner, msg=f"'{self}' did match namespace: {namespace}")
 
 
 # NOTE: dropped, ContextNS / Ctx. should be used instead.

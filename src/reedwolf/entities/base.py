@@ -29,6 +29,11 @@ from types import (
     MappingProxyType,
 )
 
+from .namespaces import (
+    MultiNamespace,
+    Namespace,
+    FieldsNS,
+)
 from .utils import (
     snake_case_to_camel,
     to_repr,
@@ -40,8 +45,7 @@ from .utils import (
     get_available_names_example,
     DumpFormatEnum,
     dump_to_format,
-    NOT_APPLIABLE,
-)
+    NOT_APPLIABLE, MISSING, )
 from .exceptions import (
     EntityInternalError,
     EntitySetupTypeError,
@@ -87,7 +91,7 @@ from .meta import (
     IDexpValueSource,
     ChildField,
     ListChildField,
-    get_enum_values, ComponentName, MessageType,
+    get_enum_values, MessageType,
 )
 from .expressions import (
     DotExpression,
@@ -95,6 +99,7 @@ from .expressions import (
     IDotExpressionNode,
     ISetupSession,
     IThisRegistry,
+    IAttrDexpNodeStore,
     DexpValidator,
 )
 from .settings import (
@@ -260,7 +265,272 @@ def make_component_fields_dataclass(class_name: str, child_field_list: ListChild
     assert issubclass(new_dataclass, IComponentFields)
     return new_dataclass
 
+# ------------------------------------------------------------
 
+
+@dataclass
+class AttrDexpNodeStore(IAttrDexpNodeStore):
+    namespace: Namespace = field(repr=True)
+
+    # automatic
+    _store: Dict[AttrName, "IAttrDexpNode"] = field(init=False, repr=False, default_factory=dict)
+    _finished: bool = field(init=False, repr=False, default=False)
+
+    def setup(self, setup_session: ISetupSession):
+        ...
+
+    def finish(self):
+        if self._finished:
+            raise EntityInternalError(owner=self, msg=f"store already finished")
+        self._finished = True
+
+    def get_items(self) -> List[Tuple[AttrName, "IAttrDexpNode"]]:
+        return self._store.items()
+
+    # def __getitem__(self, attr_name: AttrName, default=MISSING) -> "IAttrDexpNode":
+    #     return self.get(attr_name=attr_name, strict=True, default=default)
+
+    def __len__(self) -> int:
+        return len(self._store)
+
+    def get(self, attr_name: AttrName, default=MISSING) -> "IAttrDexpNode":
+        # if strict and not self._finished:
+        #     raise EntityInternalError(owner=self, msg=f"store not finished")
+        dexp_node = self._store.get(attr_name, default)
+        if default is MISSING:
+            raise KeyError(attr_name)
+        return dexp_node
+
+    def set(self, attr_name: AttrName, attr_dexp_node: "IAttrDexpNode", replace_when_duplicate: bool):
+        # if hasattr(self, "component") and self.component.name == "A" and attr_dexp_node.name == "Instance": print("here33")
+        if self._finished:
+            raise EntityInternalError(owner=self, msg=f"store finished")
+        if not replace_when_duplicate and attr_name in self._store:
+            raise EntitySetupNameError(owner=self, msg=f"IAttrDexpNode '{attr_dexp_node}' does not have unique name '{attr_name}' within this registry, found: {self._store[attr_name]}")
+        self._store[attr_name] = attr_dexp_node
+
+    # ------------------------------------------------------------
+
+    def register_attr_node(self,
+                           attr_node: "IAttrDexpNode",
+                           replace_when_duplicate: bool = False,
+                           alt_attr_node_name: Optional[AttrName] = None,
+                           ):
+        # --------------------------------------------------
+        """
+        ex. def _register_dexp_node(self, dexp_node:IDotExpressionNode,
+                                    alt_dexp_node_name=None,
+                                    replace_when_duplicate:bool = False):
+        Data can register IFunctionDexpNode-s instances since the
+        output will be used directly as data and not as a function call.
+            function=[Function(name="Countries", title="Countries",
+                              py_function=CatalogManager.get_countries)],
+            ...
+            available=(S.Countries.name != "test"),
+        """
+        # TODO: resolve this local import
+        from reedwolf.entities.expr_attr_nodes import IAttrDexpNode
+
+        attr_dexp_node_store: AttrDexpNodeStore = self
+
+        if self._finished:
+            raise EntityInternalError(owner=self, msg=f"Register({attr_node}) - already finished, adding not possible.")
+
+        if not isinstance(attr_node, IAttrDexpNode):
+            raise EntityInternalError(f"{type(attr_node)}->{attr_node}")
+
+        if isinstance(attr_node.namespace, MultiNamespace):
+            # namespace checked later again - on access
+            # attr_node.namespace.validate_namespace(owner=self, namespace=self.NAMESPACE, is_1st_node=NOT_APPLIABLE)
+            pass
+        else:
+            # TODO: REMOVE_THIS - test this too and later remove check:
+            # if attr_node.namespace in (FieldsNS, ThisNS):
+            if attr_node.namespace in (FieldsNS,):
+                raise EntityInternalError(owner=self, msg=f"FieldsNS should be handled with MultiNamespace case")
+
+            # TODO: consider if I need this check?
+            # if self.NAMESPACE != attr_node.namespace:
+            #     raise EntityInternalError(owner=self, msg=f"Method register({attr_node}) - namespace mismatch: {self.NAMESPACE} != {attr_node.namespace}")
+
+        if not isinstance(attr_node, IDotExpressionNode):
+            raise EntityInternalError(f"{type(attr_node)}->{attr_node}")
+        dexp_node_name = alt_attr_node_name if alt_attr_node_name else attr_node.name
+
+        if not dexp_node_name.count(".") == 0:
+            raise EntityInternalError(owner=self, msg=f"Node {dexp_node_name} should not contain . - only first level vars allowed")
+
+        # if attr_dexp_node_store is None:
+        #     attr_dexp_node_store = self.get_store()
+
+        # single place to register node
+        attr_dexp_node_store.set(dexp_node_name,
+                                 attr_dexp_node=attr_node,
+                                 replace_when_duplicate=replace_when_duplicate)
+
+    # ------------------------------------------------------------
+
+    def register_special_attr_node(self,
+                                    attr_name: ReservedAttributeNames,
+                                    # None for model_klass
+                                    component: Optional["IComponent"],
+                                    type_info: TypeInfo,
+                                    attr_name_prefix: Optional[str] = None,
+                                    th_field: Optional[Any] = None,
+                                    ) -> "IAttrDexpNode":
+
+        from reedwolf.entities.expr_attr_nodes import AttrDexpNodeForComponent, AttrDexpNodeForTypeInfo
+
+        # NOTE: removed restriction - was too strict
+        # if not (is_model_klass(model_klass) or model_klass in STANDARD_TYPE_LIST or is_enum(model_klass)):
+        #     raise EntitySetupValueError(owner=self, msg=f"Expected model class (DC/PYD), got: {type(model_klass)} / {model_klass} ")
+
+        if th_field and not (inspect.isclass(th_field) and issubclass(th_field, IComponentFields)):
+            raise EntitySetupValueError(owner=self, msg=f"Expected th_field is IComponentFields, got: {type(th_field)} / {th_field} ")
+
+        # type_info = TypeInfo.get_or_create_by_type(py_type_hint=model_klass)
+        # model_klass: ModelKlassType = type_info.type_
+
+        for_list: bool = (attr_name == ReservedAttributeNames.ITEMS_ATTR_NAME)
+        attr_name:str = attr_name.value
+
+        if attr_name_prefix:
+            attr_name = f"{attr_name_prefix}{attr_name}"
+
+        if component:
+            attr_node = AttrDexpNodeForComponent(
+                name=attr_name,
+                component=component,
+                namespace=self.namespace,
+                for_list=for_list,
+                # type_info=type_info,
+                # type_object=th_field,
+            )
+        else:
+            attr_node = AttrDexpNodeForTypeInfo(
+                name=attr_name,
+                type_info=type_info,
+                namespace=self.namespace,
+                for_list=for_list,
+                # type_info=None,
+                # type_object=th_field,
+            )
+
+        self.register_attr_node(attr_node)
+        return attr_node
+
+# ------------------------------------------------------------
+
+
+@dataclass
+class AttrDexpNodeStoreForComponent(AttrDexpNodeStore):
+    component: "IComponent" = field(repr=True)
+
+    # automatic
+    namespace: Namespace = field(repr=True, init=False, default=FieldsNS)
+
+    def _register_special_nodes(self, component: "IComponent", setup_session: ISetupSession):
+        if component is not self.component:
+            raise EntityInternalError(owner=self, msg=f"{component} != {self.component}")
+        component_parent = component.parent
+
+        # skip case when container is a child. Containers should register its own special fields.
+        if component_parent and component_parent is not component:
+            self.register_special_attr_node(attr_name=ReservedAttributeNames.PARENT_ATTR_NAME,
+                                            component=component_parent,
+                                            type_info=component_parent.get_type_info())
+
+        if component.is_subentity_items():
+            self.register_special_attr_node(attr_name=ReservedAttributeNames.ITEMS_ATTR_NAME,
+                                            component=component,
+                                            type_info=component.get_type_info())
+
+        if component.is_field():
+            # simple datatype as raw value (terminates ValueNode logic), e.g. int, str, date
+            self.register_special_attr_node(attr_name=ReservedAttributeNames.VALUE_ATTR_NAME,
+                                            component=component,
+                                            type_info=component.get_type_info())
+
+        if component.is_container() or component.is_fieldgroup():
+            # TODO: boolean+enables - not covered - special datastruct needed:
+            #   if isinstance(component, IField) and component.has_children():
+            # complex datastructure as raw instance (terminates ValueNode logic), e.g. Fields(name="name", age=30)
+            self.register_special_attr_node(attr_name=ReservedAttributeNames.INSTANCE_ATTR_NAME,
+                                            component=component,
+                                            type_info=component.get_type_info())
+
+        if component.has_children() and not component.is_subentity_items():
+            # for subentity_items -> need to access each item and then access children/fields
+            component_fields_dataclass, _ = component.get_component_fields_dataclass(setup_session=setup_session)
+            type_info = TypeInfo.get_or_create_by_type(ListChildField)
+            self.register_special_attr_node(attr_name=ReservedAttributeNames.CHILDREN_ATTR_NAME,
+                                            component=component,
+                                            type_info=type_info,
+                                            # TODO: missusing: th_field=component_fields_dataclass,
+                                            )
+
+    # ------------------------------------------------------------
+    def setup_all_nodes(self, setup_session: ISetupSession):
+        """
+        RECURSIVE
+        """
+        super().setup(setup_session=setup_session)
+
+        container = self.component
+
+        for component_name, component in container.components.items():
+            component_parent = component.parent
+            # store in child's component store
+            component_attr_dexp_node_store = component.get_attr_dexp_node_store()
+
+            is_not_me = (component is not container)
+
+            # TODO: if not is_not_me: continue
+
+            if not (component.is_container() and is_not_me):
+                # skip case when container is child. Containers should register its own special fields.
+                component_attr_dexp_node_store._register_special_nodes(component=component, setup_session=setup_session)
+
+            # register children one by one
+            if is_not_me and component.has_data():
+                # allow direct SubEntityItems to be accessible
+                attr_node = self.create_attr_node(component)
+                self.register_attr_node(attr_node)  # , is_list=False))
+
+                # Store in Component's parent store too - to be available in This.
+                # and in 2+ expression bit-nodes (e.g. F.access.name).
+                # Skip registering the component in its own store.
+                if (component_parent
+                  and component_parent is not container
+                  and component_parent is not component):
+                    # TODO: this is strange case :( - simplify
+                    parent_attr_dexp_node_store = component_parent.get_attr_dexp_node_store()
+                    parent_attr_dexp_node_store.register_attr_node(attr_node=attr_node)
+
+            if is_not_me and component.is_container():
+                # ------- RECURSION --------
+                component_attr_dexp_node_store.setup_all_nodes(setup_session=setup_session)
+
+        # NOTE: can not finish yet, since fallback system will add later other component's fields to this store
+        #       which are referenced and visible from this component
+        # self.finish()
+
+
+    @classmethod
+    def create_attr_node(cls, component: "IComponent"):
+        # TODO: remove these local imports, move this class to expr_attr_nodes
+        from .expr_attr_nodes import AttrDexpNodeForComponent
+
+        if not isinstance(component, (IField, IFieldGroup, IContainer,)):
+            raise EntitySetupError(owner=cls, msg=f"Register expected ComponentBase, got {component} / {type(component)}.")
+
+        attr_node = AttrDexpNodeForComponent(
+            component=component,
+            namespace=FieldsNS,
+        )
+        return attr_node
+
+# ------------------------------------------------------------
 
 
 @dataclass
@@ -316,7 +586,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
     # List of Attribute DotExpression nodes available for this component (only mine) and container (my components + from all my direct components).
     # Used in LocalFieldsRegistry, TopFieldsRegistry and in evaluating 2+ Dexp attr expressions e.g. This.access.name
     # (setup: ..., apply: get_value()). Used in Registry.get_store()
-    _attr_dexp_node_store: Dict[AttrName, "IAttrDexpNode"] = field(repr=False, init=False, default_factory=dict)
+    _attr_dexp_node_store: AttrDexpNodeStoreForComponent = field(repr=False, init=False, default=UNDEFINED)
 
     @property
     def is_finished(self) -> bool:
@@ -429,7 +699,12 @@ class IComponent(ReedwolfDataclassBase, ABC):
         self.name_counter_by_parent_name[key] += 1
         return self.name_counter_by_parent_name[key]
 
-    # ------------------------------------------------------------
+
+    def get_attr_dexp_node_store(self) -> AttrDexpNodeStoreForComponent:
+        if self._attr_dexp_node_store is UNDEFINED:
+            self._attr_dexp_node_store = AttrDexpNodeStoreForComponent(component=self)
+            # TODO: raise EntityInternalError(owner=self, msg=f"Attr _attr_dexp_node_store is not setup")
+        return self._attr_dexp_node_store
 
     def get_first_parent_container(self, consider_self: bool) -> "IContainer":  # noqa: F821
         # TODO: replace this function and maybe calls with:
@@ -617,6 +892,10 @@ class IComponent(ReedwolfDataclassBase, ABC):
 
     @staticmethod
     def is_fieldgroup() -> bool:
+        return False
+
+    @staticmethod
+    def is_field() -> bool:
         return False
 
     @staticmethod
@@ -1077,7 +1356,6 @@ class IComponent(ReedwolfDataclassBase, ABC):
 
     def get_component_fields_dataclass(self, setup_session: Optional[ISetupSession]) \
             -> Tuple[Type[IComponentFields], ListChildField]:
-        # TODO: not happy with this
         """
         CACHED
         RECURSIVE
@@ -1093,17 +1371,13 @@ class IComponent(ReedwolfDataclassBase, ABC):
         if not setup_session:
             raise EntityInternalError(owner=self, msg="_component_fields_dataclass not set and setup_session not provided")
 
+        container = self.get_first_parent_container(consider_self=True)
+
         # NOTE: deep_collect is required, otherwise errors later occur
         children = self.get_children_deep()
 
         if not children:
             raise EntityInternalError(owner=self, msg="No children found.")
-
-        container = setup_session.current_frame.container
-
-        assert setup_session and setup_session.current_frame
-        if not setup_session.current_frame.component == self:
-            raise EntityInternalError(owner=self, msg=f"setup_session.current_frame.component={setup_session.current_frame.component} <> component={self}")
 
         child_field_list: ListChildField = []
 
@@ -1126,6 +1400,7 @@ class IComponent(ReedwolfDataclassBase, ABC):
                 child_type_info = attr_node.get_type_info()
 
             elif child.is_subentity_any() or child.is_fieldgroup():
+                # TODO: check if this needs rewrite? see notes below:
                 # ------------------------------------------------------------
                 # NOTE: this is a bit complex chain of setup() actions: 
                 #           entity -> this -> subentity -> subentity ...
@@ -1460,6 +1735,10 @@ class IComponent(ReedwolfDataclassBase, ABC):
         """
         if self.is_finished:
             raise EntitySetupError(owner=self, msg="finish() should be called only once.")
+
+        if self._attr_dexp_node_store is UNDEFINED:
+            raise EntitySetupError(owner=self, msg="Attr _attr_dexp_node_store not set / used.")
+
         # self.is_finished = True
         # self._status = ComponentStatus.finished
         # for some classes - need to cache
@@ -2178,6 +2457,10 @@ class IValueNode(IDexpValueSource):
     def set_instance_attr_value(self):
         ...
 
+    @abstractmethod
+    def is_changed(self) -> bool:
+        ...
+
     # @abstractmethod
     # def add_item(self, value_node: Self):
     #     ...
@@ -2751,8 +3034,9 @@ class IApplyResult(IStackOwnerSession):
 
 # ------------------------------------------------------------
 
-def extract_type_info(
-        inspect_object: Union[IDataModel, IDotExpressionNode, DotExpression, TypeInfo, Callable, ModelKlassType],
+def extract_type_info_for_attr_name(
+        # inspect_object: Union[IDataModel, IDotExpressionNode, DotExpression, TypeInfo, Callable, ModelKlassType],
+        inspect_object: Union[TypeInfo, ModelKlassType, Any],
         attr_node_name: str
         ) -> Tuple[TypeInfo, Optional[ModelField]]:
     # Optional[IFunctionDexpNode]  # noqa: F821
@@ -2770,59 +3054,50 @@ def extract_type_info(
     this function (preffered) and when directly some other lower level meta.py
     functions.
     """
-    if isinstance(inspect_object, IDataModel):
-        inspect_object = inspect_object.model_klass
+    # OLD: if is_function(inspect_object):
+    #     # Function - callable and not class and not pydantic?
+    #     raise EntityInternalError(msg=f"Got native python function, use Function() objects instead. Got: {inspect_object}")
+    # OLD: if isinstance(parent_object, DotExpression):
+    #     raise EntityInternalError(item=inspect_object, msg=f"Parent object is DotExpression: '{parent_object}' / '{attr_node_name}'.")
 
-    # Function - callable and not class and not pydantic?
-    if isinstance(inspect_object, IDotExpressionNode):
-        parent_type_info = inspect_object.get_type_info()
-        parent_object = parent_type_info.type_
-    elif is_function(inspect_object):
-        raise EntityInternalError(msg=f"Got native python function, use Function() objects instead. Got: {inspect_object}")
-    else:
-        # normal object - hopefully with with type hinting
-        parent_object = inspect_object
+    # expecting standard object - hopefully with with type hinting
+    parent_object = inspect_object
 
     if isinstance(parent_object, TypeInfo):
         # go one level deeper
-        if not isinstance(parent_object.type_, type):
-            raise EntitySetupValueError(item=inspect_object, msg=f"Inspected object's type hint is not a class object/type: {parent_object.type_}: {parent_object.type_}, got: {type(parent_object.type_)} ('.{attr_node_name}' process)")
+        # if not isinstance(parent_object.type_, type):
+        #     raise EntitySetupValueError(item=inspect_object, msg=f"Inspected object's type hint is not a class object/type: {parent_object.type_}: {parent_object.type_}, got: {type(parent_object.type_)} ('.{attr_node_name}' process)")
         # Can be method call, so not pydantic / dataclass are allowed too
         parent_object = parent_object.type_
-
-    fields = []
-
-    type_info = None
-    th_field = None
-
-    if isinstance(parent_object, DotExpression):
-        raise EntityInternalError(item=inspect_object, msg=f"Parent object is DotExpression: '{parent_object}' / '{attr_node_name}'.")
 
     if is_method_by_name(parent_object, attr_node_name):
         raise EntitySetupNameError(item=inspect_object,
                     msg=f"Inspected object's is a method: {parent_object}.{attr_node_name}. "
-                    "Calling methods on instances are not allowed.")
+                         "Calling methods on instances are not allowed.")
 
     if is_model_klass(parent_object):
-        # raise EntityInternalError(item=inspect_object, msg=f"'Parent is not DC/PYD class -> {parent_object}: {type(parent_object)}'.")
-        if not hasattr(parent_object, "__annotations__"):
-            # TODO: what about pydantic?
-            raise EntityInternalError(item=inspect_object, msg=f"'DC/PYD class {parent_object}' has no metadata (__annotations__ / type hints), can't read '{attr_node_name}'. Add type-hints or check names.")
-
+        # --- Model klass - try to extract attribute by name from py-type-hint
+        # if not hasattr(parent_object, "__annotations__"):
+        #     raise EntityInternalError(item=inspect_object, msg=f"'DC/PYD class {parent_object}' has no metadata (__annotations__ / type hints), can't read '{attr_node_name}'. Add type-hints or check names.")
         model_klass: ModelKlassType = parent_object
-
-        # === parent type hint
         parent_py_type_hints = extract_py_type_hints(model_klass, f"setup_session->{attr_node_name}:DC/PYD")
-
         py_type_hint = parent_py_type_hints.get(attr_node_name, None)
         if py_type_hint:
             type_info = TypeInfo.get_or_create_by_type(
                             py_type_hint=py_type_hint,
                             caller=parent_object,
                             )
+        else:
+            # --- Attribute not found - will trigger error report in the next section
+            type_info = None
 
-        # === Dataclass / pydantic field metadata - only for information
+        # === Dataclass / pydantic field metadata, fields used in error report only
         th_field, fields = extract_model_field_meta(inspect_object=model_klass, attr_node_name=attr_node_name)
+    else:
+        # --- Primitive type (e.g. int) or some other non-model klass - will trigger error in next section
+        type_info = None
+        th_field = None
+        fields = []
 
     if not type_info:
         if not fields:
@@ -2835,8 +3110,7 @@ def extract_type_info(
     if not isinstance(type_info, TypeInfo):
         raise EntityInternalError(msg=f"{type_info} is not TypeInfo")
 
-    return type_info, th_field # , func_node
-
+    return type_info, th_field
 
 
 # ------------------------------------------------------------

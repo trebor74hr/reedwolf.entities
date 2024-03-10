@@ -64,11 +64,13 @@ class UndefinedType:  # (metaclass=Singleton):
         # did not disallowed this since it is handy to have "not in (None, UNDEFINED)
         #   raise ValueError(f"Not allowed to use operators '==' and '!='
         #           with {self.__class__.__name__}. Use 'is' and 'is not' instead.")
-        return other.__class__ == self.__class__
+        # return other.__class__ == self.__class__
+        return other is self
 
     def __ne__(self, other):
         # ALT: return not self.__eq__(other)
-        return other.__class__ != self.__class__
+        # return other.__class__ != self.__class__
+        return other is not self
 
     __repr__ = __str__
 

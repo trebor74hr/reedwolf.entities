@@ -70,7 +70,11 @@ from .meta import (
     get_enum_member_py_type,
     EmptyFunctionArguments,
     STANDARD_TYPE_LIST,
-    ERR_MSG_ATTR_REQUIRED, ComponentName, MessageType, NoneType,
+    ERR_MSG_ATTR_REQUIRED,
+    ComponentName,
+    MessageType,
+    NoneType,
+    _,
 )
 from .base import (
     get_name_from_bind,
@@ -80,8 +84,9 @@ from .base import (
     IApplyResult,
     ValidationFailure,
     SetupStackFrame,
-    IComponent, IValidation, IEvaluation, VALIDATION_OR_EVALUATION_TYPE, )
-from . import _
+    IComponent,
+    VALIDATION_OR_EVALUATION_TYPE,
+)
 from .expressions import (
     DotExpression,
     IFunctionDexpNode,
@@ -122,7 +127,9 @@ from .valid_base import (
 from .eval_base import (
     EvaluationBase,
 )
-from .value_accessors import ValueAccessorInputType
+from .value_accessors import (
+    ValueAccessorInputType,
+)
 
 # Items are:
 #   - when single - that must be added
@@ -244,6 +251,9 @@ class FieldBase(IField, ABC):
 
         super().init()
 
+    @staticmethod
+    def is_field() -> bool:
+        return True
 
     def _set_bound_attr_node(self, setup_session: ISetupSession):
         self.bound_attr_node = setup_session.get_dexp_node_by_dexp(self.bind_to)
@@ -266,7 +276,7 @@ class FieldBase(IField, ABC):
 
         if self.bind_to:
             # self.attr_node = setup_session.get_registry(FieldsNS).get_by_name(self.name)
-            self.attr_node = setup_session.get_registry(FieldsNS).get_store().get(self.name, UNDEFINED)
+            self.attr_node = setup_session.get_registry(FieldsNS).get_store().get(self.name, default=UNDEFINED)
             if not self.attr_node:
                 raise EntityInternalError(owner=self, msg=f"Attribute not found: {self.name}")
             if not self.is_unbound() and not self.bound_attr_node:

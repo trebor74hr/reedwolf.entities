@@ -17,13 +17,12 @@ from typing import (
     Union,
     Any,
     Callable,
-    Dict,
     ClassVar, Iterable, Tuple,
 )
 
 from .utils import (
     UNDEFINED,
-    UndefinedType, to_repr,
+    UndefinedType, to_repr, MISSING,
 )
 from .global_settings import GlobalSettings
 from .exceptions import (
@@ -39,8 +38,7 @@ from .namespaces import (
     Namespace,
     ThisNS,
     ModelsNS,
-    ContextNS,
-)
+    ContextNS, )
 from .dynamic_attrs import DynamicAttrsBase
 from .meta_dataclass import (
     ReedwolfDataclassBase,
@@ -148,6 +146,8 @@ class IDotExpressionNode(ReedwolfDataclassBase, ABC):
         ...
 
     def finish(self):
+        # if hasattr(self, "component") and self.name == "same" and repr(self.component) == "StringField(parent_name='F', bind_to=DExpr(Models.same), name='same')":
+        #     print("here33")
         if self._status == ComponentStatus.finished:
             raise EntityInternalError(owner=self, msg="already finished")
         self._getset_rwf_kwargs()
@@ -171,7 +171,7 @@ class DexpValidator:
             raise EntityInternalError(owner=self, msg=f"Expected expected_type_info TypeInfo, got: {self.expected_type_info}")
 
 
-    def validate_namespace(self, dexp: "DotExpression"):
+    def validate_dexp_namespace(self, dexp: "DotExpression"):
         if self.allow_namespaces and dexp._namespace not in self.allow_namespaces:
             raise EntitySetupTypeError(owner=dexp, msg=f"Allowed only namespace(s): {self.allow_namespaces}, got: {dexp._namespace}")
         elif self.deny_namespaces and dexp._namespace in self.deny_namespaces:
@@ -231,6 +231,58 @@ class RegistryRootValue:
 
 # ------------------------------------------------------------
 
+@dataclass
+class IAttrDexpNodeStore:
+
+    @abstractmethod
+    def setup(self, setup_session: "ISetupSession"):
+        ...
+
+    @abstractmethod
+    def finish(self):
+        ...
+
+    @abstractmethod
+    def get_items(self) -> List[Tuple[AttrName, "IAttrDexpNode"]]:
+        ...
+
+    @abstractmethod
+    def __len__(self) -> int:
+        ...
+
+    # @abstractmethod
+    # def __getitem__(self, attr_name: AttrName, default=MISSING) -> "IAttrDexpNode":
+    #     ...
+
+    @abstractmethod
+    def get(self, attr_name: AttrName, default=MISSING) -> "IAttrDexpNode":
+        ...
+
+    @abstractmethod
+    def set(self, attr_name: AttrName, attr_dexp_node: "IAttrDexpNode", replace_when_duplicate: bool):
+        ...
+
+    @abstractmethod
+    def register_attr_node(self,
+                           attr_node: "IAttrDexpNode",
+                           replace_when_duplicate: bool = False,
+                           alt_attr_node_name: Optional[AttrName] = None,
+                           ):
+        ...
+
+    @abstractmethod
+    def register_special_attr_node(self,
+                                    attr_name : "ReservedAttributeNames",
+                                    # None for model_klass
+                                    component: Optional["IComponent"],
+                                    type_info: TypeInfo,
+                                    attr_name_prefix: Optional[str]=None,
+                                    th_field: Optional[Any] = None,
+                                    ) -> "IAttrDexpNode":
+        ...
+
+# ------------------------------------------------------------
+
 
 class IRegistry:
 
@@ -242,16 +294,17 @@ class IRegistry:
         ...
 
     @abstractmethod
-    def get_store(self) -> Dict[AttrName, IDotExpressionNode]:
+    def get_store(self) -> Union[IAttrDexpNodeStore, UndefinedType]:
         ...
 
     @abstractmethod
     def create_node(self,
                     dexp_node_name: str,
-                    owner_dexp_node: IDotExpressionNode,
+                    owner_dexp_node: Optional[IDotExpressionNode],
                     owner: "IComponent",
-                    is_1st_node: bool,
+                    # is_1st_node: bool,
                     ) -> IDotExpressionNode:
+        # is_1st_node: bool = (owner_dexp_node is None)
         ...
 
     # @abstractmethod
@@ -529,7 +582,7 @@ class DotExpression(DynamicAttrsBase):
             do_validate_final = bool(self._dexp_validator)
 
         if self._dexp_validator:
-            self._dexp_validator.validate_namespace(dexp=self)
+            self._dexp_validator.validate_dexp_namespace(dexp=self)
 
         # TODO: enable this is obligatory
         # if self._dexp_validator is None:
@@ -640,11 +693,12 @@ class DotExpression(DynamicAttrsBase):
                 if bit._is_literal:
                     raise EntityInternalError(owner=self, msg=f"Literal DotExpression not expected {bit} - should be processed in the caller.")
                 dexp_node_name = bit._node
+                is_1st_node = (bnr == 1)
                 current_dexp_node = registry.create_node(
                             dexp_node_name=dexp_node_name,
                             owner_dexp_node=last_dexp_node,
                             owner=owner,
-                            is_1st_node=(bnr == 1),
+                            # is_1st_node=is_1st_node,
                             )
 
             if self._dexp_validator:

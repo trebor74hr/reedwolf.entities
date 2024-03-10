@@ -148,7 +148,8 @@ class BoundDataModelBase(IBoundDataModel):
                                             # type_object=None,
                                             )
 
-                models_registry.register_attr_node(attr_node=model_attr_dexp_node)
+                store = models_registry.get_store()
+                store.register_attr_node(attr_node=model_attr_dexp_node)
 
             # 2. Create function object and register that read handlers (with
             #    type_info) in local registry - will be called in apply phase

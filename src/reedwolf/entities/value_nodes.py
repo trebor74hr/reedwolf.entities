@@ -247,6 +247,9 @@ class ValueNodeBase(IValueNode):
 
     # def is_top_node(self):
     #     return self is self.top_node
+    def _is_value_changed(self):
+        return not isinstance(self._value, UndefinedType) and self._value != self.init_value
+        # if self.key_string == "entity__company_very_simple": print("here44")
 
     def is_changed(self) -> bool:
         """
@@ -254,7 +257,7 @@ class ValueNodeBase(IValueNode):
         """
         if self.change_op is not None:
             return True
-        return self._value!=self.init_value
+        return self._is_value_changed()
 
     # ------------------------------------------------------------
 
@@ -433,7 +436,7 @@ class ValueNodeBase(IValueNode):
         # if self.finished: # and self._value is not NA_DEFAULTS_MODE:
         #     raise EntityInternalError(owner=self, msg=f"Current value already finished, last value: {self._value}")
 
-        if self.change_op is None and self._value != self.init_value:
+        if self.change_op is None and self._is_value_changed():
             self.change_op = ChangeOpEnum.UPDATE
         # self.finished = True
         self._status = ComponentStatus.finished

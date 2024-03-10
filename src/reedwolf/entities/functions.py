@@ -225,6 +225,9 @@ class IFunction(IFunctionDexpNode, ABC):
             raise EntityInternalError(owner=self, msg="py_function input parameter is obligatory and must be a function, got: {self.py_function}")
         self.func_name = self.py_function.__name__
 
+        if self.caller and not isinstance(self.caller, IDotExpressionNode):
+            raise NotImplementedError()
+
         if not self.name:
             self.name = self.func_name
 
@@ -257,13 +260,13 @@ class IFunction(IFunctionDexpNode, ABC):
                 raise EntitySetupNameError(owner=self, msg=f"For 'Items' functions value_arg_name '{self.value_arg_name}' must have List type, got: {self.items_func_arg.type_info.py_type_hint}")
 
         prep_args_kwargs = dict(
-            setup_session = self.setup_session,
-            caller = self.caller,
-            parent_name = f"{self.as_str()}",
-            func_args = self.func_args,
-            fixed_args = self.fixed_args,
-            value_arg_type_info = self.value_arg_type_info,
-            value_arg_name = self.value_arg_name)
+            setup_session=self.setup_session,
+            caller=self.caller,
+            parent_name=f"{self.as_str()}",
+            func_args=self.func_args,
+            fixed_args=self.fixed_args,
+            value_arg_type_info=self.value_arg_type_info,
+            value_arg_name=self.value_arg_name)
 
         # NOTE: Stack and creation of this_registry should not be required
         #       if there is no DotExpression in argument directly or indirectly.
@@ -443,6 +446,8 @@ class IFunction(IFunctionDexpNode, ABC):
     def as_str(self):
         args_str = "()"
         if self.caller:
+            # TODO: Better repr: Fields/This.name -> Fields.name or This.name
+            #       can be achieved: namespace must be passed 3-4 levels down.
             return f"{self.caller.full_name} -> {self.name}{args_str}"
         return f"{self.name}{args_str}"
 
