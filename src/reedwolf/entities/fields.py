@@ -276,7 +276,7 @@ class FieldBase(IField, ABC):
 
         if self.bind_to:
             # self.attr_node = setup_session.get_registry(FieldsNS).get_by_name(self.name)
-            self.attr_node = setup_session.get_registry(FieldsNS).get_store().get(self.name, default=UNDEFINED)
+            self.attr_node = setup_session.get_registry(FieldsNS).get_store().get(self.name, UNDEFINED)
             if not self.attr_node:
                 raise EntityInternalError(owner=self, msg=f"Attribute not found: {self.name}")
             if not self.is_unbound() and not self.bound_attr_node:

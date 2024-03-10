@@ -169,7 +169,7 @@ class RegistryBase(IRegistry):
         """
         store = self.get_store()
 
-        attr_dexp_node = store.get(attr_name, default=UNDEFINED)
+        attr_dexp_node = store.get(attr_name, UNDEFINED)
         if attr_dexp_node is UNDEFINED:
             # NOTE: Should not happen if DotExpression.setup() has done its job properly
             _, valid_varnames_str = self.get_valid_varnames(attr_name)
@@ -202,6 +202,8 @@ class RegistryBase(IRegistry):
             if not store:
                 raise EntityInternalError(owner=self, msg="no items in store defined.")
 
+        if not hasattr(store, "_finished"):
+            raise Exception()
         if not store._finished:
             # some stores are finished before
             store.finish()
@@ -219,7 +221,7 @@ class RegistryBase(IRegistry):
         store = self.get_store()
         if store in (None, UNDEFINED):
             raise EntityInternalError(owner=self, msg=f"Store not supported for this registry type")
-        return store.get_items()
+        return store.items()
 
     # ------------------------------------------------------------
 
@@ -404,13 +406,13 @@ class RegistryBase(IRegistry):
             # --------------------------------------------------
             # e.g. M.company Predefined before in Entity.setup() function.
             if owner.is_unbound() and self.NAMESPACE == ModelsNS:
-                existing_attr_dexp_node = store.get(full_dexp_node_name, default=UNDEFINED)
+                existing_attr_dexp_node = store.get(full_dexp_node_name, UNDEFINED)
                 if existing_attr_dexp_node is not UNDEFINED:
                     raise EntitySetupNameError(owner=self, msg=f"full_dexp_node_name={full_dexp_node_name} already in store: {existing_attr_dexp_node}")
                 # TODO: solve with IUnboundModelsRegistry - method available in UnboundModelsRegistry only
                 attr_node_template = self.register_unbound_attr_node(component=owner, full_dexp_node_name=full_dexp_node_name)
             else:
-                attr_node_template = store.get(full_dexp_node_name, default=UNDEFINED)
+                attr_node_template = store.get(full_dexp_node_name, UNDEFINED)
                 if attr_node_template is UNDEFINED:
                     if self.CALL_DEXP_NOT_FOUND_FALLBACK:
                         attr_node_template = self.dexp_not_found_fallback(owner=owner, full_dexp_node_name=full_dexp_node_name)
@@ -439,9 +441,9 @@ class RegistryBase(IRegistry):
                 # if this is a component, then try to find child component by name in direct children
                 parent_type_info = parent_component.get_type_info()
                 attr_dexp_node_store = parent_component.get_attr_dexp_node_store()
-                dexp_node = attr_dexp_node_store.get(dexp_node_name, default=UNDEFINED)
+                dexp_node = attr_dexp_node_store.get(dexp_node_name, UNDEFINED)
                 if not dexp_node:
-                    children_names = [k for k,v in attr_dexp_node_store.get_items()]
+                    children_names = [k for k,v in attr_dexp_node_store.items()]
                     valid_varnames_str = get_available_names_example(dexp_node_name,
                                                                      children_names,
                                                                      max_display=10,
@@ -522,13 +524,13 @@ class RegistryBaseWithStoreBase(RegistryBase):
         """
         Used only for repr()/str()
         """
-        return len(self.store._store)
+        return len(self.store)
 
     # def get_by_name(self, name: str, default: Any=UNDEFINED) -> Union[IAttrDexpNode, UndefinedType]:
     #     return self.store.get(name, default)
 
     def attr_dexp_node_store_items(self) -> Iterable[Tuple[str, IAttrDexpNode]]:
-        return self.store.get_items()
+        return self.store.items()
 
 # ------------------------------------------------------------
 

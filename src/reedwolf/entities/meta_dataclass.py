@@ -1,5 +1,5 @@
 import inspect
-from abc import ABCMeta
+from abc import ABCMeta, abstractmethod
 from dataclasses import (
     is_dataclass,
     fields as dc_fields,
@@ -7,13 +7,14 @@ from dataclasses import (
 )
 from enum import IntEnum
 from typing import (
-    List,
     Optional,
     Dict,
     Type,
     Union,
     Any,
-    Callable, NewType, Iterable,
+    Callable,
+    NewType,
+    Iterable,
 )
 # immutable dict - python 3.3+
 # https://stackoverflow.com/questions/11014262/how-to-create-an-immutable-dictionary-in-python
@@ -53,7 +54,6 @@ class ComponentStatus(IntEnum):
     did_init = 1
     did_phase_one = 2
     finished = 3
-
 
 
 # ------------------------------------------------------------
@@ -203,6 +203,10 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
             if isinstance(arg_val, list):
                 # NOTE: x:list != tuple(x) - see IComponent._dump_meta
                 setattr(self, arg_name, tuple(arg_val))
+            elif isinstance(arg_val, (IReedwolfDict,)):
+                # TODO: instantiate new instance based on arg_val.__class__ + MappingProxyType (instead of dict)
+                # Currently left as is since with MappingProxyType(IReedwolfDict) custom attrs and methods are gone.
+                setattr(self, arg_name, arg_val)
             elif isinstance(arg_val, dict):
                 # NOTE: x:dict == MappingProxyType(x)
                 setattr(self, arg_name, MappingProxyType(arg_val))
@@ -389,9 +393,9 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
         if instance_copy is UNDEFINED:
             # Recursion x 2
             # not yet copied within this session
-            # OLD: args = [self._try_call_copy(aval=aval, depth=depth, instances_copied=instances_copied, traverse=traverse)
+            # OLD: args = [_try_call_copy(aval=aval, depth=depth, instances_copied=instances_copied, traverse=traverse)
             #         for aval in self._rwf_args]
-            kwargs = {aname: self._try_call_copy(aval=aval, depth=depth, instances_copied=instances_copied, traverse=traverse)
+            kwargs = {aname: _try_call_copy(aval=aval, depth=depth, instances_copied=instances_copied, traverse=traverse)
                       for aname, aval in rwf_kwargs.items()}
             # create instance from the same class with *identical* arguments
             # OLD: instance_copy = as_class(*args, **kwargs)
@@ -401,28 +405,36 @@ class ReedwolfDataclassBase(metaclass=ReedwolfMetaclass):
 
         return instance_copy
 
-    @classmethod
-    def _try_call_copy(cls, traverse:bool, aval: Any, depth: int, instances_copied: Dict) -> Any:
-        # from .expressions import DotExpression
+def try_call_copy(traverse:bool, aval: Any) -> Any:
+    instances_copied = {}
+    return _try_call_copy(traverse=traverse, aval=aval, depth=0, instances_copied=instances_copied)
 
-        # if isinstance(aval, DotExpression): # must be first
-        # if hasattr(aval, "Clone"): # DotExpression - must be first
-        if getattr(aval, "_is_dexp", None):
-            aval_new = aval.Clone()
-        elif isinstance(aval, (tuple, list)):
-            aval_new = [cls._try_call_copy(traverse=traverse, aval=aval_item, depth=depth+1, instances_copied=instances_copied)
-                        for aval_item in aval]
-        elif isinstance(aval, (dict,)):
-            aval_new = {aval_name: cls._try_call_copy(traverse=traverse, aval=aval_item, depth=depth+1, instances_copied=instances_copied)
-                        for aval_name, aval_item in aval.items()}
-        # ALT: elif hasattr(aval, "_copy") and callable(aval._copy):
-        elif traverse and isinstance(aval, ReedwolfDataclassBase):
-            aval_new = aval._copy(traverse=traverse, depth=depth + 1, instances_copied=instances_copied)
-        else:
-            # TODO: if not primitive type - use copy.deepcopy() instead?
-            # Namespace case
-            aval_new = aval
-        return aval_new
+def _try_call_copy(traverse:bool, aval: Any, depth: int, instances_copied: Dict) -> Any:
+    # from .expressions import DotExpression
+
+    # if isinstance(aval, DotExpression): # must be first
+    # if hasattr(aval, "Clone"): # DotExpression - must be first
+    if getattr(aval, "_is_dexp", None):
+        aval_new = aval.Clone()
+    elif isinstance(aval, (tuple, list)):
+        aval_new = [_try_call_copy(traverse=traverse, aval=aval_item, depth=depth+1, instances_copied=instances_copied)
+                    for aval_item in aval]
+    elif isinstance(aval, (IReedwolfDict,)):
+        aval_new = aval.copy_without_data()
+        for aval_name, aval_item in aval.items():
+            aval_new[aval_name] = _try_call_copy(traverse=traverse, aval=aval_item, depth=depth+1, instances_copied=instances_copied)
+
+    elif isinstance(aval, (dict,)):
+        aval_new = {aval_name: _try_call_copy(traverse=traverse, aval=aval_item, depth=depth+1, instances_copied=instances_copied)
+                    for aval_name, aval_item in aval.items()}
+    # ALT: elif hasattr(aval, "_copy") and callable(aval._copy):
+    elif traverse and isinstance(aval, ReedwolfDataclassBase):
+        aval_new = aval._copy(traverse=traverse, depth=depth + 1, instances_copied=instances_copied)
+    else:
+        # TODO: if not primitive type - use copy.deepcopy() instead?
+        # Namespace case
+        aval_new = aval
+    return aval_new
 
 
 if GlobalSettings.is_development:
@@ -434,6 +446,17 @@ if GlobalSettings.is_development:
 def get_func_arguments(func: Callable) -> Dict[str, Any]:
     # presuming order is preserved
     return {k: v for k, v in inspect.signature(func).parameters.items() if k != SELF_ARG_NAME}
+
+
+class IReedwolfDict(dict):
+
+    @abstractmethod
+    def copy_without_data(self) -> Self:
+        """
+        copy only header data, items() needs to be copied outside
+        """
+        ...
+
 
 # ------------------------------------------------------------
 # OBSOLETE
@@ -450,4 +473,5 @@ def get_func_arguments(func: Callable) -> Dict[str, Any]:
 #     setattr(self, attr_name, property(lambda self: attr_val))
 # so the only solution is to have standard __setattr__
 # which denies change when ._immutable
+
 

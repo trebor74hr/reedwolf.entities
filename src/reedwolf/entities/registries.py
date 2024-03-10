@@ -361,7 +361,7 @@ class LocalFieldsRegistry(RegistryBase):
         #             msg=f"Namespace '{self.NAMESPACE}': Attribute name '{full_dexp_node_name}' matches current container name. Use F.{full_dexp_node_name} instead.")
 
         container_attr_dexp_node_pair_list: Optional[List[ContainerAttrDexpNodePair]] = \
-            self.top_fields_registry.cont_attr_dexp_pair_store.get(full_dexp_node_name, default=None)
+            self.top_fields_registry.cont_attr_dexp_pair_store.get(full_dexp_node_name, None)
         if container_attr_dexp_node_pair_list is None:
             return UNDEFINED
 
@@ -461,10 +461,10 @@ class LocalFieldsRegistry(RegistryBase):
                 change=dict(attr_value_container_path=attr_value_container_path),
             )
             store = self.get_store()
-            existing_attr_dexp_node = store.get(full_dexp_node_name, default=UNDEFINED)
+            existing_attr_dexp_node = store.get(full_dexp_node_name, UNDEFINED)
             if existing_attr_dexp_node is not UNDEFINED:
                 raise EntityInternalError(owner=self, msg=f"Value '{full_dexp_node_name}' already in the store: {existing_attr_dexp_node}?")
-            store.set(full_dexp_node_name, attr_dexp_node_w_value_path, replace_when_duplicate=False)
+            store.set_or_replace(full_dexp_node_name, attr_dexp_node_w_value_path, replace_when_duplicate=False)
             return attr_dexp_node_w_value_path
 
         return UNDEFINED
@@ -472,7 +472,7 @@ class LocalFieldsRegistry(RegistryBase):
     def _apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RegistryRootValue:
         value_node = apply_result.current_frame.value_node
         store = self.get_store()
-        attr_dexp_node = store.get(attr_name, default=UNDEFINED)
+        attr_dexp_node = store.get(attr_name, UNDEFINED)
 
         if attr_dexp_node is UNDEFINED:
             raise EntityInternalError(owner=self, msg=f"{attr_name} not found in store: {store}")
@@ -587,12 +587,12 @@ class TopFieldsRegistry(RegistryBase):
 
             attr_dexp_node = AttrDexpNodeStoreForComponent.create_attr_node(component)
             if not attr_dexp_node.denied:
-                attr_dexp_pair = self.cont_attr_dexp_pair_store.get(attr_dexp_node.name, default=UNDEFINED)
+                attr_dexp_pair = self.cont_attr_dexp_pair_store.get(attr_dexp_node.name, UNDEFINED)
                 if attr_dexp_pair is UNDEFINED:
                     attr_dexp_pair = []
-                    self.cont_attr_dexp_pair_store.set(attr_name=attr_dexp_node.name,
-                                                       attr_dexp_node=attr_dexp_pair,
-                                                       replace_when_duplicate=False)
+                    self.cont_attr_dexp_pair_store.set_or_replace(attr_name=attr_dexp_node.name,
+                                                                  attr_dexp_node=attr_dexp_pair,
+                                                                  replace_when_duplicate=False)
                 attr_dexp_pair.append(ContainerAttrDexpNodePair(container_id, attr_dexp_node))
         return
 
@@ -674,7 +674,7 @@ class ContextRegistry(RegistryBaseWithStoreBase):
 
     def _apply_to_get_root_value(self, apply_result: IApplyResult, attr_name: AttrName) -> RegistryRootValue:
         store = self.get_store()
-        attr_dexp_node = store.get(attr_name, default=UNDEFINED)
+        attr_dexp_node = store.get(attr_name, UNDEFINED)
         if attr_dexp_node is UNDEFINED:
             avail_names = get_available_names_example(attr_name, list(store.keys()))
             raise EntityApplyNameError(owner=self, msg=f"Invalid attribute name '{attr_name}', available: {avail_names}.")

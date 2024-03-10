@@ -39,11 +39,14 @@ from .namespaces import (
     ThisNS,
     ModelsNS,
     ContextNS, )
-from .dynamic_attrs import DynamicAttrsBase
+from .dynamic_attrs import (
+    DynamicAttrsBase,
+)
 from .meta_dataclass import (
     ReedwolfDataclassBase,
     ComponentStatus,
     Self,
+    IReedwolfDict,
 )
 from .meta import (
     TypeInfo,
@@ -231,8 +234,7 @@ class RegistryRootValue:
 
 # ------------------------------------------------------------
 
-@dataclass
-class IAttrDexpNodeStore:
+class IAttrDexpNodeStore(IReedwolfDict):
 
     @abstractmethod
     def setup(self, setup_session: "ISetupSession"):
@@ -240,26 +242,6 @@ class IAttrDexpNodeStore:
 
     @abstractmethod
     def finish(self):
-        ...
-
-    @abstractmethod
-    def get_items(self) -> List[Tuple[AttrName, "IAttrDexpNode"]]:
-        ...
-
-    @abstractmethod
-    def __len__(self) -> int:
-        ...
-
-    # @abstractmethod
-    # def __getitem__(self, attr_name: AttrName, default=MISSING) -> "IAttrDexpNode":
-    #     ...
-
-    @abstractmethod
-    def get(self, attr_name: AttrName, default=MISSING) -> "IAttrDexpNode":
-        ...
-
-    @abstractmethod
-    def set(self, attr_name: AttrName, attr_dexp_node: "IAttrDexpNode", replace_when_duplicate: bool):
         ...
 
     @abstractmethod
@@ -280,6 +262,28 @@ class IAttrDexpNodeStore:
                                     th_field: Optional[Any] = None,
                                     ) -> "IAttrDexpNode":
         ...
+
+    @abstractmethod
+    def set_or_replace(self, attr_name: AttrName, attr_dexp_node: "IAttrDexpNode", replace_when_duplicate: bool):
+        ...
+
+    # # ----- standard dict() methods --------
+    # @abstractmethod
+    # def get(self, attr_name: AttrName, default=MISSING) -> "IAttrDexpNode":
+    #     ...
+
+    # # I like get more
+    # # @abstractmethod
+    # # def __getitem__(self, attr_name: AttrName, default=MISSING) -> "IAttrDexpNode":
+    # #     ...
+
+    # @abstractmethod
+    # def items(self) -> List[Tuple[AttrName, "IAttrDexpNode"]]:
+    #     ...
+
+    # @abstractmethod
+    # def __len__(self) -> int:
+    #     ...
 
 # ------------------------------------------------------------
 

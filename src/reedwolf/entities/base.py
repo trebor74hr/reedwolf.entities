@@ -268,18 +268,30 @@ def make_component_fields_dataclass(class_name: str, child_field_list: ListChild
 # ------------------------------------------------------------
 
 
-@dataclass
 class AttrDexpNodeStore(IAttrDexpNodeStore):
     """
     The extraction of store from Registry was necessary, since LocalFieldsRegistry is assigned to containers only
     and store-s are assigned to each component.
-    TODO: inherit standard 'dict' and remove get/set - to gain performance
-    """
-    namespace: Namespace = field(repr=True)
 
-    # automatic
-    _store: Dict[AttrName, "IAttrDexpNode"] = field(init=False, repr=False, default_factory=dict)
-    _finished: bool = field(init=False, repr=False, default=False)
+    Inherits standard 'dict' to gain performance back.
+    ex.
+        _store: Dict[AttrName, "IAttrDexpNode"] = field(init=False, repr=False, default_factory=dict)
+    """
+
+    def __init__(self, namespace: Namespace):
+        super().__init__()
+        self.namespace = namespace
+        self._finished: bool = False
+
+    def copy_without_data(self) -> Self:
+        """ used in copy process - see meta_dataclass.py """
+        return self.__class__(namespace=self.namespace)
+
+    def __str__(self):
+        return f"{self.__class__.__name__}({self.namespace})"
+
+    def __repr__(self):
+        return str(self)
 
     def setup(self, setup_session: ISetupSession):
         ...
@@ -289,30 +301,38 @@ class AttrDexpNodeStore(IAttrDexpNodeStore):
             raise EntityInternalError(owner=self, msg=f"store already finished")
         self._finished = True
 
-    def get_items(self) -> List[Tuple[AttrName, "IAttrDexpNode"]]:
-        return self._store.items()
-
-    # def __getitem__(self, attr_name: AttrName, default=MISSING) -> "IAttrDexpNode":
-    #     return self.get(attr_name=attr_name, strict=True, default=default)
-
-    def __len__(self) -> int:
-        return len(self._store)
-
-    def get(self, attr_name: AttrName, default=MISSING) -> "IAttrDexpNode":
-        # if strict and not self._finished:
-        #     raise EntityInternalError(owner=self, msg=f"store not finished")
-        dexp_node = self._store.get(attr_name, default)
-        if default is MISSING:
-            raise KeyError(attr_name)
-        return dexp_node
-
-    def set(self, attr_name: AttrName, attr_dexp_node: "IAttrDexpNode", replace_when_duplicate: bool):
+    def set_or_replace(self, attr_name: AttrName, attr_dexp_node: "IAttrDexpNode", replace_when_duplicate: bool):
         # if hasattr(self, "component") and self.component.name == "A" and attr_dexp_node.name == "Instance": print("here33")
         if self._finished:
             raise EntityInternalError(owner=self, msg=f"store finished")
-        if not replace_when_duplicate and attr_name in self._store:
-            raise EntitySetupNameError(owner=self, msg=f"IAttrDexpNode '{attr_dexp_node}' does not have unique name '{attr_name}' within this registry, found: {self._store[attr_name]}")
-        self._store[attr_name] = attr_dexp_node
+        if not replace_when_duplicate and attr_name in self:
+            raise EntitySetupNameError(owner=self, msg=f"IAttrDexpNode '{attr_dexp_node}' does not have unique name '{attr_name}' within this registry, found: {self[attr_name]}")
+        self[attr_name] = attr_dexp_node
+
+    # ------------------------------------------------------------
+    # standard dict() methods
+    # ------------------------------------------------------------
+
+    # def get(self, attr_name: AttrName, default=MISSING) -> "IAttrDexpNode":
+    #     # if strict and not self._finished:
+    #     #     raise EntityInternalError(owner=self, msg=f"store not finished")
+    #     dexp_node = super().get(attr_name, default)
+    #     if default is MISSING:
+    #         raise KeyError(attr_name)
+    #     return dexp_node
+
+    # def __getitem__(self, attr_name: AttrName) -> "IAttrDexpNode":
+    #     return super().__getitem__(attr_name=attr_name)
+
+    # def __setitem__(self, attr_name: AttrName, attr_dexp_node: "IAttrDexpNode"):
+    #     super().__setitem__(attr_name, attr_dexp_node)
+
+    # def __len__(self) -> int:
+    #     return super().__len__()
+
+    # def items(self) -> List[Tuple[AttrName, "IAttrDexpNode"]]:
+    #     return super().items()
+
 
     # ------------------------------------------------------------
 
@@ -369,9 +389,9 @@ class AttrDexpNodeStore(IAttrDexpNodeStore):
         #     attr_dexp_node_store = self.get_store()
 
         # single place to register node
-        attr_dexp_node_store.set(dexp_node_name,
-                                 attr_dexp_node=attr_node,
-                                 replace_when_duplicate=replace_when_duplicate)
+        attr_dexp_node_store.set_or_replace(dexp_node_name,
+                                            attr_dexp_node=attr_node,
+                                            replace_when_duplicate=replace_when_duplicate)
 
     # ------------------------------------------------------------
 
@@ -427,12 +447,17 @@ class AttrDexpNodeStore(IAttrDexpNodeStore):
 # ------------------------------------------------------------
 
 
-@dataclass
 class AttrDexpNodeStoreForComponent(AttrDexpNodeStore):
-    component: "IComponent" = field(repr=True)
 
-    # automatic
-    namespace: Namespace = field(repr=True, init=False, default=FieldsNS)
+    def __init__(self, component: "IComponent"):
+        super().__init__(namespace=FieldsNS)
+        self.component = component
+
+    def copy_without_data(self) -> Self:
+        return self.__class__(component=self.component)
+
+    def __str__(self):
+        return f"{self.__class__.__name__}({self.namespace})"
 
     def _register_special_nodes(self, component: "IComponent", setup_session: ISetupSession):
         if component is not self.component:

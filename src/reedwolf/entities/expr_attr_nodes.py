@@ -289,8 +289,9 @@ class IAttrDexpNode(IDotExpressionNode, ABC):
             if not getattr(value_node, "children", UNDEFINED):
                 raise EntityInternalError(owner=self, msg=f"Attribute '{attr_name}' can not be found, node '{value_node.name}' has no children")
 
-            assert hasattr(value_node, "component"), value_node
-            assert value_node.component.get_attr_dexp_node_store().get(attr_name, default=UNDEFINED), value_node
+            # ValueNodeForComponent
+            if not (hasattr(value_node, "component") and value_node.component.get_attr_dexp_node_store().get(attr_name, UNDEFINED)):
+                raise EntityInternalError(owner=self, msg=f"ValueNode {value_node}, {attr_name} not found in component's store (or is not ValueNodeForComponent).")
 
             dexp_value_node = value_node.children.get(attr_name, UNDEFINED)
 
