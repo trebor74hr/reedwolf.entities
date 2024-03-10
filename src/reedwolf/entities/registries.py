@@ -339,13 +339,12 @@ class LocalFieldsRegistry(RegistryBase):
         # container_id = self.container.container_id
         # parent_dict: Dict[ComponentName, IComponent] = {}
         # if self.container.name == "D": print("here33")
+        if not self.container.is_entity():
+            raise EntityInternalError(owner=self, msg=f"This method sets up for all Component's dexp-stores and therefore for all LocalFieldsRegistry-s")
 
         store = self.get_store()
-        if self.container.is_entity():
-            store.setup_all_nodes(setup_session=self.setup_session)
-        else:
-            assert store.get_items()
-        return
+        store.setup_all_nodes(setup_session=self.setup_session)
+
 
     def dexp_not_found_fallback(self, owner: IComponent, full_dexp_node_name: AttrName) -> Union[IAttrDexpNode, UndefinedType]:
         """

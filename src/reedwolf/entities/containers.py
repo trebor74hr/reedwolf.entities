@@ -437,6 +437,7 @@ class ContainerBase(IContainer, ABC):
     # ------------------------------------------------------------
 
     def _setup(self, setup_session: SetupSession):
+
         # components are flat list, no recursion/hierarchy browsing needed
         if self.is_finished:
             raise EntitySetupError(owner=self, msg="setup() should be called only once")
@@ -451,10 +452,6 @@ class ContainerBase(IContainer, ABC):
                     this_registry = None,
                 )):
 
-            # each container will have own LocalFieldsRegistry (with assigned TopFieldsRegistry)
-            # A.3. COMPONENTS - collect attr_nodes - previously flattened (recursive function fill_components)
-            fields_registry: LocalFieldsRegistry = self.setup_session.get_registry(FieldsNS)
-            fields_registry.register_all()
 
             # ----------------------------------------
             # SETUP PHASE TWO (recursive)
@@ -819,7 +816,17 @@ class Entity(IEntity, ContainerBase):
         return self
 
 
+    def _setup_phase_one(self, components: Optional[Dict[str, Self]] = None) -> NoneType:
+        super()._setup_phase_one(components=components)
 
+        # A.3. COMPONENTS - collect attr_nodes - previously flattened (recursive function fill_components)
+        #      each container will have own Store and then associated LocalFieldsRegistry
+        #      (with assigned TopFieldsRegistry)
+        fields_registry: LocalFieldsRegistry = self.setup_session.get_registry(FieldsNS)
+
+        # Only Entity can do setup - it will walk through all components and fill the stores which
+        # are later used in LocalFieldsRegistry-s.
+        fields_registry.register_all()
 
     # ------------------------------------------------------------
     # apply - API entries

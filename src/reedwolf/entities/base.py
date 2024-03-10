@@ -270,6 +270,11 @@ def make_component_fields_dataclass(class_name: str, child_field_list: ListChild
 
 @dataclass
 class AttrDexpNodeStore(IAttrDexpNodeStore):
+    """
+    The extraction of store from Registry was necessary, since LocalFieldsRegistry is assigned to containers only
+    and store-s are assigned to each component.
+    TODO: inherit standard 'dict' and remove get/set - to gain performance
+    """
     namespace: Namespace = field(repr=True)
 
     # automatic
