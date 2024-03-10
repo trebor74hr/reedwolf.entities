@@ -232,7 +232,9 @@ class RegistryRootValue:
 # ------------------------------------------------------------
 
 @dataclass
-class IAttrDexpNodeStore:
+class IAttrDexpNodeStore(ReedwolfDataclassBase):
+
+    _status: ComponentStatus = field(init=False, repr=False, default=ComponentStatus.draft)
 
     @abstractmethod
     def setup(self, setup_session: "ISetupSession"):

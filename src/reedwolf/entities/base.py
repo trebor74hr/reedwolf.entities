@@ -273,7 +273,9 @@ class AttrDexpNodeStore(IAttrDexpNodeStore):
     """
     The extraction of store from Registry was necessary, since LocalFieldsRegistry is assigned to containers only
     and store-s are assigned to each component.
-    TODO: inherit standard 'dict' and remove get/set - to gain performance
+    NOTE: tried to inherit standard 'dict' in order to improve performance. Failed, work in branch: store-as-dict-240310
+          Changed Store to inherit python's std dict, wanted to get performance back. It was 1.65 before big introducing
+          store, with store 1.81-5, after this refactoring now is 1.84 :(, so reverting this change.
     """
     namespace: Namespace = field(repr=True)
 
